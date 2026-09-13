@@ -17,8 +17,9 @@ export const metadata: Metadata = {
   description: "Competitive chess, live.",
   manifest: "/manifest.webmanifest",
   icons: {
-    icon: "/cburger_logo.png",
-    shortcut: "/cburger_logo.png",
+    icon: [{ url: "/cburger_logo.png", type: "image/png" }],
+    shortcut: [{ url: "/cburger_logo.png", type: "image/png" }],
+    apple: [{ url: "/cburger_logo.png", type: "image/png" }],
   },
 };
 

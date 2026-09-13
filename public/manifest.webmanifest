@@ -1,1 +1,1 @@
-{"name":"Chess Burger","short_name":"Chess Burger","start_url":"/","display":"standalone","background_color":"#0b0e13","theme_color":"#0b0e13","icons":[{"src":"/cburger_logo.png","sizes":"any","type":"image/png","purpose":"any"}]}
+{"id":"/","name":"Chess Burger","short_name":"Chess Burger","description":"Competitive chess, live.","start_url":"/","scope":"/","display":"standalone","background_color":"#0b0e13","theme_color":"#0b0e13","icons":[{"src":"/cburger_logo.png","sizes":"any","type":"image/png","purpose":"any maskable"}]}
