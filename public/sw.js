@@ -1,4 +1,4 @@
-const CACHE='chess-burger-shell-v38';
+const CACHE='chess-burger-shell-v39';
 const ASSETS=['/','/cburger_logo.png','/manifest.webmanifest',...Array.from({length:50},(_,i)=>'/badges/badge-'+String(i).padStart(2,'0')+'.png'),...Array.from({length:10},(_,i)=>'/levels/level-'+String(i).padStart(2,'0')+'.png')];
 self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE).then(async cache=>{await Promise.all(ASSETS.map(async path=>{try{const r=await fetch(path,{cache:'reload'});if(r.ok&&!r.redirected)await cache.put(path,r);}catch{}}));}));self.skipWaiting();});
 self.addEventListener('activate',event=>event.waitUntil(Promise.all([self.clients.claim(),caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('chess-burger-shell-')&&k!==CACHE).map(k=>caches.delete(k))))])));

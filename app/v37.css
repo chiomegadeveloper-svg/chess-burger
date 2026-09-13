@@ -1,0 +1,37 @@
+.card-only-view .card-topline {
+  min-height: 66px;
+  padding-left: 0;
+  justify-content: flex-end;
+}
+
+.card-brand-logo {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  transform: translate(-50%, -50%);
+}
+
+.card-brand-logo img {
+  display: block;
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  object-fit: cover;
+  box-shadow:
+    0 0 0 2px #d8bb5d,
+    0 0 18px #49e4ef73;
+}
+
+@media (max-width: 650px) {
+  .card-only-view .card-topline {
+    min-height: 48px;
+    margin-bottom: 9px;
+  }
+
+  .card-brand-logo img {
+    width: 48px;
+    height: 48px;
+  }
+}
