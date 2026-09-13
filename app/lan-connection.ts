@@ -13,10 +13,10 @@ export async function decodeSignal(code:string):Promise<Signal>{
  }catch{throw Error('Invalid or unsupported pairing code. Please scan it again.');}
 }
 export class LanConnection {
- pc:RTCPeerConnection;channel:RTCDataChannel|null=null;host:boolean;room:string;own:ArenaPlayer;control:string;match:ArenaMatch|null=null;guest:ArenaPlayer|null=null;guestReady=false;closed=false;timer:ReturnType<typeof setInterval>|null=null;
+ pc:RTCPeerConnection;channel:RTCDataChannel|null=null;host:boolean;room:string;own:ArenaPlayer;control:string;match:ArenaMatch|null=null;guest:ArenaPlayer|null=null;peer:ArenaPlayer|null=null;guestReady=false;closed=false;timer:ReturnType<typeof setInterval>|null=null;
  onState:(match:ArenaMatch)=>void;onStatus:(status:string)=>void;
  constructor(host:boolean,own:ArenaPlayer,control:string,onState:(match:ArenaMatch)=>void,onStatus:(s:string)=>void,room=crypto.randomUUID()){
-  this.host=host;this.own={user_id:own.user_id,display_name:own.display_name,username:own.username,avatar_url:"",country_code:own.country_code,cbr:own.cbr,gold_points:0,wins:own.wins,losses:own.losses,win_streak:own.win_streak};this.control=control;this.room=room;this.onState=onState;this.onStatus=onStatus;
+  this.host=host;this.own={user_id:own.user_id,display_name:own.display_name,username:own.username,avatar_url:/^https:\/\//.test(own.avatar_url)?own.avatar_url.slice(0,500):"",country_code:own.country_code,cbr:own.cbr,gold_points:0,wins:own.wins,losses:own.losses,win_streak:own.win_streak};this.control=control;this.room=room;this.onState=onState;this.onStatus=onStatus;
   this.pc=new RTCPeerConnection({iceServers:[]});
   this.pc.onconnectionstatechange=()=>{const state=this.pc.connectionState;onStatus(state==='connected'?'Connected over local Wi-Fi':state==='failed'?'Connection failed. Check that your hotspot allows devices to communicate.':state==='disconnected'?'Disconnected. Reconnect to the same Wi-Fi network.':state);};
   this.pc.ondatachannel=e=>this.attach(e.channel);if(host)this.attach(this.pc.createDataChannel('chess-burger',{ordered:true}));
@@ -24,8 +24,9 @@ export class LanConnection {
  attach(channel:RTCDataChannel){this.channel=channel;channel.onopen=()=>{this.send({type:'hello',player:this.own});this.onStatus(this.host?'Guest connected. Waiting for Ready.':'Connected. Press Ready to play.');};channel.onclose=()=>this.onStatus('Connection closed. Your replay is saved on this device.');channel.onmessage=e=>{try{if(typeof e.data!=='string'||e.data.length>30000)return;this.receive(JSON.parse(e.data));}catch{this.onStatus('An invalid game message was rejected.');}};}
  send(value:unknown){if(this.channel?.readyState==='open')this.channel.send(JSON.stringify(value));}
  receive(message:any){
-  if(message.type==='hello'&&this.host&&!this.match){const p=message.player;if(!p||typeof p.user_id!=='string'||p.user_id===this.own.user_id||typeof p.display_name!=='string')return;
-   this.guest={user_id:p.user_id.slice(0,80),display_name:p.display_name.slice(0,60),username:String(p.username??'player').slice(0,24),avatar_url:'',country_code:'',cbr:Number.isFinite(p.cbr)?Math.max(0,Math.min(100000,p.cbr)):88,gold_points:0,wins:0,losses:0,win_streak:0};this.onStatus(`${this.guest.display_name} connected. Waiting for Ready.`);
+  if(message.type==='hello'&&!this.match){const p=message.player;if(!p||typeof p.user_id!=='string'||p.user_id===this.own.user_id||typeof p.display_name!=='string')return;
+   const player={user_id:p.user_id.slice(0,80),display_name:p.display_name.slice(0,60),username:String(p.username??'player').slice(0,24),avatar_url:typeof p.avatar_url==='string'&&/^https:\/\//.test(p.avatar_url)?p.avatar_url.slice(0,500):'',country_code:String(p.country_code??'').slice(0,3),cbr:Number.isFinite(p.cbr)?Math.max(0,Math.min(100000,p.cbr)):88,gold_points:0,wins:0,losses:0,win_streak:0};
+   this.peer=player;if(this.host){this.guest=player;this.onStatus(`${player.display_name} connected. Waiting for Ready.`);}else this.onStatus(`Connected to ${player.display_name}. Press Ready to play.`);
   }else if(message.type==='ready'&&this.host&&this.guest&&!this.match){this.guestReady=true;this.onStatus(`${this.guest.display_name} is ready. Press Start game.`);}
   else if(message.type==='action'&&this.host)this.apply(message.move,message.resign,this.match?.black_id??'',message.version);
   else if(message.type==='state'&&!this.host){const m=message.match as ArenaMatch;if(m?.id!==this.room||!m.black_id||m.black_id!==this.own.user_id||typeof m.pgn!=='string'||!['active','finished'].includes(m.status)||!['white','black','draw',null].includes(m.result)||!Number.isInteger(m.version)||m.version<0||![m.white_ms,m.black_ms,m.last_tick].every(Number.isFinite)||!m.white||!m.black||m.white_id===m.black_id)return;timeControl(m.control);gameFromPgn(m.pgn);if(this.match&&m.version<this.match.version)return;this.match=m;this.onState({...m,server_now:m.server_now??Date.now()});}
