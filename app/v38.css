@@ -1,0 +1,131 @@
+.result-actions {
+  display: grid;
+  grid-template-columns: 1fr 1.35fr;
+  gap: 9px;
+  margin-top: 12px;
+}
+.result-actions button {
+  margin: 0;
+}
+.result-replay {
+  background: #1e3a45 !important;
+  border-color: #4a8191 !important;
+  color: #c7f7ff !important;
+}
+.match-reactions {
+  margin-top: 15px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(104, 193, 207, 0.28);
+}
+.versus-players {
+  display: grid;
+  grid-template-columns: 1fr 32px 1fr;
+  align-items: end;
+  gap: 5px;
+}
+.versus-player {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  min-width: 0;
+  text-align: center;
+}
+.versus-player .player-avatar {
+  width: 72px;
+  height: 72px;
+  border: 2px solid #e5be62;
+  box-shadow: 0 0 16px rgba(75, 222, 236, 0.28);
+  font-size: 24px;
+}
+.versus-player strong {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.72rem;
+  margin-top: 5px;
+}
+.versus-mark {
+  position: absolute;
+  right: -25px;
+  top: 57px;
+  color: #e8c66e;
+  font-size: 1rem;
+  font-style: italic;
+  letter-spacing: 0.08em;
+  text-shadow: 0 0 10px rgba(227, 185, 79, 0.45);
+}
+.reaction-bubble {
+  height: 56px;
+  display: grid;
+  place-items: end center;
+  overflow: visible;
+}
+.reaction-bubble img {
+  max-width: 104px;
+  max-height: 74px;
+  object-fit: contain;
+  filter: drop-shadow(0 5px 7px rgba(0, 0, 0, 0.35));
+  animation: reaction-pop 0.28s cubic-bezier(0.16, 0.96, 0.33, 1.35);
+}
+.emote-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 5px;
+  margin-top: 12px;
+}
+.emote-grid button {
+  aspect-ratio: 1;
+  padding: 3px;
+  border-color: #496d77;
+  background: #12292f;
+  transition:
+    opacity 0.18s,
+    transform 0.18s,
+    filter 0.18s;
+}
+.emote-grid button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  border-color: #e8c66e;
+}
+.emote-grid button img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.emote-grid.cooling button {
+  opacity: 0.4;
+  filter: grayscale(0.2);
+}
+.emote-cooldown {
+  text-align: center;
+  margin: 7px 0 0;
+  font-size: 0.72rem;
+  color: #9cc5cd;
+}
+@keyframes reaction-pop {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.7);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@media (max-width: 650px) {
+  .versus-player .player-avatar {
+    width: 64px;
+    height: 64px;
+  }
+  .reaction-bubble {
+    height: 48px;
+  }
+  .result-actions {
+    grid-template-columns: 1fr;
+  }
+  .versus-mark {
+    right: -23px;
+    top: 49px;
+  }
+}

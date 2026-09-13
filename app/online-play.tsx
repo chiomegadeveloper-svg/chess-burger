@@ -117,6 +117,10 @@ export function OnlineGame({
       setBusy(false);
     }
   }
+  async function react(emote: string) {
+    const response = await arena<{ match: ArenaMatch }>("react", { id, emote });
+    accept(response.match);
+  }
   if (!match)
     return (
       <p className="cloud-panel" role="status">
@@ -135,6 +139,7 @@ export function OnlineGame({
         ownId={profile?.user_id}
         onMove={watch ? undefined : (m) => void move("move", m)}
         onResign={watch ? undefined : () => void move("resign")}
+        onReact={watch ? undefined : react}
         busy={busy}
         connection={error ? "Reconnecting…" : watch ? "Spectating" : "Live"}
       />
