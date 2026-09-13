@@ -1,0 +1,10 @@
+"use client";
+import {useEffect,useState} from 'react';
+import {arena} from './arena-client';
+import type {ArenaMatch} from './game-rules';
+import {readGames,SavedGame} from './game-history';
+export default function RecentPlays({onReplay}:{onReplay:(game:SavedGame)=>void}){
+ const[games,setGames]=useState<SavedGame[]>([]),[error,setError]=useState('');
+ useEffect(()=>{let alive=true;const refresh=async()=>{try{let games=readGames().filter(g=>g.pgn);try{const d=await arena<{matches:ArenaMatch[]}>('history');const offline=await arena<{games:SavedGame[]}>('offline-history');const server=[...offline.games,...d.matches.map(m=>({id:m.id,white:m.white?.display_name??'White',black:m.black?.display_name??'Black',pgn:m.pgn,score:m.result==='draw'?'½–½':m.result==='white'?'1–0':'0–1',startedAt:new Date(m.created_at).toISOString(),updatedAt:new Date(m.created_at).toISOString()}))];games=[...server,...games.filter(g=>!server.some(s=>s.id===g.id))];}catch{}if(alive){setGames(games.sort((a,b)=>Date.parse(b.startedAt??'')-Date.parse(a.startedAt??'')));setError('');}}catch{if(alive)setError('Saved games could not be loaded from this browser.');}};void refresh();const change=()=>void refresh();window.addEventListener('cb-games-changed',change);return()=>{alive=false;window.removeEventListener('cb-games-changed',change);};},[]);
+ return <section className="recent-plays"><div className="page-heading"><h2>Recent plays</h2><span className="sample-label">Saved games</span></div>{error?<p role="alert">{error}</p>:!games.length?<p className="history-empty">No saved games yet. Your moves are saved as you play.</p>:<ol>{games.map(g=><li key={g.id}><span className="history-players"><strong>{g.white}</strong> vs <strong>{g.black}</strong></span><span className="history-score">{g.score}</span><time dateTime={g.startedAt??undefined}>{g.startedAt?new Date(g.startedAt).toLocaleDateString():'Date unavailable'} <span>{g.startedAt?new Date(g.startedAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):''}</span></time><button onClick={()=>onReplay(g)}>Replay</button></li>)}</ol>}</section>
+}

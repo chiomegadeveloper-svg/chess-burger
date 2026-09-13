@@ -1,0 +1,13 @@
+"use client";
+import {createClient,SupabaseClient} from '@supabase/supabase-js';
+import {authStorage} from './auth-storage';
+let pending:Promise<SupabaseClient|null>|undefined;
+export function getSupabase(){
+ if(!pending)pending=fetch('/api/public-config',{cache:'no-store'}).then(async r=>{
+  if(!r.ok)throw new Error('Account service is unavailable.');const c=await r.json() as {configured:boolean;url:string;key:string};if(!c.configured)return null;
+  return createClient(c.url,c.key,{auth:{flowType:'pkce',detectSessionInUrl:true,persistSession:true,autoRefreshToken:true,storageKey:'cb-auth',storage:authStorage}});
+ }).catch(e=>{pending=undefined;throw e;});
+ return pending;
+}
+export type PlayerProfile={user_id:string;username:string;display_name:string;bio:string;avatar_url:string;card_photo_url:string;country_code:string;featured_photos:string[];featured_badges:string[];cbr:number;gold_points:number;win_streak:number;wins:number;losses:number;role:"player"|"admin"|"owner";created_at:string;rating_delta?:number};
+export type FeedEvent={id:string;user_id:string;kind:string;display_name:string;avatar_url:string;cbr:number;content:string;image_url:string;expires_at:string|null;cbr_delta:number;gold_delta:number;heart_count:number;created_at:string};
