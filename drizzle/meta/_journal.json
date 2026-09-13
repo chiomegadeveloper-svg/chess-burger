@@ -43,6 +43,13 @@
       "when": 1789234946777,
       "tag": "0005_social_guards_feed_retention",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1789286400000,
+      "tag": "0006_offline_cbr",
+      "breakpoints": true
     }
   ]
 }

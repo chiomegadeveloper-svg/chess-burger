@@ -10,4 +10,4 @@ export const authStorage={
   setItem:(key:string,value:string)=>(keepLogin()?localStorage:sessionStorage).setItem(key,value),
   removeItem:(key:string)=>{localStorage.removeItem(key);sessionStorage.removeItem(key);},
 };
-export function clearAccountCache(){for(const key of ['cb-auth','cb-auth-code-verifier','cb-staff-profile','cb-guest-profile','cb-local-rating','cb-active-match']){localStorage.removeItem(key);sessionStorage.removeItem(key);}window.dispatchEvent(new Event('cb-signed-out'));}
+export function clearAccountCache(){for(const storage of [localStorage,sessionStorage]){for(const key of ['cb-auth','cb-auth-code-verifier','cb-staff-profile','cb-guest-profile','cb-local-rating','cb-local-ocbr','cb-active-match'])storage.removeItem(key);for(let i=storage.length-1;i>=0;i--){const key=storage.key(i);if(key?.startsWith('cb-local-ocbr:'))storage.removeItem(key);}}window.dispatchEvent(new Event('cb-signed-out'));}

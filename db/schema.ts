@@ -1,8 +1,8 @@
 import {sqliteTable,text,integer,real,index,uniqueIndex} from 'drizzle-orm/sqlite-core';
 export const arenaPlayers=sqliteTable('arena_players',{
  user_id:text().primaryKey(),username:text().notNull(),display_name:text().notNull(),avatar_url:text().notNull().default(''),country_code:text().notNull().default('PH'),
- cbr:integer().notNull().default(88),gold_points:integer().notNull().default(0),wins:integer().notNull().default(0),losses:integer().notNull().default(0),win_streak:integer().notNull().default(0),updated_at:integer().notNull(),
-},t=>[uniqueIndex('arena_username').on(t.username),index('arena_rank').on(t.cbr)]);
+ cbr:integer().notNull().default(88),ocbr:integer().notNull().default(88),gold_points:integer().notNull().default(0),wins:integer().notNull().default(0),losses:integer().notNull().default(0),win_streak:integer().notNull().default(0),updated_at:integer().notNull(),
+},t=>[uniqueIndex('arena_username').on(t.username),index('arena_rank').on(t.cbr),index('arena_offline_rank').on(t.ocbr)]);
 export const arenaPresence=sqliteTable('arena_presence',{
  user_id:text().primaryKey(),lat:real(),lng:real(),accuracy:real(),gps:integer().notNull().default(0),seen_at:integer().notNull(),
 },t=>[index('arena_presence_seen').on(t.seen_at)]);

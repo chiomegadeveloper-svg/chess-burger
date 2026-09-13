@@ -1,0 +1,13 @@
+.card-stats{grid-template-columns:repeat(4,minmax(0,1fr))}
+.card-only-view .card-stats{grid-template-columns:repeat(4,minmax(0,1fr))}
+.card-only-view .card-stats>div{min-width:0;padding-inline:12px}
+@media(max-width:650px){.card-only-view .card-main{grid-template-columns:30% minmax(0,1fr)}.card-only-view .card-stats>div{padding-inline:5px}.card-only-view .card-stats strong{font-size:clamp(12px,4vw,18px)}.card-only-view .card-stats span{overflow-wrap:anywhere}}
+
+/* Compact community feed: preserve all actions while reducing vertical space. */
+.community-list{gap:7px}
+.feed-cloud{grid-template-columns:40px minmax(0,1fr) auto!important;gap:9px!important;min-height:62px;padding:8px 12px!important;border-radius:13px!important}
+.feed-player{width:38px;height:42px}.feed-avatar{width:36px;height:36px}.feed-level{width:20px;height:24px}
+.feed-meta{gap:7px;margin-bottom:1px}.feed-copy p{font-size:12px!important;line-height:1.35!important}.feed-rewards{margin-top:3px}
+.social-actions-compact{margin:4px 0 0;gap:5px}.social-actions-compact button{min-height:29px;padding:3px 9px;font-size:11px}
+.feed-cloud .heart-button{min-width:30px;padding:3px}
+@media(max-width:650px){.community-list{gap:6px}.feed-cloud{grid-template-columns:35px minmax(0,1fr) auto!important;gap:7px!important;min-height:56px;padding:7px 8px 7px 10px!important}.feed-player{width:34px;height:38px}.feed-avatar{width:32px;height:32px}.feed-level{width:18px;height:22px}.feed-meta{flex-wrap:nowrap}.feed-copy p{font-size:11px!important;line-height:1.3!important}.social-actions-compact button{min-height:27px;padding:2px 7px;font-size:10px}}

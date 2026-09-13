@@ -7,12 +7,12 @@ const stmt=(db:D1Database,sql:string,...values:unknown[])=>db.prepare(sql).bind(
 const now=()=>Date.now();
 const uid=()=>crypto.randomUUID();
 const shortCode=()=>{const alphabet='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',bytes=crypto.getRandomValues(new Uint8Array(8));return Array.from(bytes,n=>alphabet[n%alphabet.length]).join('');};
-const playerColumns='user_id,username,display_name,avatar_url,country_code,cbr,gold_points,wins,losses,win_streak';
+const playerColumns='user_id,username,display_name,avatar_url,country_code,cbr,ocbr,gold_points,wins,losses,win_streak';
 const inPlay=`status='active'`;
 export async function syncPlayer(db:D1Database,p:PlayerProfile){
- await stmt(db,`INSERT INTO arena_players (${playerColumns},updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)
+ await stmt(db,`INSERT INTO arena_players (${playerColumns},updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
  ON CONFLICT(user_id) DO UPDATE SET username=excluded.username,display_name=excluded.display_name,avatar_url=excluded.avatar_url,country_code=excluded.country_code,updated_at=excluded.updated_at`,
- p.user_id,p.username,p.display_name,p.avatar_url||'',p.country_code||'PH',Math.max(0,p.cbr??88),Math.max(0,p.gold_points??0),p.wins??0,p.losses??0,p.win_streak??0,now()).run();
+ p.user_id,p.username,p.display_name,p.avatar_url||'',p.country_code||'PH',Math.max(0,p.cbr??88),Math.max(0,p.ocbr??88),Math.max(0,p.gold_points??0),p.wins??0,p.losses??0,p.win_streak??0,now()).run();
  return (await stmt(db,`SELECT ${playerColumns} FROM arena_players WHERE user_id=?`,p.user_id).first<ArenaPlayer>())!;
 }
 async function current(db:D1Database,id:string){return stmt(db,`SELECT * FROM arena_matches WHERE (white_id=? OR black_id=?) AND ${inPlay} ORDER BY created_at DESC LIMIT 1`,id,id).first<ArenaMatch>();}
@@ -118,7 +118,7 @@ export async function publicAction(db:D1Database,action:string,params:URLSearchP
  }
  if(action==='profile-data'){
   const userId=params.get('user_id')??'';if(!userId)throw new ArenaError('Player not found.',404);
-  const profile=await stmt(db,`SELECT p.*,COALESCE(a.cbr,88) AS cbr,COALESCE(a.gold_points,0) AS gold_points,COALESCE(a.win_streak,0) AS win_streak,COALESCE(a.wins,0) AS wins,COALESCE(a.losses,0) AS losses FROM app_profiles p LEFT JOIN arena_players a ON a.user_id=p.user_id WHERE p.user_id=?`,userId).first<any>();if(!profile)throw new ArenaError('Player not found.',404);
+  const profile=await stmt(db,`SELECT p.*,COALESCE(a.cbr,88) AS cbr,COALESCE(a.ocbr,88) AS ocbr,COALESCE(a.gold_points,0) AS gold_points,COALESCE(a.win_streak,0) AS win_streak,COALESCE(a.wins,0) AS wins,COALESCE(a.losses,0) AS losses FROM app_profiles p LEFT JOIN arena_players a ON a.user_id=p.user_id WHERE p.user_id=?`,userId).first<any>();if(!profile)throw new ArenaError('Player not found.',404);
   const rank=await stmt(db,'SELECT COUNT(*)+1 AS rank FROM arena_players WHERE cbr>? OR (cbr=? AND wins>?) OR(cbr=? AND wins=? AND user_id<?)',profile.cbr,profile.cbr,profile.wins,profile.cbr,profile.wins,userId).first<{rank:number}>();
   return {profile:{...profile,featured_photos:JSON.parse(profile.featured_photos||'[]'),featured_badges:JSON.parse(profile.featured_badges||'[]'),created_at:new Date(profile.created_at).toISOString()},rank:rank?.rank??0};
  }
@@ -170,13 +170,13 @@ export async function privateAction(db:D1Database,profile:PlayerProfile,action:s
   if(!Number.isFinite(r.created_at)||!Number.isFinite(r.finished_at)||r.created_at<1577836800000||r.created_at>r.finished_at||r.finished_at>t+300000)throw new ArenaError('The offline game dates are invalid.');
   if(await stmt(db,'SELECT id FROM arena_matches WHERE id=?',matchId).first())throw new ArenaError('This is an online match.');
   const key='offline:'+matchId+':'+id,won=r.result===(r.white_id===id?'white':'black'),lost=r.result!=='draw'&&!won;
-  const delta=won?'2':lost?'-MIN(5,cbr)':'0';
-  const guard='NOT EXISTS(SELECT 1 FROM arena_ledger WHERE id=?)',first='first:'+id+':'+matchId;
+  const delta=won?'6':lost?'-MIN(9,ocbr)':'0';
+  const guard='NOT EXISTS(SELECT 1 FROM arena_ledger WHERE id=?)';
   const record={id:matchId,white:String(r.white_name??'White').slice(0,60),black:String(r.black_name??'Black').slice(0,60),pgn:r.pgn,score:r.result==='draw'?'½–½':r.result==='white'?'1–0':'0–1',startedAt:new Date(r.created_at).toISOString(),updatedAt:new Date(r.finished_at).toISOString()};
   const writes=[stmt(db,`INSERT OR IGNORE INTO arena_offline_results(id,user_id,record,created_at) VALUES(?,?,?,?)`,key,id,JSON.stringify(record),r.created_at)];
-  if(won){writes.push(stmt(db,`INSERT OR IGNORE INTO arena_feed(id,user_id,kind,display_name,content,cbr_delta,created_at) SELECT ?,user_id,'win',display_name,'won an offline match.',${delta},? FROM arena_players WHERE user_id=? AND ${guard}`,key+':win',r.finished_at,id,key));writes.push(stmt(db,`INSERT OR IGNORE INTO arena_ledger(id,user_id,delta,kind,created_at) SELECT ?,?,0,'first_blood',? WHERE ${guard} AND NOT EXISTS(SELECT 1 FROM arena_ledger WHERE user_id=? AND kind='first_blood' AND created_at>?)`,first,id,r.finished_at,key,id,r.finished_at-86340000));writes.push(stmt(db,`INSERT OR IGNORE INTO arena_feed(id,user_id,kind,display_name,content,created_at) SELECT ?,user_id,'first_blood',display_name,'earned their first win of the day.',? FROM arena_players WHERE user_id=? AND EXISTS(SELECT 1 FROM arena_ledger WHERE id=?)`,first,r.finished_at,id,first));}
+  if(won){writes.push(stmt(db,`INSERT OR IGNORE INTO arena_feed(id,user_id,kind,display_name,content,cbr_delta,created_at) SELECT ?,user_id,'win',display_name,'won an offline match (+6 OCBR).',0,? FROM arena_players WHERE user_id=? AND ${guard}`,key+':win',r.finished_at,id,key));}
   writes.push(stmt(db,`INSERT OR IGNORE INTO arena_ledger(id,user_id,delta,kind,created_at) SELECT ?,user_id,${delta},'offline',? FROM arena_players WHERE user_id=? AND ${guard}`,key,r.finished_at,id,key));
-  writes.push(stmt(db,`UPDATE arena_players SET cbr=MAX(0,cbr+(${delta})),wins=wins+?,losses=losses+?,win_streak=${won?'win_streak+1':'0'} WHERE user_id=? AND NOT EXISTS(SELECT 1 FROM arena_logs WHERE id=?)`,won?1:0,lost?1:0,id,key));
+  writes.push(stmt(db,`UPDATE arena_players SET ocbr=MAX(0,ocbr+(${delta})) WHERE user_id=? AND NOT EXISTS(SELECT 1 FROM arena_logs WHERE id=?)`,id,key));
   writes.push(stmt(db,'INSERT OR IGNORE INTO arena_logs(id,actor_user_id,action,details,created_at) VALUES(?,?,?,?,?)',key,id,'offline_result',JSON.stringify({matchId,result:r.result,selfReported:true}),t));
   writes.push(stmt(db,'DELETE FROM arena_feed WHERE id NOT IN(SELECT id FROM arena_feed ORDER BY created_at DESC LIMIT 50)'));
   await db.batch(writes);return {ok:true};
