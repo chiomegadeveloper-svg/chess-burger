@@ -11,6 +11,7 @@ import "./arena.css";
 import "./feed-polish.css";
 import "./charcoal-theme.css";
 import "./social.css";
+import "./v31.css";
 
 export const metadata: Metadata = {
   title: "Chess Burger",
