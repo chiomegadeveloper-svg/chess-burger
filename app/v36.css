@@ -1,0 +1,5 @@
+.offline-role-actions{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0}
+.offline-role-actions button{min-height:48px}
+.offline-role-actions button[aria-pressed=true]{border-color:#e2bd59;color:#f2d477;background:#353020}
+.pairing-role-note{margin:0 0 12px;color:#94a7b2;font-size:12px}
+@media(max-width:650px){.offline-role-actions{gap:8px}.offline-role-actions button{min-height:42px;font-size:12px}}
