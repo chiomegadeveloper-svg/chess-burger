@@ -15,6 +15,7 @@ import '../app/social.css';
 import '../app/v31.css';
 import '../app/v32.css';
 import '../app/v33.css';
+import '../app/v34.css';
 import Page from '../app/page';
 
 createRoot(document.getElementById('root')!).render(

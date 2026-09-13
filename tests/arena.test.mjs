@@ -65,7 +65,7 @@ test('Feed pruning keeps latest 50; hearts are idempotent and removed with old i
 });
 test('Offline replay and CBR sync are idempotent and only affect the submitting account',async()=>{
  const db=database(),a=profile('a'),b=profile('b');await seed(db,a,b);const chess=new Chess();['f3','e5','g4','Qh4#'].forEach(m=>chess.move(m));const record={id:crypto.randomUUID(),white_id:'a',black_id:'b',white_name:'A',black_name:'B',pgn:chess.pgn(),result:'black',control:'10+0',created_at:Date.now()-10000,finished_at:Date.now()};
- await privateAction(db,b,'offline-result',{record});await privateAction(db,b,'offline-result',{record});assert.equal(player(db,'b').cbr,96);assert.equal(player(db,'a').cbr,88);assert.equal((await privateAction(db,b,'offline-history',{})).games.length,1);await privateAction(db,a,'offline-result',{record});assert.equal(player(db,'a').cbr,78);
+ await privateAction(db,b,'offline-result',{record});await privateAction(db,b,'offline-result',{record});assert.equal(player(db,'b').cbr,90);assert.equal(player(db,'a').cbr,88);assert.equal((await privateAction(db,b,'offline-history',{})).games.length,1);await privateAction(db,a,'offline-result',{record});assert.equal(player(db,'a').cbr,83);
  await assert.rejects(privateAction(db,a,'offline-result',{record:{...record,id:crypto.randomUUID(),result:'white'}}),/final board/);
 });
 test('App advertisement is global, staff-controlled, replaceable and removable',async()=>{

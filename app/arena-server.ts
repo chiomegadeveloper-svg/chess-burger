@@ -170,8 +170,7 @@ export async function privateAction(db:D1Database,profile:PlayerProfile,action:s
   if(!Number.isFinite(r.created_at)||!Number.isFinite(r.finished_at)||r.created_at<1577836800000||r.created_at>r.finished_at||r.finished_at>t+300000)throw new ArenaError('The offline game dates are invalid.');
   if(await stmt(db,'SELECT id FROM arena_matches WHERE id=?',matchId).first())throw new ArenaError('This is an online match.');
   const key='offline:'+matchId+':'+id,won=r.result===(r.white_id===id?'white':'black'),lost=r.result!=='draw'&&!won;
-  const other=await stmt(db,'SELECT cbr FROM arena_players WHERE user_id=?',r.white_id===id?r.black_id:r.white_id).first<{cbr:number}>(),opponent=other?.cbr??88;
-  const delta=won?`8+CASE WHEN win_streak+1>=4 THEN 2 ELSE 0 END+CASE WHEN ABS(cbr-${opponent})>10 THEN ${Math.floor(opponent*.1)} ELSE 0 END`:lost?'-MIN(10,cbr)':'0';
+  const delta=won?'2':lost?'-MIN(5,cbr)':'0';
   const guard='NOT EXISTS(SELECT 1 FROM arena_ledger WHERE id=?)',first='first:'+id+':'+matchId;
   const record={id:matchId,white:String(r.white_name??'White').slice(0,60),black:String(r.black_name??'Black').slice(0,60),pgn:r.pgn,score:r.result==='draw'?'½–½':r.result==='white'?'1–0':'0–1',startedAt:new Date(r.created_at).toISOString(),updatedAt:new Date(r.finished_at).toISOString()};
   const writes=[stmt(db,`INSERT OR IGNORE INTO arena_offline_results(id,user_id,record,created_at) VALUES(?,?,?,?)`,key,id,JSON.stringify(record),r.created_at)];
