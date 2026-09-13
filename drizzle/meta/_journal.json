@@ -1,0 +1,48 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1788976979208,
+      "tag": "0000_panoramic_magus",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1788978713410,
+      "tag": "0001_handy_nightshade",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1789211128380,
+      "tag": "0002_young_morg",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1789232279517,
+      "tag": "0003_adorable_miss_america",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1789234921619,
+      "tag": "0004_simple_steve_rogers",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1789234946777,
+      "tag": "0005_social_guards_feed_retention",
+      "breakpoints": true
+    }
+  ]
+}

@@ -1,0 +1,50 @@
+=========================================================================================================
+                            CHESS GAME APP: REWARD BADGES & SHOP POINTS TABLE                            
+=========================================================================================================
+
++----+-------------------------+-----------------------------------------------+-------------+-----------------------------------+
+|  # | Badge Name              | How to Achieve                                | Gold Points | App Shop Reward                   |
++----+-------------------------+-----------------------------------------------+-------------+-----------------------------------+
+|  1 | Wandering Pawn          | Reach Player Level 1                          | 1 Pt        | 100 Shop Coins                    |
+|  2 | Vanguard Knight         | Reach Player Level 2                          | 2 Pts       | Wooden Board Skin                 |
+|  3 | Zealot Bishop           | Reach Player Level 3                          | 2 Pts       | Custom Avatar Border              |
+|  4 | Fortress Rook           | Reach Player Level 4                          | 3 Pts       | Marble Piece Set                  |
+|  5 | Gambit Stalker          | Reach Player Level 5                          | 4 Pts       | Profile Banner                    |
+|  6 | Promoted Champion       | Reach Player Level 6                          | 4 Pts       | Silver Crown Icon                 |
+|  7 | Sovereign Queen         | Reach Player Level 7                          | 5 Pts       | Neon Board Skin                   |
+|  8 | Zugzwang Sphinx         | Reach Player Level 8                          | 6 Pts       | Mystic Audio Pack                 |
+|  9 | Grandmaster Phoenix     | Reach Player Level 9                          | 7 Pts       | Phoenix Move Effect               |
+| 10 | Mythical Endgame Dragon | Reach Player Level 10                         | 8 Pts       | Legendary Dragon Board & VIP Pass |
+| 11 | First Blood             | Win your 1st online match                     | 1 Pt        | 50 Shop Coins                     |
+| 12 | Hot Streak              | Win 3 matches in a row                        | 2 Pts       | 150 Shop Coins                    |
+| 13 | On Fire                 | Win 5 matches in a row                        | 4 Pts       | Flame Emote                       |
+| 14 | Unstoppable             | Achieve a 10-win streak                       | 6 Pts       | Golden Move Trail                 |
+| 15 | Board Dominator         | Achieve a 15-win streak                       | 7 Pts       | Exclusive Profile Title           |
+| 16 | Century Conqueror       | Win 100 total matches                         | 8 Pts       | 1,000 Shop Coins                  |
+| 17 | Scholar's Edge          | Win a game in under 10 moves                  | 3 Pts       | Quick-Play XP Booster             |
+| 18 | Fork Master             | Fork King & Queen with a Knight               | 3 Pts       | Knight Avatar Frame               |
+| 19 | Skewer Specialist       | Execute a successful Skewer attack            | 3 Pts       | Tactical Emote Pack               |
+| 20 | Castle Builder          | Perform Castling in 10 separate matches       | 2 Pts       | Stone Castle Profile Theme        |
+| 21 | En Passant Elite        | Execute an En Passant capture                 | 4 Pts       | 250 Shop Coins                    |
+| 22 | Queen's Gambit          | Sacrifice your Queen and win                  | 6 Pts       | Animated Queen Banner             |
+| 23 | Pawn Stormer            | Promote 3 Pawns in a single match             | 5 Pts       | Pawn Storm Title                  |
+| 24 | Discovered Strike       | Deliver Checkmate via Discovered Check        | 5 Pts       | Stealth Sound Pack                |
+| 25 | Underpromotion Hero     | Promote a Pawn to Knight/Bishop for Checkmate | 4 Pts       | Surprise Emote                    |
+| 26 | Comeback King           | Win a game after losing your Queen            | 6 Pts       | Resilient Title & 500 Coins       |
+| 27 | Bullet Demon            | Win a 1-minute Bullet match                   | 3 Pts       | Lightning Move Effect             |
+| 28 | Blitz Maestro           | Win 10 Blitz matches                          | 4 Pts       | Speedster Profile Tag             |
+| 29 | Rapid Strategist        | Win 10 Rapid matches                          | 3 Pts       | Hourglass Avatar Border           |
+| 30 | Classical Thinker       | Complete a 30-minute Classical match          | 2 Pts       | Vintage Piece Set                 |
+| 31 | Friendly Rival          | Play 10 matches against friends               | 2 Pts       | Friendly Emote Set                |
+| 32 | Daily Puzzler           | Solve 7 daily puzzles in a row                | 3 Pts       | 200 Shop Coins                    |
+| 33 | Rating Novice           | Reach 1,000 ELO Rating                        | 2 Pts       | Bronze Rating Badge               |
+| 34 | Rating Expert           | Reach 1,500 ELO Rating                        | 4 Pts       | Silver Rating Badge               |
+| 35 | Rating Master           | Reach 2,000 ELO Rating                        | 6 Pts       | Gold Rating Badge                 |
+| 36 | Top 100 Challenger      | Reach the Top 100 Global Leaderboard          | 5 Pts       | Leaderboard Name Color            |
+| 37 | Top 10 Titan            | Reach the Top 10 Global Leaderboard           | 8 Pts       | Titan Crown Frame & 2,000 Coins   |
+| 38 | Tournament Champion     | Win a Weekly App Tournament                   | 7 Pts       | Gold Trophy Badge                 |
+| 39 | Puzzle Grandmaster      | Solve 500 total tactics puzzles               | 7 Pts       | Master Mind Avatar                |
+| 40 | Globe Trotter           | Play a match on all board custom themes       | 3 Pts       | World Collector Title             |
++----+-------------------------+-----------------------------------------------+-------------+-----------------------------------+
+
+Design Note: Badges are visually minimal metallic coin emblems with central icon designs and no text or point numbers rendered on the coin face.
