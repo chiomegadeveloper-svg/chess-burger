@@ -761,7 +761,7 @@ export default function Page() {
                 setSummary(null);
                 setActiveId("");
                 setMatchId(summary.id);
-                setTab("game");
+                setTab("watch");
               }
             : undefined
         }
