@@ -1,0 +1,12 @@
+.internet-pairing{margin:14px 0;gap:12px!important}
+.internet-pairing-title{display:flex;align-items:center;gap:11px}
+.internet-pairing-title>svg{width:28px;height:28px;color:#53dbe8;flex:0 0 auto}
+.internet-pairing-title h2,.internet-pairing-title p{margin:0}
+.internet-pairing-title p{font-size:11px;color:#9fb0bb}
+.internet-code-actions{display:grid;grid-template-columns:auto auto minmax(120px,1fr) auto;gap:9px;align-items:center}
+.internet-code-actions>span{font-size:11px;color:#8c9aa4;text-align:center}
+.internet-code-actions input{text-transform:uppercase;font:600 18px/1 Poppins,sans-serif;letter-spacing:3px;text-align:center}
+.internet-room-code{display:block;padding:12px;border:1px solid #c3a85d;border-radius:10px;background:#11191e;color:#f3d77f;font-size:clamp(24px,5vw,38px);letter-spacing:6px;text-align:center}
+.pairing-divider{display:flex;align-items:center;gap:12px;margin:18px 0 10px;color:#9aabb4;font-size:11px;text-transform:uppercase;letter-spacing:1px}
+.pairing-divider:before,.pairing-divider:after{content:'';height:1px;background:#39434c;flex:1}
+@media(max-width:650px){.internet-code-actions{grid-template-columns:1fr auto}.internet-code-actions .gold-button{grid-column:1 / -1}.internet-code-actions input{min-width:0}.internet-room-code{letter-spacing:4px}}

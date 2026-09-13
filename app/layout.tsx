@@ -13,6 +13,7 @@ import "./charcoal-theme.css";
 import "./social.css";
 import "./v31.css";
 import "./v32.css";
+import "./v33.css";
 
 export const metadata: Metadata = {
   title: "Chess Burger",

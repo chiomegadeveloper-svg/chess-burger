@@ -6,6 +6,7 @@ export class ArenaError extends Error {status:number;constructor(message:string,
 const stmt=(db:D1Database,sql:string,...values:unknown[])=>db.prepare(sql).bind(...values);
 const now=()=>Date.now();
 const uid=()=>crypto.randomUUID();
+const shortCode=()=>{const alphabet='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',bytes=crypto.getRandomValues(new Uint8Array(8));return Array.from(bytes,n=>alphabet[n%alphabet.length]).join('');};
 const playerColumns='user_id,username,display_name,avatar_url,country_code,cbr,gold_points,wins,losses,win_streak';
 const inPlay=`status='active'`;
 export async function syncPlayer(db:D1Database,p:PlayerProfile){
@@ -75,7 +76,7 @@ export async function createRoom(db:D1Database,p:ArenaPlayer,control:string,targ
  const id=uid(),t=now();await db.batch([
   stmt(db,"UPDATE arena_matches SET status='cancelled' WHERE host_id=? AND status='waiting'",p.user_id),
   stmt(db,'DELETE FROM arena_queue WHERE user_id=? AND match_id IS NULL',p.user_id),
-  stmt(db,`INSERT INTO arena_matches(id,host_id,white_id,invite_to,code,control,status,white_ms,black_ms,last_tick,white_cbr,created_at) SELECT ?,?,?,?,?,?,'waiting',?,?,?,?,? WHERE NOT EXISTS(SELECT 1 FROM arena_matches WHERE status='active' AND (white_id=? OR black_id=?))`,id,p.user_id,p.user_id,target??null,id.slice(0,8).toUpperCase(),control,tc.seconds*1000,tc.seconds*1000,t,p.cbr,t,p.user_id,p.user_id),
+  stmt(db,`INSERT INTO arena_matches(id,host_id,white_id,invite_to,code,control,status,white_ms,black_ms,last_tick,white_cbr,created_at) SELECT ?,?,?,?,?,?,'waiting',?,?,?,?,? WHERE NOT EXISTS(SELECT 1 FROM arena_matches WHERE status='active' AND (white_id=? OR black_id=?))`,id,p.user_id,p.user_id,target??null,shortCode(),control,tc.seconds*1000,tc.seconds*1000,t,p.cbr,t,p.user_id,p.user_id),
  ]);return {match:await matchView(db,id)};
 }
 export async function joinRoom(db:D1Database,p:ArenaPlayer,code:string){

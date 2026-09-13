@@ -30,7 +30,7 @@ test('Concurrent queue requests cannot place a player on two boards',async()=>{
 });
 test('Host controls time; targeted invites exclude other users and expired rooms',async()=>{
  const db=database(),a=profile('a'),b=profile('b'),c=profile('c');await seed(db,a,b,c);await privateAction(db,b,'presence',{gps:true,lat:11,lng:125,accuracy:10});
- const r=await createRoom(db,a,'1+1','b');await assert.rejects(joinRoom(db,c,r.match.code),/another player/);const m=(await joinRoom(db,b,r.match.code)).match;assert.equal(m.host_id,'a');assert.equal(m.control,'1+1');assert.equal(m.white_ms,60000);assert.equal(m.black_id,'b');await assert.rejects(createRoom(db,a,'3+0'),/current match/);
+ const r=await createRoom(db,a,'1+1','b');assert.match(r.match.code,/^[A-Z0-9]{8}$/);await assert.rejects(joinRoom(db,c,r.match.code),/another player/);const m=(await joinRoom(db,b,r.match.code)).match;assert.equal(m.host_id,'a');assert.equal(m.control,'1+1');assert.equal(m.white_ms,60000);assert.equal(m.black_id,'b');await assert.rejects(createRoom(db,a,'3+0'),/current match/);
  await playMove(db,b,m.id,m.version,undefined,true);const waiting=await createRoom(db,a,'10+0');db.sqlite.prepare('UPDATE arena_matches SET created_at=0 WHERE id=?').run(waiting.match.id);await assert.rejects(joinRoom(db,c,waiting.match.code),/expired/);
 });
 test('Server rejects illegal, out-of-turn, stale, and spectator moves',async()=>{
