@@ -1,0 +1,15 @@
+.card-only-view .card-achievements{position:relative;display:grid;grid-template-columns:1.05fr 1fr;gap:12px;margin-top:20px}
+.card-only-view .card-achievements section{min-width:0;padding:12px 14px;border:1px solid #b89b4d;border-radius:13px;background:linear-gradient(145deg,#17252b,#0a1216);box-shadow:inset 0 0 0 2px #05090b,inset 0 0 0 3px #315963}
+.card-only-view .card-achievements header{display:flex;align-items:center;gap:9px;margin-bottom:10px;text-align:left}
+.card-only-view .card-achievements header>svg{width:21px;color:#efd076;filter:drop-shadow(0 0 5px #dcb44066)}
+.card-only-view .card-achievements header span{display:grid;min-width:0}
+.card-only-view .card-achievements header strong{font-size:12px;color:#edf5f6}
+.card-only-view .card-achievements header small{font-size:8px;color:#7f9aa3;letter-spacing:.4px;text-transform:uppercase}
+.trophy-slots{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.trophy-slots>span{display:grid;place-items:center;gap:2px;min-height:52px;border:1px dashed #6f633d;border-radius:8px;color:#635b44;background:#11191d}
+.trophy-slots i{font:normal 18px Georgia,serif;color:#8a7a4d}
+.trophy-slots small{font-size:7px;color:#788990;text-align:center}
+.card-badge-strip{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
+.card-badge-strip img,.card-badge-strip .empty-badge{width:100%;aspect-ratio:1;object-fit:contain;border:1px solid #5d674e;border-radius:9px;background:#202a2e;padding:3px}
+.card-badge-strip .empty-badge{display:grid;place-items:center;color:#52636a;font-family:Georgia,serif}
+@media(max-width:650px){.card-only-view .card-achievements{grid-template-columns:1fr;gap:8px;margin-top:13px}.card-only-view .card-achievements section{padding:9px 10px}.card-only-view .card-achievements header{margin-bottom:7px}.trophy-slots>span{min-height:42px}}
