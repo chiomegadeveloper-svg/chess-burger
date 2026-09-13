@@ -19,10 +19,11 @@ const player=(db,id)=>db.sqlite.prepare('SELECT * FROM arena_players WHERE user_
 test('CBR bonus: both rating directions, exact 10-point boundary, and fourth-win streak',()=>{
  assert.equal(winDelta(88,98,1),8);assert.equal(winDelta(88,99,1),17);assert.equal(winDelta(108,88,1),16);assert.equal(winDelta(88,88,4),10);assert.equal(winDelta(88,108,5),20);
 });
-test('Random queue enforces ±20, matching time control, and fresh availability',async()=>{
- const db=database(),a=profile('a'),outside=profile('outside',109),wrong=profile('wrong'),stale=profile('stale'),b=profile('b',108);await seed(db,a,outside,wrong,stale,b);
- assert.equal((await queueMatch(db,outside,'3+0')).match,null);assert.equal((await queueMatch(db,wrong,'1+0')).match,null);await queueMatch(db,stale,'3+0');db.sqlite.prepare('UPDATE arena_queue SET seen_at=0 WHERE user_id=?').run('stale');
- assert.equal((await queueMatch(db,a,'3+0')).match,null);await privateAction(db,outside,'cancel-queue',{});const paired=(await queueMatch(db,b,'3+0')).match;assert.deepEqual(new Set([paired.white_id,paired.black_id]),new Set(['a','b']));assert.equal(paired.white_cbr,88);assert.equal(paired.black_cbr,108);assert.equal(paired.control,'3+0');assert.equal((await queueMatch(db,a,'1+0')).match.id,paired.id);
+test('Random queue prefers ±20 CBR, then chooses the closest fresh player with the same time control',async()=>{
+ const db=database(),a=profile('a',88),near=profile('near',106),far=profile('far',140),wrong=profile('wrong',89),stale=profile('stale',90);await seed(db,a,near,far,wrong,stale);
+ const now=Date.now();db.sqlite.prepare('INSERT INTO arena_queue(user_id,control,seen_at) VALUES(?,?,?)').run('far','3+0',now-3);db.sqlite.prepare('INSERT INTO arena_queue(user_id,control,seen_at) VALUES(?,?,?)').run('near','3+0',now-2);db.sqlite.prepare('INSERT INTO arena_queue(user_id,control,seen_at) VALUES(?,?,?)').run('wrong','1+0',now-1);db.sqlite.prepare('INSERT INTO arena_queue(user_id,control,seen_at) VALUES(?,?,?)').run('stale','3+0',0);
+ const preferred=(await queueMatch(db,a,'3+0')).match;assert.equal(preferred.white_id,'near');assert.equal(preferred.black_id,'a');assert.equal(preferred.control,'3+0');
+ const db2=database(),seeker=profile('seeker',88),distant=profile('distant',160),closest=profile('closest',121);await seed(db2,seeker,distant,closest);db2.sqlite.prepare('INSERT INTO arena_queue(user_id,control,seen_at) VALUES(?,?,?)').run('distant','10+0',now-2);db2.sqlite.prepare('INSERT INTO arena_queue(user_id,control,seen_at) VALUES(?,?,?)').run('closest','10+0',now-1);const fallback=(await queueMatch(db2,seeker,'10+0')).match;assert.equal(fallback.white_id,'closest');assert.equal(fallback.black_id,'seeker');
 });
 test('Concurrent queue requests cannot place a player on two boards',async()=>{
  const db=database(),players=['a','b','c','d','e','f'].map(x=>profile(x));await seed(db,...players);await Promise.all(players.map(p=>queueMatch(db,p,'10+0')));

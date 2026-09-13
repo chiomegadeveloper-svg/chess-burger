@@ -60,10 +60,10 @@ export async function queueMatch(db:D1Database,p:ArenaPlayer,control:string){
   stmt(db,`INSERT INTO arena_queue(user_id,control,seen_at) VALUES(?,?,?) ON CONFLICT(user_id) DO UPDATE SET seen_at=excluded.seen_at,control=CASE WHEN match_id IS NULL THEN excluded.control ELSE control END`,p.user_id,control,t),
   stmt(db,`INSERT INTO arena_matches(id,host_id,white_id,black_id,code,control,status,white_ms,black_ms,last_tick,white_cbr,black_cbr,created_at)
     SELECT ?,q.user_id,q.user_id,?,?,?,'active',?,?,?,?,?,? FROM arena_queue q JOIN arena_players p ON p.user_id=q.user_id
-    WHERE q.user_id<>? AND q.control=? AND q.match_id IS NULL AND q.seen_at>? AND ABS(p.cbr-?)<=20
+    WHERE q.user_id<>? AND q.control=? AND q.match_id IS NULL AND q.seen_at>?
     AND NOT EXISTS(SELECT 1 FROM arena_matches WHERE status='active' AND (white_id IN(q.user_id,?) OR black_id IN(q.user_id,?)))
-    ORDER BY RANDOM() LIMIT 1`,id,p.user_id,id.slice(0,8).toUpperCase(),control,tc.seconds*1000,tc.seconds*1000,t, // white CBR set from matched player's row below
-    p.cbr,p.cbr,t,p.user_id,control,t-15000,p.cbr,p.user_id,p.user_id),
+    ORDER BY ABS(p.cbr-?) ASC,q.seen_at ASC LIMIT 1`,id,p.user_id,id.slice(0,8).toUpperCase(),control,tc.seconds*1000,tc.seconds*1000,t, // white CBR set from matched player's row below
+    p.cbr,p.cbr,t,p.user_id,control,t-15000,p.user_id,p.user_id,p.cbr),
   stmt(db,`UPDATE arena_matches SET white_cbr=(SELECT cbr FROM arena_players WHERE user_id=white_id) WHERE id=?`,id),
   stmt(db,`UPDATE arena_queue SET match_id=? WHERE user_id IN (SELECT white_id FROM arena_matches WHERE id=? UNION SELECT black_id FROM arena_matches WHERE id=?)`,id,id,id),
  ]);

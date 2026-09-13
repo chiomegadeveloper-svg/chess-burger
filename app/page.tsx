@@ -26,7 +26,7 @@ import {SocialHub,MatchResult,type MatchSummary} from './social';
 import PublicProfile from './public-profile';
 
 const modes=[
- {name:'Play Online',sub:'Random opponent · within 20 CBR',meta:'Find match',Icon:Globe2,key:'online'},
+ {name:'Play Online',sub:'Closest available CBR opponent',meta:'Find match',Icon:Globe2,key:'online'},
  {name:'Nearby Match',sub:'See GPS-active players on the map',meta:'Open map',Icon:MapPin,key:'map'},
  {name:'Offline Board',sub:'Local Wi-Fi · QR & pairing code',meta:'Pair devices',Icon:UsersRound,key:'pairing'},
  {name:'Territory Invasion',sub:'Claim a 200 m zone',meta:'+10 CBR',Icon:Flag,key:'territory'},
