@@ -36,7 +36,7 @@ test('Host controls time; targeted invites exclude other users and expired rooms
 test('Server rejects illegal, out-of-turn, stale, and spectator moves',async()=>{
  const db=database(),a=profile('a'),b=profile('b'),c=profile('c');await seed(db,a,b,c);let m=await room(db,a,b);await assert.rejects(playMove(db,c,m.id,m.version,{from:'e2',to:'e4'}),/two players/);await assert.rejects(playMove(db,b,m.id,m.version,{from:'e7',to:'e5'}),/turn/);await assert.rejects(playMove(db,a,m.id,m.version,{from:'e2',to:'e5'}),/not legal/);const version=m.version;m=(await playMove(db,a,m.id,m.version,{from:'e2',to:'e4'})).match;assert(m.white_ms>180000);await assert.rejects(playMove(db,b,m.id,version,{from:'e7',to:'e5'}),/changed/);
 });
-test('Checkmate applies both ratings exactly once, with first blood once per UTC day',async()=>{
+test('Checkmate applies both ratings exactly once, with first blood once per 23h 59m window',async()=>{
  const db=database(),a=profile('a',108),b={...profile('b',88),win_streak:3};await seed(db,a,b);let m=await room(db,a,b);
  for(const [actor,from,to] of [[a,'f2','f3'],[b,'e7','e5'],[a,'g2','g4'],[b,'d8','h4']])m=(await playMove(db,actor,m.id,m.version,{from,to})).match;
  assert.equal(m.status,'finished');assert.equal(m.result,'black');assert.equal(player(db,'a').cbr,98);assert.equal(player(db,'b').cbr,108);assert.equal(player(db,'b').win_streak,4);

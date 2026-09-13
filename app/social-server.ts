@@ -6,6 +6,12 @@ const visible=`NOT EXISTS(SELECT 1 FROM social_links b WHERE b.kind='block' AND 
 export async function socialAction(db:D1Database,id:string,action:string,input:Record<string,unknown>){
  const target=String(input.target??''),t=Date.now();
  if(action==='social-presence'){await stmt(db,'INSERT INTO social_presence(user_id,seen_at) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET seen_at=excluded.seen_at',id,t).run();return {ok:true};}
+ if(action==='social-counts'){
+  const counts=await stmt(db,`SELECT
+   (SELECT COUNT(*) FROM social_links WHERE kind='friend' AND status='accepted' AND (user_id=? OR target_id=?)) AS friends,
+   (SELECT COUNT(*) FROM social_links WHERE kind='follow' AND target_id=?) AS followers`,id,id,id).first<{friends:number;followers:number}>();
+  return {friends:Number(counts?.friends??0),followers:Number(counts?.followers??0)};
+ }
  if(action==='social-list'){
   const mode=String(input.mode??'friends'),q=String(input.q??'').trim().replace(/^@/,'').slice(0,60),page=Math.max(1,Math.floor(Number(input.page)||1));
   let filter='',values:unknown[]=[];

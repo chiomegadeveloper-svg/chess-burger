@@ -3,7 +3,7 @@ import {useEffect,useRef,useState} from 'react';
 import {QRCodeSVG} from 'qrcode.react';
 import {Search,Copy,X} from 'lucide-react';
 import {arena} from './arena-client';
-import {type ArenaMatch,type ArenaPlayer,timeControl} from './game-rules';
+import {gameFromPgn,type ArenaMatch,type ArenaPlayer,timeControl} from './game-rules';
 import type {PlayerProfile} from './supabase';
 import TimePicker from './time-picker';
 import MatchBoard,{Avatar} from './match-board';
@@ -12,8 +12,8 @@ import {saveGame} from './game-history';
 export function OnlineGame({id,profile,onFinished,watch=false}:{id:string;profile:PlayerProfile|null;onFinished:(match:ArenaMatch)=>void;watch?:boolean}){
  const [match,setMatch]=useState<ArenaMatch|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false);const finished=useRef(false),alive=useRef(true),latest=useRef(0);
  function accept(m:ArenaMatch){if(!alive.current||m.version<latest.current)return;latest.current=m.version;setMatch(m);setError('');if(m.status==='finished'&&!finished.current){finished.current=true;if(!watch){try{saveGame({id:m.id,white:m.white?.display_name??'White',black:m.black?.display_name??'Black',pgn:m.pgn,score:m.result==='draw'?'½–½':m.result==='white'?'1–0':'0–1',startedAt:new Date(m.created_at).toISOString(),updatedAt:new Date().toISOString(),ratedAt:new Date().toISOString()});}catch{}onFinished(m);}}}
- useEffect(()=>{alive.current=true;let pending=false;const poll=async()=>{if(pending)return;pending=true;try{const r=await arena<{match:ArenaMatch}>(watch?'watch':'match',{id},watch);accept(r.match);}catch(e){if(alive.current)setError((e as Error).message);}finally{pending=false;}};void poll();const timer=setInterval(poll,1500);return()=>{alive.current=false;clearInterval(timer);};},[id,watch]);
- async function move(action:'move'|'resign',move?:{from:string;to:string;promotion?:string}){if(!match||busy)return;setBusy(true);try{const r=await arena<{match:ArenaMatch}>(action,{id,version:match.version,move});accept(r.match);}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
+ useEffect(()=>{alive.current=true;let pending=false;const poll=async()=>{if(pending)return;pending=true;try{const r=await arena<{match:ArenaMatch}>(watch?'watch':'match',{id},watch);accept(r.match);}catch(e){if(alive.current)setError((e as Error).message);}finally{pending=false;}};void poll();const timer=setInterval(poll,500);return()=>{alive.current=false;clearInterval(timer);};},[id,watch]);
+ async function move(action:'move'|'resign',move?:{from:string;to:string;promotion?:string}){if(!match||busy)return;const confirmed=match;setBusy(true);if(action==='move'&&move){try{const game=gameFromPgn(match.pgn);game.move(move);latest.current=match.version+.5;setMatch({...match,pgn:game.pgn()});}catch{}}try{const r=await arena<{match:ArenaMatch}>(action,{id,version:confirmed.version,move});accept(r.match);}catch(e){latest.current=confirmed.version;setMatch(confirmed);setError((e as Error).message);}finally{setBusy(false);}}
  if(!match)return <p className="cloud-panel" role="status">{error||'Opening your board…'}</p>;
  return <>{error&&<p className="inline-error" role="alert">{error}</p>}<MatchBoard match={match} ownId={profile?.user_id} onMove={watch?undefined:m=>void move('move',m)} onResign={watch?undefined:()=>void move('resign')} busy={busy} connection={error?'Reconnecting…':watch?'Spectating':'Live'}/></>;
 }
