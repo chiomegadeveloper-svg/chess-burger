@@ -15,11 +15,9 @@ import {
   Camera,
   Image as ImageIcon,
   Trophy,
-  Award,
 } from "lucide-react";
 import { toast } from "sonner";
 import { levelFor } from "./cbr";
-import { BADGES, BadgeInfo } from "./badges";
 import { getSupabase, PlayerProfile } from "./supabase";
 import {
   authStorage,
@@ -28,6 +26,7 @@ import {
   clearAccountCache,
 } from "./auth-storage";
 import AppFeaturedPhoto from "./app-featured-photo";
+import RewardEmblems from "./reward-emblems";
 import { arena } from "./arena-client";
 import { profileRequest } from "./profile-client";
 import { toWebpUnder1Mb } from "./media";
@@ -41,7 +40,6 @@ const emptyPhotos = ["", "", "", ""],
     ["SG", "🇸🇬", "Singapore"],
     ["GB", "🇬🇧", "United Kingdom"],
   ];
-const badgeBuckets = ["Opening", "Battle", "Explorer", "Elite"];
 const blankProfile = (id = "guest-device"): PlayerProfile => ({
   user_id: id,
   username: "new_player",
@@ -122,7 +120,6 @@ export default function Account({
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [selectedPhoto, setSelectedPhoto] = useState(""),
-    [selectedBadge, setSelectedBadge] = useState<BadgeInfo | null>(null),
     [email, setEmail] = useState(""),
     [password, setPassword] = useState("");
   useEffect(() => {
@@ -526,9 +523,7 @@ export default function Account({
       profile.wins + profile.losses
         ? Math.round((profile.wins / (profile.wins + profile.losses)) * 100)
         : 0,
-    isStaff = profile.role === "owner" || profile.role === "admin",
-    unlockedBadges = BADGES.filter((b) => b.id <= level.level),
-    cardBadges = unlockedBadges.slice(0, 5);
+    isStaff = profile.role === "owner" || profile.role === "admin";
   const playerCard = (
     <>
       <div className="player-card">
@@ -624,38 +619,6 @@ export default function Account({
               ))}
             </div>
           </section>
-          <section className="card-badge-frame">
-            <header>
-              <Award />
-              <span>
-                <strong>Unlocked Badges</strong>
-                <small>
-                  {unlockedBadges.length} of {BADGES.length} earned
-                </small>
-              </span>
-            </header>
-            <div className="card-badge-strip">
-              {cardBadges.map((badge) => (
-                <img
-                  key={badge.id}
-                  src={
-                    "/badges/badge-" +
-                    String(badge.id - 1).padStart(2, "0") +
-                    ".png"
-                  }
-                  alt={badge.name}
-                />
-              ))}
-              {Array.from(
-                { length: Math.max(0, 5 - cardBadges.length) },
-                (_, i) => (
-                  <span className="empty-badge" key={i}>
-                    ♟
-                  </span>
-                ),
-              )}
-            </div>
-          </section>
         </div>
       </div>
     </>
@@ -665,6 +628,7 @@ export default function Account({
       <section>
         {playerCard}
         <AppFeaturedPhoto />
+        <RewardEmblems />
       </section>
     );
   if (registered === true && !editing)
@@ -955,72 +919,6 @@ export default function Account({
           landscape images fit inside each thumbnail.
         </p>
       </section>
-      <section className="featured-profile-badges">
-        <h2>Featured badges</h2>
-        <div>
-          {BADGES.filter((b) =>
-            profile.featured_badges.length
-              ? profile.featured_badges.includes(String(b.id))
-              : b.id <= level.level,
-          )
-            .slice(0, 4)
-            .map((badge) => (
-              <button key={badge.id} onClick={() => setSelectedBadge(badge)}>
-                <img
-                  src={
-                    "/badges/badge-" +
-                    String(badge.id - 1).padStart(2, "0") +
-                    ".png"
-                  }
-                  alt={badge.name}
-                />
-              </button>
-            ))}
-        </div>
-      </section>
-      <section className="badge-collection">
-        <h2>50 badge collection</h2>
-        {badgeBuckets.map((bucket, b) => {
-          const start = b * 10,
-            end = b === 3 ? 50 : start + 10;
-          return (
-            <div className="badge-bucket" key={bucket}>
-              <h3>
-                {bucket}
-                <span>{end - start} badges</span>
-              </h3>
-              <div>
-                {BADGES.slice(start, end).map((badge) => {
-                  const unlocked = badge.id <= level.level;
-                  return (
-                    <button
-                      type="button"
-                      aria-label={
-                        badge.name +
-                        ", " +
-                        (unlocked ? "unlocked" : "locked") +
-                        ", view rewards"
-                      }
-                      className={unlocked ? "unlocked" : "locked"}
-                      key={badge.id}
-                      onClick={() => setSelectedBadge(badge)}
-                    >
-                      <img
-                        src={
-                          "/badges/badge-" +
-                          String(badge.id - 1).padStart(2, "0") +
-                          ".png"
-                        }
-                        alt=""
-                      />
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })}
-      </section>
       <Dialog
         open={!!selectedPhoto}
         onOpenChange={(open) => !open && setSelectedPhoto("")}
@@ -1031,39 +929,6 @@ export default function Account({
             <DialogDescription>Expanded player photo</DialogDescription>
           </DialogHeader>
           {selectedPhoto && <img src={selectedPhoto} alt="Expanded featured" />}
-        </DialogContent>
-      </Dialog>
-      <Dialog
-        open={!!selectedBadge}
-        onOpenChange={(open) => !open && setSelectedBadge(null)}
-      >
-        <DialogContent className="badge-dialog">
-          {selectedBadge && (
-            <>
-              <img
-                src={
-                  "/badges/badge-" +
-                  String(selectedBadge.id - 1).padStart(2, "0") +
-                  ".png"
-                }
-                alt={selectedBadge.name}
-              />
-              <DialogHeader>
-                <DialogTitle>
-                  {selectedBadge.id}. {selectedBadge.name}
-                </DialogTitle>
-                <DialogDescription>
-                  {selectedBadge.requirement}
-                </DialogDescription>
-              </DialogHeader>
-              <strong>
-                {selectedBadge.points === null
-                  ? "Reward not specified"
-                  : `Reward: ${selectedBadge.points} Gold Point${selectedBadge.points === 1 ? "" : "s"}`}
-              </strong>
-              <p>{selectedBadge.shopReward}</p>
-            </>
-          )}
         </DialogContent>
       </Dialog>
     </section>

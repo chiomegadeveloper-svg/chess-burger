@@ -9,6 +9,7 @@ import {
   type ArenaPlayer,
 } from "./game-rules.ts";
 import type { PlayerProfile } from "./supabase";
+import { levelFor } from "./cbr.ts";
 
 export class ArenaError extends Error {
   status: number;
@@ -652,6 +653,21 @@ export async function privateAction(
       id,
     ).first();
     return { profile: { ...profile, ...p }, rank: rank?.rank };
+  }
+  if (action === "rewards") {
+    const [matches, checkmates, friends, reactions] = await Promise.all([
+      stmt(db,"SELECT COUNT(*) AS n FROM arena_matches WHERE status='finished' AND (white_id=? OR black_id=?)",id,id).first<{n:number}>(),
+      stmt(db,"SELECT COUNT(*) AS n FROM arena_matches WHERE status='finished' AND pgn LIKE '%#%' AND ((white_id=? AND result='white') OR (black_id=? AND result='black'))",id,id).first<{n:number}>(),
+      stmt(db,"SELECT COUNT(*) AS n FROM social_links WHERE kind='friend' AND status='accepted' AND (user_id=? OR target_id=?)",id,id).first<{n:number}>(),
+      stmt(db,"SELECT COUNT(*) AS n FROM arena_hearts h JOIN arena_feed f ON f.id=h.feed_id WHERE f.user_id=?",id).first<{n:number}>(),
+    ]);
+    const level=levelFor(p.cbr).level,totalMatches=Number(matches?.n??0),mateWins=Number(checkmates?.n??0),friendCount=Number(friends?.n??0),reactionCount=Number(reactions?.n??0),gained=Math.max(0,p.cbr-88);
+    const unlocked:string[]=[];
+    if(level>=2)unlocked.push('rookie-flame'); if(p.wins>=3)unlocked.push('knights-steel'); if(totalMatches>=10)unlocked.push('burger-blitz'); if(mateWins>=1)unlocked.push('first-checkmate'); if(level>=5)unlocked.push('golden-pawn');
+    if(gained>=100)unlocked.push('cbr-climber'); if(p.wins>=10)unlocked.push('neon-board'); if(level>=10)unlocked.push('burger-master'); if(p.win_streak>=3)unlocked.push('silver-rook'); if(friendCount>=5)unlocked.push('friendly-challenger');
+    if(mateWins>=5)unlocked.push('tactical-thinker'); if(totalMatches>=30)unlocked.push('midnight-board'); if(level>=15)unlocked.push('golden-king'); if(gained>=500)unlocked.push('cb-champion'); if(p.win_streak>=5)unlocked.push('flaming-queen');
+    if(reactionCount>=25)unlocked.push('community-legend'); if(p.wins>=25)unlocked.push('cyber-knight'); if(level>=20)unlocked.push('burger-crown'); if(p.cbr>=1000)unlocked.push('grandmaster-gold'); if(p.wins>=100)unlocked.push('cb-supreme');
+    return {unlocked};
   }
   if (action === "state") {
     const active = await current(db, id),
