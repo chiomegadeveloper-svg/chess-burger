@@ -640,6 +640,7 @@ export type MatchSummary = {
   delta: number;
   ratingLabel?: "CBR" | "OCBR";
   ratingValue?: number;
+  goldDelta?: number;
   opponent?: ArenaPlayer;
   local?: boolean;
 };
@@ -727,6 +728,13 @@ export function MatchResult({
             </>
           )}
         </div>
+        {!result.local && result.goldDelta !== undefined && (
+          <p className="result-gold">
+            {result.goldDelta
+              ? `+${result.goldDelta} Gold earned`
+              : "No Gold for a drawn match"}
+          </p>
+        )}
         {!result.local && (
           <>
             <progress

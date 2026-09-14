@@ -86,6 +86,13 @@ export async function settle(db: D1Database, id: string) {
       : lost
         ? "-MIN(10,cbr)"
         : "0";
+    // Gold is separate from CBR: it is never awarded for offline play, and
+    // the sixth consecutive win (pre-match streak already at five) earns +2.
+    const gold = won
+      ? "5+CASE WHEN win_streak>=5 THEN 2 ELSE 0 END"
+      : lost
+        ? "1"
+        : "0";
     statements.push(
       stmt(
         db,
@@ -96,12 +103,23 @@ export async function settle(db: D1Database, id: string) {
         id,
       ),
     );
+    statements.push(
+      stmt(
+        db,
+        `INSERT OR IGNORE INTO arena_gold_ledger(id,user_id,delta,kind,reference_id,created_at) SELECT ?,user_id,${gold},'match',?,? FROM arena_players WHERE user_id=? AND ${guard}`,
+        `match-gold:${id}:${pid}`,
+        id,
+        now(),
+        pid,
+        id,
+      ),
+    );
     if (won) {
       statements.push(
         stmt(
           db,
-          `INSERT OR IGNORE INTO arena_feed(id,user_id,kind,display_name,content,cbr_delta,created_at)
-    SELECT ?,user_id,'win',display_name,?,${delta},? FROM arena_players WHERE user_id=? AND ${guard}`,
+          `INSERT OR IGNORE INTO arena_feed(id,user_id,kind,display_name,content,cbr_delta,gold_delta,created_at)
+    SELECT ?,user_id,'win',display_name,?,${delta},${gold},? FROM arena_players WHERE user_id=? AND ${guard}`,
           id + ":win",
           `won a ${timeControl(m.control).group.toLowerCase()} match.`,
           now(),
@@ -137,7 +155,7 @@ export async function settle(db: D1Database, id: string) {
     statements.push(
       stmt(
         db,
-        `UPDATE arena_players SET cbr=MAX(0,cbr+(${delta})),wins=wins+?,losses=losses+?,win_streak=${won ? "win_streak+1" : "0"} WHERE user_id=? AND ${guard}`,
+        `UPDATE arena_players SET cbr=MAX(0,cbr+(${delta})),gold_points=gold_points+(${gold}),wins=wins+?,losses=losses+?,win_streak=${won ? "win_streak+1" : "0"} WHERE user_id=? AND ${guard}`,
         won ? 1 : 0,
         lost ? 1 : 0,
         pid,
@@ -226,12 +244,20 @@ export async function matchView(db: D1Database, id: string) {
     id + ":" + m.white_id,
     id + ":" + m.black_id,
   ).all<{ user_id: string; delta: number }>();
+  const gold = await stmt(
+    db,
+    "SELECT user_id,delta FROM arena_gold_ledger WHERE reference_id=? AND kind='match'",
+    id,
+  ).all<{ user_id: string; delta: number }>();
   return {
     ...m,
     white: white ?? undefined,
     black: black ?? undefined,
     rating_changes: Object.fromEntries(
       ratings.results.map((r) => [r.user_id, r.delta]),
+    ),
+    gold_changes: Object.fromEntries(
+      gold.results.map((r) => [r.user_id, r.delta]),
     ),
     server_now: now(),
   };
@@ -456,6 +482,47 @@ export async function playMove(
     throw new ArenaError("The board changed. Please try again.", 409);
   return { match: await matchView(db, id) };
 }
+const emotes = new Set([
+  "haha",
+  "easy",
+  "good-game",
+  "crying",
+  "nya",
+  "newbie",
+  "great",
+  "surrender",
+  "no",
+  "yes",
+  "draw",
+  "check-time",
+]);
+export async function sendMatchReaction(
+  db: D1Database,
+  p: ArenaPlayer,
+  id: string,
+  emote: string,
+) {
+  if (!emotes.has(emote)) throw new ArenaError("Choose a valid reaction.");
+  const m = await matchView(db, id);
+  if (![m.white_id, m.black_id].includes(p.user_id))
+    throw new ArenaError("Only the two players can react.", 403);
+  if (m.status !== "active")
+    throw new ArenaError("Reactions are available during an active match.");
+  let reactions: Record<string, { emote: string; at: number }> = {};
+  try {
+    reactions = JSON.parse(m.reactions || "{}");
+  } catch {}
+  if (reactions[p.user_id] && now() - reactions[p.user_id].at < 5000)
+    throw new ArenaError("Reactions recharge in 5 seconds.", 429);
+  reactions[p.user_id] = { emote, at: now() };
+  await stmt(
+    db,
+    "UPDATE arena_matches SET reactions=? WHERE id=? AND status='active'",
+    JSON.stringify(reactions),
+    id,
+  ).run();
+  return { match: await matchView(db, id) };
+}
 export async function publicAction(
   db: D1Database,
   action: string,
@@ -644,6 +711,8 @@ export async function privateAction(
       input.move,
       action === "resign",
     );
+  if (action === "react")
+    return sendMatchReaction(db, p, String(input.id), String(input.emote));
   if (action === "presence") {
     const gps = input.gps === true;
     if (
@@ -930,6 +999,70 @@ export async function privateAction(
   }
   if (!["owner", "admin"].includes(profile.role))
     throw new ArenaError("Owner or GM access is required.", 403);
+  if (action === "tournament-gold") {
+    const tournamentId = String(input.tournament_id ?? "");
+    const winners = Array.isArray(input.winners) ? input.winners : [];
+    if (!/^[a-f0-9-]{36}$/i.test(tournamentId) || winners.length !== 3)
+      throw new ArenaError("Champion through 3rd-place winners are required.");
+    const seen = new Set<string>(),
+      writes: D1PreparedStatement[] = [];
+    for (const raw of winners) {
+      const rank = Number(raw?.rank),
+        amount = Number(raw?.amount),
+        userId = String(raw?.user_id ?? "");
+      if (
+        ![1, 2, 3].includes(rank) ||
+        !/^[a-f0-9-]{36}$/i.test(userId) ||
+        !Number.isInteger(amount) ||
+        amount < 0 ||
+        amount > 10000 ||
+        seen.has(userId)
+      )
+        throw new ArenaError("Tournament reward data is invalid.");
+      seen.add(userId);
+      if (!amount) continue;
+      const target = await stmt(
+        db,
+        "SELECT user_id FROM arena_players WHERE user_id=?",
+        userId,
+      ).first<{ user_id: string }>();
+      if (!target)
+        throw new ArenaError(
+          "Every rewarded player must sign in to Chess Burger first.",
+        );
+      const key = `tournament-gold:${tournamentId}:${rank}`;
+      writes.push(
+        stmt(
+          db,
+          "UPDATE arena_players SET gold_points=gold_points+? WHERE user_id=? AND NOT EXISTS(SELECT 1 FROM arena_logs WHERE id=?)",
+          amount,
+          userId,
+          key,
+        ),
+        stmt(
+          db,
+          "INSERT OR IGNORE INTO arena_gold_ledger(id,user_id,delta,kind,reference_id,created_at) SELECT ?,?,?, 'tournament',?,? WHERE NOT EXISTS(SELECT 1 FROM arena_logs WHERE id=?)",
+          key,
+          userId,
+          amount,
+          tournamentId,
+          t,
+          key,
+        ),
+        stmt(
+          db,
+          "INSERT OR IGNORE INTO arena_logs(id,actor_user_id,action,details,created_at) VALUES(?,?,?,?,?)",
+          key,
+          id,
+          "tournament_gold",
+          JSON.stringify({ tournamentId, rank, userId, amount }),
+          t,
+        ),
+      );
+    }
+    await db.batch(writes);
+    return { ok: true };
+  }
   if (action === "grant-gold") {
     const amount = Number(input.amount);
     if (!Number.isInteger(amount) || amount < 1 || amount > 10000)

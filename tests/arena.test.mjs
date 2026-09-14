@@ -13,6 +13,7 @@ import {
   settle,
   privateAction,
   publicAction,
+  sendMatchReaction,
 } from "../app/arena-server.ts";
 import { winDelta } from "../app/game-rules.ts";
 
@@ -648,4 +649,50 @@ test("Finished match response includes actual clamped CBR changes and updated st
   assert.equal(m.white.cbr, 0);
   assert.equal(m.black.cbr, 12);
   assert.equal((await matchView(db, m.id)).rating_changes.a, -4);
+});
+test("Match reactions are shared between players and recharge for five seconds", async () => {
+  const db = database(),
+    a = profile("a"),
+    b = profile("b"),
+    c = profile("c");
+  await seed(db, a, b, c);
+  const match = await room(db, a, b);
+  const updated = await sendMatchReaction(db, a, match.id, "haha");
+  const reactions = JSON.parse(updated.match.reactions);
+  assert.equal(reactions.a.emote, "haha");
+  assert.ok(reactions.a.at > 0);
+  await assert.rejects(
+    () => sendMatchReaction(db, a, match.id, "easy"),
+    /recharge/,
+  );
+  await assert.rejects(
+    () => sendMatchReaction(db, c, match.id, "easy"),
+    /Only the two players/,
+  );
+});
+test("Online results award Gold, including the sixth-win streak bonus, but never award a draw", async () => {
+  const db = database(),
+    a = profile("a"),
+    b = profile("b");
+  await seed(db, a, b);
+  db.sqlite
+    .prepare("UPDATE arena_players SET win_streak=5 WHERE user_id='b'")
+    .run();
+  let match = await room(db, a, b);
+  match = (await playMove(db, a, match.id, match.version, undefined, true))
+    .match;
+  assert.equal(match.gold_changes.a, 1);
+  assert.equal(match.gold_changes.b, 7);
+  assert.equal(
+    db.sqlite
+      .prepare("SELECT gold_points FROM arena_players WHERE user_id='a'")
+      .get().gold_points,
+    1,
+  );
+  assert.equal(
+    db.sqlite
+      .prepare("SELECT gold_points FROM arena_players WHERE user_id='b'")
+      .get().gold_points,
+    7,
+  );
 });

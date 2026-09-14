@@ -50,6 +50,20 @@
       "when": 1789286400000,
       "tag": "0006_offline_cbr",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1789341000000,
+      "tag": "0007_match_reactions",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1789346100000,
+      "tag": "0008_gold_rewards",
+      "breakpoints": true
     }
   ]
 }

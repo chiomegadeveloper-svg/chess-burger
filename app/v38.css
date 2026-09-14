@@ -12,6 +12,12 @@
   border-color: #4a8191 !important;
   color: #c7f7ff !important;
 }
+.result-gold {
+  margin: 8px 0 0;
+  text-align: center;
+  color: #f4cf73;
+  font-weight: 700;
+}
 .match-reactions {
   margin-top: 15px;
   padding-top: 14px;

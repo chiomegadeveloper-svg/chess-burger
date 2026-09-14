@@ -141,6 +141,7 @@ export default function Page() {
         delta:
           m.rating_changes?.[ownId] ??
           player.cbr - (side === "white" ? m.white_cbr : m.black_cbr),
+        goldDelta: m.gold_changes?.[ownId] ?? 0,
         opponent,
       });
     },

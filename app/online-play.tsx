@@ -11,6 +11,7 @@ import {
   timeControl,
 } from "./game-rules";
 import type { PlayerProfile } from "./supabase";
+import { getSupabase } from "./supabase";
 import TimePicker from "./time-picker";
 import MatchBoard, { Avatar } from "./match-board";
 import QrInput from "./qr-input";
@@ -28,10 +29,13 @@ export function OnlineGame({
 }) {
   const [match, setMatch] = useState<ArenaMatch | null>(null),
     [error, setError] = useState(""),
-    [busy, setBusy] = useState(false);
+    [busy, setBusy] = useState(false),
+    [live, setLive] = useState(false);
   const finished = useRef(false),
     alive = useRef(true),
-    latest = useRef(0);
+    latest = useRef(0),
+    channel = useRef<any>(null),
+    refresh = useRef<() => void>(() => {});
   function accept(m: ArenaMatch) {
     if (!alive.current || m.version < latest.current) return;
     latest.current = m.version;
@@ -80,13 +84,49 @@ export function OnlineGame({
         pending = false;
       }
     };
+    refresh.current = () => void poll();
     void poll();
-    const timer = setInterval(poll, 500);
+    // Realtime broadcasts wake this authoritative read immediately. Polling is
+    // retained only as a quiet recovery path when the channel is unavailable.
+    const timer = setInterval(poll, live ? 8000 : 750);
     return () => {
       alive.current = false;
       clearInterval(timer);
     };
-  }, [id, watch]);
+  }, [id, watch, live]);
+  useEffect(() => {
+    let active = true;
+    setLive(false);
+    void getSupabase()
+      .then((client) => {
+        if (!client || !active) return;
+        const next = client
+          .channel(`cb-match:${id}`, {
+            config: { broadcast: { self: false, ack: true } },
+          })
+          .on("broadcast", { event: "match-updated" }, () => refresh.current())
+          .subscribe((status) => {
+            if (active) setLive(status === "SUBSCRIBED");
+          });
+        channel.current = next;
+      })
+      .catch(() => {
+        if (active) setLive(false);
+      });
+    return () => {
+      active = false;
+      const current = channel.current;
+      channel.current = null;
+      if (current) void current.unsubscribe();
+    };
+  }, [id]);
+  function announce() {
+    void channel.current?.send({
+      type: "broadcast",
+      event: "match-updated",
+      payload: { id },
+    });
+  }
   async function move(
     action: "move" | "resign",
     move?: { from: string; to: string; promotion?: string },
@@ -109,6 +149,7 @@ export function OnlineGame({
         move,
       });
       accept(r.match);
+      announce();
     } catch (e) {
       latest.current = confirmed.version;
       setMatch(confirmed);
@@ -120,6 +161,7 @@ export function OnlineGame({
   async function react(emote: string) {
     const response = await arena<{ match: ArenaMatch }>("react", { id, emote });
     accept(response.match);
+    announce();
   }
   if (!match)
     return (
@@ -141,7 +183,15 @@ export function OnlineGame({
         onResign={watch ? undefined : () => void move("resign")}
         onReact={watch ? undefined : react}
         busy={busy}
-        connection={error ? "Reconnecting…" : watch ? "Spectating" : "Live"}
+        connection={
+          error
+            ? "Reconnecting…"
+            : watch
+              ? "Spectating"
+              : live
+                ? "Live"
+                : "Polling backup"
+        }
       />
     </>
   );
