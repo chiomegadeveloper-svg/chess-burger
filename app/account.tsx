@@ -121,7 +121,10 @@ export default function Account({
     [error, setError] = useState(""),
     [selectedPhoto, setSelectedPhoto] = useState(""),
     [email, setEmail] = useState(""),
-    [password, setPassword] = useState("");
+    [password, setPassword] = useState(""),
+    [showPasswordSecurity, setShowPasswordSecurity] = useState(false),
+    [newPassword, setNewPassword] = useState(""),
+    [confirmPassword, setConfirmPassword] = useState("");
   useEffect(() => {
     setRemember(keepLogin());
     let live = true,
@@ -212,9 +215,13 @@ export default function Account({
           data: { session },
         } = await c.auth.getSession();
         await load(c, session?.user ?? null);
-        const { data } = c.auth.onAuthStateChange((_event, s) =>
-          setTimeout(() => void load(c, s?.user ?? null), 0),
-        );
+        const { data } = c.auth.onAuthStateChange((event, s) => {
+          if (event === "PASSWORD_RECOVERY") {
+            setShowPasswordSecurity(true);
+            toast.info("Choose a new password to finish recovery.");
+          }
+          setTimeout(() => void load(c, s?.user ?? null), 0);
+        });
         unsubscribe = () => data.subscription.unsubscribe();
       })
       .catch(() => {
@@ -295,6 +302,58 @@ export default function Account({
         });
     } catch {
       setError("Could not connect. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function requestPasswordReset() {
+    if (!client) {
+      setError("Account service is unavailable. Please check the app connection.");
+      return;
+    }
+    const target = email.trim().toLowerCase();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(target)) {
+      setError("Enter the email address used for your Chess Burger account.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const { error: resetError } = await client.auth.resetPasswordForEmail(target, {
+        redirectTo: new URL("/", window.location.origin).toString(),
+      });
+      if (resetError) throw resetError;
+      toast.success("Recovery email sent.", {
+        description: "Open the secure link, then choose a new password in Chess Burger.",
+      });
+    } catch {
+      setError("We could not send a recovery email. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function changePassword(e: React.FormEvent) {
+    e.preventDefault();
+    if (!client || !user || guest) return;
+    if (newPassword.length < 6) {
+      setError("Your new password must be at least 6 characters.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setError("The new passwords do not match.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const { error: updateError } = await client.auth.updateUser({ password: newPassword });
+      if (updateError) throw updateError;
+      setNewPassword("");
+      setConfirmPassword("");
+      setShowPasswordSecurity(false);
+      toast.success("Password updated securely.");
+    } catch (e) {
+      setError((e as Error).message || "Password could not be updated. Please try again.");
     } finally {
       setBusy(false);
     }
@@ -509,6 +568,14 @@ export default function Account({
             >
               Create account
             </button>
+            <button
+              disabled={busy}
+              type="button"
+              className="password-recovery-button"
+              onClick={() => void requestPasswordReset()}
+            >
+              Forgot password?
+            </button>
           </div>
         </form>
         <p className="registration-note">
@@ -624,6 +691,32 @@ export default function Account({
       </div>
     </>
   );
+  const passwordSecurity = !guest && user ? (
+    <section className="password-security">
+      <header>
+        <div>
+          <span>ACCOUNT SECURITY</span>
+          <h2>Password</h2>
+        </div>
+        <button type="button" disabled={busy} onClick={() => setShowPasswordSecurity((open) => !open)}>
+          {showPasswordSecurity ? "Cancel" : "Change password"}
+        </button>
+      </header>
+      {showPasswordSecurity ? (
+        <form onSubmit={changePassword}>
+          <label>
+            New password
+            <input type="password" autoComplete="new-password" minLength={6} required value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="At least 6 characters" />
+          </label>
+          <label>
+            Confirm new password
+            <input type="password" autoComplete="new-password" minLength={6} required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Enter it again" />
+          </label>
+          <button type="submit" disabled={busy}>{busy ? "Updating…" : "Save new password"}</button>
+        </form>
+      ) : <p>Use a unique password. If you forget it, use “Forgot password?” from the sign-in screen.</p>}
+    </section>
+  ) : null;
   if (cardOnly)
     return (
       <section>
@@ -720,6 +813,7 @@ export default function Account({
             Edit profile
           </button>
         </div>
+        {passwordSecurity}
       </section>
     );
   return (
@@ -924,6 +1018,7 @@ export default function Account({
         selected={profile.featured_badges}
         onChange={(featured_badges) => setProfile({ ...profile, featured_badges })}
       />
+      {passwordSecurity}
       <Dialog
         open={!!selectedPhoto}
         onOpenChange={(open) => !open && setSelectedPhoto("")}
