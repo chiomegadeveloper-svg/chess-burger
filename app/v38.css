@@ -46,9 +46,8 @@
   margin-top: 5px;
 }
 .versus-mark {
-  position: absolute;
-  right: -25px;
-  top: 57px;
+  align-self: center;
+  justify-self: center;
   color: #e8c66e;
   font-size: 1rem;
   font-style: italic;
@@ -123,9 +122,5 @@
   }
   .result-actions {
     grid-template-columns: 1fr;
-  }
-  .versus-mark {
-    right: -23px;
-    top: 49px;
   }
 }

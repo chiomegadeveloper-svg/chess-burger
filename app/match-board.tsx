@@ -218,6 +218,31 @@ export default function MatchBoard({
       </div>
     );
   }
+  function reactionPlayer(side: "white" | "black") {
+    const player = match[side];
+    const reaction = reactions[player?.user_id ?? ""];
+    const visible = reaction && tick - reaction.at < 3500;
+    const emoteIndex = reaction
+      ? emotes.findIndex(([id]) => id === reaction.emote)
+      : -1;
+    return (
+      <div className="versus-player">
+        <div className="reaction-bubble" aria-live="polite">
+          {visible && emoteIndex >= 0 && (
+            <img
+              key={reaction.at}
+              src={`/emotes/${emoteIndex}.webp`}
+              alt={`${player?.display_name ?? side} reacted ${reaction.emote}`}
+            />
+          )}
+        </div>
+        <Avatar player={player} />
+        <strong>
+          {player?.display_name ?? (side === "white" ? "White" : "Black")}
+        </strong>
+      </div>
+    );
+  }
   return (
     <section className="chess-scene network-scene">
       <div className="page-heading">
@@ -367,33 +392,9 @@ export default function MatchBoard({
           </p>
           <section className="match-reactions" aria-label="Player reactions">
             <div className="versus-players">
-              {(["white", "black"] as const).map((side, index) => {
-                const player = match[side],
-                  reaction = reactions[player?.user_id ?? ""],
-                  visible = reaction && tick - reaction.at < 3500,
-                  emoteIndex = reaction
-                    ? emotes.findIndex(([id]) => id === reaction.emote)
-                    : -1;
-                return (
-                  <div className="versus-player" key={side}>
-                    <div className="reaction-bubble" aria-live="polite">
-                      {visible && emoteIndex >= 0 && (
-                        <img
-                          key={reaction.at}
-                          src={`/emotes/${emoteIndex}.webp`}
-                          alt={`${player?.display_name ?? side} reacted ${reaction.emote}`}
-                        />
-                      )}
-                    </div>
-                    <Avatar player={player} />
-                    <strong>
-                      {player?.display_name ??
-                        (side === "white" ? "White" : "Black")}
-                    </strong>
-                    {index === 0 && <b className="versus-mark">VS</b>}
-                  </div>
-                );
-              })}
+              {reactionPlayer("white")}
+              <b className="versus-mark">VS</b>
+              {reactionPlayer("black")}
             </div>
             {onReact && (
               <>
