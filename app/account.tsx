@@ -26,7 +26,7 @@ import {
   clearAccountCache,
 } from "./auth-storage";
 import AppFeaturedPhoto from "./app-featured-photo";
-import RewardEmblems from "./reward-emblems";
+import RewardEmblems, { FeaturedRewardPicker, FeaturedRewardSlots } from "./reward-emblems";
 import { arena } from "./arena-client";
 import { profileRequest } from "./profile-client";
 import { toWebpUnder1Mb } from "./media";
@@ -619,6 +619,7 @@ export default function Account({
               ))}
             </div>
           </section>
+          <FeaturedRewardSlots selected={profile.featured_badges} />
         </div>
       </div>
     </>
@@ -919,6 +920,10 @@ export default function Account({
           landscape images fit inside each thumbnail.
         </p>
       </section>
+      <FeaturedRewardPicker
+        selected={profile.featured_badges}
+        onChange={(featured_badges) => setProfile({ ...profile, featured_badges })}
+      />
       <Dialog
         open={!!selectedPhoto}
         onOpenChange={(open) => !open && setSelectedPhoto("")}
