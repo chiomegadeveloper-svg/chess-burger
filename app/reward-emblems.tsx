@@ -1,18 +1,18 @@
 "use client";
 import {useEffect,useState} from "react";
-import {BadgeCheck,Brain,Crown,Flag,Flame,Grid3X3,Medal,MessageCircleHeart,Mountain,Shield,Star,Trophy,Users, type LucideIcon} from "lucide-react";
+import {Medal} from "lucide-react";
 import {arena} from "./arena-client";
 import {REWARDS,type RewardDefinition,type RewardId} from "./reward-definitions";
 import "./reward-emblems.css";
 
-const icons:Record<RewardId,LucideIcon>={
- "rookie-flame":Flame,"knights-steel":Shield,"burger-blitz":Flag,"first-checkmate":BadgeCheck,"golden-pawn":Flag,
- "cbr-climber":Mountain,"neon-board":Grid3X3,"burger-master":Crown,"silver-rook":Shield,"friendly-challenger":Users,
- "tactical-thinker":Brain,"midnight-board":Grid3X3,"golden-king":Crown,"cb-champion":Trophy,"flaming-queen":Flame,
- "community-legend":MessageCircleHeart,"cyber-knight":Star,"burger-crown":Crown,"grandmaster-gold":Medal,"cb-supreme":Trophy,
+const emblemArtwork:Record<RewardId,number>={
+ "rookie-flame":0,"knights-steel":1,"burger-blitz":2,"first-checkmate":12,"golden-pawn":5,
+ "cbr-climber":6,"neon-board":18,"burger-master":14,"silver-rook":13,"friendly-challenger":9,
+ "tactical-thinker":10,"midnight-board":4,"golden-king":15,"cb-champion":19,"flaming-queen":11,
+ "community-legend":8,"cyber-knight":7,"burger-crown":17,"grandmaster-gold":16,"cb-supreme":3,
 };
-export function RewardMark({id}:{id:RewardId}){const Icon=icons[id];return <Icon aria-hidden="true"/>;}
-function Emblem({reward,unlocked}:{reward:RewardDefinition;unlocked:boolean}){const Icon=icons[reward.id];return <article className={unlocked?"reward-emblem unlocked":"reward-emblem locked"} title={`${reward.name} — ${reward.requirement}`}><span className={`reward-seal ${reward.kind}`}><Icon aria-hidden="true"/></span><strong>{reward.name}</strong><small>{reward.requirement}</small></article>;}
+export function RewardMark({id}:{id:RewardId}){return <img src={`/reward-emblems/emblem-${emblemArtwork[id]}.webp`} alt="" aria-hidden="true"/>;}
+function Emblem({reward,unlocked}:{reward:RewardDefinition;unlocked:boolean}){return <article className={unlocked?"reward-emblem unlocked":"reward-emblem locked"} title={`${reward.name} — ${reward.requirement}`}><span className={`reward-seal ${reward.kind}`}><RewardMark id={reward.id}/></span><strong>{reward.name}</strong><small>{reward.requirement}</small></article>;}
 function useRewardUnlocks(){const [unlocked,setUnlocked]=useState<RewardId[]>([]),[ready,setReady]=useState(false);useEffect(()=>{let alive=true;arena<{unlocked:RewardId[]}>('rewards').then(data=>{if(alive)setUnlocked(data.unlocked);}).catch(()=>{}).finally(()=>{if(alive)setReady(true);});return()=>{alive=false;};},[]);return {unlocked,ready};}
 
 export function FeaturedRewardSlots({selected}:{selected:string[]}){const {unlocked,ready}=useRewardUnlocks();const chosen=selected.filter((id):id is RewardId=>REWARDS.some(reward=>reward.id===id)&&unlocked.includes(id as RewardId)).slice(0,5);return <section className="card-featured-rewards"><header><Medal/><span><strong>Featured Emblems</strong><small>{ready?`${chosen.length} of 5 selected`:"Loading rewards…"}</small></span></header><div className="featured-reward-slots" aria-label="Five featured reward emblem slots">{Array.from({length:5},(_,index)=>{const id=chosen[index],reward=id&&REWARDS.find(item=>item.id===id);return reward?<span className={`featured-reward-slot ${reward.kind}`} key={index} title={reward.name}><i><RewardMark id={reward.id}/></i><small>{reward.name}</small></span>:<span className="featured-reward-slot empty" key={index} aria-label="Empty featured emblem slot"><i>?</i><small>Locked</small></span>;})}</div></section>;}
