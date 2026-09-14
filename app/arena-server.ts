@@ -715,6 +715,8 @@ export async function privateAction(
     return sendMatchReaction(db, p, String(input.id), String(input.emote));
   if (action === "presence") {
     const gps = input.gps === true;
+    const barangay = typeof input.barangay === "string" ? input.barangay.trim().slice(0, 96) : "";
+    const locality = typeof input.locality === "string" ? input.locality.trim().slice(0, 96) : "";
     if (
       gps &&
       (!Number.isFinite(input.lat) ||
@@ -735,6 +737,18 @@ export async function privateAction(
       gps ? 1 : 0,
       t,
     ).run();
+    // The app stores only a general territory label for leaderboards, never
+    // the user's precise GPS point after they switch location sharing off.
+    if (gps && barangay && locality)
+      await stmt(
+        db,
+        "INSERT INTO arena_player_regions(user_id,barangay,locality,country_code,updated_at) VALUES(?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET barangay=excluded.barangay,locality=excluded.locality,country_code=excluded.country_code,updated_at=excluded.updated_at",
+        id,
+        barangay,
+        locality,
+        p.country_code || "PH",
+        t,
+      ).run();
     return { ok: true };
   }
   if (action === "leave") {
@@ -782,6 +796,25 @@ export async function privateAction(
         .sort((a, b) => a.distance - b.distance),
       territories: zones.results,
     };
+  }
+  if (action === "territory-leaders") {
+    const scope = input.scope === "city" ? "city" : input.scope === "barangay" ? "barangay" : null;
+    if (!scope) throw new ArenaError("Choose a territory ranking.");
+    const region = await stmt(
+      db,
+      "SELECT barangay,locality FROM arena_player_regions WHERE user_id=?",
+      id,
+    ).first<{barangay:string;locality:string}>();
+    if (!region)
+      throw new ArenaError("Keep GPS on briefly so Chess Burger can identify your territory.");
+    const field = scope === "city" ? "locality" : "barangay";
+    const label = region[field];
+    const rows = await stmt(
+      db,
+      `SELECT p.user_id,p.username,p.display_name,p.avatar_url,p.country_code,p.cbr,p.ocbr,p.gold_points,p.wins,p.losses,p.win_streak,ROW_NUMBER() OVER(ORDER BY p.cbr DESC,p.wins DESC,p.user_id) AS rank FROM arena_players p JOIN arena_player_regions r ON r.user_id=p.user_id WHERE r.${field}=? ORDER BY p.cbr DESC,p.wins DESC,p.user_id LIMIT 10`,
+      label,
+    ).all<ArenaPlayer>();
+    return { scope, label, players: rows.results };
   }
   if (action === "claim") {
     const pos = await stmt(

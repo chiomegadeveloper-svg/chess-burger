@@ -696,3 +696,19 @@ test("Online results award Gold, including the sixth-win streak bonus, but never
     7,
   );
 });
+test("Territory leaderboards use a player's stored general Barangay or city label", async () => {
+  const db = database(),
+    a = profile("a", 88),
+    b = profile("b", 120),
+    c = profile("c", 105);
+  await seed(db, a, b, c);
+  await privateAction(db, a, "presence", {gps:true,lat:11.24,lng:125,accuracy:12,barangay:"Barangay 1",locality:"Ormoc City"});
+  await privateAction(db, b, "presence", {gps:true,lat:11.25,lng:125,accuracy:12,barangay:"Barangay 1",locality:"Ormoc City"});
+  await privateAction(db, c, "presence", {gps:true,lat:11.25,lng:125,accuracy:12,barangay:"Barangay 2",locality:"Ormoc City"});
+  const brgy = await privateAction(db, a, "territory-leaders", {scope:"barangay"});
+  assert.equal(brgy.label, "Barangay 1");
+  assert.deepEqual(brgy.players.map((p) => p.user_id), ["b", "a"]);
+  const city = await privateAction(db, a, "territory-leaders", {scope:"city"});
+  assert.equal(city.label, "Ormoc City");
+  assert.deepEqual(city.players.map((p) => p.user_id), ["b", "c", "a"]);
+});
