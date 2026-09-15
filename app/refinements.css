@@ -500,6 +500,35 @@ textarea:focus-visible {
   font-size: 13px;
   line-height: 1.45;
 }
+.interactive-board .sq.premove-origin {
+  box-shadow:
+    inset 0 0 0 4px #5bd7e5,
+    inset 0 0 22px #5bd7e566;
+}
+.interactive-board .sq.premove-destination {
+  box-shadow:
+    inset 0 0 0 4px #69e4ef,
+    inset 0 0 30px #69e4ef88;
+}
+.interactive-board .sq.dragging {
+  cursor: grabbing;
+  filter: brightness(1.15);
+}
+.premove-ghost {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: inherit;
+  line-height: 1;
+  opacity: 0.5;
+  pointer-events: none;
+}
+@media (min-width: 700px) {
+  .interactive-board .sq {
+    touch-action: none;
+  }
+}
 .cms-panel {
   font-size: 16px;
   background: #f8fbfc;
