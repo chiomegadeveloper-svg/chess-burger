@@ -10,12 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  ShieldCheck,
-  Camera,
-  Image as ImageIcon,
-  Trophy,
-} from "lucide-react";
+import { ShieldCheck, Camera, Image as ImageIcon, Trophy } from "lucide-react";
 import { toast } from "sonner";
 import { levelFor } from "./cbr";
 import { getSupabase, PlayerProfile } from "./supabase";
@@ -26,7 +21,10 @@ import {
   clearAccountCache,
 } from "./auth-storage";
 import AppFeaturedPhoto from "./app-featured-photo";
-import RewardEmblems, { FeaturedRewardPicker, FeaturedRewardSlots } from "./reward-emblems";
+import RewardEmblems, {
+  FeaturedRewardPicker,
+  FeaturedRewardSlots,
+} from "./reward-emblems";
 import { arena } from "./arena-client";
 import { profileRequest } from "./profile-client";
 import { toWebpUnder1Mb } from "./media";
@@ -40,6 +38,7 @@ const emptyPhotos = ["", "", "", ""],
     ["SG", "🇸🇬", "Singapore"],
     ["GB", "🇬🇧", "United Kingdom"],
   ];
+const EMAIL_SEND_COOLDOWN_SECONDS = 60;
 const blankProfile = (id = "guest-device"): PlayerProfile => ({
   user_id: id,
   username: "new_player",
@@ -118,6 +117,7 @@ export default function Account({
   });
   const [loading, setLoading] = useState(true),
     [busy, setBusy] = useState(false),
+    [emailCooldown, setEmailCooldown] = useState(0),
     [error, setError] = useState(""),
     [selectedPhoto, setSelectedPhoto] = useState(""),
     [email, setEmail] = useState(""),
@@ -125,6 +125,14 @@ export default function Account({
     [showPasswordSecurity, setShowPasswordSecurity] = useState(false),
     [newPassword, setNewPassword] = useState(""),
     [confirmPassword, setConfirmPassword] = useState("");
+  useEffect(() => {
+    if (!emailCooldown) return;
+    const timer = window.setInterval(
+      () => setEmailCooldown((seconds) => Math.max(0, seconds - 1)),
+      1000,
+    );
+    return () => window.clearInterval(timer);
+  }, [emailCooldown]);
   useEffect(() => {
     setRemember(keepLogin());
     let live = true,
@@ -276,6 +284,12 @@ export default function Account({
       );
       return;
     }
+    if (mode === "signup" && emailCooldown > 0) {
+      setError(
+        `Please wait ${emailCooldown} seconds before requesting another confirmation email.`,
+      );
+      return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -295,11 +309,19 @@ export default function Account({
                 ).toString(),
               },
             });
-      if (result.error) setError(result.error.message);
-      else if (mode === "signup" && !result.data.session)
+      if (result.error) {
+        if (result.error.message.toLowerCase().includes("rate limit")) {
+          setEmailCooldown(EMAIL_SEND_COOLDOWN_SECONDS);
+          setError(
+            "Too many email requests. Please wait one minute, then try again once.",
+          );
+        } else setError(result.error.message);
+      } else if (mode === "signup" && !result.data.session) {
+        setEmailCooldown(EMAIL_SEND_COOLDOWN_SECONDS);
         toast.success("Confirmation email sent.", {
           description: "Open the link to return directly to Chess Burger.",
         });
+      }
     } catch {
       setError("Could not connect. Please try again.");
     } finally {
@@ -308,7 +330,9 @@ export default function Account({
   }
   async function requestPasswordReset() {
     if (!client) {
-      setError("Account service is unavailable. Please check the app connection.");
+      setError(
+        "Account service is unavailable. Please check the app connection.",
+      );
       return;
     }
     const target = email.trim().toLowerCase();
@@ -316,18 +340,35 @@ export default function Account({
       setError("Enter the email address used for your Chess Burger account.");
       return;
     }
+    if (emailCooldown > 0) {
+      setError(
+        `Please wait ${emailCooldown} seconds before requesting another recovery email.`,
+      );
+      return;
+    }
     setBusy(true);
     setError("");
     try {
-      const { error: resetError } = await client.auth.resetPasswordForEmail(target, {
-        redirectTo: new URL("/", window.location.origin).toString(),
-      });
+      const { error: resetError } = await client.auth.resetPasswordForEmail(
+        target,
+        {
+          redirectTo: new URL("/", window.location.origin).toString(),
+        },
+      );
       if (resetError) throw resetError;
+      setEmailCooldown(EMAIL_SEND_COOLDOWN_SECONDS);
       toast.success("Recovery email sent.", {
-        description: "Open the secure link, then choose a new password in Chess Burger.",
+        description:
+          "Open the secure link, then choose a new password in Chess Burger.",
       });
-    } catch {
-      setError("We could not send a recovery email. Please try again.");
+    } catch (e) {
+      const message = (e as Error).message?.toLowerCase() ?? "";
+      if (message.includes("rate limit")) {
+        setEmailCooldown(EMAIL_SEND_COOLDOWN_SECONDS);
+        setError(
+          "Too many email requests. Please wait one minute, then try again once.",
+        );
+      } else setError("We could not send a recovery email. Please try again.");
     } finally {
       setBusy(false);
     }
@@ -346,14 +387,19 @@ export default function Account({
     setBusy(true);
     setError("");
     try {
-      const { error: updateError } = await client.auth.updateUser({ password: newPassword });
+      const { error: updateError } = await client.auth.updateUser({
+        password: newPassword,
+      });
       if (updateError) throw updateError;
       setNewPassword("");
       setConfirmPassword("");
       setShowPasswordSecurity(false);
       toast.success("Password updated securely.");
     } catch (e) {
-      setError((e as Error).message || "Password could not be updated. Please try again.");
+      setError(
+        (e as Error).message ||
+          "Password could not be updated. Please try again.",
+      );
     } finally {
       setBusy(false);
     }
@@ -562,19 +608,23 @@ export default function Account({
               {busy ? "Please wait…" : "Sign in"}
             </button>
             <button
-              disabled={busy}
+              disabled={busy || emailCooldown > 0}
               type="button"
               onClick={() => void emailAuth("signup")}
             >
-              Create account
+              {emailCooldown
+                ? `Create account (${emailCooldown}s)`
+                : "Create account"}
             </button>
             <button
-              disabled={busy}
+              disabled={busy || emailCooldown > 0}
               type="button"
               className="password-recovery-button"
               onClick={() => void requestPasswordReset()}
             >
-              Forgot password?
+              {emailCooldown
+                ? `Email available in ${emailCooldown}s`
+                : "Forgot password?"}
             </button>
           </div>
         </form>
@@ -691,32 +741,60 @@ export default function Account({
       </div>
     </>
   );
-  const passwordSecurity = !guest && user ? (
-    <section className="password-security">
-      <header>
-        <div>
-          <span>ACCOUNT SECURITY</span>
-          <h2>Password</h2>
-        </div>
-        <button type="button" disabled={busy} onClick={() => setShowPasswordSecurity((open) => !open)}>
-          {showPasswordSecurity ? "Cancel" : "Change password"}
-        </button>
-      </header>
-      {showPasswordSecurity ? (
-        <form onSubmit={changePassword}>
-          <label>
-            New password
-            <input type="password" autoComplete="new-password" minLength={6} required value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="At least 6 characters" />
-          </label>
-          <label>
-            Confirm new password
-            <input type="password" autoComplete="new-password" minLength={6} required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Enter it again" />
-          </label>
-          <button type="submit" disabled={busy}>{busy ? "Updating…" : "Save new password"}</button>
-        </form>
-      ) : <p>Use a unique password. If you forget it, use “Forgot password?” from the sign-in screen.</p>}
-    </section>
-  ) : null;
+  const passwordSecurity =
+    !guest && user ? (
+      <section className="password-security">
+        <header>
+          <div>
+            <span>ACCOUNT SECURITY</span>
+            <h2>Password</h2>
+          </div>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => setShowPasswordSecurity((open) => !open)}
+          >
+            {showPasswordSecurity ? "Cancel" : "Change password"}
+          </button>
+        </header>
+        {showPasswordSecurity ? (
+          <form onSubmit={changePassword}>
+            <label>
+              New password
+              <input
+                type="password"
+                autoComplete="new-password"
+                minLength={6}
+                required
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="At least 6 characters"
+              />
+            </label>
+            <label>
+              Confirm new password
+              <input
+                type="password"
+                autoComplete="new-password"
+                minLength={6}
+                required
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Enter it again"
+              />
+            </label>
+            <button type="submit" disabled={busy}>
+              {busy ? "Updating…" : "Save new password"}
+            </button>
+          </form>
+        ) : (
+          <p>
+            Use a unique password. If you forget it, use “Forgot password?” from
+            the sign-in screen.
+          </p>
+        )}
+      </section>
+    ) : null;
   if (cardOnly)
     return (
       <section>
@@ -1016,7 +1094,9 @@ export default function Account({
       </section>
       <FeaturedRewardPicker
         selected={profile.featured_badges}
-        onChange={(featured_badges) => setProfile({ ...profile, featured_badges })}
+        onChange={(featured_badges) =>
+          setProfile({ ...profile, featured_badges })
+        }
       />
       {passwordSecurity}
       <Dialog
