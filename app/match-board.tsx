@@ -70,6 +70,7 @@ export default function MatchBoard({
   ownId,
   onMove,
   onPremove,
+  premoveQueued = false,
   onResign,
   onReact,
   busy = false,
@@ -80,6 +81,7 @@ export default function MatchBoard({
   ownId?: string;
   onMove?: (move: { from: string; to: string; promotion?: string }) => void;
   onPremove?: (move: { from: string; to: string; promotion?: string }) => void;
+  premoveQueued?: boolean;
   onResign?: () => void;
   onReact?: (emote: string) => Promise<void> | void;
   busy?: boolean;
@@ -319,12 +321,16 @@ export default function MatchBoard({
               ? result
               : `Replay · move ${replay} of ${history.length}`}
           </h2>
-          {canPremove && (
+          {premoveQueued ? (
+            <p className="premove-note">
+              Premove queued. It will play automatically if legal.
+            </p>
+          ) : canPremove ? (
             <p className="premove-note">
               Your opponent is thinking. Select your next move to queue one
               premove.
             </p>
-          )}
+          ) : null}
           {promotion && (
             <div className="promotion-picker">
               <p>Promote to</p>
