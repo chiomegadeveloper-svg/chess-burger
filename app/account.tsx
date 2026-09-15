@@ -278,9 +278,9 @@ export default function Account({
       return;
     }
     const normalized = email.trim().toLowerCase();
-    if (!/^[^@\s]+@gmail\.com$/.test(normalized) || password.length < 6) {
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(normalized) || password.length < 6) {
       setError(
-        "Use a Gmail address and a password with at least 6 characters.",
+        "Use a valid email address and a Chess Burger password with at least 6 characters.",
       );
       return;
     }
@@ -591,7 +591,17 @@ export default function Account({
           <span>PLAYER ACCESS</span>
         </div>
         <h2>Welcome to the board.</h2>
-        <p>Sign in with your Gmail address to save your player profile.</p>
+        <p>Create a Chess Burger account with any email address, or sign in securely with Google.</p>
+        <button
+          className="google-auth-button"
+          disabled={busy}
+          type="button"
+          onClick={() => void signInWithGoogle()}
+        >
+          <span aria-hidden="true">G</span>
+          Continue with Google
+        </button>
+        <p className="registration-note">Or use a Chess Burger email and password:</p>
         <form
           className="gmail-form"
           onSubmit={(e) => {
@@ -600,18 +610,18 @@ export default function Account({
           }}
         >
           <label>
-            Gmail address
+            Email address
             <input
               type="email"
               autoComplete="email"
               required
-              placeholder="yourname@gmail.com"
+              placeholder="name@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value.trim())}
             />
           </label>
           <label>
-            Password
+            Chess Burger password
             <input
               type="password"
               autoComplete="current-password"
@@ -622,6 +632,9 @@ export default function Account({
               onChange={(e) => setPassword(e.target.value)}
             />
           </label>
+          <p className="registration-note">
+            This password is only for Chess Burger. Never enter your Google password here—use Continue with Google instead.
+          </p>
           <label className="remember-login">
             <input
               type="checkbox"
@@ -633,15 +646,6 @@ export default function Account({
           <div>
             <button disabled={busy} type="submit">
               {busy ? "Please wait…" : "Sign in"}
-            </button>
-            <button
-              className="google-auth-button"
-              disabled={busy}
-              type="button"
-              onClick={() => void signInWithGoogle()}
-            >
-              <span aria-hidden="true">G</span>
-              Continue with Google
             </button>
             <button
               disabled={busy || emailCooldown > 0}
