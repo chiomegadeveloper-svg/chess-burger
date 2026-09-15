@@ -328,6 +328,33 @@ export default function Account({
       setBusy(false);
     }
   }
+  async function signInWithGoogle() {
+    setKeepLogin(remember);
+    if (!client) {
+      setError(
+        "Account service is unavailable. Please check the app connection.",
+      );
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const { error: googleError } = await client.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: new URL("/", window.location.origin).toString(),
+          queryParams: { prompt: "select_account" },
+        },
+      });
+      if (googleError) throw googleError;
+    } catch (e) {
+      setError(
+        (e as Error).message ||
+          "Google sign-in could not be started. Please try again.",
+      );
+      setBusy(false);
+    }
+  }
   async function requestPasswordReset() {
     if (!client) {
       setError(
@@ -606,6 +633,15 @@ export default function Account({
           <div>
             <button disabled={busy} type="submit">
               {busy ? "Please wait…" : "Sign in"}
+            </button>
+            <button
+              className="google-auth-button"
+              disabled={busy}
+              type="button"
+              onClick={() => void signInWithGoogle()}
+            >
+              <span aria-hidden="true">G</span>
+              Continue with Google
             </button>
             <button
               disabled={busy || emailCooldown > 0}
