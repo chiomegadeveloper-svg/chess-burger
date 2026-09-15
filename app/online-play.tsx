@@ -196,14 +196,12 @@ export function OnlineGame({
         match={match}
         ownId={profile?.user_id}
         onMove={watch ? undefined : (m) => void move("move", m)}
+        premoveQueued={!!premove}
         onPremove={
           watch
             ? undefined
             : (queued) => {
                 setPremove(queued);
-                setError(
-                  "Premove queued. It will play automatically if legal.",
-                );
               }
         }
         onResign={watch ? undefined : () => void move("resign")}
