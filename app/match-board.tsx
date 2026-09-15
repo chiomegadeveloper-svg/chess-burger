@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Square } from "chess.js";
 import {
   Flag,
@@ -70,7 +70,7 @@ export default function MatchBoard({
   ownId,
   onMove,
   onPremove,
-  premoveQueued = false,
+  premove,
   onResign,
   onReact,
   busy = false,
@@ -81,7 +81,7 @@ export default function MatchBoard({
   ownId?: string;
   onMove?: (move: { from: string; to: string; promotion?: string }) => void;
   onPremove?: (move: { from: string; to: string; promotion?: string }) => void;
-  premoveQueued?: boolean;
+  premove?: { from: string; to: string; promotion?: string } | null;
   onResign?: () => void;
   onReact?: (emote: string) => Promise<void> | void;
   busy?: boolean;
@@ -100,7 +100,10 @@ export default function MatchBoard({
       null,
     ),
     [reactionUntil, setReactionUntil] = useState(0),
-    [reactionError, setReactionError] = useState("");
+    [reactionError, setReactionError] = useState(""),
+    [dragFrom, setDragFrom] = useState<Square | null>(null);
+  const dragSource = useRef<Square | null>(null),
+    suppressClick = useRef(false);
   const chess = useMemo(() => gameFromPgn(match.pgn), [match.pgn]),
     history = chess.history(),
     myColor = ownId === match.black_id ? "b" : "w";
@@ -126,6 +129,8 @@ export default function MatchBoard({
   useEffect(() => {
     setSelected(null);
     setPromotion(null);
+    setDragFrom(null);
+    dragSource.current = null;
   }, [match.version]);
   useEffect(() => {
     const last = chess.history({ verbose: true }).at(-1);
@@ -160,6 +165,7 @@ export default function MatchBoard({
     selected && canPlay
       ? chess.moves({ square: selected, verbose: true }).map((move) => move.to)
       : [];
+  const premovePiece = premove ? chess.get(premove.from) : null;
   const reversed = (myColor === "b") !== flip,
     squares = Array.from(
       { length: 64 },
@@ -181,19 +187,61 @@ export default function MatchBoard({
                   : "Black to move"
                 : "Your move"
               : "Waiting for opponent";
+  function submitMove(from: Square, to: Square) {
+    if (canPlay) {
+      const isLegal = chess
+        .moves({ square: from, verbose: true })
+        .some((move) => move.to === to);
+      if (!isLegal) return;
+      if (chess.get(from)?.type === "p" && ["1", "8"].includes(to[1]))
+        setPromotion({ from, to });
+      else onMove?.({ from, to });
+      return;
+    }
+    if (canPremove && chess.get(to)?.color !== myColor)
+      onPremove?.({ from, to, promotion: "q" });
+  }
   function click(square: Square) {
+    if (suppressClick.current) return;
     if ((!canPlay && !canPremove) || promotion) return;
     if (selected && legal.includes(square)) {
-      if (chess.get(selected)?.type === "p" && ["1", "8"].includes(square[1]))
-        setPromotion({ from: selected, to: square });
-      else onMove?.({ from: selected, to: square });
+      submitMove(selected, square);
+      setSelected(null);
     } else if (selected && canPremove && chess.get(square)?.color !== myColor) {
-      onPremove?.({ from: selected, to: square, promotion: "q" });
+      submitMove(selected, square);
       setSelected(null);
     } else {
       const movingColor = canPlay ? chess.turn() : myColor;
       setSelected(chess.get(square)?.color === movingColor ? square : null);
     }
+  }
+  function beginDrag(
+    event: React.PointerEvent<HTMLButtonElement>,
+    square: Square,
+  ) {
+    const touchPhone =
+      event.pointerType === "touch" &&
+      !window.matchMedia("(min-width: 700px)").matches;
+    if (touchPhone || (!canPlay && !canPremove) || promotion) return;
+    const movingColor = canPlay ? chess.turn() : myColor;
+    if (chess.get(square)?.color !== movingColor) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    dragSource.current = square;
+    setDragFrom(square);
+  }
+  function finishDrag(event: React.PointerEvent<HTMLButtonElement>) {
+    const from = dragSource.current;
+    if (!from) return;
+    dragSource.current = null;
+    setDragFrom(null);
+    const target = document
+      .elementFromPoint(event.clientX, event.clientY)
+      ?.closest<HTMLButtonElement>("[data-square]")?.dataset.square as
+      Square | undefined;
+    if (!target || target === from) return;
+    suppressClick.current = true;
+    window.setTimeout(() => (suppressClick.current = false), 0);
+    submitMove(from, target);
   }
   async function react(emote: string) {
     if (!onReact || reactionCooling) return;
@@ -288,16 +336,22 @@ export default function MatchBoard({
                   <button
                     type="button"
                     key={square}
+                    data-square={square}
                     className={
                       "sq " +
                       (light ? "light" : "dark") +
                       (selected === square ? " selected" : "") +
                       (legal.includes(square) ? " legal" : "") +
+                      (dragFrom === square ? " dragging" : "") +
+                      (premove?.from === square ? " premove-origin" : "") +
+                      (premove?.to === square ? " premove-destination" : "") +
                       (moveMarker?.from === square ? " move-origin" : "") +
                       (moveMarker?.to === square ? " move-destination" : "") +
                       (piece?.color === "w" ? " white-piece" : " black-piece")
                     }
                     onClick={() => click(square)}
+                    onPointerDown={(event) => beginDrag(event, square)}
+                    onPointerUp={finishDrag}
                     aria-label={`${square}${piece ? ` ${piece.color} ${piece.type}` : " empty"}`}
                     aria-disabled={!canPlay}
                   >
@@ -308,6 +362,19 @@ export default function MatchBoard({
                           ? "·"
                           : ""}
                     </span>
+                    {premove?.to === square && premovePiece && (
+                      <span
+                        className={
+                          "premove-ghost " +
+                          (premovePiece.color === "w"
+                            ? "white-piece"
+                            : "black-piece")
+                        }
+                        aria-hidden="true"
+                      >
+                        {symbols[premovePiece.color + premovePiece.type]}
+                      </span>
+                    )}
                   </button>
                 );
               })}
@@ -321,7 +388,7 @@ export default function MatchBoard({
               ? result
               : `Replay · move ${replay} of ${history.length}`}
           </h2>
-          {premoveQueued ? (
+          {premove ? (
             <p className="premove-note">
               Premove queued. It will play automatically if legal.
             </p>
