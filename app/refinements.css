@@ -490,6 +490,16 @@ textarea:focus-visible {
 .photo-dialog p {
   color: #b6cfd4;
 }
+.premove-note {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border: 1px solid #5bd7e588;
+  border-radius: 10px;
+  background: #173744;
+  color: #baf4fa;
+  font-size: 13px;
+  line-height: 1.45;
+}
 .cms-panel {
   font-size: 16px;
   background: #f8fbfc;
