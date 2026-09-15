@@ -30,7 +30,12 @@ export function OnlineGame({
   const [match, setMatch] = useState<ArenaMatch | null>(null),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
-    [live, setLive] = useState(false);
+    [live, setLive] = useState(false),
+    [premove, setPremove] = useState<{
+      from: string;
+      to: string;
+      promotion?: string;
+    } | null>(null);
   const finished = useRef(false),
     alive = useRef(true),
     latest = useRef(0),
@@ -163,6 +168,17 @@ export function OnlineGame({
     accept(response.match);
     announce();
   }
+  useEffect(() => {
+    if (!match || !premove || busy || watch || !profile?.user_id) return;
+    const game = gameFromPgn(match.pgn),
+      myTurn =
+        (game.turn() === "w" && match.white_id === profile.user_id) ||
+        (game.turn() === "b" && match.black_id === profile.user_id);
+    if (!myTurn || match.status !== "active") return;
+    const queued = premove;
+    setPremove(null);
+    void move("move", queued);
+  }, [match?.version, premove, busy, watch, profile?.user_id]);
   if (!match)
     return (
       <p className="cloud-panel" role="status">
@@ -180,6 +196,16 @@ export function OnlineGame({
         match={match}
         ownId={profile?.user_id}
         onMove={watch ? undefined : (m) => void move("move", m)}
+        onPremove={
+          watch
+            ? undefined
+            : (queued) => {
+                setPremove(queued);
+                setError(
+                  "Premove queued. It will play automatically if legal.",
+                );
+              }
+        }
         onResign={watch ? undefined : () => void move("resign")}
         onReact={watch ? undefined : react}
         busy={busy}
