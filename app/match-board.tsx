@@ -69,6 +69,7 @@ export default function MatchBoard({
   match,
   ownId,
   onMove,
+  onPremove,
   onResign,
   onReact,
   busy = false,
@@ -78,6 +79,7 @@ export default function MatchBoard({
   match: ArenaMatch;
   ownId?: string;
   onMove?: (move: { from: string; to: string; promotion?: string }) => void;
+  onPremove?: (move: { from: string; to: string; promotion?: string }) => void;
   onResign?: () => void;
   onReact?: (emote: string) => Promise<void> | void;
   busy?: boolean;
@@ -145,6 +147,13 @@ export default function MatchBoard({
     replay === null &&
     !busy &&
     (bothSides || chess.turn() === myColor);
+  const canPremove =
+    match.status === "active" &&
+    !!onPremove &&
+    replay === null &&
+    !busy &&
+    !bothSides &&
+    chess.turn() !== myColor;
   const legal =
     selected && canPlay
       ? chess.moves({ square: selected, verbose: true }).map((move) => move.to)
@@ -171,13 +180,18 @@ export default function MatchBoard({
                 : "Your move"
               : "Waiting for opponent";
   function click(square: Square) {
-    if (!canPlay || promotion) return;
+    if ((!canPlay && !canPremove) || promotion) return;
     if (selected && legal.includes(square)) {
       if (chess.get(selected)?.type === "p" && ["1", "8"].includes(square[1]))
         setPromotion({ from: selected, to: square });
       else onMove?.({ from: selected, to: square });
-    } else
-      setSelected(chess.get(square)?.color === chess.turn() ? square : null);
+    } else if (selected && canPremove && chess.get(square)?.color !== myColor) {
+      onPremove?.({ from: selected, to: square, promotion: "q" });
+      setSelected(null);
+    } else {
+      const movingColor = canPlay ? chess.turn() : myColor;
+      setSelected(chess.get(square)?.color === movingColor ? square : null);
+    }
   }
   async function react(emote: string) {
     if (!onReact || reactionCooling) return;
@@ -305,6 +319,12 @@ export default function MatchBoard({
               ? result
               : `Replay · move ${replay} of ${history.length}`}
           </h2>
+          {canPremove && (
+            <p className="premove-note">
+              Your opponent is thinking. Select your next move to queue one
+              premove.
+            </p>
+          )}
           {promotion && (
             <div className="promotion-picker">
               <p>Promote to</p>
