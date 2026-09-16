@@ -15,6 +15,7 @@ const labels:Record<string,string>={profile_created:"New player",profile_updated
 
 export default function CommunityFeed({onOpenProfile}:{onOpenProfile:(userId:string)=>void}){
  const[tab,setTab]=useState<FeedTab>("recent"),[page,setPage]=useState(1),[events,setEvents]=useState<CommunityEvent[]>([]);
+ const[expandedImage,setExpandedImage]=useState<string|null>(null);
  const request=useRef(0);
  const[total,setTotal]=useState(0),[status,setStatus]=useState("Loading activity…"),[userId,setUserId]=useState<string|null>(null),[reacted,setReacted]=useState<Set<string>>(new Set());
  const refresh=useCallback(async()=>{
@@ -25,6 +26,7 @@ export default function CommunityFeed({onOpenProfile}:{onOpenProfile:(userId:str
   if(tab==='first_blood')rows=rows.filter(e=>e.kind==='first_blood');
   if(tab==='announcement')rows=rows.filter(e=>e.kind==='announcement');
   if(tab==='popular')rows.sort((a,b)=>b.heart_count-a.heart_count||Date.parse(b.created_at)-Date.parse(a.created_at));
+  if(tab==='recent')rows.sort((a,b)=>Number(b.kind==='announcement')-Number(a.kind==='announcement')||Date.parse(b.created_at)-Date.parse(a.created_at));
   setTotal(rows.length);const pages=Math.max(1,Math.ceil(rows.length/PAGE_SIZE));if(page>pages){setPage(pages);return;}
   setEvents(rows.slice((page-1)*PAGE_SIZE,page*PAGE_SIZE));
   setStatus(rows.length?'':localFeed.status==='rejected'?'Community activity is temporarily unavailable.':'No activity in this view yet.');
@@ -41,10 +43,10 @@ export default function CommunityFeed({onOpenProfile}:{onOpenProfile:(userId:str
   try{await arena('heart',{id:event.id,liked:!has});}
   catch{toast.error('Reaction was not saved.');await refresh();}finally{pendingHearts.current.delete(event.id);}
  }
- function selectTab(next:FeedTab){request.current++;setEvents([]);setStatus("Loading activity…");setTab(next);setPage(1);}
+ function selectTab(next:FeedTab){request.current++;setEvents([]);setExpandedImage(null);setStatus("Loading activity…");setTab(next);setPage(1);}
  const pages=Math.max(1,Math.min(5,Math.ceil(total/PAGE_SIZE)));
  return <section className="feed-page">
-  <div className="page-heading"><h1>Community feed</h1><span className="sample-label">Latest 50</span></div>
+  <div className="page-heading"><h1>{tab==="announcement"?"Announcements":"Community feed"}</h1><span className="sample-label">{tab==="announcement"?"Official updates":"Latest 50"}</span></div>
   <div className="feed-tabs" role="tablist" aria-label="Community feed views">
    <button role="tab" aria-selected={tab==="recent"} onClick={()=>selectTab("recent")}>Recent feed</button>
    <button role="tab" aria-selected={tab==="popular"} onClick={()=>selectTab("popular")}>Popular</button>
@@ -54,7 +56,7 @@ export default function CommunityFeed({onOpenProfile}:{onOpenProfile:(userId:str
   {status&&<p className="account-note" role="status">{status}</p>}
   <ol className="community-list">{events.map(event=>{const date=new Date(event.created_at),level=levelFor(event.cbr),announcement=event.kind==='announcement',avatarUrl=announcement?'/cburger_logo.png':event.avatar_url;return <li key={event.id} className={`feed-cloud kind-${event.kind}`}>
    <button className="feed-player" disabled={announcement} onClick={()=>!announcement&&onOpenProfile(event.user_id)} aria-label={announcement?'Chess Burger announcement':`Open ${event.display_name}'s profile`}><span className="feed-avatar">{avatarUrl?<img src={avatarUrl} alt=""/>:event.display_name.charAt(0)}</span>{!announcement&&<img className="feed-level" src={`/levels/level-${String(level.level-1).padStart(2,"0")}.png`} alt={`Level ${level.level}`}/>}</button>
-   <div className="feed-copy"><div className="feed-meta"><span className="feed-kind">{labels[event.kind]??event.kind.replaceAll("_"," ")}</span><time dateTime={event.created_at}>{date.toLocaleDateString([],{month:"short",day:"numeric"})} · {date.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}</time></div><p>{announcement?<strong className="feed-name">Chess Burger</strong>:<button className="feed-name" onClick={()=>onOpenProfile(event.user_id)}>{event.display_name}</button>}<span className="feed-activity"> {event.content||"shared an update."}</span></p>{event.image_url&&<img className="announcement-image" src={event.image_url} alt="Announcement"/>}<div className="feed-rewards">{event.cbr_delta!==0&&<span className="feed-detail">{event.cbr_delta>0?"+":""}{event.cbr_delta} CBR</span>}{event.gold_delta!==0&&<span className="feed-gold">{event.gold_delta>0?"+":""}{event.gold_delta} Gold</span>}</div>{!announcement&&userId&&event.user_id!==userId&&<SocialButtons key={userId+":"+event.user_id} target={event.user_id} compact/>}</div>
+   <div className="feed-copy"><div className="feed-meta"><span className="feed-kind">{labels[event.kind]??event.kind.replaceAll("_"," ")}</span><time dateTime={event.created_at}>{date.toLocaleDateString([],{month:"short",day:"numeric"})} · {date.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}</time></div><p>{announcement?<strong className="feed-name">Chess Burger</strong>:<button className="feed-name" onClick={()=>onOpenProfile(event.user_id)}>{event.display_name}</button>}<span className="feed-activity"> {event.content||"shared an update."}</span></p>{announcement&&<span className="announcement-pin">PINNED ANNOUNCEMENT</span>}{event.image_url&&<button type="button" className={"announcement-image-button "+(expandedImage===event.id?"expanded":"")} aria-expanded={expandedImage===event.id} aria-label={(expandedImage===event.id?"Collapse":"Expand")+" announcement photo"} onClick={()=>setExpandedImage(current=>current===event.id?null:event.id)}><img className="announcement-image" src={event.image_url} alt="Announcement attachment"/></button>}<div className="feed-rewards">{event.cbr_delta!==0&&<span className="feed-detail">{event.cbr_delta>0?"+":""}{event.cbr_delta} CBR</span>}{event.gold_delta!==0&&<span className="feed-gold">{event.gold_delta>0?"+":""}{event.gold_delta} Gold</span>}</div>{!announcement&&userId&&event.user_id!==userId&&<SocialButtons key={userId+":"+event.user_id} target={event.user_id} compact/>}</div>
    <button className={"heart-button "+(reacted.has(event.id)?"reacted":"")} aria-label={(reacted.has(event.id)?"Remove":"Add")+" heart reaction"} aria-pressed={reacted.has(event.id)} onClick={()=>void toggleHeart(event)}><Heart size={17} fill={reacted.has(event.id)?"currentColor":"none"}/><span>{event.heart_count}</span></button>
   </li>})}</ol>
   {total>PAGE_SIZE&&<nav className="feed-pagination" aria-label="Feed pages"><button disabled={page===1} onClick={()=>setPage(p=>p-1)}><ChevronLeft size={15}/>Previous</button><span>Page {page} of {pages}</span><button disabled={page>=pages} onClick={()=>setPage(p=>p+1)}>Next<ChevronRight size={15}/></button></nav>}
