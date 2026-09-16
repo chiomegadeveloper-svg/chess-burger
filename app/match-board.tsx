@@ -102,10 +102,10 @@ export default function MatchBoard({
     [reactionUntil, setReactionUntil] = useState(0),
     [reactionError, setReactionError] = useState(""),
     [dragFrom, setDragFrom] = useState<Square | null>(null),
-    [boardTheme, setBoardTheme] = useState<"slate" | "classic" | "wood" | "premium-walnut">(() => {
+    [boardTheme, setBoardTheme] = useState<"slate" | "classic" | "wood" | "premium-walnut" | "meta-blue">(() => {
       if (typeof window === "undefined") return "slate";
       const saved = window.localStorage.getItem("cb-board-theme");
-      return saved === "classic" || saved === "wood" || saved === "premium-walnut" ? saved : "slate";
+      return saved === "classic" || saved === "wood" || saved === "premium-walnut" || saved === "meta-blue" ? saved : "slate";
     });
   const dragSource = useRef<Square | null>(null),
     suppressClick = useRef(false);
@@ -192,7 +192,7 @@ export default function MatchBoard({
                   : "Black to move"
                 : "Your move"
               : "Waiting for opponent";
-  function chooseBoardTheme(theme: "slate" | "classic" | "wood" | "premium-walnut") {
+  function chooseBoardTheme(theme: "slate" | "classic" | "wood" | "premium-walnut" | "meta-blue") {
     setBoardTheme(theme);
     window.localStorage.setItem("cb-board-theme", theme);
   }
@@ -431,7 +431,8 @@ export default function MatchBoard({
                 ["slate", "Chess Burger"],
                 ["classic", "Classic green"],
                 ["wood", "Warm wood"],
-                ["premium-walnut", "Premium Walnut by CHI"],
+                ["premium-walnut", "Kurama"],
+                ["meta-blue", "Meta Blue"],
               ].map(([theme, label]) => (
                 <button
                   key={theme}
@@ -439,7 +440,7 @@ export default function MatchBoard({
                   className={boardTheme === theme ? "active" : ""}
                   aria-pressed={boardTheme === theme}
                   onClick={() =>
-                    chooseBoardTheme(theme as "slate" | "classic" | "wood" | "premium-walnut")
+                    chooseBoardTheme(theme as "slate" | "classic" | "wood" | "premium-walnut" | "meta-blue")
                   }
                 >
                   <i className={"board-swatch " + theme} aria-hidden="true" />
