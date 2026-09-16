@@ -15,7 +15,7 @@ async function handle(request:Request){
   const settings=env as unknown as Record<string,string|undefined>,account=await authenticatedAccount(request,settings);if(!account)throw new ArenaError('Please sign in again.',401);
   const profile=await loadOrImportProfile(env.DB,account.user,account.client);if(!profile)throw new ArenaError('Save your player profile before joining a match.',403);
   return response(await privateAction(env.DB,profile,String(body.action),body));
- }catch(e){if(e instanceof ArenaError)return response({error:e.message},e.status);console.error('Arena request failed',e);return response({error:'The game service could not complete this request. Please try again.'},500);}
+ }catch(e){if(e instanceof ArenaError)return response({error:e.message},e.status);if((e as Error).message==='account_deleted')return response({error:'This Chess Burger account has been deleted by the owner.'},403);console.error('Arena request failed',e);return response({error:'The game service could not complete this request. Please try again.'},500);}
 }
 export const GET=handle;
 export const POST=handle;
