@@ -3,7 +3,7 @@ import {useEffect} from 'react';
 import {getSupabase} from './supabase';
 
 /** A short-lived activity signal. Never stores GPS coordinates in Supabase. */
-export function useLivePresence(userId?:string, gpsEnabled=false, activeMatchId=''){
+export function useLivePresence(userId?:string, gpsEnabled=false, activeMatchId='', cbr=88){
   useEffect(()=>{
     if(!userId || userId==='guest-device')return;
     let alive=true, sending=false;
@@ -19,6 +19,7 @@ export function useLivePresence(userId?:string, gpsEnabled=false, activeMatchId=
           user_id:userId,
           seen_at:new Date().toISOString(),
           gps_enabled:gpsEnabled,
+          cbr:Math.max(0,Math.floor(cbr)),
           match_id:activeMatchId || null
         },{onConflict:'user_id'});
         if(error)console.warn('Live presence unavailable:',error.message);
@@ -36,5 +37,5 @@ export function useLivePresence(userId?:string, gpsEnabled=false, activeMatchId=
       document.removeEventListener('visibilitychange',resumed);
       window.removeEventListener('online',resumed);
     };
-  },[userId,gpsEnabled,activeMatchId]);
+  },[userId,gpsEnabled,activeMatchId,cbr]);
 }
