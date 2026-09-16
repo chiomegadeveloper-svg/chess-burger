@@ -45,3 +45,10 @@ button.gold-button,.cloud-panel button.gold-button{background:linear-gradient(14
 
 /* Meta Blue: a polished navy-metal frame, blue squares and silver-white pieces. */
 .interactive-board.board-theme-meta-blue{position:relative;border:6px solid #071426;border-image:linear-gradient(135deg,#a5c9e8,#0c2850 18%,#020912 48%,#174579 78%,#c4dff0) 1;box-shadow:0 0 0 2px #020712,0 0 0 4px #5d91ba,0 14px 30px #020915cc;border-radius:2px;overflow:hidden}.interactive-board.board-theme-meta-blue:before{content:"";position:absolute;z-index:4;inset:-4px;pointer-events:none;border:2px solid #e7f5ff88;box-shadow:inset 0 0 0 1px #041022cc}.interactive-board.board-theme-meta-blue .sq{box-shadow:inset 0 0 0 1px #8faec566,inset 0 1px 0 #fff9}.interactive-board.board-theme-meta-blue .sq.light{background:radial-gradient(circle at 30% 20%,#ffffff,#e8edf2 58%,#b8c2cb);background-color:#e8edf2}.interactive-board.board-theme-meta-blue .sq.dark{background:radial-gradient(circle at 70% 15%,#285688,#0e2d52 62%,#071a31);background-color:#0e2d52}.interactive-board.board-theme-meta-blue .sq.white-piece .piece{color:#fffdf4;text-shadow:0 1px 0 #57718a,0 3px 3px #06101dbb,0 0 5px #fff}.interactive-board.board-theme-meta-blue .sq.black-piece .piece{color:#07111e;text-shadow:0 1px 0 #75b7ed,0 3px 3px #01050acc,0 0 5px #418ee0}.interactive-board.board-theme-meta-blue .sq.premove-origin,.interactive-board.board-theme-meta-blue .sq.premove-destination{box-shadow:inset 0 0 0 4px #54edf4,inset 0 0 22px #54edf499,inset 0 0 0 1px #8faec566;z-index:2}
+
+
+/* Owner-only destructive user management */
+.cms-danger-zone{margin-top:24px;padding:16px;border:1px solid #bd6a61;border-radius:13px;background:linear-gradient(145deg,#fff5f3,#f2ddda)}
+.cms-danger-zone h3{margin:0 0 5px;color:#7f302a}.cms-danger-zone .cms-note{margin:0 0 12px;color:#7b5753}
+.cms-panel .cms-delete-user{width:100%;margin-top:5px;border-color:#9d4039;background:linear-gradient(#c85a50,#8f302a);color:#fff;box-shadow:inset 0 1px #ffffff44}
+.cms-panel .cms-delete-user:hover:not(:disabled){filter:brightness(.95)}.cms-panel .cms-delete-user:disabled{opacity:.45;cursor:not-allowed}
