@@ -2,8 +2,8 @@
 import {createClient,SupabaseClient} from '@supabase/supabase-js';
 import {authStorage} from './auth-storage';
 let pending:Promise<SupabaseClient|null>|undefined;
-const configuredUrl=import.meta.env.VITE_SUPABASE_URL?.trim()??'';
-const configuredKey=import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim()??'';
+const configuredUrl=(import.meta.env.NEXT_PUBLIC_SUPABASE_URL ?? import.meta.env.VITE_SUPABASE_URL)?.trim()??'';
+const configuredKey=(import.meta.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY)?.trim()??'';
 export function getSupabase(){
  if(!pending)pending=(configuredUrl&&configuredKey
   ? Promise.resolve({configured:true,url:configuredUrl,key:configuredKey})
