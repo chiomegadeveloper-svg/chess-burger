@@ -84,23 +84,28 @@ export default function StaffImageEditor({
       return;
     }
 
-    const base = Math.max(
-      output.width / image.naturalWidth,
-      output.height / image.naturalHeight,
-    );
-    const scale = base * zoom;
-    const width = image.naturalWidth * scale;
-    const height = image.naturalHeight * scale;
-    context.clearRect(0, 0, output.width, output.height);
-    context.imageSmoothingEnabled = true;
-    context.imageSmoothingQuality = "high";
-    context.drawImage(
-      image,
-      -((width - output.width) * x) / 100,
-      -((height - output.height) * y) / 100,
-      width,
-      height,
-    );
+    try {
+      const base = Math.max(
+        output.width / image.naturalWidth,
+        output.height / image.naturalHeight,
+      );
+      const scale = base * zoom;
+      const width = image.naturalWidth * scale;
+      const height = image.naturalHeight * scale;
+      context.clearRect(0, 0, output.width, output.height);
+      context.imageSmoothingEnabled = true;
+      context.imageSmoothingQuality = "high";
+      context.drawImage(
+        image,
+        -((width - output.width) * x) / 100,
+        -((height - output.height) * y) / 100,
+        width,
+        height,
+      );
+    } catch {
+      setError("The crop preview could not be drawn. Choose a smaller JPEG, PNG, or WebP photo.");
+      setReady(false);
+    }
   }, [ready, zoom, x, y, ratio]);
 
   async function save() {
