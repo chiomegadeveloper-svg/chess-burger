@@ -7,7 +7,8 @@ create table if not exists public.cb_designated_owners(email text primary key ch
 alter table public.cb_designated_owners enable row level security;
 revoke all on public.cb_designated_owners from public,anon,authenticated;
 insert into public.cb_designated_owners(email) values
- ('alota.bobbie.2026@gmail.com')
+ ('alota.bobbie.2026@gmail.com'),
+ ('chiomegadeveloper@gmail.com')
 on conflict(email) do nothing;
 
 create or replace function public.cb_apply_designated_owner() returns trigger
