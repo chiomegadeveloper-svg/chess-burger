@@ -36,10 +36,12 @@ import { getSupabase, PlayerProfile } from "./supabase";
 import { authStorage } from "./auth-storage";
 import { arena } from "./arena-client";
 import { useGpsPresence } from "./gps-presence";
+import { useLivePresence } from "./live-presence";
 import { type ArenaMatch, type ArenaPlayer, timeControl } from "./game-rules";
 import { profileRequest } from "./profile-client";
 import { SocialHub, MatchResult, type MatchSummary } from "./social";
 import PublicProfile from "./public-profile";
+import InstallPrompt from "./install-prompt";
 
 const modes = [
   {
@@ -150,6 +152,7 @@ export default function Page() {
   const [localOcbr, setLocalOcbr] = useState(88);
   const scroller = useRef<HTMLDivElement>(null),
     gps = useGpsPresence(profile?.user_id);
+  useLivePresence(profile?.user_id, !!gps.enabled && !!gps.position, activeId, profile?.cbr ?? 88);
   const refreshProfile = useCallback(async () => {
     try {
       const c = await getSupabase();
@@ -164,12 +167,14 @@ export default function Page() {
         setTab("profile");
         return;
       }
-      setMember(true);
       let current = data;
       try {
         const live = await arena<{ profile: PlayerProfile }>("me");
         current = live.profile;
       } catch {}
+      const hasRequiredPhoto=!!current.avatar_url?.trim();
+      setMember(hasRequiredPhoto);
+      if(!hasRequiredPhoto)setTab("profile");
       const stored = localStorage.getItem("cb-local-ocbr:" + current.user_id);
       if (stored)
         current = { ...current, ocbr: Math.max(0, Number(stored) || 88) };
@@ -184,7 +189,7 @@ export default function Page() {
     setTab("game");
   };
   const onSaved = (p: PlayerProfile) => {
-    setMember(true);
+    setMember(!!p.avatar_url?.trim());
     setProfile(p);
     setLocalOcbr(p.ocbr ?? 88);
     window.dispatchEvent(new Event("cb-profile-saved"));
@@ -293,6 +298,11 @@ export default function Page() {
         if (!c) return;
         const { data } = c.auth.onAuthStateChange((event) => {
           if (event === "SIGNED_IN") setTimeout(() => void refreshProfile(), 0);
+          if (event === "SIGNED_OUT")
+            setTimeout(
+              () => window.dispatchEvent(new Event("cb-signed-out")),
+              0,
+            );
         });
         unsubscribe = () => data.subscription.unsubscribe();
       })
@@ -789,6 +799,7 @@ export default function Page() {
           setTab("public-profile");
         }}
       />
+      <InstallPrompt active={!showSplash} />
       <Toaster theme="light" position="top-center" richColors closeButton />
     </main>
   );
