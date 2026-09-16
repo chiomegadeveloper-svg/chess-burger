@@ -569,6 +569,32 @@ export default function Account({
       setBusy(false);
     }
   }
+  async function saveFeaturedEmblems(featured_badges: string[]) {
+    if (!profile || !client || !user) return;
+    const next = { ...profile, featured_badges };
+    setProfile(next);
+    try {
+      const saved = await profileRequest(client, "PUT", {
+        user_id: next.user_id,
+        username: next.username,
+        display_name: next.display_name,
+        bio: next.bio,
+        avatar_url: next.avatar_url,
+        country_code: next.country_code,
+        featured_photos: next.featured_photos,
+        featured_badges,
+      });
+      if (!saved) throw new Error("Emblems were not saved.");
+      const complete = { ...blankProfile(saved.user_id), ...saved };
+      setProfile(complete);
+      onSaved(complete);
+      window.dispatchEvent(new Event("cb-profile-saved"));
+      toast.success("Featured emblems updated.");
+    } catch (e) {
+      setProfile(profile);
+      setError((e as Error).message || "Could not save featured emblems.");
+    }
+  }
   async function signOut() {
     setBusy(true);
     setError("");
@@ -779,7 +805,7 @@ export default function Account({
               ))}
             </div>
           </section>
-          <FeaturedRewardSlots selected={profile.featured_badges} />
+          <FeaturedRewardSlots selected={profile.featured_badges} profile={profile} />
         </div>
       </div>
     </>
@@ -843,7 +869,7 @@ export default function Account({
       <section>
         {playerCard}
         <AppFeaturedPhoto />
-        <RewardEmblems />
+        <RewardEmblems profile={profile} />
       </section>
     );
   if (registered === true && !editing)
@@ -1138,9 +1164,8 @@ export default function Account({
       </section>
       <FeaturedRewardPicker
         selected={profile.featured_badges}
-        onChange={(featured_badges) =>
-          setProfile({ ...profile, featured_badges })
-        }
+        profile={profile}
+        onChange={(featured_badges) => void saveFeaturedEmblems(featured_badges)}
       />
       {passwordSecurity}
       <Dialog
