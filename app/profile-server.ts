@@ -23,8 +23,13 @@ export async function authenticatedAccount(request:Request,settings:Settings):Pr
 }
 
 export async function readProfile(db:D1Database,userId:string){const row=await stmt(db,profileSelect+' WHERE p.user_id=?',userId).first<ProfileRow>();return row?profileFromRow(row):null;}
+async function assertActiveUser(db:D1Database,userId:string){
+ const deleted=await stmt(db,'SELECT user_id FROM deleted_users WHERE user_id=?',userId).first();
+ if(deleted)throw new Error('account_deleted');
+}
 
 export async function saveProfile(db:D1Database,user:User,input:Partial<PlayerProfile>,options:{trusted?:boolean;role?:PlayerProfile['role'];announce?:boolean}={}){
+ await assertActiveUser(db,user.id);
  const existing=await readProfile(db,user.id),username=String(input.username??'').replace(/^@+/,'').trim().toLowerCase(),displayName=String(input.display_name??'').trim();
  if(!/^[a-z0-9_]{3,24}$/.test(username))throw new Error('username_format');if(!displayName||displayName.length>60)throw new Error('name_required');
  const collision=await stmt(db,'SELECT user_id FROM app_profiles WHERE username=? AND user_id<>? UNION SELECT user_id FROM arena_players WHERE username=? AND user_id<>? LIMIT 1',username,user.id,username,user.id).first();if(collision)throw new Error('username_taken');
@@ -41,6 +46,7 @@ export async function saveProfile(db:D1Database,user:User,input:Partial<PlayerPr
 }
 
 export async function loadOrImportProfile(db:D1Database,user:User,client:SupabaseClient){
+ await assertActiveUser(db,user.id);
  const saved=await readProfile(db,user.id);
  if(saved){
   if(isDesignatedOwner(user.email)&&saved.role!=='owner'){
