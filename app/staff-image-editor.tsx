@@ -1,12 +1,191 @@
 "use client";
-import {useEffect,useRef,useState} from 'react';
-import {Dialog,DialogContent,DialogHeader,DialogTitle,DialogDescription} from '@/components/ui/dialog';
 
-export default function StaffImageEditor({file,onCancel,onSave}:{file:File|null;onCancel:()=>void;onSave:(file:File)=>Promise<void>}){
- const canvas=useRef<HTMLCanvasElement>(null),bitmap=useRef<ImageBitmap|null>(null);
- const [zoom,setZoom]=useState(1),[x,setX]=useState(50),[y,setY]=useState(50),[ratio,setRatio]=useState('1.7777778'),[ready,setReady]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
- useEffect(()=>{let active=true;setReady(false);setZoom(1);setX(50);setY(50);setError('');if(file)void createImageBitmap(file).then(b=>{if(!active){b.close();return;}bitmap.current=b;setReady(true);}).catch(()=>setError('This image cannot be opened. Try JPEG, PNG or WebP.'));return()=>{active=false;bitmap.current?.close();bitmap.current=null;};},[file]);
- useEffect(()=>{const c=canvas.current,b=bitmap.current;if(!c||!b||!ready)return;const aspect=Number(ratio);c.width=1200;c.height=Math.round(1200/aspect);const base=Math.max(c.width/b.width,c.height/b.height),scale=base*zoom,w=b.width*scale,h=b.height*scale;const ctx=c.getContext('2d')!;ctx.clearRect(0,0,c.width,c.height);ctx.drawImage(b,-(w-c.width)*x/100,-(h-c.height)*y/100,w,h);},[ready,zoom,x,y,ratio]);
- async function save(){setBusy(true);setError('');try{const c=canvas.current!;let blob:Blob|null=null;for(let q=.9;q>=.3;q-=.1){blob=await new Promise<Blob|null>(r=>c.toBlob(r,'image/webp',q));if(blob&&blob.size<1_000_000)break;}if(!blob||blob.type!=='image/webp'||blob.size>=1_000_000)throw Error('Could not fit this crop under 1 MB. Try a closer crop.');await onSave(new File([blob],'staff-crop.webp',{type:'image/webp'}));}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
- return <Dialog open={!!file} onOpenChange={open=>{if(!open&&!busy)onCancel();}}><DialogContent className="staff-image-editor"><DialogHeader><DialogTitle>Crop & preview</DialogTitle><DialogDescription>Adjust the image before uploading. Saved as WebP under 1 MB.</DialogDescription></DialogHeader><canvas ref={canvas} aria-label="Cropped image preview"/><label>Shape<select value={ratio} onChange={e=>setRatio(e.target.value)}><option value="1.7777778">Landscape · 16:9</option><option value="1">Square · 1:1</option><option value="0.75">Portrait · 3:4</option></select></label><label>Zoom<input type="range" min="1" max="4" step=".01" value={zoom} onChange={e=>setZoom(Number(e.target.value))}/></label><label>Horizontal position<input type="range" min="0" max="100" value={x} onChange={e=>setX(Number(e.target.value))}/></label><label>Vertical position<input type="range" min="0" max="100" value={y} onChange={e=>setY(Number(e.target.value))}/></label>{error&&<p role="alert">{error}</p>}<button className="gold-button" disabled={!ready||busy} onClick={()=>void save()}>{busy?'Uploading…':'Use crop & upload'}</button></DialogContent></Dialog>;
+import { useEffect, useRef, useState } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { canvasToWebpUnder1Mb, loadImageFile } from "./media";
+
+export default function StaffImageEditor({
+  file,
+  onCancel,
+  onSave,
+}: {
+  file: File | null;
+  onCancel: () => void;
+  onSave: (file: File) => Promise<void>;
+}) {
+  const canvas = useRef<HTMLCanvasElement>(null);
+  const source = useRef<HTMLImageElement | null>(null);
+  const disposeSource = useRef<(() => void) | null>(null);
+  const [zoom, setZoom] = useState(1);
+  const [x, setX] = useState(50);
+  const [y, setY] = useState(50);
+  const [ratio, setRatio] = useState("1.7777778");
+  const [ready, setReady] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    setReady(false);
+    setZoom(1);
+    setX(50);
+    setY(50);
+    setError("");
+    disposeSource.current?.();
+    disposeSource.current = null;
+    source.current = null;
+
+    if (file)
+      void loadImageFile(file)
+        .then((loaded) => {
+          if (!active) {
+            loaded.dispose();
+            return;
+          }
+          source.current = loaded.image;
+          disposeSource.current = loaded.dispose;
+          setReady(true);
+        })
+        .catch((cause) => {
+          if (active)
+            setError(
+              cause instanceof Error
+                ? cause.message
+                : "This image cannot be opened.",
+            );
+        });
+
+    return () => {
+      active = false;
+      disposeSource.current?.();
+      disposeSource.current = null;
+      source.current = null;
+    };
+  }, [file]);
+
+  useEffect(() => {
+    const output = canvas.current;
+    const image = source.current;
+    if (!output || !image || !ready) return;
+
+    const aspect = Number(ratio);
+    output.width = 1200;
+    output.height = Math.round(1200 / aspect);
+    const context = output.getContext("2d");
+    if (!context) {
+      setError("This browser cannot process images.");
+      setReady(false);
+      return;
+    }
+
+    const base = Math.max(
+      output.width / image.naturalWidth,
+      output.height / image.naturalHeight,
+    );
+    const scale = base * zoom;
+    const width = image.naturalWidth * scale;
+    const height = image.naturalHeight * scale;
+    context.clearRect(0, 0, output.width, output.height);
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = "high";
+    context.drawImage(
+      image,
+      -((width - output.width) * x) / 100,
+      -((height - output.height) * y) / 100,
+      width,
+      height,
+    );
+  }, [ready, zoom, x, y, ratio]);
+
+  async function save() {
+    const output = canvas.current;
+    if (!output) return;
+    setBusy(true);
+    setError("");
+    try {
+      const blob = await canvasToWebpUnder1Mb(output);
+      await onSave(
+        new File([blob], "staff-crop.webp", { type: "image/webp" }),
+      );
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : "The image was not uploaded.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog
+      open={!!file}
+      onOpenChange={(open) => {
+        if (!open && !busy) onCancel();
+      }}
+    >
+      <DialogContent className="staff-image-editor">
+        <DialogHeader>
+          <DialogTitle>Crop & preview</DialogTitle>
+          <DialogDescription>
+            Adjust the image before uploading. Saved as WebP under 1 MB.
+          </DialogDescription>
+        </DialogHeader>
+        <canvas ref={canvas} aria-label="Cropped image preview" />
+        <label>
+          Shape
+          <select value={ratio} onChange={(event) => setRatio(event.target.value)}>
+            <option value="1.7777778">Landscape · 16:9</option>
+            <option value="1">Square · 1:1</option>
+            <option value="0.75">Portrait · 3:4</option>
+          </select>
+        </label>
+        <label>
+          Zoom
+          <input
+            type="range"
+            min="1"
+            max="4"
+            step=".01"
+            value={zoom}
+            onChange={(event) => setZoom(Number(event.target.value))}
+          />
+        </label>
+        <label>
+          Horizontal position
+          <input
+            type="range"
+            min="0"
+            max="100"
+            value={x}
+            onChange={(event) => setX(Number(event.target.value))}
+          />
+        </label>
+        <label>
+          Vertical position
+          <input
+            type="range"
+            min="0"
+            max="100"
+            value={y}
+            onChange={(event) => setY(Number(event.target.value))}
+          />
+        </label>
+        {error && <p role="alert">{error}</p>}
+        <button
+          type="button"
+          className="gold-button"
+          disabled={!ready || busy}
+          onClick={() => void save()}
+        >
+          {busy ? "Uploading…" : "Use crop & upload"}
+        </button>
+      </DialogContent>
+    </Dialog>
+  );
 }
