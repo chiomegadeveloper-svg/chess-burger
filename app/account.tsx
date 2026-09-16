@@ -805,7 +805,7 @@ export default function Account({
               ))}
             </div>
           </section>
-          <FeaturedRewardSlots selected={profile.featured_badges} profile={profile} />
+          <FeaturedRewardSlots selected={profile.featured_badges} profile={profile} onChoose={() => setEditing(true)} />
         </div>
       </div>
     </>
