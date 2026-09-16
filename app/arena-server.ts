@@ -30,6 +30,87 @@ const shortCode = () => {
 const playerColumns =
   "user_id,username,display_name,avatar_url,country_code,cbr,ocbr,gold_points,wins,losses,win_streak";
 const inPlay = `status='active'`;
+const FAIR_PLAY_ABORT_LIMIT = 5;
+const FAIR_PLAY_COOLDOWN_MS = 60_000;
+
+type FairPlayState = {
+  total_aborts: number;
+  cooldown_until: number;
+  cooldown_complete?: boolean;
+};
+
+async function fairPlayState(db: D1Database, userId: string): Promise<FairPlayState> {
+  const state = await stmt(
+    db,
+    "SELECT total_aborts,cooldown_until,cooldown_notified_at FROM arena_fair_play WHERE user_id=?",
+    userId,
+  ).first<{ total_aborts: number; cooldown_until: number; cooldown_notified_at: number }>();
+  if (!state) return { total_aborts: 0, cooldown_until: 0 };
+  const t = now();
+  if (state.cooldown_until > t)
+    return { total_aborts: state.total_aborts, cooldown_until: state.cooldown_until };
+  if (state.cooldown_until && state.cooldown_notified_at < state.cooldown_until) {
+    await stmt(
+      db,
+      "UPDATE arena_fair_play SET cooldown_notified_at=?,updated_at=? WHERE user_id=? AND cooldown_notified_at<?",
+      t, t, userId, state.cooldown_until,
+    ).run();
+    return { total_aborts: state.total_aborts, cooldown_until: 0, cooldown_complete: true };
+  }
+  return { total_aborts: state.total_aborts, cooldown_until: 0 };
+}
+
+async function requireFairPlayReady(db: D1Database, userId: string) {
+  const fair = await fairPlayState(db, userId);
+  if (fair.cooldown_until > now()) {
+    const seconds = Math.max(1, Math.ceil((fair.cooldown_until - now()) / 1000));
+    throw new ArenaError(`Fair-play cooldown: play again in ${seconds}s.`, 429);
+  }
+  return fair;
+}
+
+async function abortMatch(db: D1Database, p: ArenaPlayer, id: string, version: number) {
+  const m = await matchView(db, id);
+  if (![m.white_id, m.black_id].includes(p.user_id))
+    throw new ArenaError("Only the two players can abort this match.", 403);
+  if (m.status !== "active")
+    return { match: m, fair_play: await fairPlayState(db, p.user_id) };
+  if (m.version !== version)
+    throw new ArenaError("The board changed. Please try again.", 409);
+
+  const changed = await stmt(
+    db,
+    "UPDATE arena_matches SET status='cancelled',result=NULL,version=version+1 WHERE id=? AND version=? AND status='active'",
+    id, version,
+  ).run();
+  if (!changed.meta.changes)
+    throw new ArenaError("The board changed. Please try again.", 409);
+
+  const t = now();
+  const event = await stmt(
+    db,
+    "INSERT OR IGNORE INTO arena_abort_events(match_id,user_id,created_at) VALUES(?,?,?)",
+    id, p.user_id, t,
+  ).run();
+  if (event.meta.changes) {
+    await stmt(
+      db,
+      "INSERT INTO arena_fair_play(user_id,total_aborts,cooldown_until,cooldown_notified_at,clean_match_streak,updated_at) VALUES(?,1,0,0,0,?) ON CONFLICT(user_id) DO UPDATE SET total_aborts=total_aborts+1,clean_match_streak=0,updated_at=excluded.updated_at",
+      p.user_id, t,
+    ).run();
+    const record = await stmt(
+      db, "SELECT total_aborts FROM arena_fair_play WHERE user_id=?", p.user_id,
+    ).first<{ total_aborts: number }>();
+    if (record && record.total_aborts % FAIR_PLAY_ABORT_LIMIT === 0)
+      await stmt(
+        db,
+        "UPDATE arena_fair_play SET cooldown_until=?,cooldown_notified_at=0,updated_at=? WHERE user_id=?",
+        t + FAIR_PLAY_COOLDOWN_MS, t, p.user_id,
+      ).run();
+  }
+  return { match: await matchView(db, id), fair_play: await fairPlayState(db, p.user_id) };
+}
+
 export async function syncPlayer(db: D1Database, p: PlayerProfile) {
   await stmt(
     db,
@@ -163,6 +244,40 @@ export async function settle(db: D1Database, id: string) {
         id,
       ),
     );
+    // Only completed games count toward the fair-play streak.
+    statements.push(
+      stmt(
+        db,
+        `INSERT INTO arena_fair_play(user_id,total_aborts,cooldown_until,cooldown_notified_at,clean_match_streak,updated_at)
+         SELECT ?,0,0,0,1,? WHERE ${guard}
+         ON CONFLICT(user_id) DO UPDATE SET clean_match_streak=clean_match_streak+1,updated_at=excluded.updated_at WHERE ${guard}`,
+        pid, now(), id,
+      ),
+      stmt(
+        db,
+        `INSERT OR IGNORE INTO arena_ledger(id,user_id,delta,kind,created_at)
+         SELECT ?,?,20,'fair_play',? WHERE ${guard}
+         AND EXISTS(SELECT 1 FROM arena_fair_play WHERE user_id=? AND clean_match_streak>=10)`,
+        `fair-play:${id}:${pid}`, pid, now(), id, pid,
+      ),
+      stmt(
+        db,
+        "UPDATE arena_players SET cbr=cbr+20 WHERE user_id=? AND EXISTS(SELECT 1 FROM arena_ledger WHERE id=?)",
+        pid, `fair-play:${id}:${pid}`,
+      ),
+      stmt(
+        db,
+        `INSERT OR IGNORE INTO arena_feed(id,user_id,kind,display_name,content,cbr_delta,created_at)
+         SELECT ?,user_id,'fair_play',display_name,'played fair for 10 consecutive matches (+20 CBR).',20,?
+         FROM arena_players WHERE user_id=? AND EXISTS(SELECT 1 FROM arena_ledger WHERE id=?)`,
+        `fair-play-feed:${id}:${pid}`, now(), pid, `fair-play:${id}:${pid}`,
+      ),
+      stmt(
+        db,
+        "UPDATE arena_fair_play SET clean_match_streak=0,updated_at=? WHERE user_id=? AND clean_match_streak>=10 AND EXISTS(SELECT 1 FROM arena_ledger WHERE id=?)",
+        now(), pid, `fair-play:${id}:${pid}`,
+      ),
+    );
   }
   statements.push(
     stmt(
@@ -268,6 +383,7 @@ export async function queueMatch(
   p: ArenaPlayer,
   control: string,
 ) {
+  await requireFairPlayReady(db, p.user_id);
   const tc = timeControl(control),
     compatibleControls = TIME_CONTROLS.filter(
       (candidate) => candidate.group === tc.group,
@@ -339,6 +455,7 @@ export async function createRoom(
   target?: string,
   publicChallenge = false,
 ) {
+  await requireFairPlayReady(db, p.user_id);
   const tc = timeControl(control);
   if (publicChallenge && target) throw new ArenaError("Choose one challenge audience.");
   if (target === p.user_id) throw new ArenaError("Choose another player.");
@@ -394,6 +511,7 @@ export async function createRoom(
   return { match: await matchView(db, id) };
 }
 export async function joinRoom(db: D1Database, p: ArenaPlayer, code: string) {
+  await requireFairPlayReady(db, p.user_id);
   const m = await stmt(
     db,
     "SELECT * FROM arena_matches WHERE code=? AND status='waiting' AND created_at>?",
@@ -547,6 +665,44 @@ export async function publicAction(
       ).first()) ?? { image_url: "", updated_at: null }
     );
   }
+  if (action === "map-stats") {
+    const cutoff = now() - 60_000;
+    const gpsCutoff = now() - 45_000;
+    const [registered, online, matches, gps, leader] = await Promise.all([
+      stmt(db, "SELECT COUNT(*) AS count FROM app_profiles").first<{ count: number }>(),
+      stmt(
+        db,
+        `SELECT COUNT(*) AS count FROM arena_players p WHERE p.updated_at>? OR EXISTS(SELECT 1 FROM arena_matches m WHERE m.status='active' AND (m.white_id=p.user_id OR m.black_id=p.user_id))`,
+        cutoff,
+      ).first<{ count: number }>(),
+      stmt(
+        db,
+        "SELECT COUNT(*) AS count FROM arena_matches WHERE status='active'",
+      ).first<{ count: number }>(),
+      stmt(
+        db,
+        "SELECT COUNT(*) AS count FROM arena_presence WHERE gps=1 AND seen_at>?",
+        gpsCutoff,
+      ).first<{ count: number }>(),
+      stmt(
+        db,
+        `SELECT p.user_id,p.display_name,p.cbr,
+        (SELECT COUNT(*)+1 FROM arena_players r WHERE r.cbr>p.cbr OR (r.cbr=p.cbr AND r.wins>p.wins) OR (r.cbr=p.cbr AND r.wins=p.wins AND r.user_id<p.user_id)) AS rank
+        FROM arena_players p
+        WHERE p.updated_at>? OR EXISTS(SELECT 1 FROM arena_matches m WHERE m.status='active' AND (m.white_id=p.user_id OR m.black_id=p.user_id))
+        ORDER BY p.cbr DESC,p.wins DESC,p.user_id LIMIT 1`,
+        cutoff,
+      ).first<{ user_id: string; display_name: string; cbr: number; rank: number }>(),
+    ]);
+    return {
+      online_users: Number(online?.count ?? 0),
+      registered_users: Number(registered?.count ?? 0),
+      active_matches: Number(matches?.count ?? 0),
+      gps_online: Number(gps?.count ?? 0),
+      highest_online: leader ?? null,
+      updated_at: new Date().toISOString(),
+    };
+  }
   if (action === "ranks") {
     const rows = await stmt(
       db,
@@ -638,9 +794,14 @@ export async function privateAction(
   action: string,
   input: Record<string, any>,
 ) {
+  if(!profile.avatar_url?.trim()&&!["me","leave"].includes(action))
+    throw new ArenaError("Add and save a profile picture to unlock Chess Burger.",403);
   const p = await syncPlayer(db, profile),
     id = p.user_id,
     t = now();
+  const cmsAction = ["cms-announcements", "save-announcement", "delete-announcement", "set-app-feature", "set-card-photo", "grant-gold", "logs"].includes(action);
+  if (cmsAction && !["owner", "admin"].includes(profile.role))
+    throw new ArenaError("Owner or GM access is required.", 403);
   if (action.startsWith("social-") || action.startsWith("chat-"))
     return socialAction(db, id, action, input);
   if (action === "public-profile") {
@@ -728,6 +889,7 @@ export async function privateAction(
     return {
       match: active ? await matchView(db, active.id) : null,
       completed: completed ? await matchView(db, completed.id) : null,
+      fair_play: await fairPlayState(db, id),
       invites: invites.results,
     };
   }
@@ -769,6 +931,8 @@ export async function privateAction(
       throw new ArenaError("This room is private.", 403);
     return { match };
   }
+  if (action === "abort")
+    return abortMatch(db, p, String(input.id), Number(input.version));
   if (action === "move" || action === "resign")
     return playMove(
       db,
@@ -1267,7 +1431,15 @@ export async function privateAction(
         "DELETE FROM arena_feed WHERE id NOT IN(SELECT id FROM arena_feed ORDER BY created_at DESC LIMIT 50)",
       ),
     ]);
-    return { ok: true };
+    return {
+      ok: true,
+      post: {
+        id: feedId,
+        content,
+        image_url: image,
+        expires_at: new Date(expires).toISOString(),
+      },
+    };
   }
   if (action === "delete-announcement") {
     const feedId = String(input.id ?? "");
@@ -1345,22 +1517,109 @@ export async function privateAction(
     ]);
     return { ok: true };
   }
+  if (action === "delete-user") {
+    if (profile.role !== "owner")
+      throw new ArenaError("Owner access is required.", 403);
+    const username = String(input.username ?? "")
+      .replace(/^@+/, "")
+      .trim()
+      .toLowerCase();
+    const confirmation = String(input.confirmation ?? "")
+      .replace(/^@+/, "")
+      .trim()
+      .toLowerCase();
+    if (!username || confirmation !== username)
+      throw new ArenaError("Type the exact username to confirm deletion.");
+    const target = await stmt(
+      db,
+      "SELECT user_id,username,role FROM app_profiles WHERE username=?",
+      username,
+    ).first<{ user_id: string; username: string; role: string }>();
+    if (!target) throw new ArenaError("Player not found.");
+    if (target.user_id === id)
+      throw new ArenaError("You cannot delete your own owner account.", 403);
+    if (target.role === "owner")
+      throw new ArenaError("Owner accounts are protected.", 403);
+    const deletedAt = now();
+    await db.batch([
+      stmt(
+        db,
+        "INSERT OR REPLACE INTO deleted_users(user_id,username,deleted_by,deleted_at) VALUES(?,?,?,?)",
+        target.user_id,
+        target.username,
+        id,
+        deletedAt,
+      ),
+      stmt(db, "DELETE FROM arena_hearts WHERE user_id=?", target.user_id),
+      stmt(db, "DELETE FROM arena_feed WHERE user_id=?", target.user_id),
+      stmt(db, "DELETE FROM arena_ledger WHERE user_id=?", target.user_id),
+      stmt(db, "DELETE FROM arena_gold_ledger WHERE user_id=?", target.user_id),
+      stmt(db, "DELETE FROM arena_presence WHERE user_id=?", target.user_id),
+      stmt(db, "DELETE FROM arena_queue WHERE user_id=?", target.user_id),
+      stmt(db, "DELETE FROM arena_territory WHERE user_id=?", target.user_id),
+      stmt(db, "DELETE FROM arena_offline_results WHERE user_id=?", target.user_id),
+      stmt(db, "DELETE FROM arena_player_regions WHERE user_id=?", target.user_id),
+      stmt(
+        db,
+        "DELETE FROM social_links WHERE user_id=? OR target_id=?",
+        target.user_id,
+        target.user_id,
+      ),
+      stmt(
+        db,
+        "DELETE FROM social_messages WHERE sender_id=? OR recipient_id=?",
+        target.user_id,
+        target.user_id,
+      ),
+      stmt(db, "DELETE FROM social_presence WHERE user_id=?", target.user_id),
+      stmt(
+        db,
+        "DELETE FROM arena_matches WHERE status<>'finished' AND (host_id=? OR white_id=? OR black_id=? OR invite_to=?)",
+        target.user_id,
+        target.user_id,
+        target.user_id,
+        target.user_id,
+      ),
+      stmt(db, "DELETE FROM arena_players WHERE user_id=?", target.user_id),
+      stmt(db, "DELETE FROM app_profiles WHERE user_id=?", target.user_id),
+      stmt(
+        db,
+        "INSERT INTO arena_logs(id,actor_user_id,action,details,created_at) VALUES(?,?,?,?,?)",
+        uid(),
+        id,
+        "delete_user",
+        JSON.stringify({ username: target.username, user_id: target.user_id }),
+        deletedAt,
+      ),
+    ]);
+    return { ok: true };
+  }
   if (action === "set-role") {
     if (profile.role !== "owner")
       throw new ArenaError("Owner access is required.", 403);
     const username = String(input.username ?? "")
         .replace(/^@+/, "")
+        .trim()
         .toLowerCase(),
       role = String(input.role ?? "");
-    if (!["player", "admin"].includes(role))
-      throw new ArenaError("Choose Player or GM / Admin.");
+    if (!["player", "admin", "owner"].includes(role))
+      throw new ArenaError("Choose Owner, GM / Admin, or Player.");
     const target = await stmt(
       db,
-      "SELECT user_id FROM app_profiles WHERE username=? AND role<>'owner'",
+      "SELECT user_id,role FROM app_profiles WHERE username=?",
       username,
-    ).first<{ user_id: string }>();
-    if (!target)
-      throw new ArenaError("Player not found or Owner role is protected.");
+    ).first<{ user_id: string; role: string }>();
+    if (!target) throw new ArenaError("Player not found.");
+    if (target.user_id === id)
+      throw new ArenaError("You cannot change your own owner access.", 403);
+    if (target.role === "owner" && role !== "owner") {
+      const owners = await stmt(
+        db,
+        "SELECT COUNT(*) AS count FROM app_profiles WHERE role='owner'",
+      ).first<{ count: number }>();
+      if ((owners?.count ?? 0) <= 1)
+        throw new ArenaError("Chess Burger must keep at least one Owner.", 403);
+    }
     await db.batch([
       stmt(
         db,
