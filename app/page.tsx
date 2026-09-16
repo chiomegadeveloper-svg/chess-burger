@@ -83,6 +83,14 @@ const navigation = [
   { key: "profile", label: "Profile", Icon: UserRound },
 ];
 type Invite = ArenaMatch & { host_name: string; host_avatar: string };
+const activeMatchKey = (userId: string) => `cb-active-match:${userId}`;
+function savedSharedBoard(userId: string) {
+  try {
+    const raw = localStorage.getItem(`cb-shared-board:${userId}`);
+    const match = raw ? JSON.parse(raw) as ArenaMatch : null;
+    return match?.white_id === userId && match.status === "active" ? match.id : "";
+  } catch { return ""; }
+}
 export default function Page() {
   const [tab, setTab] = useState("profile"),
     [profile, setProfile] = useState<PlayerProfile | null>(null),
@@ -94,6 +102,9 @@ export default function Page() {
     [viewedUserId, setViewedUserId] = useState(""),
     [invites, setInvites] = useState<Invite[]>([]),
     [activeId, setActiveId] = useState(""),
+    [sharedId, setSharedId] = useState(""),
+    [pairingOpened, setPairingOpened] = useState(false),
+    [localMatchActive, setLocalMatchActive] = useState(false),
     [offlineControl, setOfflineControl] = useState("10+0");
   const [summary, setSummary] = useState<MatchSummary | null>(null);
   const shownResults = useRef(new Set<string>());
@@ -186,8 +197,28 @@ export default function Page() {
   const openMatch = (id: string) => {
     setMatchId(id);
     setActiveId(id);
+    if (profile?.user_id && profile.user_id !== "guest-device")
+      localStorage.setItem(activeMatchKey(profile.user_id), id);
     setTab("game");
   };
+  useEffect(() => {
+    if (tab === "pairing") setPairingOpened(true);
+  }, [tab]);
+  useEffect(() => {
+    const userId = profile?.user_id;
+    if (!userId) { setSharedId(""); return; }
+    const update = () => setSharedId(savedSharedBoard(userId));
+    update();
+    window.addEventListener("cb-games-changed", update);
+    window.addEventListener("storage", update);
+    return () => { window.removeEventListener("cb-games-changed", update); window.removeEventListener("storage", update); };
+  }, [profile?.user_id]);
+  useEffect(() => {
+    if (!localMatchActive) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [localMatchActive]);
   const onSaved = (p: PlayerProfile) => {
     setMember(!!p.avatar_url?.trim());
     setProfile(p);
@@ -327,6 +358,7 @@ export default function Page() {
       setProfile(null);
       setSummary(null);
       setActiveId("");
+      setSharedId("");
       setInvites([]);
       setLocalOcbr(88);
       setTab("profile");
@@ -342,6 +374,9 @@ export default function Page() {
   }, [refreshProfile]);
   useEffect(() => {
     if (!profile || profile.user_id === "guest-device") return;
+    const userId = profile.user_id;
+    const remembered = localStorage.getItem(activeMatchKey(userId));
+    setActiveId(remembered ?? "");
     let live = true,
       pending = false;
     const poll = async () => {
@@ -353,7 +388,10 @@ export default function Page() {
         );
         if (live) {
           setInvites(d.invites);
-          setActiveId(d.match?.status === "active" ? d.match.id : "");
+          const currentId = d.match?.status === "active" ? d.match.id : "";
+          setActiveId(currentId);
+          if (currentId) localStorage.setItem(activeMatchKey(userId), currentId);
+          else localStorage.removeItem(activeMatchKey(userId));
         }
       } catch {
       } finally {
@@ -362,9 +400,14 @@ export default function Page() {
     };
     void poll();
     const timer = setInterval(poll, 4000);
+    const onVisible = () => { if (document.visibilityState === "visible") void poll(); };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
     return () => {
       live = false;
       clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
     };
   }, [profile?.user_id]);
   useEffect(() => {
@@ -507,6 +550,9 @@ export default function Page() {
           profile={profile}
           watch={tab === "watch"}
           onFinished={(m) => {
+            if (profile?.user_id && localStorage.getItem(activeMatchKey(profile.user_id)) === m.id)
+              localStorage.removeItem(activeMatchKey(profile.user_id));
+            setActiveId(current => current === m.id ? "" : current);
             showOnlineResult(m);
             void refreshProfile();
             window.dispatchEvent(new Event("cb-profile-saved"));
@@ -514,21 +560,7 @@ export default function Page() {
         />
       </>
     );
-  else if (tab === "pairing")
-    content = (
-      <>
-        {back}
-        <LocalPairing
-          profile={profile}
-          startSameDevice={(c) => {
-            setOfflineControl(c);
-            setTab("offline");
-          }}
-          startOnlineMatch={openMatch}
-          onResult={localResult}
-        />
-      </>
-    );
+  else if (tab === "pairing") content = null;
   else if (tab === "offline")
     content = (
       <>
@@ -645,7 +677,7 @@ export default function Page() {
         )}
       </section>
     );
-  if (member === false && tab !== "profile")
+  if (member === false && tab !== "profile" && !(tab === "pairing" && localMatchActive))
     content = (
       <section className="profile-page registration-gate">
         <div className="page-heading">
@@ -718,7 +750,17 @@ export default function Page() {
       >
         {activeId && tab !== "game" && (
           <button className="resume-match" onClick={() => openMatch(activeId)}>
-            Return to your active match <ChevronRight size={15} />
+            Return to online match <ChevronRight size={15} />
+          </button>
+        )}
+        {localMatchActive && tab !== "pairing" && (
+          <button className="resume-match" onClick={() => setTab("pairing")}>
+            Return to QR-paired match <ChevronRight size={15} />
+          </button>
+        )}
+        {sharedId && tab !== "offline" && (
+          <button className="resume-match" onClick={() => setTab("offline")}>
+            Return to shared-device match <ChevronRight size={15} />
           </button>
         )}
         {invites.length > 0 && tab !== "game" && (
@@ -754,6 +796,16 @@ export default function Page() {
           </div>
         )}
         {content}
+        {pairingOpened && <div hidden={tab !== "pairing"}>
+          {tab === "pairing" && back}
+          <LocalPairing
+            profile={profile}
+            startSameDevice={(c) => { setOfflineControl(c); setTab("offline"); }}
+            startOnlineMatch={openMatch}
+            onResult={localResult}
+            onLocalMatchChange={setLocalMatchActive}
+          />
+        </div>}
       </div>
       <nav className="bottom-nav" aria-label="Main navigation">
         {navigation.map(({ key, label, Icon }) => (
