@@ -168,3 +168,16 @@ html,body,#root{width:100%;max-width:100%;overflow-x:hidden}
  .account-toolbar{grid-template-columns:1fr}
  .account-controls{justify-content:flex-start}
 }
+
+
+/* Install offer shown after splash when the PWA is not already installed */
+.install-prompt-backdrop{position:fixed;inset:0;z-index:1200;display:grid;place-items:center;padding:18px;background:#05090db8;backdrop-filter:blur(7px)}
+.install-prompt{position:relative;width:min(100%,390px);padding:27px 25px 22px;border:1px solid #a98d4e;border-radius:21px;background:linear-gradient(145deg,#2b333c,#141a20 75%);box-shadow:inset 0 1px #ffffff17,0 24px 70px #000a;color:#eef3f5;text-align:center}
+.install-prompt>img{width:68px;height:68px;object-fit:contain;filter:drop-shadow(0 5px 12px #0008)}
+.install-prompt>span{display:block;margin-top:8px;color:#65d9e4;font-size:9px;font-weight:700;letter-spacing:1.7px}
+.install-prompt h2{margin:7px 0 6px;font-size:22px}.install-prompt>p{margin:0 auto 18px;max-width:290px;color:#acb8bf;font-size:12px;line-height:1.65}
+.install-close{position:absolute;top:12px;right:12px;display:grid;place-items:center;width:34px;height:34px;border:0;border-radius:50%;background:#ffffff0c;color:#aab6bc}.install-close svg{width:17px}
+.install-primary{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;min-height:47px;border:1px solid #d2b568;border-radius:11px;background:linear-gradient(#f6dea0,#c39446);color:#211a0e;font-size:13px;font-weight:700}.install-primary svg{width:18px}
+.install-instructions{display:flex;align-items:center;gap:12px;padding:13px;border:1px solid #486775;border-radius:11px;background:#172730;text-align:left}.install-instructions>svg{width:24px;flex:none;color:#66d8e2}.install-instructions p{margin:0;color:#d3e0e4;font-size:11px;line-height:1.55}
+.install-later{margin-top:12px;padding:7px 12px;border:0;background:transparent;color:#96a3aa;font-size:11px}
+@media(max-width:380px){.install-prompt-backdrop{padding:10px}.install-prompt{padding:23px 17px 18px;border-radius:17px}.install-prompt>img{width:58px;height:58px}.install-prompt h2{font-size:19px}}
