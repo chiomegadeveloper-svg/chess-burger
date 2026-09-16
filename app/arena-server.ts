@@ -1376,17 +1376,27 @@ export async function privateAction(
       throw new ArenaError("Owner access is required.", 403);
     const username = String(input.username ?? "")
         .replace(/^@+/, "")
+        .trim()
         .toLowerCase(),
       role = String(input.role ?? "");
-    if (!["player", "admin"].includes(role))
-      throw new ArenaError("Choose Player or GM / Admin.");
+    if (!["player", "admin", "owner"].includes(role))
+      throw new ArenaError("Choose Owner, GM / Admin, or Player.");
     const target = await stmt(
       db,
-      "SELECT user_id FROM app_profiles WHERE username=? AND role<>'owner'",
+      "SELECT user_id,role FROM app_profiles WHERE username=?",
       username,
-    ).first<{ user_id: string }>();
-    if (!target)
-      throw new ArenaError("Player not found or Owner role is protected.");
+    ).first<{ user_id: string; role: string }>();
+    if (!target) throw new ArenaError("Player not found.");
+    if (target.user_id === id)
+      throw new ArenaError("You cannot change your own owner access.", 403);
+    if (target.role === "owner" && role !== "owner") {
+      const owners = await stmt(
+        db,
+        "SELECT COUNT(*) AS count FROM app_profiles WHERE role='owner'",
+      ).first<{ count: number }>();
+      if ((owners?.count ?? 0) <= 1)
+        throw new ArenaError("Chess Burger must keep at least one Owner.", 403);
+    }
     await db.batch([
       stmt(
         db,
