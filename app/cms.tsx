@@ -25,9 +25,12 @@ export default function Cms({profile,onClose}:{profile:PlayerProfile;onClose:()=
   if(!text.trim()&&!image)throw Error("Add text or an image.");
   const end=new Date(deadline);
   if(!Number.isFinite(end.getTime())||end.getTime()<=Date.now())throw Error("Choose a future end date.");
-  const result=await arena<{post?:Post}>("save-announcement",{id:editing,content:text.trim(),image_url:image,expires_at:end.toISOString()});
-  if(!result.post)throw Error("The announcement was not saved. Please try again.");
-  setPosts(current=>editing?current.map(post=>post.id===result.post!.id?result.post!:post):[result.post!,...current]);
+  const result=await arena<{ok?:boolean;post?:Post}>("save-announcement",{id:editing,content:text.trim(),image_url:image,expires_at:end.toISOString()});
+  if(result.post){
+    setPosts(current=>editing?current.map(post=>post.id===result.post!.id?result.post!:post):[result.post!,...current]);
+  }else{
+    await loadPosts();
+  }
   setText("");setImage("");setDeadline("");setEditing(null);
   window.dispatchEvent(new Event("cb-profile-saved"));
   toast.success("Announcement published to the Community Feed.");
