@@ -25,6 +25,8 @@ function database() {
     sqlite.exec(
       readFileSync(new URL("../drizzle/" + file, import.meta.url), "utf8"),
     );
+  // The fair-play migration is managed separately from the D1 schema files.
+  sqlite.exec("CREATE TABLE IF NOT EXISTS arena_fair_play(user_id TEXT PRIMARY KEY,total_aborts INTEGER NOT NULL DEFAULT 0,cooldown_until INTEGER NOT NULL DEFAULT 0,cooldown_notified_at INTEGER NOT NULL DEFAULT 0,clean_match_streak INTEGER NOT NULL DEFAULT 0,updated_at INTEGER NOT NULL DEFAULT 0)");
   const db = {
     sqlite,
     prepare(sql) {
@@ -73,7 +75,7 @@ function profile(name, cbr = 88, role = "player") {
     user_id: name,
     username: name,
     display_name: name,
-    avatar_url: "",
+    avatar_url: "https://example.com/avatar.png",
     country_code: "PH",
     cbr,
     gold_points: 0,
