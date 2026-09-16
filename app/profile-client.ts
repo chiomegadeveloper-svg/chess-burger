@@ -1,7 +1,7 @@
 import type {SupabaseClient} from '@supabase/supabase-js';
 import type {PlayerProfile} from './supabase';
 
-const fields='user_id,username,display_name,bio,avatar_url,card_photo_url,country_code,featured_photos,featured_badges,cbr,gold_points,win_streak,wins,losses,role,created_at';
+const fields='*';
 
 function profilePayload(userId:string,input:Partial<PlayerProfile>){
  return {
