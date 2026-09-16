@@ -627,6 +627,8 @@ export async function privateAction(
   action: string,
   input: Record<string, any>,
 ) {
+  if(!profile.avatar_url?.trim()&&!["me","leave"].includes(action))
+    throw new ArenaError("Add and save a profile picture to unlock Chess Burger.",403);
   const p = await syncPlayer(db, profile),
     id = p.user_id,
     t = now();
