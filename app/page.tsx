@@ -152,7 +152,7 @@ export default function Page() {
   const [localOcbr, setLocalOcbr] = useState(88);
   const scroller = useRef<HTMLDivElement>(null),
     gps = useGpsPresence(profile?.user_id);
-  useLivePresence(profile?.user_id, !!gps.enabled && !!gps.position, activeId);
+  useLivePresence(profile?.user_id, !!gps.enabled && !!gps.position, activeId, profile?.cbr ?? 88);
   const refreshProfile = useCallback(async () => {
     try {
       const c = await getSupabase();
