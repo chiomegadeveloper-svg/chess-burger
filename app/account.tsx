@@ -448,10 +448,9 @@ export default function Account({
     setBusy(true);
     setError("");
     try {
-      const {
-        data: { session },
-      } = await client.auth.getSession();
-      if (!session || session.user.id !== user.id) throw new Error("session");
+      const { data: refreshed, error: refreshError } = await client.auth.refreshSession();
+      const session = refreshed.session ?? (await client.auth.getSession()).data.session;
+      if (refreshError || !session || session.user.id !== user.id) throw new Error("session");
       const blob = await toWebpUnder1Mb(file),
         path =
           user.id +
@@ -501,7 +500,7 @@ export default function Account({
         description: "Save your profile to keep this photo.",
       });
     } catch (e) {
-      const code = (e as Error).message;
+      const code = e instanceof Error ? e.message : String(e);
       setError(
         code === "image-size"
           ? "Photo could not be reduced below 1 MB. Choose a smaller image."
@@ -513,7 +512,7 @@ export default function Account({
                 ? "Supabase blocked this upload. Apply the profile media storage policies, then retry."
                 : code.includes("photo") || code.includes("JPEG") || code.includes("PNG") || code.includes("WebP") || code.includes("pixels") || code.includes("15 MB")
                   ? code
-                  : "Photo could not be uploaded to Supabase. Please retry.",
+                  : `Photo upload failed: ${code || "Connection interrupted"}. Please retry.`,
       );
     } finally {
       setBusy(false);
