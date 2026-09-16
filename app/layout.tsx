@@ -24,6 +24,9 @@ export const metadata: Metadata = {
   title: "Chess Burger",
   description: "Competitive chess, live.",
   manifest: "/manifest.webmanifest",
+  verification: {
+    google: "BpKi2gFy5TX5I_hDZ9zG2BDrM0KUrdLMk40B1jq-tKI",
+  },
   icons: {
     icon: [{ url: "/cburger_logo.png", type: "image/png" }],
     shortcut: [{ url: "/cburger_logo.png", type: "image/png" }],
