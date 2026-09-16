@@ -40,6 +40,7 @@ import { type ArenaMatch, type ArenaPlayer, timeControl } from "./game-rules";
 import { profileRequest } from "./profile-client";
 import { SocialHub, MatchResult, type MatchSummary } from "./social";
 import PublicProfile from "./public-profile";
+import InstallPrompt from "./install-prompt";
 
 const modes = [
   {
@@ -785,6 +786,7 @@ export default function Page() {
           setTab("public-profile");
         }}
       />
+      <InstallPrompt active={!showSplash} />
       <Toaster theme="light" position="top-center" richColors closeButton />
     </main>
   );
