@@ -180,6 +180,32 @@ test("Host controls time; targeted invites exclude other users and expired rooms
     .run(waiting.match.id);
   await assert.rejects(joinRoom(db, c, waiting.match.code), /expired/);
 });
+test("Public challenge stays pinned until accepted and cannot be joined twice", async () => {
+  const db = database(), a = profile("host"), b = profile("guest"), c = profile("late");
+  await seed(db, a, b, c);
+  const posted = await privateAction(db, a, "room", {control:"3+0",publicChallenge:true});
+  const id = posted.match.id;
+  const feed = await publicAction(db, "feed", new URLSearchParams());
+  assert.equal(feed.events[0].id, `challenge:${id}`);
+  await assert.rejects(privateAction(db, a, "accept-challenge", {id}), /own challenge/);
+  const accepted = await privateAction(db, b, "accept-challenge", {id});
+  assert.equal(accepted.match.status, "active");
+  assert.equal(accepted.match.black_id, b.user_id);
+  await assert.rejects(privateAction(db, c, "accept-challenge", {id}), /expired or was accepted/);
+  const updated = await publicAction(db, "feed", new URLSearchParams());
+  assert.ok(!updated.events.some(event => event.id === `challenge:${id}`));
+});
+test("Username search suggests close misspellings and directed challenges remain private", async () => {
+  const db = database(), host = profile("host"), bobbie = profile("bobbie"), stranger = profile("stranger");
+  await seed(db, host, bobbie, stranger);
+  db.sqlite.prepare("INSERT INTO app_profiles(user_id,username,display_name,created_at,updated_at) VALUES(?,?,?,?,?)")
+    .run("bobbie", "alota_bobbie", "Bobbie Alota", Date.now(), Date.now());
+  const found = await privateAction(db, host, "search-players", {query:"alota_bobie"});
+  assert.equal(found.players[0].user_id, bobbie.user_id);
+  const invite = await privateAction(db, host, "room", {control:"10+0",target:bobbie.user_id});
+  await assert.rejects(joinRoom(db, stranger, invite.match.code), /another player/);
+  assert.equal((await joinRoom(db, bobbie, invite.match.code)).match.status, "active");
+});
 test("Server rejects illegal, out-of-turn, stale, and spectator moves", async () => {
   const db = database(),
     a = profile("a"),
