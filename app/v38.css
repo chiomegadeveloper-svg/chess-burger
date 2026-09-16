@@ -130,3 +130,41 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+/* Responsive shell and compact profile controls for narrow phones */
+html,body,#root{width:100%;max-width:100%;overflow-x:hidden}
+.app-shell{width:100%;max-width:1160px;min-width:0}
+.scroll-area{width:100%;min-width:0;box-sizing:border-box}
+.scroll-area>section,.profile-page,.profile-editor,.profile-readonly{width:100%;max-width:100%;min-width:0;box-sizing:border-box}
+.profile-hero>div:last-child{min-width:0}
+.profile-hero h2,.profile-hero p{max-width:100%;overflow-wrap:anywhere}
+@media(max-width:650px){
+ .scroll-area{padding-left:12px;padding-right:12px}
+ .account-toolbar{display:grid;grid-template-columns:minmax(0,1fr) auto;width:100%;align-items:center}
+ .account-toolbar>span,.account-toolbar>.remember-login{min-width:0}
+ .account-controls{min-width:0;margin-left:0;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px}
+ .account-controls button,.account-controls .cms-access-button{min-width:0;padding:8px 10px;font-size:10px}
+ .profile-hero{grid-template-columns:82px minmax(0,1fr);gap:11px;padding:13px;overflow:hidden}
+ .avatar-upload{width:82px;height:82px}
+ .profile-hero h2{font-size:18px;line-height:1.25}
+ .profile-hero p{font-size:10px;line-height:1.5;margin:4px 0}
+ .profile-hero .role-badge{margin:2px 0 7px;padding:5px 9px;font-size:9px}
+ .profile-social{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;width:100%}
+ .profile-social button{width:100%;min-width:0;padding:6px 4px;font-size:9px;white-space:normal;line-height:1.25}
+ .profile-social button:last-child:nth-child(odd){grid-column:1/-1}
+ .profile-summary{width:100%;min-width:0;box-sizing:border-box}
+ .profile-summary>div,.profile-summary>article{min-width:0}
+ .cms-page,.cms-panel,.cms-heading{width:100%;max-width:100%;min-width:0;box-sizing:border-box}
+ .cms-tabs{display:flex;max-width:100%;overflow-x:auto;scrollbar-width:none}
+ .cms-tabs::-webkit-scrollbar{display:none}
+ .cms-tabs button{flex:0 0 auto;white-space:nowrap}
+}
+@media(max-width:380px){
+ .scroll-area{padding-left:9px;padding-right:9px}
+ .profile-hero{grid-template-columns:72px minmax(0,1fr);gap:9px;padding:11px}
+ .avatar-upload{width:72px;height:72px}
+ .profile-hero h2{font-size:16px}
+ .account-toolbar{grid-template-columns:1fr}
+ .account-controls{justify-content:flex-start}
+}
