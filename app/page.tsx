@@ -36,6 +36,7 @@ import { getSupabase, PlayerProfile } from "./supabase";
 import { authStorage } from "./auth-storage";
 import { arena } from "./arena-client";
 import { useGpsPresence } from "./gps-presence";
+import { useLivePresence } from "./live-presence";
 import { type ArenaMatch, type ArenaPlayer, timeControl } from "./game-rules";
 import { profileRequest } from "./profile-client";
 import { SocialHub, MatchResult, type MatchSummary } from "./social";
@@ -151,6 +152,7 @@ export default function Page() {
   const [localOcbr, setLocalOcbr] = useState(88);
   const scroller = useRef<HTMLDivElement>(null),
     gps = useGpsPresence(profile?.user_id);
+  useLivePresence(profile?.user_id, !!gps.enabled && !!gps.position, activeId);
   const refreshProfile = useCallback(async () => {
     try {
       const c = await getSupabase();
