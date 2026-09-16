@@ -30,6 +30,87 @@ const shortCode = () => {
 const playerColumns =
   "user_id,username,display_name,avatar_url,country_code,cbr,ocbr,gold_points,wins,losses,win_streak";
 const inPlay = `status='active'`;
+const FAIR_PLAY_ABORT_LIMIT = 5;
+const FAIR_PLAY_COOLDOWN_MS = 60_000;
+
+type FairPlayState = {
+  total_aborts: number;
+  cooldown_until: number;
+  cooldown_complete?: boolean;
+};
+
+async function fairPlayState(db: D1Database, userId: string): Promise<FairPlayState> {
+  const state = await stmt(
+    db,
+    "SELECT total_aborts,cooldown_until,cooldown_notified_at FROM arena_fair_play WHERE user_id=?",
+    userId,
+  ).first<{ total_aborts: number; cooldown_until: number; cooldown_notified_at: number }>();
+  if (!state) return { total_aborts: 0, cooldown_until: 0 };
+  const t = now();
+  if (state.cooldown_until > t)
+    return { total_aborts: state.total_aborts, cooldown_until: state.cooldown_until };
+  if (state.cooldown_until && state.cooldown_notified_at < state.cooldown_until) {
+    await stmt(
+      db,
+      "UPDATE arena_fair_play SET cooldown_notified_at=?,updated_at=? WHERE user_id=? AND cooldown_notified_at<?",
+      t, t, userId, state.cooldown_until,
+    ).run();
+    return { total_aborts: state.total_aborts, cooldown_until: 0, cooldown_complete: true };
+  }
+  return { total_aborts: state.total_aborts, cooldown_until: 0 };
+}
+
+async function requireFairPlayReady(db: D1Database, userId: string) {
+  const fair = await fairPlayState(db, userId);
+  if (fair.cooldown_until > now()) {
+    const seconds = Math.max(1, Math.ceil((fair.cooldown_until - now()) / 1000));
+    throw new ArenaError(`Fair-play cooldown: play again in ${seconds}s.`, 429);
+  }
+  return fair;
+}
+
+async function abortMatch(db: D1Database, p: ArenaPlayer, id: string, version: number) {
+  const m = await matchView(db, id);
+  if (![m.white_id, m.black_id].includes(p.user_id))
+    throw new ArenaError("Only the two players can abort this match.", 403);
+  if (m.status !== "active")
+    return { match: m, fair_play: await fairPlayState(db, p.user_id) };
+  if (m.version !== version)
+    throw new ArenaError("The board changed. Please try again.", 409);
+
+  const changed = await stmt(
+    db,
+    "UPDATE arena_matches SET status='cancelled',result=NULL,version=version+1 WHERE id=? AND version=? AND status='active'",
+    id, version,
+  ).run();
+  if (!changed.meta.changes)
+    throw new ArenaError("The board changed. Please try again.", 409);
+
+  const t = now();
+  const event = await stmt(
+    db,
+    "INSERT OR IGNORE INTO arena_abort_events(match_id,user_id,created_at) VALUES(?,?,?)",
+    id, p.user_id, t,
+  ).run();
+  if (event.meta.changes) {
+    await stmt(
+      db,
+      "INSERT INTO arena_fair_play(user_id,total_aborts,cooldown_until,cooldown_notified_at,clean_match_streak,updated_at) VALUES(?,1,0,0,0,?) ON CONFLICT(user_id) DO UPDATE SET total_aborts=total_aborts+1,clean_match_streak=0,updated_at=excluded.updated_at",
+      p.user_id, t,
+    ).run();
+    const record = await stmt(
+      db, "SELECT total_aborts FROM arena_fair_play WHERE user_id=?", p.user_id,
+    ).first<{ total_aborts: number }>();
+    if (record && record.total_aborts % FAIR_PLAY_ABORT_LIMIT === 0)
+      await stmt(
+        db,
+        "UPDATE arena_fair_play SET cooldown_until=?,cooldown_notified_at=0,updated_at=? WHERE user_id=?",
+        t + FAIR_PLAY_COOLDOWN_MS, t, p.user_id,
+      ).run();
+  }
+  return { match: await matchView(db, id), fair_play: await fairPlayState(db, p.user_id) };
+}
+
 export async function syncPlayer(db: D1Database, p: PlayerProfile) {
   await stmt(
     db,
@@ -163,6 +244,40 @@ export async function settle(db: D1Database, id: string) {
         id,
       ),
     );
+    // Only completed games count toward the fair-play streak.
+    statements.push(
+      stmt(
+        db,
+        `INSERT INTO arena_fair_play(user_id,total_aborts,cooldown_until,cooldown_notified_at,clean_match_streak,updated_at)
+         SELECT ?,0,0,0,1,? WHERE ${guard}
+         ON CONFLICT(user_id) DO UPDATE SET clean_match_streak=clean_match_streak+1,updated_at=excluded.updated_at WHERE ${guard}`,
+        pid, now(), id,
+      ),
+      stmt(
+        db,
+        `INSERT OR IGNORE INTO arena_ledger(id,user_id,delta,kind,created_at)
+         SELECT ?,?,20,'fair_play',? WHERE ${guard}
+         AND EXISTS(SELECT 1 FROM arena_fair_play WHERE user_id=? AND clean_match_streak>=10)`,
+        `fair-play:${id}:${pid}`, pid, now(), id, pid,
+      ),
+      stmt(
+        db,
+        "UPDATE arena_players SET cbr=cbr+20 WHERE user_id=? AND EXISTS(SELECT 1 FROM arena_ledger WHERE id=?)",
+        pid, `fair-play:${id}:${pid}`,
+      ),
+      stmt(
+        db,
+        `INSERT OR IGNORE INTO arena_feed(id,user_id,kind,display_name,content,cbr_delta,created_at)
+         SELECT ?,user_id,'fair_play',display_name,'played fair for 10 consecutive matches (+20 CBR).',20,?
+         FROM arena_players WHERE user_id=? AND EXISTS(SELECT 1 FROM arena_ledger WHERE id=?)`,
+        `fair-play-feed:${id}:${pid}`, now(), pid, `fair-play:${id}:${pid}`,
+      ),
+      stmt(
+        db,
+        "UPDATE arena_fair_play SET clean_match_streak=0,updated_at=? WHERE user_id=? AND clean_match_streak>=10 AND EXISTS(SELECT 1 FROM arena_ledger WHERE id=?)",
+        now(), pid, `fair-play:${id}:${pid}`,
+      ),
+    );
   }
   statements.push(
     stmt(
@@ -268,6 +383,7 @@ export async function queueMatch(
   p: ArenaPlayer,
   control: string,
 ) {
+  await requireFairPlayReady(db, p.user_id);
   const tc = timeControl(control),
     compatibleControls = TIME_CONTROLS.filter(
       (candidate) => candidate.group === tc.group,
@@ -338,6 +454,7 @@ export async function createRoom(
   control: string,
   target?: string,
 ) {
+  await requireFairPlayReady(db, p.user_id);
   const tc = timeControl(control);
   if (target === p.user_id) throw new ArenaError("Choose another player.");
   if (target) {
@@ -386,6 +503,7 @@ export async function createRoom(
   return { match: await matchView(db, id) };
 }
 export async function joinRoom(db: D1Database, p: ArenaPlayer, code: string) {
+  await requireFairPlayReady(db, p.user_id);
   const m = await stmt(
     db,
     "SELECT * FROM arena_matches WHERE code=? AND status='waiting' AND created_at>?",
@@ -689,6 +807,7 @@ export async function privateAction(
     return {
       match: active ? await matchView(db, active.id) : null,
       completed: completed ? await matchView(db, completed.id) : null,
+      fair_play: await fairPlayState(db, id),
       invites: invites.results,
     };
   }
@@ -720,6 +839,8 @@ export async function privateAction(
       throw new ArenaError("This room is private.", 403);
     return { match };
   }
+  if (action === "abort")
+    return abortMatch(db, p, String(input.id), Number(input.version));
   if (action === "move" || action === "resign")
     return playMove(
       db,
