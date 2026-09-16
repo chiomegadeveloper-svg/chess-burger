@@ -1,0 +1,50 @@
+/* Chess Burger identity and readable player card */
+.brand{gap:11px;color:#f6f3e8;font-size:clamp(13px,1.45vw,17px);letter-spacing:.08em;white-space:nowrap}
+.brand img{width:40px;height:40px;flex:none;clip-path:circle(38% at 50% 50%);transform:scale(1.25);background:#111}
+.brand span{font-weight:700;text-shadow:0 1px 5px #000a}
+.brand b{color:#e8c875}
+.app-header{min-height:56px}
+.splash-screen:before{content:""!important;inset:50% auto auto 50%!important;translate:-50% -50%;width:min(72vw,440px)!important;aspect-ratio:1!important;border-radius:50%!important;background:radial-gradient(circle,#28e9ee29 0 30%,#19bbd51a 48%,transparent 72%)!important;filter:blur(12px)!important;animation:cyan-electric-glow 2s ease-in-out infinite alternate!important}
+.splash-screen img{width:min(54vw,260px)!important;height:min(54vw,260px);object-fit:cover;clip-path:circle(38% at 50% 50%);transform:scale(1.18);filter:drop-shadow(0 0 20px #27d9ed80)!important;animation:none!important}
+.splash-screen strong{font-size:clamp(16px,3.2vw,25px);letter-spacing:.17em}
+.card-only-view .card-topline{min-height:74px}
+.card-brand-logo img{width:76px;height:76px;clip-path:circle(38% at 50% 50%);transform:scale(1.24);box-shadow:none}
+.card-only-view .card-identity-heading{grid-template-columns:minmax(0,1fr) clamp(120px,17vw,190px);gap:16px}
+.card-only-view .identity-level-emblem{max-height:195px;filter:drop-shadow(0 0 15px #00d9ef99)}
+.card-only-view .card-identity-heading p{font-size:clamp(13px,1.7vw,17px);letter-spacing:.09em}
+.card-only-view .card-identity h2{font-size:clamp(30px,5vw,54px)}
+.card-only-view .card-status{font-size:14px;line-height:1.45}
+.card-only-view .card-online{font-size:16px}
+.card-only-view .card-achievements header strong{font-size:15px}
+.card-only-view .card-achievements header small{font-size:10px}
+.card-only-view .card-achievements header>svg{width:25px;height:25px}
+.card-only-view .featured-reward-slots{gap:7px}
+.card-only-view .featured-reward-slot{min-height:86px;padding:7px 2px;gap:5px}
+.card-only-view .featured-reward-slot i{width:49px;height:49px}
+.card-only-view .featured-reward-slot i img{width:100%;height:100%;transform:none}
+.card-only-view .featured-reward-slot small{max-width:100%;padding:0 2px;font-size:10px;line-height:1.2;white-space:normal;overflow-wrap:anywhere}
+.card-only-view .trophy-slots>span{min-height:86px}
+.card-only-view .trophy-slots i{font-size:27px}
+.card-only-view .trophy-slots small{font-size:10px}
+@media(max-width:650px){
+ .app-header{min-height:52px}
+ .brand{gap:7px;font-size:12px;letter-spacing:.05em}
+ .brand img{width:34px;height:34px}
+ .card-only-view .card-topline{min-height:53px}
+ .card-brand-logo img{width:54px;height:54px}
+ .card-only-view .card-identity-heading{grid-template-columns:minmax(0,1fr) clamp(66px,18vw,100px);gap:8px}
+ .card-only-view .identity-level-emblem{max-height:104px}
+ .card-only-view .card-identity-heading p{font-size:10px;letter-spacing:.04em}
+ .card-only-view .card-identity h2{font-size:clamp(19px,5.6vw,30px)}
+ .card-only-view .card-status{font-size:10px}
+ .card-only-view .card-online{font-size:11px}
+ .card-only-view .card-achievements header strong{font-size:13px}
+ .card-only-view .card-achievements header small{font-size:9px}
+ .card-only-view .featured-reward-slot{min-height:75px;padding:6px 2px}
+ .card-only-view .featured-reward-slot i{width:clamp(30px,9vw,44px);height:clamp(30px,9vw,44px)}
+ .card-only-view .featured-reward-slot small{font-size:9px}
+ .card-only-view .trophy-slots>span{min-height:65px}
+ .card-only-view .trophy-slots small{font-size:9px}
+}
+@media(max-width:370px){.brand{font-size:10px}.card-only-view .featured-reward-slots{gap:4px}.card-only-view .featured-reward-slot small{font-size:8px}}
+@media(prefers-reduced-motion:reduce){.splash-screen:before{animation:none!important}}
