@@ -805,7 +805,7 @@ export default function Account({
               ))}
             </div>
           </section>
-          <FeaturedRewardSlots selected={profile.featured_badges} profile={profile} onChoose={() => setEditing(true)} />
+          <FeaturedRewardSlots selected={profile.featured_badges} profile={profile} onChoose={() => { setEditing(true); window.setTimeout(() => document.getElementById("featured-emblem-picker")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0); }} />
         </div>
       </div>
     </>
