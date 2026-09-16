@@ -806,26 +806,41 @@ export default function Account({
               ))}
             </div>
           </section>
-          <FeaturedRewardSlots selected={profile.featured_badges} profile={profile} onChoose={() => setEmblemPickerOpen(true)} />
-        </div>
-      </div>
-      <Dialog open={emblemPickerOpen} onOpenChange={setEmblemPickerOpen}>
-        <DialogContent className="emblem-picker-dialog">
-          <DialogHeader>
-            <DialogTitle>Choose featured emblems</DialogTitle>
-            <DialogDescription>
-              Select up to five unlocked emblems for your player card. Changes save immediately.
-            </DialogDescription>
-          </DialogHeader>
-          <FeaturedRewardPicker
+          <FeaturedRewardSlots
             selected={profile.featured_badges}
             profile={profile}
-            onChange={(featured_badges) => void saveFeaturedEmblems(featured_badges)}
+            onChoose={() => setEmblemPickerOpen((open) => !open)}
           />
-        </DialogContent>
-      </Dialog>
+        </div>
+      </div>
     </>
   );
+  const emblemPickerPanel = emblemPickerOpen ? (
+    <section className="emblem-picker-panel" aria-label="Choose featured emblems">
+      <header>
+        <div>
+          <span>PLAYER CARD</span>
+          <h2>Choose featured emblems</h2>
+        </div>
+        <button
+          type="button"
+          onClick={() => setEmblemPickerOpen(false)}
+          aria-label="Close emblem chooser"
+        >
+          Close
+        </button>
+      </header>
+      <p>Select up to five unlocked emblems. Changes save immediately.</p>
+      <FeaturedRewardPicker
+        selected={profile.featured_badges}
+        profile={profile}
+        onChange={(featured_badges) =>
+          void saveFeaturedEmblems(featured_badges)
+        }
+      />
+      {error && <p className="auth-error" role="alert">{error}</p>}
+    </section>
+  ) : null;
   const passwordSecurity =
     !guest && user ? (
       <section className="password-security">
@@ -884,6 +899,7 @@ export default function Account({
     return (
       <section>
         {playerCard}
+        {emblemPickerPanel}
         <AppFeaturedPhoto />
         <RewardEmblems profile={profile} />
       </section>
