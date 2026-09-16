@@ -750,6 +750,9 @@ export async function privateAction(
   const p = await syncPlayer(db, profile),
     id = p.user_id,
     t = now();
+  const cmsAction = ["cms-announcements", "save-announcement", "delete-announcement", "set-app-feature", "set-card-photo", "grant-gold", "logs"].includes(action);
+  if (cmsAction && !["owner", "admin"].includes(profile.role))
+    throw new ArenaError("Owner or GM access is required.", 403);
   if (action.startsWith("social-") || action.startsWith("chat-"))
     return socialAction(db, id, action, input);
   if (action === "public-profile") {
@@ -1339,7 +1342,15 @@ export async function privateAction(
         "DELETE FROM arena_feed WHERE id NOT IN(SELECT id FROM arena_feed ORDER BY created_at DESC LIMIT 50)",
       ),
     ]);
-    return { ok: true };
+    return {
+      ok: true,
+      post: {
+        id: feedId,
+        content,
+        image_url: image,
+        expires_at: new Date(expires).toISOString(),
+      },
+    };
   }
   if (action === "delete-announcement") {
     const feedId = String(input.id ?? "");
