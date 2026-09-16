@@ -655,6 +655,44 @@ export async function publicAction(
       ).first()) ?? { image_url: "", updated_at: null }
     );
   }
+  if (action === "map-stats") {
+    const cutoff = now() - 60_000;
+    const gpsCutoff = now() - 45_000;
+    const [registered, online, matches, gps, leader] = await Promise.all([
+      stmt(db, "SELECT COUNT(*) AS count FROM app_profiles").first<{ count: number }>(),
+      stmt(
+        db,
+        `SELECT COUNT(*) AS count FROM arena_players p WHERE p.updated_at>? OR EXISTS(SELECT 1 FROM arena_matches m WHERE m.status='active' AND (m.white_id=p.user_id OR m.black_id=p.user_id))`,
+        cutoff,
+      ).first<{ count: number }>(),
+      stmt(
+        db,
+        "SELECT COUNT(*) AS count FROM arena_matches WHERE status='active'",
+      ).first<{ count: number }>(),
+      stmt(
+        db,
+        "SELECT COUNT(*) AS count FROM arena_presence WHERE gps=1 AND seen_at>?",
+        gpsCutoff,
+      ).first<{ count: number }>(),
+      stmt(
+        db,
+        `SELECT p.user_id,p.display_name,p.cbr,
+        (SELECT COUNT(*)+1 FROM arena_players r WHERE r.cbr>p.cbr OR (r.cbr=p.cbr AND r.wins>p.wins) OR (r.cbr=p.cbr AND r.wins=p.wins AND r.user_id<p.user_id)) AS rank
+        FROM arena_players p
+        WHERE p.updated_at>? OR EXISTS(SELECT 1 FROM arena_matches m WHERE m.status='active' AND (m.white_id=p.user_id OR m.black_id=p.user_id))
+        ORDER BY p.cbr DESC,p.wins DESC,p.user_id LIMIT 1`,
+        cutoff,
+      ).first<{ user_id: string; display_name: string; cbr: number; rank: number }>(),
+    ]);
+    return {
+      online_users: Number(online?.count ?? 0),
+      registered_users: Number(registered?.count ?? 0),
+      active_matches: Number(matches?.count ?? 0),
+      gps_online: Number(gps?.count ?? 0),
+      highest_online: leader ?? null,
+      updated_at: new Date().toISOString(),
+    };
+  }
   if (action === "ranks") {
     const rows = await stmt(
       db,
