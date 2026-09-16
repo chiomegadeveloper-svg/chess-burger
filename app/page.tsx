@@ -36,12 +36,10 @@ import { getSupabase, PlayerProfile } from "./supabase";
 import { authStorage } from "./auth-storage";
 import { arena } from "./arena-client";
 import { useGpsPresence } from "./gps-presence";
-import { useLivePresence } from "./live-presence";
 import { type ArenaMatch, type ArenaPlayer, timeControl } from "./game-rules";
 import { profileRequest } from "./profile-client";
 import { SocialHub, MatchResult, type MatchSummary } from "./social";
 import PublicProfile from "./public-profile";
-import InstallPrompt from "./install-prompt";
 
 const modes = [
   {
@@ -152,7 +150,6 @@ export default function Page() {
   const [localOcbr, setLocalOcbr] = useState(88);
   const scroller = useRef<HTMLDivElement>(null),
     gps = useGpsPresence(profile?.user_id);
-  useLivePresence(profile?.user_id, !!gps.enabled && !!gps.position, activeId, profile?.cbr ?? 88);
   const refreshProfile = useCallback(async () => {
     try {
       const c = await getSupabase();
@@ -167,14 +164,12 @@ export default function Page() {
         setTab("profile");
         return;
       }
+      setMember(true);
       let current = data;
       try {
         const live = await arena<{ profile: PlayerProfile }>("me");
         current = live.profile;
       } catch {}
-      const hasRequiredPhoto=!!current.avatar_url?.trim();
-      setMember(hasRequiredPhoto);
-      if(!hasRequiredPhoto)setTab("profile");
       const stored = localStorage.getItem("cb-local-ocbr:" + current.user_id);
       if (stored)
         current = { ...current, ocbr: Math.max(0, Number(stored) || 88) };
@@ -189,7 +184,7 @@ export default function Page() {
     setTab("game");
   };
   const onSaved = (p: PlayerProfile) => {
-    setMember(!!p.avatar_url?.trim());
+    setMember(true);
     setProfile(p);
     setLocalOcbr(p.ocbr ?? 88);
     window.dispatchEvent(new Event("cb-profile-saved"));
@@ -298,11 +293,6 @@ export default function Page() {
         if (!c) return;
         const { data } = c.auth.onAuthStateChange((event) => {
           if (event === "SIGNED_IN") setTimeout(() => void refreshProfile(), 0);
-          if (event === "SIGNED_OUT")
-            setTimeout(
-              () => window.dispatchEvent(new Event("cb-signed-out")),
-              0,
-            );
         });
         unsubscribe = () => data.subscription.unsubscribe();
       })
@@ -374,6 +364,7 @@ export default function Page() {
     "offline",
     "pairing",
     "online",
+    "challenge",
     "game",
     "watch",
     "channel",
@@ -405,6 +396,7 @@ export default function Page() {
   if (tab === "home")
     content = (
       <CommunityFeed
+        onMatch={openMatch}
         onOpenProfile={(userId) => {
           setViewedUserId(userId);
           setTab("public-profile");
@@ -417,6 +409,7 @@ export default function Page() {
         currentUserId={profile?.user_id}
         userId={viewedUserId}
         onClose={() => setTab("home")}
+        onChallenge={(player) => { setTarget(player); setTab("challenge"); }}
       />
     );
   else if (tab === "play")
@@ -430,6 +423,11 @@ export default function Page() {
           </button>
         </div>
         <p className="page-caption">Choose your board.</p>
+        <button className="match-row available challenge-lobby-link" onClick={() => { setTarget(null); setTab("challenge"); }}>
+          <span className="mode-symbol"><Swords size={21}/></span>
+          <span className="mode-copy"><strong>Challenge a Player</strong><small>Search by username or challenge anyone in the feed</small></span>
+          <span className="mode-meta">Invite</span><ChevronRight size={15}/>
+        </button>
         <div className="mode-list">
           {modes.map(({ name, sub, meta, Icon, key }) => (
             <button
@@ -476,13 +474,14 @@ export default function Page() {
         </p>
       </section>
     );
-  else if (tab === "online")
+  else if (tab === "online" || tab === "challenge")
     content = (
       <>
         {back}
         <OnlinePlay
           profile={profile}
           target={target}
+          challenge={tab === "challenge"}
           onMatch={openMatch}
           onLogin={() => setTab("profile")}
         />
@@ -790,7 +789,6 @@ export default function Page() {
           setTab("public-profile");
         }}
       />
-      <InstallPrompt active={!showSplash} />
       <Toaster theme="light" position="top-center" richColors closeButton />
     </main>
   );
