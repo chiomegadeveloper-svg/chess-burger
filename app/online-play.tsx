@@ -35,7 +35,8 @@ export function OnlineGame({
       from: string;
       to: string;
       promotion?: string;
-    } | null>(null);
+    } | null>(null),
+    [fairPlayNotice, setFairPlayNotice] = useState("");
   const finished = useRef(false),
     alive = useRef(true),
     latest = useRef(0),
@@ -133,7 +134,7 @@ export function OnlineGame({
     });
   }
   async function move(
-    action: "move" | "resign",
+    action: "move" | "resign" | "abort",
     move?: { from: string; to: string; promotion?: string },
   ) {
     if (!match || busy) return;
@@ -148,12 +149,28 @@ export function OnlineGame({
       } catch {}
     }
     try {
-      const r = await arena<{ match: ArenaMatch }>(action, {
+      const r = await arena<{
+        match: ArenaMatch;
+        fair_play?: { cooldown_until: number; total_aborts: number };
+      }>(action, {
         id,
         version: confirmed.version,
         move,
       });
       accept(r.match);
+      if (action === "abort") {
+        const until = r.fair_play?.cooldown_until ?? 0;
+        if (until > Date.now()) {
+          const wait = Math.max(1, Math.ceil((until - Date.now()) / 1000));
+          setFairPlayNotice(`Fair-play cooldown: you aborted 5 matches. You can play again in ${wait} seconds.`);
+          window.setTimeout(
+            () => setFairPlayNotice("Cooldown complete. To be fair to other players, please finish the matches you start."),
+            until - Date.now() + 100,
+          );
+        } else {
+          setFairPlayNotice("Match aborted. No CBR, Gold, or EXP was awarded to either player.");
+        }
+      }
       announce();
     } catch (e) {
       latest.current = confirmed.version;
@@ -192,6 +209,13 @@ export function OnlineGame({
           {error}
         </p>
       )}
+      {fairPlayNotice && (
+        <div className="fair-play-popup" role="status">
+          <strong>Fair play</strong>
+          <p>{fairPlayNotice}</p>
+          <button type="button" onClick={() => setFairPlayNotice("")}>Okay</button>
+        </div>
+      )}
       <MatchBoard
         match={match}
         ownId={profile?.user_id}
@@ -205,6 +229,7 @@ export function OnlineGame({
               }
         }
         onResign={watch ? undefined : () => void move("resign")}
+        onAbort={watch ? undefined : () => void move("abort")}
         onReact={watch ? undefined : react}
         busy={busy}
         connection={
@@ -315,7 +340,7 @@ export default function OnlinePlay({
             Date.now() - r.match.created_at > 120000)
         ) {
           setRoom(null);
-            setError("Challenge expired. Create another one.");
+            setError("Invitation expired. Create another room.");
         }
       } catch (e) {
         if (active) setError((e as Error).message);
