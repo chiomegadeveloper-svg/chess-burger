@@ -4,8 +4,10 @@ create table if not exists public.cb_live_presence (
   user_id uuid primary key references auth.users(id) on delete cascade,
   seen_at timestamptz not null default now(),
   gps_enabled boolean not null default false,
+  cbr integer not null default 88 check (cbr >= 0),
   match_id text null check (match_id is null or char_length(match_id) between 1 and 100)
 );
+alter table public.cb_live_presence add column if not exists cbr integer not null default 88;
 create index if not exists cb_live_presence_seen_at_idx on public.cb_live_presence (seen_at);
 alter table public.cb_live_presence enable row level security;
 revoke all on public.cb_live_presence from anon, authenticated;
@@ -28,18 +30,14 @@ language sql stable security definer
 set search_path = ''
 as $$
   with live as (
-    select p.user_id, p.gps_enabled, p.match_id
+    select p.user_id, p.gps_enabled, p.match_id, p.cbr
     from public.cb_live_presence p
     join public.cb_profiles c on c.user_id = p.user_id
     where p.seen_at >= now() - interval '60 seconds'
-  ), ranks as (
-    select c.user_id, c.display_name, c.cbr,
-      dense_rank() over (order by c.cbr desc)::integer as rank
-    from public.cb_profiles c
   ), highest as (
-    select r.user_id, r.display_name, r.cbr, r.rank
-    from ranks r join live l on l.user_id = r.user_id
-    order by r.cbr desc, r.user_id
+    select l.user_id, c.display_name, l.cbr
+    from live l join public.cb_profiles c on c.user_id = l.user_id
+    order by l.cbr desc, l.user_id
     limit 1
   )
   select jsonb_build_object(
