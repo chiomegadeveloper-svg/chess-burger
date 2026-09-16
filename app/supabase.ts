@@ -2,9 +2,14 @@
 import {createClient,SupabaseClient} from '@supabase/supabase-js';
 import {authStorage} from './auth-storage';
 let pending:Promise<SupabaseClient|null>|undefined;
+const configuredUrl=import.meta.env.VITE_SUPABASE_URL?.trim()??'';
+const configuredKey=import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim()??'';
 export function getSupabase(){
- if(!pending)pending=fetch('/api/public-config',{cache:'no-store'}).then(async r=>{
-  if(!r.ok)throw new Error('Account service is unavailable.');const c=await r.json() as {configured:boolean;url:string;key:string};if(!c.configured)return null;
+ if(!pending)pending=(configuredUrl&&configuredKey
+  ? Promise.resolve({configured:true,url:configuredUrl,key:configuredKey})
+  : fetch('/api/public-config',{cache:'no-store'}).then(async r=>{
+  if(!r.ok)throw new Error('Account service is unavailable.');return await r.json() as {configured:boolean;url:string;key:string};
+ })).then(c=>{if(!c.configured)return null;
   return createClient(c.url,c.key,{auth:{flowType:'pkce',detectSessionInUrl:true,persistSession:true,autoRefreshToken:true,storageKey:'cb-auth',storage:authStorage}});
  }).catch(e=>{pending=undefined;throw e;});
  return pending;
