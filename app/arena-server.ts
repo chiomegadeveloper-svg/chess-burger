@@ -453,19 +453,22 @@ export async function createRoom(
   p: ArenaPlayer,
   control: string,
   target?: string,
+  publicChallenge = false,
 ) {
   await requireFairPlayReady(db, p.user_id);
   const tc = timeControl(control);
+  if (publicChallenge && target) throw new ArenaError("Choose one challenge audience.");
   if (target === p.user_id) throw new ArenaError("Choose another player.");
   if (target) {
     const available = await stmt(
       db,
-      "SELECT * FROM arena_presence WHERE user_id=? AND gps=1 AND seen_at>?",
+      "SELECT user_id FROM app_profiles WHERE user_id=? UNION SELECT user_id FROM arena_players WHERE user_id=? LIMIT 1",
       target,
-      now() - 45000,
+      target,
     ).first();
-    if (!available)
-      throw new ArenaError("This player is no longer available on the map.");
+    if (!available) throw new ArenaError("This player is unavailable.", 404);
+    if (await blocked(db, p.user_id, target))
+      throw new ArenaError("This player is unavailable.", 403);
   }
   if (await current(db, p.user_id))
     throw new ArenaError("Finish your current match first.");
@@ -499,6 +502,11 @@ export async function createRoom(
       p.user_id,
       p.user_id,
     ),
+    ...(publicChallenge ? [stmt(db,
+      "INSERT INTO arena_feed(id,user_id,kind,display_name,content,expires_at,created_at) VALUES(?,?,'challenge',?,?,?,?)",
+      `challenge:${id}`, p.user_id, p.display_name,
+      `is looking for a ${tc.group.toLowerCase()} challenge · ${tc.label}.`, t + 120000, t,
+    )] : []),
   ]);
   return { match: await matchView(db, id) };
 }
@@ -514,6 +522,8 @@ export async function joinRoom(db: D1Database, p: ArenaPlayer, code: string) {
   if (m.white_id === p.user_id) return { match: await matchView(db, m.id) };
   if (m.invite_to && m.invite_to !== p.user_id)
     throw new ArenaError("This invitation is for another player.", 403);
+  if (await blocked(db, m.white_id, p.user_id))
+    throw new ArenaError("This player is unavailable.", 403);
   const change = await stmt(
     db,
     `UPDATE arena_matches SET black_id=?,black_cbr=?,status='active',last_tick=?,version=version+1 WHERE id=? AND status='waiting'
@@ -733,7 +743,8 @@ export async function publicAction(
     ]);
     const result = await stmt(
       db,
-      "SELECT f.*,CASE WHEN f.kind='announcement' THEN 'Chess Burger' ELSE f.display_name END AS display_name,CASE WHEN f.kind='announcement' THEN '/cburger_logo.png' ELSE COALESCE(p.avatar_url,'') END AS avatar_url,COALESCE(p.cbr,88) AS cbr,(SELECT COUNT(*) FROM arena_hearts h WHERE h.feed_id=f.id) AS heart_count FROM arena_feed f LEFT JOIN arena_players p ON p.user_id=f.user_id ORDER BY f.created_at DESC LIMIT 50",
+      "SELECT f.*,CASE WHEN f.kind='announcement' THEN 'Chess Burger' ELSE f.display_name END AS display_name,CASE WHEN f.kind='announcement' THEN '/cburger_logo.png' ELSE COALESCE(p.avatar_url,'') END AS avatar_url,COALESCE(p.cbr,88) AS cbr,(SELECT COUNT(*) FROM arena_hearts h WHERE h.feed_id=f.id) AS heart_count FROM arena_feed f LEFT JOIN arena_players p ON p.user_id=f.user_id LEFT JOIN arena_matches m ON f.kind='challenge' AND f.id='challenge:'||m.id WHERE (f.kind<>'challenge' OR (m.status='waiting' AND m.invite_to IS NULL AND m.created_at>?)) ORDER BY CASE WHEN f.kind='challenge' THEN 0 WHEN f.kind='announcement' THEN 1 ELSE 2 END,f.created_at DESC LIMIT 50",
+      now() - 120000,
     ).all();
     return {
       events: result.results.map((f) => ({
@@ -802,6 +813,36 @@ export async function privateAction(
       new URLSearchParams({ user_id: String(input.user_id) }),
     );
   }
+  if (action === "search-players") {
+    const query = String(input.query ?? "").trim().replace(/^@/, "").toLowerCase().slice(0, 40);
+    if (query.length < 2) return { players: [] };
+    const rows = await stmt(db,
+      `SELECT p.user_id,p.username,p.display_name,p.avatar_url,p.country_code,COALESCE(a.cbr,88) AS cbr
+       FROM app_profiles p LEFT JOIN arena_players a ON a.user_id=p.user_id
+       WHERE p.user_id<>? ORDER BY p.updated_at DESC LIMIT 3000`, id,
+    ).all<ArenaPlayer>();
+    const distance = (a: string, b: string) => {
+      const row = Array.from({ length: b.length + 1 }, (_, i) => i);
+      for (let i = 1; i <= a.length; i++) {
+        let previous = row[0]; row[0] = i;
+        for (let j = 1; j <= b.length; j++) {
+          const old = row[j];
+          row[j] = Math.min(row[j] + 1, row[j - 1] + 1, previous + (a[i - 1] === b[j - 1] ? 0 : 1));
+          previous = old;
+        }
+      }
+      return row[b.length];
+    };
+    return { players: rows.results.map(player => {
+      const username = player.username.toLowerCase(), name = player.display_name.toLowerCase();
+      const score = username === query ? 0 : username.startsWith(query) ? 1 : name.startsWith(query) ? 2
+        : username.includes(query) ? 3 : name.includes(query) ? 4
+        : 5 + Math.min(distance(query, username), distance(query, name));
+      return { player, score };
+    }).filter(result => result.score <= 5 + Math.max(2, Math.floor(query.length / 3)))
+      .sort((a, b) => a.score - b.score || a.player.username.localeCompare(b.player.username))
+      .slice(0, 10).map(result => result.player) };
+  }
   if (action === "me") {
     const rank = await stmt(
       db,
@@ -862,7 +903,17 @@ export async function privateAction(
     return { ok: true };
   }
   if (action === "room")
-    return createRoom(db, p, String(input.control), input.target);
+    return createRoom(db, p, String(input.control), typeof input.target === "string" ? input.target : undefined, input.publicChallenge === true);
+  if (action === "accept-challenge") {
+    const matchId = String(input.id ?? "");
+    const room = await stmt(db,
+      "SELECT m.code,m.white_id FROM arena_matches m JOIN arena_feed f ON f.id='challenge:'||m.id AND f.kind='challenge' WHERE m.id=? AND m.status='waiting' AND m.invite_to IS NULL AND m.created_at>? AND f.expires_at>?",
+      matchId, now() - 120000, now(),
+    ).first<{code:string;white_id:string}>();
+    if (!room) throw new ArenaError("This challenge has expired or was accepted.", 404);
+    if (room.white_id === id) throw new ArenaError("You cannot accept your own challenge.");
+    return joinRoom(db, p, room.code);
+  }
   if (action === "join") return joinRoom(db, p, String(input.code));
   if (action === "cancel-room") {
     await stmt(

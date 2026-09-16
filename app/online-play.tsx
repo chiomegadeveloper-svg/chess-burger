@@ -250,20 +250,39 @@ export default function OnlinePlay({
   onMatch,
   onLogin,
   target,
+  challenge = false,
 }: {
   profile: PlayerProfile | null;
   onMatch: (id: string) => void;
   onLogin: () => void;
   target?: ArenaPlayer | null;
+  challenge?: boolean;
 }) {
   const [control, setControl] = useState("10+0"),
     [searching, setSearching] = useState(false),
     [room, setRoom] = useState<ArenaMatch | null>(null),
+    [query, setQuery] = useState(""),
+    [results, setResults] = useState<ArenaPlayer[]>([]),
+    [selected, setSelected] = useState<ArenaPlayer | null>(target ?? null),
+    [audience, setAudience] = useState<"username" | "anyone" | null>(target ? "username" : null),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
   const cancelled = useRef(false),
     callback = useRef(onMatch);
   callback.current = onMatch;
+  useEffect(() => {
+    if (target) { setSelected(target); setAudience("username"); }
+  }, [target?.user_id]);
+  useEffect(() => {
+    if (!challenge || audience !== "username" || selected || query.trim().length < 2) { setResults([]); return; }
+    let live = true;
+    const timer = setTimeout(() => {
+      void arena<{players:ArenaPlayer[]}>("search-players", {query:query.trim()})
+        .then(r => { if(live) setResults(r.players); })
+        .catch(e => { if(live) setError((e as Error).message); });
+    }, 250);
+    return () => { live = false; clearTimeout(timer); };
+  }, [challenge, audience, query, selected?.user_id]);
   useEffect(() => {
     if (!searching) return;
     cancelled.current = false;
@@ -321,7 +340,7 @@ export default function OnlinePlay({
             Date.now() - r.match.created_at > 120000)
         ) {
           setRoom(null);
-          setError("Invitation expired. Create another room.");
+            setError("Invitation expired. Create another room.");
         }
       } catch (e) {
         if (active) setError((e as Error).message);
@@ -339,7 +358,8 @@ export default function OnlinePlay({
     try {
       const r = await arena<{ match: ArenaMatch }>("room", {
         control,
-        target: target?.user_id,
+        target: challenge ? selected?.user_id : target?.user_id,
+        publicChallenge: challenge && audience === "anyone",
       });
       setRoom(r.match);
     } catch (e) {
@@ -378,10 +398,10 @@ export default function OnlinePlay({
   return (
     <section className="match-setup">
       <div className="page-heading">
-        <h1>{target ? "Invite to a match" : "Play Online"}</h1>
+        <h1>{challenge ? "Challenge a Player" : target ? "Invite to a match" : "Play Online"}</h1>
         <span className="sample-label">{profile.cbr} CBR</span>
       </div>
-      {target ? (
+      {target && !challenge ? (
         <div className="invite-player cloud-panel">
           <Avatar player={target} />
           <span>
@@ -390,18 +410,34 @@ export default function OnlinePlay({
           </span>
         </div>
       ) : (
-        <p className="page-caption">
+        !challenge && <p className="page-caption">
           Prioritizes players within ±20 CBR, then selects the closest available
           opponent.
         </p>
       )}
+      {challenge && !room && <div className="cloud-panel challenge-options">
+        <h2>Who do you want to challenge?</h2>
+        <div className="challenge-audience">
+          <button type="button" className={audience === "username" ? "chosen" : ""} aria-pressed={audience === "username"} onClick={() => {setAudience("username");setError("");}}>Challenge by username</button>
+          <button type="button" className={audience === "anyone" ? "chosen" : ""} aria-pressed={audience === "anyone"} onClick={() => {setAudience("anyone");setSelected(null);setError("");}}>Challenge anyone</button>
+        </div>
+        {audience === "username" && <div className="challenge-search">
+          {selected ? <div className="challenge-selected"><Avatar player={selected}/><span><strong>{selected.display_name}</strong><small>@{selected.username}</small></span><button type="button" onClick={() => {setSelected(null);setQuery("");}}>Change</button></div> : <>
+            <label htmlFor="challenge-username">Search username or name</label>
+            <input id="challenge-username" autoComplete="off" value={query} onChange={e => {setQuery(e.target.value);setError("");}} placeholder="Type at least 2 characters" />
+            {query.trim().length >= 2 && <ul aria-label="Matching players" className="challenge-results">{results.map(player => <li key={player.user_id}><button type="button" onClick={() => {setSelected(player);setQuery("");setResults([]);}}><Avatar player={player}/><span><strong>{player.display_name}</strong><small>@{player.username} · {player.cbr} CBR</small></span></button></li>)}</ul>}
+            {query.trim().length >= 2 && results.length === 0 && <p>No matches yet. Try a shorter name.</p>}
+          </>}
+        </div>}
+        {audience === "anyone" && <p>Choose a game time below. Your challenge will be pinned in the community feed for 2 minutes.</p>}
+      </div>}
       <div className="cloud-panel">
         <TimePicker
           value={control}
           onChange={setControl}
           disabled={searching || !!room || busy}
         />
-        {searching ? (
+        {searching && !challenge ? (
           <div className="search-status">
             <Search size={20} />
             <strong>
@@ -419,14 +455,14 @@ export default function OnlinePlay({
         ) : (
           !room && (
             <button
-              disabled={busy}
+              disabled={busy || (challenge && (!audience || (audience === "username" && !selected)))}
               className="gold-button wide"
               onClick={() => {
                 setError("");
-                target ? void create() : setSearching(true);
+                target || challenge ? void create() : setSearching(true);
               }}
             >
-              {target ? "Send match invitation" : "Find opponent"}
+              {challenge ? audience === "anyone" ? "Post challenge to feed" : "Send challenge" : target ? "Send match invitation" : "Find opponent"}
             </button>
           )
         )}
@@ -436,7 +472,7 @@ export default function OnlinePlay({
           down.
         </p>
       </div>
-      {!target && !searching && !room && (
+      {!challenge && !target && !searching && !room && (
         <div className="lobby-pair-grid">
           <div className="cloud-panel">
             <h2>Host with QR</h2>
@@ -474,8 +510,8 @@ export default function OnlinePlay({
             Copy code
           </button>
           <p>
-            {target
-              ? "Invitation sent to " + target.display_name
+            {challenge && audience === "anyone" ? "Your challenge is pinned in the feed" : selected || target
+              ? "Invitation sent to " + (selected ?? target)?.display_name
               : "Waiting for your opponent"}{" "}
             · {timeControl(room.control).label}
           </p>

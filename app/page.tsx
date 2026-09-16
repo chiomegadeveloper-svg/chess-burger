@@ -374,6 +374,7 @@ export default function Page() {
     "offline",
     "pairing",
     "online",
+    "challenge",
     "game",
     "watch",
     "channel",
@@ -405,6 +406,7 @@ export default function Page() {
   if (tab === "home")
     content = (
       <CommunityFeed
+        onMatch={openMatch}
         onOpenProfile={(userId) => {
           setViewedUserId(userId);
           setTab("public-profile");
@@ -417,6 +419,7 @@ export default function Page() {
         currentUserId={profile?.user_id}
         userId={viewedUserId}
         onClose={() => setTab("home")}
+        onChallenge={(player) => { setTarget(player); setTab("challenge"); }}
       />
     );
   else if (tab === "play")
@@ -430,6 +433,11 @@ export default function Page() {
           </button>
         </div>
         <p className="page-caption">Choose your board.</p>
+        <button className="match-row available challenge-lobby-link" onClick={() => { setTarget(null); setTab("challenge"); }}>
+          <span className="mode-symbol"><Swords size={21}/></span>
+          <span className="mode-copy"><strong>Challenge a Player</strong><small>Search by username or challenge anyone in the feed</small></span>
+          <span className="mode-meta">Invite</span><ChevronRight size={15}/>
+        </button>
         <div className="mode-list">
           {modes.map(({ name, sub, meta, Icon, key }) => (
             <button
@@ -476,13 +484,14 @@ export default function Page() {
         </p>
       </section>
     );
-  else if (tab === "online")
+  else if (tab === "online" || tab === "challenge")
     content = (
       <>
         {back}
         <OnlinePlay
           profile={profile}
           target={target}
+          challenge={tab === "challenge"}
           onMatch={openMatch}
           onLogin={() => setTab("profile")}
         />
