@@ -12,7 +12,7 @@ type NearbyPlayer=ArenaPlayer&{lat:number;lng:number;distance:number};
 type Zone={id:string;user_id:string;lat:number;lng:number;display_name:string};
 type TerritoryScope='barangay'|'city';
 type Leaders={scope:TerritoryScope;label:string;players:ArenaPlayer[]};
-type MapStats={online_users:number;registered_users:number;active_matches:number;gps_online:number;highest_online:{user_id:string;display_name:string;cbr:number;rank:number}|null;updated_at:string};
+type MapStats={online_users:number;registered_users:number;active_matches:number;gps_online:number;highest_online:{user_id:string;display_name:string;cbr:number}|null;updated_at:string};
 export default function NearbyMap({enabled,position,toggle,error:gpsError,onInvite,territory=false,onClaimed}:{enabled:boolean;position:Position|null;toggle:()=>void;error:string;onInvite:(p:ArenaPlayer)=>void;territory?:boolean;onClaimed:()=>void}){
  const node=useRef<HTMLDivElement>(null),map=useRef<LeafletMap|null>(null),layer=useRef<LeafletLayerGroup|null>(null),centered=useRef(false),visiblePlayers=useRef(''),hoverCard=useRef<HTMLDivElement>(null);
  const [players,setPlayers]=useState<NearbyPlayer[]>([]),[zones,setZones]=useState<Zone[]>([]),[selected,setSelected]=useState<NearbyPlayer|null>(null),[hovered,setHovered]=useState<NearbyPlayer|null>(null),[error,setError]=useState(''),[mapError,setMapError]=useState(''),[ready,setReady]=useState(false),[busy,setBusy]=useState(false),[leaders,setLeaders]=useState<Leaders|null>(null),[leaderBusy,setLeaderBusy]=useState(false),[stats,setStats]=useState<MapStats|null>(null),[statsError,setStatsError]=useState('');
@@ -37,7 +37,7 @@ export default function NearbyMap({enabled,position,toggle,error:gpsError,onInvi
   <article><Users/><div><strong>{stats?stats.online_users:'—'} <small>/ {stats?stats.registered_users:'—'}</small></strong><span>Online / registered</span></div></article>
   <article><Swords/><div><strong>{stats?.active_matches??'—'}</strong><span>Active matches</span></div></article>
   <article><Satellite/><div><strong>{stats?.gps_online??'—'}</strong><span>GPS online</span></div></article>
-  <article><Crown/><div><strong>{stats?.highest_online?'#'+stats.highest_online.rank:'—'}</strong><span>{stats?.highest_online?stats.highest_online.display_name:'Highest online rank'}</span></div></article>
+  <article><Crown/><div><strong>{stats?.highest_online?stats.highest_online.cbr+' CBR':'—'}</strong><span>{stats?.highest_online?stats.highest_online.display_name:'Highest online rank'}</span></div></article>
  </section>
  </section>;
 }
