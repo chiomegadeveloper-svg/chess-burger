@@ -72,6 +72,7 @@ export default function MatchBoard({
   onPremove,
   premove,
   onResign,
+  onAbort,
   onReact,
   busy = false,
   connection = "Live",
@@ -83,6 +84,7 @@ export default function MatchBoard({
   onPremove?: (move: { from: string; to: string; promotion?: string }) => void;
   premove?: { from: string; to: string; promotion?: string } | null;
   onResign?: () => void;
+  onAbort?: () => void;
   onReact?: (emote: string) => Promise<void> | void;
   busy?: boolean;
   connection?: string;
@@ -96,6 +98,7 @@ export default function MatchBoard({
     [flip, setFlip] = useState(false),
     [tick, setTick] = useState(Date.now()),
     [confirmResign, setConfirmResign] = useState(false),
+    [confirmAbort, setConfirmAbort] = useState(false),
     [moveMarker, setMoveMarker] = useState<{ from: string; to: string } | null>(
       null,
     ),
@@ -179,7 +182,9 @@ export default function MatchBoard({
   if (reversed) squares.reverse();
   const tc = timeControl(match.control),
     result =
-      match.result === "draw"
+      match.status === "cancelled"
+        ? "Match aborted · no rewards awarded"
+        : match.result === "draw"
         ? "Draw"
         : match.result
           ? `${match.result === "white" ? (match.white?.display_name ?? "White") : (match.black?.display_name ?? "Black")} wins`
@@ -460,7 +465,29 @@ export default function MatchBoard({
                 Resign
               </button>
             )}
+            {onAbort && match.status === "active" && (
+              <button className="abort-match-button" onClick={() => setConfirmAbort((value) => !value)}>
+                <Flag size={15} />
+                Abort match
+              </button>
+            )}
           </div>
+          {confirmAbort && (
+            <div className="resign-confirm abort-confirm" role="alertdialog" aria-label="Abort match">
+              <p>Abort this match?</p>
+              <small>Both players receive no CBR, Gold, or EXP. Every fifth abort triggers a 1-minute cooldown.</small>
+              <button
+                disabled={busy}
+                onClick={() => {
+                  onAbort?.();
+                  setConfirmAbort(false);
+                }}
+              >
+                Yes, abort match
+              </button>
+              <button onClick={() => setConfirmAbort(false)}>Keep playing</button>
+            </div>
+          )}
           {confirmResign && (
             <div className="resign-confirm">
               <p>Resign this match?</p>
