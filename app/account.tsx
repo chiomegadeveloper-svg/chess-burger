@@ -27,7 +27,7 @@ import RewardEmblems, {
 } from "./reward-emblems";
 import { arena } from "./arena-client";
 import { profileRequest } from "./profile-client";
-import { toWebpUnder1Mb } from "./media";
+import { toWebpUnder1Mb, validateImageFile } from "./media";
 
 const emptyPhotos = ["", "", "", ""],
   countries = [
@@ -439,8 +439,10 @@ export default function Account({
       setError("Sign in to upload a profile photo.");
       return;
     }
-    if (!file.type.startsWith("image/")) {
-      setError("Choose a JPG, PNG, or WebP image.");
+    try {
+      validateImageFile(file);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Choose a valid photo.");
       return;
     }
     setBusy(true);
@@ -458,7 +460,9 @@ export default function Account({
           "-" +
           (kind === "avatar" ? 0 : index) +
           "-" +
-          crypto.randomUUID() +
+          (typeof crypto.randomUUID === "function"
+            ? crypto.randomUUID()
+            : Date.now().toString(36) + Math.random().toString(36).slice(2)) +
           ".webp";
       const { data, error } = await client.storage
         .from("cb-profile-media")
@@ -507,7 +511,9 @@ export default function Account({
               ? "Profile photo storage is not configured yet. Run supabase/profile-media-storage.sql once."
               : code === "policy"
                 ? "Supabase blocked this upload. Apply the profile media storage policies, then retry."
-                : "Photo could not be uploaded to Supabase. Please retry.",
+                : code.includes("photo") || code.includes("JPEG") || code.includes("PNG") || code.includes("WebP") || code.includes("pixels") || code.includes("15 MB")
+                  ? code
+                  : "Photo could not be uploaded to Supabase. Please retry.",
       );
     } finally {
       setBusy(false);
@@ -1052,11 +1058,14 @@ export default function Account({
           </i>
           <input
             type="file"
-            accept="image/*"
+            accept="image/jpeg,image/png,image/webp"
             disabled={busy}
-            onChange={(e) =>
-              e.target.files?.[0] && void upload(e.target.files[0], "avatar")
-            }
+            onChange={(e) => {
+              const input = e.currentTarget;
+              const selected = input.files?.[0];
+              input.value = "";
+              if (selected) void upload(selected, "avatar");
+            }}
           />
         </label>
         <div>
@@ -1163,12 +1172,14 @@ export default function Account({
                   Replace
                   <input
                     type="file"
-                    accept="image/*"
+                    accept="image/jpeg,image/png,image/webp"
                     disabled={busy}
-                    onChange={(e) =>
-                      e.target.files?.[0] &&
-                      void upload(e.target.files[0], "photo", i)
-                    }
+                    onChange={(e) => {
+                      const input = e.currentTarget;
+                      const selected = input.files?.[0];
+                      input.value = "";
+                      if (selected) void upload(selected, "photo", i);
+                    }}
                   />
                 </label>
               </div>
@@ -1178,12 +1189,14 @@ export default function Account({
                 <span>Upload</span>
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/jpeg,image/png,image/webp"
                   disabled={busy}
-                  onChange={(e) =>
-                    e.target.files?.[0] &&
-                    void upload(e.target.files[0], "photo", i)
-                  }
+                  onChange={(e) => {
+                    const input = e.currentTarget;
+                    const selected = input.files?.[0];
+                    input.value = "";
+                    if (selected) void upload(selected, "photo", i);
+                  }}
                 />
               </label>
             ),
