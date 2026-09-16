@@ -1,4 +1,4 @@
-const CACHE = "chess-burger-shell-v44";
+const CACHE = "chess-burger-shell-v45";
 const ASSETS = [
   "/",
   "/cburger_logo.png",
