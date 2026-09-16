@@ -101,7 +101,12 @@ export default function MatchBoard({
     ),
     [reactionUntil, setReactionUntil] = useState(0),
     [reactionError, setReactionError] = useState(""),
-    [dragFrom, setDragFrom] = useState<Square | null>(null);
+    [dragFrom, setDragFrom] = useState<Square | null>(null),
+    [boardTheme, setBoardTheme] = useState<"slate" | "classic" | "wood">(() => {
+      if (typeof window === "undefined") return "slate";
+      const saved = window.localStorage.getItem("cb-board-theme");
+      return saved === "classic" || saved === "wood" ? saved : "slate";
+    });
   const dragSource = useRef<Square | null>(null),
     suppressClick = useRef(false);
   const chess = useMemo(() => gameFromPgn(match.pgn), [match.pgn]),
@@ -187,6 +192,10 @@ export default function MatchBoard({
                   : "Black to move"
                 : "Your move"
               : "Waiting for opponent";
+  function chooseBoardTheme(theme: "slate" | "classic" | "wood") {
+    setBoardTheme(theme);
+    window.localStorage.setItem("cb-board-theme", theme);
+  }
   function submitMove(from: Square, to: Square) {
     if (canPlay) {
       const isLegal = chess
@@ -323,7 +332,7 @@ export default function MatchBoard({
           {strip(reversed ? "white" : "black")}
           <div className="board-stage">
             <div
-              className="interactive-board"
+              className={"interactive-board board-theme-" + boardTheme}
               role="group"
               aria-label="Chessboard"
             >
@@ -415,6 +424,29 @@ export default function MatchBoard({
               ))}
             </div>
           )}
+          <section className="board-theme-picker" aria-label="Board color">
+            <span>Board color</span>
+            <div>
+              {[
+                ["slate", "Chess Burger"],
+                ["classic", "Classic green"],
+                ["wood", "Warm wood"],
+              ].map(([theme, label]) => (
+                <button
+                  key={theme}
+                  type="button"
+                  className={boardTheme === theme ? "active" : ""}
+                  aria-pressed={boardTheme === theme}
+                  onClick={() =>
+                    chooseBoardTheme(theme as "slate" | "classic" | "wood")
+                  }
+                >
+                  <i className={"board-swatch " + theme} aria-hidden="true" />
+                  {label}
+                </button>
+              ))}
+            </div>
+          </section>
           <div className="board-actions">
             <button onClick={() => setFlip((value) => !value)}>
               <RotateCw size={15} />
