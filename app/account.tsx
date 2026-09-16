@@ -448,9 +448,13 @@ export default function Account({
     setBusy(true);
     setError("");
     try {
-      const { data: refreshed, error: refreshError } = await client.auth.refreshSession();
-      const session = refreshed.session ?? (await client.auth.getSession()).data.session;
-      if (refreshError || !session || session.user.id !== user.id) throw new Error("session");
+      const { data: current } = await client.auth.getSession();
+      let session = current.session;
+      if (session?.expires_at && session.expires_at * 1000 < Date.now() + 60_000) {
+        const refreshed = await client.auth.refreshSession();
+        session = refreshed.data.session;
+      }
+      if (!session || session.user.id !== user.id) throw new Error("session");
       const blob = await toWebpUnder1Mb(file),
         path =
           user.id +
