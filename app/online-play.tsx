@@ -95,9 +95,14 @@ export function OnlineGame({
     // Realtime broadcasts wake this authoritative read immediately. Polling is
     // retained only as a quiet recovery path when the channel is unavailable.
     const timer = setInterval(poll, live ? 8000 : 750);
+    const onVisible = () => { if (document.visibilityState === "visible") void poll(); };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
     return () => {
       alive.current = false;
       clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
     };
   }, [id, watch, live]);
   useEffect(() => {
