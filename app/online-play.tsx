@@ -196,7 +196,7 @@ export function OnlineGame({
         match={match}
         ownId={profile?.user_id}
         onMove={watch ? undefined : (m) => void move("move", m)}
-        premoveQueued={!!premove}
+        premove={premove}
         onPremove={
           watch
             ? undefined
