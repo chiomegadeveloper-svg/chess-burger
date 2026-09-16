@@ -293,6 +293,11 @@ export default function Page() {
         if (!c) return;
         const { data } = c.auth.onAuthStateChange((event) => {
           if (event === "SIGNED_IN") setTimeout(() => void refreshProfile(), 0);
+          if (event === "SIGNED_OUT")
+            setTimeout(
+              () => window.dispatchEvent(new Event("cb-signed-out")),
+              0,
+            );
         });
         unsubscribe = () => data.subscription.unsubscribe();
       })
