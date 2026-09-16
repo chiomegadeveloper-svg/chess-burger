@@ -102,10 +102,10 @@ export default function MatchBoard({
     [reactionUntil, setReactionUntil] = useState(0),
     [reactionError, setReactionError] = useState(""),
     [dragFrom, setDragFrom] = useState<Square | null>(null),
-    [boardTheme, setBoardTheme] = useState<"slate" | "classic" | "wood">(() => {
+    [boardTheme, setBoardTheme] = useState<"slate" | "classic" | "wood" | "premium-walnut">(() => {
       if (typeof window === "undefined") return "slate";
       const saved = window.localStorage.getItem("cb-board-theme");
-      return saved === "classic" || saved === "wood" ? saved : "slate";
+      return saved === "classic" || saved === "wood" || saved === "premium-walnut" ? saved : "slate";
     });
   const dragSource = useRef<Square | null>(null),
     suppressClick = useRef(false);
@@ -192,7 +192,7 @@ export default function MatchBoard({
                   : "Black to move"
                 : "Your move"
               : "Waiting for opponent";
-  function chooseBoardTheme(theme: "slate" | "classic" | "wood") {
+  function chooseBoardTheme(theme: "slate" | "classic" | "wood" | "premium-walnut") {
     setBoardTheme(theme);
     window.localStorage.setItem("cb-board-theme", theme);
   }
@@ -431,6 +431,7 @@ export default function MatchBoard({
                 ["slate", "Chess Burger"],
                 ["classic", "Classic green"],
                 ["wood", "Warm wood"],
+                ["premium-walnut", "Premium Walnut by CHI"],
               ].map(([theme, label]) => (
                 <button
                   key={theme}
@@ -438,7 +439,7 @@ export default function MatchBoard({
                   className={boardTheme === theme ? "active" : ""}
                   aria-pressed={boardTheme === theme}
                   onClick={() =>
-                    chooseBoardTheme(theme as "slate" | "classic" | "wood")
+                    chooseBoardTheme(theme as "slate" | "classic" | "wood" | "premium-walnut")
                   }
                 >
                   <i className={"board-swatch " + theme} aria-hidden="true" />
