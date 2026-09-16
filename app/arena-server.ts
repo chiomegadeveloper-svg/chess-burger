@@ -1294,6 +1294,83 @@ export async function privateAction(
     ]);
     return { ok: true };
   }
+  if (action === "delete-user") {
+    if (profile.role !== "owner")
+      throw new ArenaError("Owner access is required.", 403);
+    const username = String(input.username ?? "")
+      .replace(/^@+/, "")
+      .trim()
+      .toLowerCase();
+    const confirmation = String(input.confirmation ?? "")
+      .replace(/^@+/, "")
+      .trim()
+      .toLowerCase();
+    if (!username || confirmation !== username)
+      throw new ArenaError("Type the exact username to confirm deletion.");
+    const target = await stmt(
+      db,
+      "SELECT user_id,username,role FROM app_profiles WHERE username=?",
+      username,
+    ).first<{ user_id: string; username: string; role: string }>();
+    if (!target) throw new ArenaError("Player not found.");
+    if (target.user_id === id)
+      throw new ArenaError("You cannot delete your own owner account.", 403);
+    if (target.role === "owner")
+      throw new ArenaError("Owner accounts are protected.", 403);
+    const deletedAt = now();
+    await db.batch([
+      stmt(
+        db,
+        "INSERT OR REPLACE INTO deleted_users(user_id,username,deleted_by,deleted_at) VALUES(?,?,?,?)",
+        target.user_id,
+        target.username,
+        id,
+        deletedAt,
+      ),
+      stmt(db, "DELETE FROM arena_hearts WHERE user_id=?", target.user_id),
+      stmt(db, "DELETE FROM arena_feed WHERE user_id=?", target.user_id),
+      stmt(db, "DELETE FROM arena_ledger WHERE user_id=?", target.user_id),
+      stmt(db, "DELETE FROM arena_gold_ledger WHERE user_id=?", target.user_id),
+      stmt(db, "DELETE FROM arena_presence WHERE user_id=?", target.user_id),
+      stmt(db, "DELETE FROM arena_queue WHERE user_id=?", target.user_id),
+      stmt(db, "DELETE FROM arena_territory WHERE user_id=?", target.user_id),
+      stmt(db, "DELETE FROM arena_offline_results WHERE user_id=?", target.user_id),
+      stmt(db, "DELETE FROM arena_player_regions WHERE user_id=?", target.user_id),
+      stmt(
+        db,
+        "DELETE FROM social_links WHERE user_id=? OR target_id=?",
+        target.user_id,
+        target.user_id,
+      ),
+      stmt(
+        db,
+        "DELETE FROM social_messages WHERE sender_id=? OR recipient_id=?",
+        target.user_id,
+        target.user_id,
+      ),
+      stmt(db, "DELETE FROM social_presence WHERE user_id=?", target.user_id),
+      stmt(
+        db,
+        "DELETE FROM arena_matches WHERE status<>'finished' AND (host_id=? OR white_id=? OR black_id=? OR invite_to=?)",
+        target.user_id,
+        target.user_id,
+        target.user_id,
+        target.user_id,
+      ),
+      stmt(db, "DELETE FROM arena_players WHERE user_id=?", target.user_id),
+      stmt(db, "DELETE FROM app_profiles WHERE user_id=?", target.user_id),
+      stmt(
+        db,
+        "INSERT INTO arena_logs(id,actor_user_id,action,details,created_at) VALUES(?,?,?,?,?)",
+        uid(),
+        id,
+        "delete_user",
+        JSON.stringify({ username: target.username, user_id: target.user_id }),
+        deletedAt,
+      ),
+    ]);
+    return { ok: true };
+  }
   if (action === "set-role") {
     if (profile.role !== "owner")
       throw new ArenaError("Owner access is required.", 403);
