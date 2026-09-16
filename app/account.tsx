@@ -585,23 +585,23 @@ export default function Account({
   if (loading) return <p className="account-note">Loading player profile…</p>;
   if (!user && !guest)
     return (
-      <section className="account-panel">
+      <section className="account-panel auth-card">
         <div className="auth-brand">
-          <img src="/cburger_logo.png" alt="Chess Burger" />
+          <img src="/cburger_logo.png" alt="" />
           <span>PLAYER ACCESS</span>
         </div>
-        <h2>Welcome to the board.</h2>
-        <p>Create a Chess Burger account with any email address, or sign in securely with Google.</p>
+        <h2>Sign in to Chess Burger</h2>
+        <p className="auth-subtitle">Play, save progress, and build your profile.</p>
         <button
           className="google-auth-button"
           disabled={busy}
           type="button"
           onClick={() => void signInWithGoogle()}
         >
-          <span aria-hidden="true">G</span>
+          <span className="google-mark" aria-hidden="true">G</span>
           Continue with Google
         </button>
-        <p className="registration-note">Or use a Chess Burger email and password:</p>
+        <div className="auth-divider"><span>or continue with email</span></div>
         <form
           className="gmail-form"
           onSubmit={(e) => {
@@ -610,7 +610,7 @@ export default function Account({
           }}
         >
           <label>
-            Email address
+            Email
             <input
               type="email"
               autoComplete="email"
@@ -621,57 +621,53 @@ export default function Account({
             />
           </label>
           <label>
-            Chess Burger password
+            Password
             <input
               type="password"
               autoComplete="current-password"
               required
               minLength={6}
-              placeholder="At least 6 characters"
+              placeholder="6+ characters"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
           </label>
-          <p className="registration-note">
-            This password is only for Chess Burger. Never enter your Google password here—use Continue with Google instead.
-          </p>
-          <label className="remember-login">
-            <input
-              type="checkbox"
-              checked={remember}
-              onChange={(e) => setRemember(e.target.checked)}
-            />
-            Keep me logged in
-          </label>
-          <div>
-            <button disabled={busy} type="submit">
-              {busy ? "Please wait…" : "Sign in"}
-            </button>
-            <button
-              disabled={busy || emailCooldown > 0}
-              type="button"
-              onClick={() => void emailAuth("signup")}
-            >
-              {emailCooldown
-                ? `Create account (${emailCooldown}s)`
-                : "Create account"}
-            </button>
+          <div className="auth-options">
+            <label className="remember-login">
+              <input
+                type="checkbox"
+                checked={remember}
+                onChange={(e) => setRemember(e.target.checked)}
+              />
+              Keep me signed in
+            </label>
             <button
               disabled={busy || emailCooldown > 0}
               type="button"
               className="password-recovery-button"
               onClick={() => void requestPasswordReset()}
             >
-              {emailCooldown
-                ? `Email available in ${emailCooldown}s`
-                : "Forgot password?"}
+              Forgot password?
+            </button>
+          </div>
+          <p className="auth-security-note">
+            Use your Chess Burger password, not your Google password.
+          </p>
+          <div className="auth-actions">
+            <button className="auth-primary" disabled={busy} type="submit">
+              {busy ? "Please wait…" : "Sign in"}
+            </button>
+            <button
+              className="auth-secondary"
+              disabled={busy || emailCooldown > 0}
+              type="button"
+              onClick={() => void emailAuth("signup")}
+            >
+              {emailCooldown ? `Try again in ${emailCooldown}s` : "Create account"}
             </button>
           </div>
         </form>
-        <p className="registration-note">
-          Create or sign in to your account to unlock Chess Burger.
-        </p>
-        {error && <p role="alert">{error}</p>}
+        {error && <p className="auth-error" role="alert">{error}</p>}
       </section>
     );
   if (!profile) return null;
