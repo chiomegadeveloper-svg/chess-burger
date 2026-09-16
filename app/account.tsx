@@ -111,6 +111,7 @@ export default function Account({
   const [remember, setRemember] = useState(true),
     [registered, setRegistered] = useState<boolean | null>(null);
   const [editing, setEditing] = useState(false);
+  const [emblemPickerOpen, setEmblemPickerOpen] = useState(false);
   const [socialCounts, setSocialCounts] = useState({
     friends: 0,
     followers: 0,
@@ -805,9 +806,24 @@ export default function Account({
               ))}
             </div>
           </section>
-          <FeaturedRewardSlots selected={profile.featured_badges} profile={profile} onChoose={() => { setEditing(true); window.setTimeout(() => document.getElementById("featured-emblem-picker")?.scrollIntoView({ behavior: "smooth", block: "start" }), 0); }} />
+          <FeaturedRewardSlots selected={profile.featured_badges} profile={profile} onChoose={() => setEmblemPickerOpen(true)} />
         </div>
       </div>
+      <Dialog open={emblemPickerOpen} onOpenChange={setEmblemPickerOpen}>
+        <DialogContent className="emblem-picker-dialog">
+          <DialogHeader>
+            <DialogTitle>Choose featured emblems</DialogTitle>
+            <DialogDescription>
+              Select up to five unlocked emblems for your player card. Changes save immediately.
+            </DialogDescription>
+          </DialogHeader>
+          <FeaturedRewardPicker
+            selected={profile.featured_badges}
+            profile={profile}
+            onChange={(featured_badges) => void saveFeaturedEmblems(featured_badges)}
+          />
+        </DialogContent>
+      </Dialog>
     </>
   );
   const passwordSecurity =
