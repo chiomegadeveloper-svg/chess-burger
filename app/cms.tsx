@@ -21,7 +21,17 @@ export default function Cms({profile,onClose}:{profile:PlayerProfile;onClose:()=
  async function run(fn:()=>Promise<void>){setBusy(true);try{await fn();}catch(e){toast.error((e as Error).message);}finally{setBusy(false);}}
  async function loadPosts(){const data=await arena<{posts:Post[]}>("cms-announcements");setPosts(data.posts);}
  useEffect(()=>{if(section==="card"){setFeatureLoaded(false);void arena<{image_url:string}>("app-feature",{},true).then(data=>{setCardUrl(data.image_url);setFeatureLoaded(true);}).catch(()=>toast.error("Could not load the app photo. Reopen this tab to retry."));}if(section==="announcement")void run(loadPosts);if(section==="logs"){setLogError("");void arena<{logs:Log[]}>("logs",{page}).then(data=>setLogs(data.logs)).catch(()=>setLogError("Activity logs are temporarily unavailable."));try{setLocalLogs(JSON.parse(localStorage.getItem("cb-offline-audit")??"[]"));}catch{setLocalLogs([]);}}},[section,page]);
- async function publish(){if(!text.trim()&&!image)throw Error("Add text or an image.");const end=new Date(deadline);if(!Number.isFinite(end.getTime())||end.getTime()<=Date.now())throw Error("Choose a future end date.");await arena("save-announcement",{id:editing,content:text.trim(),image_url:image,expires_at:end.toISOString()});setText("");setImage("");setDeadline("");setEditing(null);await loadPosts();window.dispatchEvent(new Event("cb-profile-saved"));toast.success("Announcement published.");}
+ async function publish(){
+  if(!text.trim()&&!image)throw Error("Add text or an image.");
+  const end=new Date(deadline);
+  if(!Number.isFinite(end.getTime())||end.getTime()<=Date.now())throw Error("Choose a future end date.");
+  const result=await arena<{post?:Post}>("save-announcement",{id:editing,content:text.trim(),image_url:image,expires_at:end.toISOString()});
+  if(!result.post)throw Error("The announcement was not saved. Please try again.");
+  setPosts(current=>editing?current.map(post=>post.id===result.post!.id?result.post!:post):[result.post!,...current]);
+  setText("");setImage("");setDeadline("");setEditing(null);
+  window.dispatchEvent(new Event("cb-profile-saved"));
+  toast.success("Announcement published to the Community Feed.");
+}
  async function upload(file:File,target:"announcement"|"card"){const url=await uploadStaffImage(file,profile.user_id);if(target==="announcement"){setImage(url);toast.success("Image uploaded. Save to publish it.");return;}setCardUrl(url);await arena("set-app-feature",{url});window.dispatchEvent(new Event("cb-app-feature-changed"));toast.success("Featured photo published beneath every User Card.");}
  if(!staff)return <p>Owner or GM access is required.</p>;
  return <section className="cms-page"><div className="cms-heading"><div><span>{owner?"OWNER":"GM ADMIN"} CONTROL</span><h1>Chess Burger CMS</h1></div><button onClick={onClose}>Close</button></div><div className="cms-tabs">{menu.map(([key,label,Icon])=><button key={key as string} className={section===key?"active":""} onClick={()=>setSection(key as string)}><Icon/>{label as string}</button>)}</div>
