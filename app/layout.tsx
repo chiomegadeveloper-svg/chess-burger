@@ -29,7 +29,7 @@ export const metadata: Metadata = {
     google: "BpKi2gFy5TX5I_hDZ9zG2BDrM0KUrdLMk40B1jq-tKI",
   },
   icons: {
-    icon: [{ url: "/cburger_logo.png", type: "image/png" }],
+    icon: [{ url: "/chess-burger-icon.svg", type: "image/svg+xml" }, { url: "/cburger_logo.png", type: "image/png" }],
     shortcut: [{ url: "/cburger_logo.png", type: "image/png" }],
     apple: [{ url: "/cburger_logo.png", type: "image/png" }],
   },
