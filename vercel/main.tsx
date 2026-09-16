@@ -20,6 +20,7 @@ import "../app/v35.css";
 import "../app/v36.css";
 import "../app/v37.css";
 import "../app/v38.css";
+import "../app/v39.css";
 import Page from "../app/page";
 
 createRoot(document.getElementById("root")!).render(
