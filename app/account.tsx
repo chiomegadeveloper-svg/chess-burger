@@ -188,9 +188,11 @@ export default function Account({
       const loaded = data
         ? { ...blankProfile(u.id), ...data }
         : newAccountProfile(u);
+      const hasRequiredPhoto=!!data?.avatar_url?.trim();
       setRegistered(!!data);
-      setEditing(!data);
-      onMembershipChange?.(!!data);
+      setEditing(!data||!hasRequiredPhoto);
+      onMembershipChange?.(hasRequiredPhoto);
+      if(data&&!hasRequiredPhoto)setError("Add and save a profile picture to unlock Chess Burger.");
       if (!live) return;
       setProfile(loaded);
       onLoaded?.(loaded);
@@ -529,6 +531,10 @@ export default function Account({
         throw Object.assign(new Error("Enter your name."), {
           code: "name_required",
         });
+      if (!profile.avatar_url?.trim())
+        throw Object.assign(new Error("A profile picture is required to use Chess Burger."), {
+          code: "avatar_required",
+        });
       const payload = {
         user_id: profile.user_id,
         username,
@@ -554,7 +560,8 @@ export default function Account({
       setError(
         issue.code === "username_taken" ||
           issue.code === "username_format" ||
-          issue.code === "name_required"
+          issue.code === "name_required" ||
+          issue.code === "avatar_required"
           ? (issue.message ?? "Check your profile details.")
           : `Profile could not be saved${issue.message ? ": " + issue.message : ". Please try again."}`,
       );
@@ -932,6 +939,7 @@ export default function Account({
     );
   return (
     <section className="profile-editor">
+      {!profile.avatar_url&&<p className="auth-error" role="status">A profile picture is required. Upload one below and save your profile to unlock the app.</p>}
       {registered === false && (
         <div className="profile-registration-intro">
           <span>STEP 2 OF 2</span>
