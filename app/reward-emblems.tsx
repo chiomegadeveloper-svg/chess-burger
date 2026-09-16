@@ -35,12 +35,12 @@ function useRewardUnlocks(profile?:RewardStats){
 }
 const valid=(id:string):id is RewardId=>REWARDS.some(reward=>reward.id===id);
 
-export function FeaturedRewardSlots({selected,profile}:{selected:string[];profile?:RewardStats}){
+export function FeaturedRewardSlots({selected,profile,onChoose}:{selected:string[];profile?:RewardStats;onChoose?:()=>void}){
  const {unlocked,ready}=useRewardUnlocks(profile);
  // A previously selected emblem remains visible even if the rewards request is
  // temporarily offline. The picker only allows new selections when unlocked.
  const chosen=selected.filter(valid).slice(0,5);
- return <section className="card-featured-rewards"><header><Medal/><span><strong>Featured Emblems</strong><small>{ready?`${chosen.length} of 5 selected`:"Loading rewards…"}</small></span></header><div className="featured-reward-slots" aria-label="Five featured reward emblem slots">{Array.from({length:5},(_,index)=>{const id=chosen[index],reward=id&&REWARDS.find(item=>item.id===id);return reward?<span className={`featured-reward-slot ${reward.kind}`} key={index} title={reward.name}><i><RewardMark id={reward.id}/></i><small>{reward.name}</small></span>:<span className="featured-reward-slot empty" key={index} aria-label="Empty featured emblem slot"><i>?</i><small>Empty</small></span>;})}</div></section>;
+ return <section className="card-featured-rewards"><header><Medal/><span><strong>Featured Emblems</strong><small>{ready?`${chosen.length} of 5 selected`:"Loading rewards…"}</small></span>{onChoose&&<button type="button" className="choose-emblems-button" onClick={onChoose}>Choose</button>}</header><div className="featured-reward-slots" aria-label="Five featured reward emblem slots">{Array.from({length:5},(_,index)=>{const id=chosen[index],reward=id&&REWARDS.find(item=>item.id===id);return reward?<span className={`featured-reward-slot ${reward.kind}`} key={index} title={reward.name}><i><RewardMark id={reward.id}/></i><small>{reward.name}</small></span>:<span className="featured-reward-slot empty" key={index} aria-label="Empty featured emblem slot"><i>?</i><small>Empty</small></span>;})}</div></section>;
 }
 export function FeaturedRewardPicker({selected,onChange,profile}:{selected:string[];onChange:(next:string[])=>void;profile?:RewardStats}){
  const {unlocked,ready}=useRewardUnlocks(profile),known=selected.filter(valid);
