@@ -1,7 +1,8 @@
-const CACHE = "chess-burger-shell-v48";
+const CACHE = "chess-burger-shell-v49";
 const ASSETS = [
   "/",
   "/cburger_logo.png",
+  "/chess-burger-icon.svg",
   "/manifest.webmanifest",
   ...Array.from(
     { length: 50 },
@@ -63,7 +64,7 @@ self.addEventListener("message", (event) => {
             const u = new URL(path, self.location.origin);
             if (
               !cacheable(u) ||
-              !/\.(js|css|woff2?|png|webp)$/.test(u.pathname)
+              !/\.(js|css|woff2?|png|webp|svg)$/.test(u.pathname)
             )
               return;
             const r = await fetch(u);
