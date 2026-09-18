@@ -797,9 +797,9 @@ export default function Page() {
                 </button>
                 <button
                   onClick={() =>
-                    void arena("cancel-room", { id: i.id }).then(() =>
-                      setInvites((v) => v.filter((m) => m.id !== i.id)),
-                    )
+                    void arena("decline-room", { id: i.id })
+                      .then(() => setInvites((v) => v.filter((m) => m.id !== i.id)))
+                      .catch((e) => toast.error(e.message))
                   }
                 >
                   Decline
