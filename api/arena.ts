@@ -24,6 +24,9 @@ function db(): Db {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url) fail(503, 'The Vercel game service is missing NEXT_PUBLIC_SUPABASE_URL (or VITE_SUPABASE_URL).');
   if (!key) fail(503, 'The Vercel game service is missing SUPABASE_SERVICE_ROLE_KEY.');
+  // Supabase sends this value in HTTP headers; reject accidentally pasted
+  // instructions or Unicode characters without ever logging the credential.
+  if (!/^[\x21-\x7e]+$/.test(key)) fail(503, 'The Vercel Supabase server key contains invalid characters. Replace it with the exact key from Supabase, then redeploy Preview.');
   return createClient(url as string, key as string, { auth: { autoRefreshToken: false, persistSession: false } }) as Db;
 }
 async function signedIn(client: Db, req: Req) {
