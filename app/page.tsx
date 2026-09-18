@@ -172,7 +172,19 @@ export default function Page() {
         data: { session },
       } = await c.auth.getSession();
       if (!session) return;
-      const data = await profileRequest(c);
+      let data = await profileRequest(c);
+      // Earlier versions kept the completed profile on the device.  The
+      // original hosted database is no longer available, so rehydrate a
+      // missing Supabase row from that same user's preserved local profile.
+      // This only runs when Supabase has no row, and never replaces one.
+      if (!data) {
+        try {
+          const cached = JSON.parse(authStorage.getItem("cb-staff-profile") ?? "null") as PlayerProfile | null;
+          if (cached?.user_id === session.user.id && cached.username && cached.display_name) {
+            data = await profileRequest(c, "PUT", cached);
+          }
+        } catch {}
+      }
       if (!data) {
         setMember(false);
         setTab("profile");
