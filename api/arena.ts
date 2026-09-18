@@ -73,21 +73,61 @@ async function settle(client: Db, match: any) {
 async function publicFeed(client: Db) {
   const list = await client.from('cb_feed').select('*').or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`).order('created_at', { ascending: false }).limit(70);
   if (list.error) fail(500, list.error.message);
+  const challengeIds = (list.data ?? []).filter((e: any) => e.kind === 'challenge' && e.challenge_match_id).map((e: any) => e.challenge_match_id);
+  const activeChallenges = new Set<string>();
+  if (challengeIds.length) {
+    const waiting = await client.from('cb_matches').select('id').in('id', challengeIds).eq('status', 'waiting').is('invite_to', null).gt('created_at', new Date(now() - 120000).toISOString());
+    if (waiting.error) fail(500, waiting.error.message);
+    for (const m of waiting.data ?? []) activeChallenges.add(m.id);
+  }
   const people = await playerMap(client, (list.data ?? []).map((e: any) => e.user_id));
-  return { events: (list.data ?? []).map((e: any) => ({ id: e.kind === 'challenge' && e.challenge_match_id ? `challenge:${e.challenge_match_id}` : e.id, user_id: e.user_id, kind: e.kind, display_name: e.kind === 'announcement' ? 'Chess Burger' : e.display_name, content: e.content, image_url: e.image_url ?? '', expires_at: e.expires_at, cbr_delta: e.cbr_delta ?? 0, gold_delta: e.gold_delta ?? 0, heart_count: e.heart_count ?? 0, created_at: e.created_at, avatar_url: e.kind === 'announcement' ? '/cburger_logo.png' : people.get(e.user_id)?.avatar_url ?? '', cbr: people.get(e.user_id)?.cbr ?? 88 })) };
+  return { events: (list.data ?? []).filter((e: any) => e.kind !== 'challenge' || activeChallenges.has(e.challenge_match_id)).map((e: any) => ({ id: e.kind === 'challenge' && e.challenge_match_id ? `challenge:${e.challenge_match_id}` : e.id, user_id: e.user_id, kind: e.kind, display_name: e.kind === 'announcement' ? 'Chess Burger' : e.display_name, content: e.content, image_url: e.image_url ?? '', expires_at: e.expires_at, cbr_delta: e.cbr_delta ?? 0, gold_delta: e.gold_delta ?? 0, heart_count: e.heart_count ?? 0, created_at: e.created_at, avatar_url: e.kind === 'announcement' ? '/cburger_logo.png' : people.get(e.user_id)?.avatar_url ?? '', cbr: people.get(e.user_id)?.cbr ?? 88 })) };
 }
 
 export default async function handler(req: Req, res: Res) {
   res.setHeader('Cache-Control', 'no-store');
+  let action = '';
   try {
     const client = db(), body = (req.body && typeof req.body === 'object' ? req.body : {}) as Record<string, any>;
-    const action = String(req.method === 'GET' ? req.query?.action ?? '' : body.action ?? '');
+    action = String(req.method === 'GET' ? req.query?.action ?? '' : body.action ?? '');
+    console.info('arena.request', { action, method: req.method });
     if (req.method === 'GET') { if (action === 'feed') return res.status(200).json(await publicFeed(client)); fail(404, 'Unknown game request.'); }
     const account = await signedIn(client, req);
     // The app refreshes this on sign-in to obtain the authoritative profile.
     // Keep it as a first-class migration action rather than falling through to
     // a 404 on every page load.
     if (action === 'me') return res.status(200).json({ profile: { ...account.profile, ocbr: 88 } });
+    if (action === 'social-status' || action === 'social-update') {
+      const target = String(body.target ?? '');
+      if (!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(target) || target === account.id) fail(400, 'Choose another registered player.');
+      const pair = `and(user_id.eq.${account.id},target_id.eq.${target}),and(user_id.eq.${target},target_id.eq.${account.id})`;
+      const links = await client.from('cb_social_links').select('*').or(pair);
+      if (links.error) fail(500, links.error.message);
+      const rows = links.data ?? [];
+      if (action === 'social-status') return res.status(200).json({
+        blocked: rows.some((r: any) => r.kind === 'block'),
+        blockedByMe: rows.some((r: any) => r.kind === 'block' && r.user_id === account.id),
+        following: rows.some((r: any) => r.kind === 'follow' && r.user_id === account.id),
+        friendship: rows.filter((r: any) => r.kind === 'friend').map((r: any) => r.status === 'accepted' ? 'accepted' : r.user_id === account.id ? 'sent' : 'received')[0] ?? null,
+      });
+      const op = String(body.op ?? '');
+      const person = await client.from('cb_profiles').select('user_id').eq('user_id', target).maybeSingle();
+      if (person.error) fail(500, person.error.message);
+      if (!person.data) fail(404, 'This player is unavailable.');
+      if (!['block', 'unblock'].includes(op) && rows.some((r: any) => r.kind === 'block')) fail(403, 'This player is unavailable.');
+      let update: any;
+      if (op === 'unfollow' || op === 'unblock') update = await client.from('cb_social_links').delete().eq('user_id', account.id).eq('target_id', target).eq('kind', op === 'unfollow' ? 'follow' : 'block');
+      else if (op === 'remove-friend') update = await client.from('cb_social_links').delete().eq('kind', 'friend').or(pair);
+      else if (op === 'accept') update = await client.from('cb_social_links').update({ status: 'accepted' }).eq('user_id', target).eq('target_id', account.id).eq('kind', 'friend').eq('status', 'pending');
+      else if (['follow', 'friend', 'block'].includes(op)) {
+        const exists = rows.some((r: any) => r.kind === op && (op === 'friend' || r.user_id === account.id));
+        if (!exists) update = await client.from('cb_social_links').insert({ user_id: account.id, target_id: target, kind: op, status: op === 'friend' ? 'pending' : 'active' });
+        if (update?.error && update.error.code !== '23505') fail(500, update.error.message);
+        if (op === 'block') update = await client.from('cb_social_links').delete().in('kind', ['friend', 'follow']).or(pair);
+      } else fail(400, 'Unknown social action.');
+      if (update?.error && update.error.code !== '23505') fail(500, update.error.message);
+      return res.status(200).json({ ok: true });
+    }
     if (action === 'search-players') {
       const query = String(body.query ?? '').trim().replace(/^@/, '').toLowerCase(); if (query.length < 2) return res.status(200).json({ players: [] });
       const r = await client.from('cb_profiles').select('user_id,username,display_name,avatar_url,country_code,cbr,gold_points,wins,losses,win_streak').neq('user_id', account.id).or(`username.ilike.%${query}%,display_name.ilike.%${query}%`).limit(10);
@@ -97,12 +137,24 @@ export default async function handler(req: Req, res: Res) {
       const control = String(body.control ?? ''), clock = tc(control), target = typeof body.target === 'string' ? body.target : null, publicChallenge = body.publicChallenge === true;
       if (publicChallenge && target) fail(400, 'Choose one challenge audience.');
       const active = await client.from('cb_matches').select('id').eq('status', 'active').or(`white_id.eq.${account.id},black_id.eq.${account.id}`).limit(1); if (active.error) fail(500, active.error.message); if (active.data?.length) fail(409, 'Finish your current match first.');
-      const match = one<any>(await client.from('cb_matches').insert({ host_id: account.id, white_id: account.id, invite_to: target, code: code(), control, white_ms: clock.seconds * 1000, black_ms: clock.seconds * 1000, last_tick: new Date().toISOString(), white_cbr: account.profile.cbr }).select('*').single());
+      // A new invitation replaces older unanswered invitations from this host.
+      const old = await client.from('cb_matches').select('id').eq('host_id', account.id).eq('status', 'waiting');
+      if (old.error) fail(500, old.error.message);
+      const oldIds = (old.data ?? []).map((m: any) => m.id);
+      if (oldIds.length) {
+        const cancelled = await client.from('cb_matches').update({ status: 'cancelled' }).in('id', oldIds).eq('host_id', account.id).eq('status', 'waiting');
+        if (cancelled.error) fail(500, cancelled.error.message);
+        const expired = await client.from('cb_feed').update({ expires_at: new Date().toISOString() }).in('challenge_match_id', oldIds).eq('kind', 'challenge');
+        if (expired.error) fail(500, expired.error.message);
+      }
+      const match = one<any>(await client.from('cb_matches').insert({ host_id: account.id, white_id: account.id, invite_to: target, status: 'waiting', code: code(), control, white_ms: clock.seconds * 1000, black_ms: clock.seconds * 1000, last_tick: new Date().toISOString(), white_cbr: account.profile.cbr }).select('*').single());
       if (publicChallenge) { const event = await client.from('cb_feed').insert({ user_id: account.id, kind: 'challenge', display_name: account.profile.display_name, content: `is looking for a ${clock.group.toLowerCase()} challenge · ${clock.label}.`, challenge_match_id: match.id, expires_at: new Date(now() + 120000).toISOString() }); if (event.error) { await client.from('cb_matches').delete().eq('id', match.id); fail(500, event.error.message); } }
-      return res.status(200).json({ match: await matchView(client, match) });
+      console.info('arena.room-created', { matchId: match.id, publicChallenge });
+      return res.status(200).json({ match: await matchView(client, match), challengePublished: publicChallenge });
     }
     if (action === 'accept-challenge') {
       const id = String(body.id ?? ''), match = await readMatch(client, id); if (match.white_id === account.id) fail(400, 'You cannot accept your own challenge.');
+      if (match.status !== 'waiting' || match.invite_to || Date.parse(match.created_at) <= now() - 120000) fail(404, 'This challenge has expired or was accepted.');
       const event = await client.from('cb_feed').select('id').eq('challenge_match_id', id).eq('kind', 'challenge').gt('expires_at', new Date().toISOString()).maybeSingle(); if (event.error) fail(500, event.error.message); if (!event.data) fail(404, 'This challenge has expired or was accepted.');
       const changed = await client.from('cb_matches').update({ black_id: account.id, black_cbr: account.profile.cbr, status: 'active', version: 1, last_tick: new Date().toISOString() }).eq('id', id).eq('status', 'waiting').is('black_id', null).select('*').maybeSingle(); if (changed.error) fail(500, changed.error.message); if (!changed.data) fail(409, 'This challenge was already accepted.');
       await client.from('cb_feed').update({ expires_at: new Date().toISOString() }).eq('id', event.data.id); return res.status(200).json({ match: await matchView(client, changed.data) });
@@ -112,6 +164,7 @@ export default async function handler(req: Req, res: Res) {
       const match = one<any>(await client.from('cb_matches').select('*').eq('code', roomCode).eq('status', 'waiting').maybeSingle());
       if (match.white_id === account.id) fail(400, 'You cannot join your own room.');
       if (match.invite_to && match.invite_to !== account.id) fail(403, 'This invitation belongs to another player.');
+      if (Date.parse(match.created_at) <= now() - 120000) fail(410, 'This invitation has expired.');
       const changed = await client.from('cb_matches').update({ black_id: account.id, black_cbr: account.profile.cbr, status: 'active', version: Number(match.version) + 1, last_tick: new Date().toISOString() }).eq('id', match.id).eq('version', match.version).eq('status', 'waiting').is('black_id', null).select('*').maybeSingle();
       if (changed.error) fail(500, changed.error.message);
       if (!changed.data) fail(409, 'This room was already joined.');
@@ -121,13 +174,21 @@ export default async function handler(req: Req, res: Res) {
     if (action === 'state') {
       const [r, pending] = await Promise.all([
         client.from('cb_matches').select('*').eq('status', 'active').or(`white_id.eq.${account.id},black_id.eq.${account.id}`).order('created_at', { ascending: false }).limit(1).maybeSingle(),
-        client.from('cb_matches').select('id,host_id,control,code,created_at').eq('status', 'waiting').eq('invite_to', account.id).order('created_at', { ascending: false }).limit(10),
+        client.from('cb_matches').select('id,host_id,control,code,created_at').eq('status', 'waiting').eq('invite_to', account.id).gt('created_at', new Date(now() - 120000).toISOString()).order('created_at', { ascending: false }).limit(10),
       ]);
       if (r.error || pending.error) fail(500, r.error?.message ?? pending.error?.message ?? 'Unable to load match state.');
       const names = await playerMap(client, (pending.data ?? []).map((invite: any) => invite.host_id));
       return res.status(200).json({ match: r.data ? await matchView(client, r.data) : null, completed: null, invites: (pending.data ?? []).map((invite: any) => ({ ...invite, host_name: names.get(invite.host_id)?.display_name ?? 'A player' })), fair_play: { total_aborts: 0, cooldown_until: 0 } });
     }
-    if (action === 'cancel-room') { const r = await client.from('cb_matches').update({ status: 'cancelled' }).eq('id', String(body.id ?? '')).eq('host_id', account.id).eq('status', 'waiting'); if (r.error) fail(500, r.error.message); return res.status(200).json({ ok: true }); }
+    if (action === 'cancel-room' || action === 'decline-room') {
+      const id = String(body.id ?? '');
+      const r = await client.from('cb_matches').update({ status: 'cancelled' }).eq('id', id).eq(action === 'cancel-room' ? 'host_id' : 'invite_to', account.id).eq('status', 'waiting').select('id').maybeSingle();
+      if (r.error) fail(500, r.error.message);
+      if (!r.data) fail(409, 'This invitation is no longer available.');
+      const expired = await client.from('cb_feed').update({ expires_at: new Date().toISOString() }).eq('kind', 'challenge').eq('challenge_match_id', id);
+      if (expired.error) fail(500, expired.error.message);
+      return res.status(200).json({ ok: true });
+    }
     if (action === 'heart') { const id = String(body.id ?? ''); if (id.startsWith('challenge:')) return res.status(200).json({ ok: true }); const r = body.liked === true ? await client.from('cb_feed_reactions').upsert({ feed_id: id, user_id: account.id }, { onConflict: 'feed_id,user_id' }) : await client.from('cb_feed_reactions').delete().eq('feed_id', id).eq('user_id', account.id); if (r.error) fail(500, r.error.message); return res.status(200).json({ ok: true }); }
     if (action === 'hearts') { const r = await client.from('cb_feed_reactions').select('feed_id').eq('user_id', account.id); if (r.error) fail(500, r.error.message); return res.status(200).json({ ids: (r.data ?? []).map((row: any) => row.feed_id) }); }
     if (action === 'move' || action === 'resign' || action === 'abort') {
@@ -149,5 +210,5 @@ export default async function handler(req: Req, res: Res) {
     }
     if (action === 'react') { const match = await readMatch(client, String(body.id ?? '')); if (!participant(match, account.id)) fail(403, 'This room is private.'); const reactions = Array.isArray(match.reactions) ? match.reactions : []; reactions.push({ emote: String(body.emote ?? '').slice(0, 8), at: now() }); const changed = one<any>(await client.from('cb_matches').update({ reactions, version: Number(match.version) + 1 }).eq('id', match.id).eq('version', match.version).select('*').maybeSingle()); return res.status(200).json({ match: await matchView(client, changed) }); }
     fail(404, 'This game action is not available during the migration.');
-  } catch (error) { const known = error instanceof ApiError ? error : new ApiError(500, 'The game service could not complete this request. Please try again.'); if (!(error instanceof ApiError)) console.error('Chess Burger arena error', error); return res.status(known.status).json({ error: known.message }); }
+  } catch (error) { const known = error instanceof ApiError ? error : new ApiError(500, 'The game service could not complete this request. Please try again.'); console.error('arena.failed', { action, status: known.status, message: known.message }); return res.status(known.status).json({ error: known.message }); }
 }

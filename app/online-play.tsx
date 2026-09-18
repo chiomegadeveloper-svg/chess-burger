@@ -361,12 +361,18 @@ export default function OnlinePlay({
     setBusy(true);
     setError("");
     try {
-      const r = await arena<{ match: ArenaMatch }>("room", {
+      const r = await arena<{ match: ArenaMatch; challengePublished?: boolean }>("room", {
         control,
         target: challenge ? selected?.user_id : target?.user_id,
         publicChallenge: challenge && audience === "anyone",
       });
+      if (challenge && audience === "anyone" && r.challengePublished !== true) {
+        throw Error("The server did not confirm your public challenge. Please retry.");
+      }
       setRoom(r.match);
+      if (challenge && audience === "anyone") {
+        window.dispatchEvent(new Event("cb-profile-saved"));
+      }
     } catch (e) {
       setError((e as Error).message);
     } finally {

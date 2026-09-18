@@ -544,6 +544,7 @@ export default function Page() {
       <>
         {back}
         <OnlinePlay
+          key={`${tab}:${target?.user_id ?? 'anyone'}`}
           profile={profile}
           target={target}
           challenge={tab === "challenge"}
@@ -796,9 +797,9 @@ export default function Page() {
                 </button>
                 <button
                   onClick={() =>
-                    void arena("cancel-room", { id: i.id }).then(() =>
-                      setInvites((v) => v.filter((m) => m.id !== i.id)),
-                    )
+                    void arena("decline-room", { id: i.id })
+                      .then(() => setInvites((v) => v.filter((m) => m.id !== i.id)))
+                      .catch((e) => toast.error(e.message))
                   }
                 >
                   Decline
