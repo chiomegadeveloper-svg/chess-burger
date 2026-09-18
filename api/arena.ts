@@ -20,7 +20,7 @@ const code = () => Array.from(crypto.getRandomValues(new Uint8Array(8)), n => 'A
 const one = <T>(r: { data: T | null; error: { message: string } | null }): T => { if (r.error) fail(500, r.error.message); if (!r.data) fail(404, 'This game is no longer available.'); return r.data as T; };
 
 function db(): Db {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL, key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.VITE_SUPABASE_URL, key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) fail(503, 'The Vercel game service needs its Supabase server key.');
   return createClient(url as string, key as string, { auth: { autoRefreshToken: false, persistSession: false } }) as Db;
 }
