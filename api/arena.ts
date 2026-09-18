@@ -84,6 +84,10 @@ export default async function handler(req: Req, res: Res) {
     const action = String(req.method === 'GET' ? req.query?.action ?? '' : body.action ?? '');
     if (req.method === 'GET') { if (action === 'feed') return res.status(200).json(await publicFeed(client)); fail(404, 'Unknown game request.'); }
     const account = await signedIn(client, req);
+    // The app refreshes this on sign-in to obtain the authoritative profile.
+    // Keep it as a first-class migration action rather than falling through to
+    // a 404 on every page load.
+    if (action === 'me') return res.status(200).json({ profile: { ...account.profile, ocbr: 88 } });
     if (action === 'search-players') {
       const query = String(body.query ?? '').trim().replace(/^@/, '').toLowerCase(); if (query.length < 2) return res.status(200).json({ players: [] });
       const r = await client.from('cb_profiles').select('user_id,username,display_name,avatar_url,country_code,cbr,gold_points,wins,losses,win_streak').neq('user_id', account.id).or(`username.ilike.%${query}%,display_name.ilike.%${query}%`).limit(10);
