@@ -544,6 +544,7 @@ export default function Page() {
       <>
         {back}
         <OnlinePlay
+          key={`${tab}:${target?.user_id ?? 'anyone'}`}
           profile={profile}
           target={target}
           challenge={tab === "challenge"}

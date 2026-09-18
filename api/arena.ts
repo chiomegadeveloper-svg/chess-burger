@@ -79,15 +79,48 @@ async function publicFeed(client: Db) {
 
 export default async function handler(req: Req, res: Res) {
   res.setHeader('Cache-Control', 'no-store');
+  let action = '';
   try {
     const client = db(), body = (req.body && typeof req.body === 'object' ? req.body : {}) as Record<string, any>;
-    const action = String(req.method === 'GET' ? req.query?.action ?? '' : body.action ?? '');
+    action = String(req.method === 'GET' ? req.query?.action ?? '' : body.action ?? '');
+    console.info('arena.request', { action, method: req.method });
     if (req.method === 'GET') { if (action === 'feed') return res.status(200).json(await publicFeed(client)); fail(404, 'Unknown game request.'); }
     const account = await signedIn(client, req);
     // The app refreshes this on sign-in to obtain the authoritative profile.
     // Keep it as a first-class migration action rather than falling through to
     // a 404 on every page load.
     if (action === 'me') return res.status(200).json({ profile: { ...account.profile, ocbr: 88 } });
+    if (action === 'social-status' || action === 'social-update') {
+      const target = String(body.target ?? '');
+      if (!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(target) || target === account.id) fail(400, 'Choose another registered player.');
+      const pair = `and(user_id.eq.${account.id},target_id.eq.${target}),and(user_id.eq.${target},target_id.eq.${account.id})`;
+      const links = await client.from('cb_social_links').select('*').or(pair);
+      if (links.error) fail(500, links.error.message);
+      const rows = links.data ?? [];
+      if (action === 'social-status') return res.status(200).json({
+        blocked: rows.some((r: any) => r.kind === 'block'),
+        blockedByMe: rows.some((r: any) => r.kind === 'block' && r.user_id === account.id),
+        following: rows.some((r: any) => r.kind === 'follow' && r.user_id === account.id),
+        friendship: rows.filter((r: any) => r.kind === 'friend').map((r: any) => r.status === 'accepted' ? 'accepted' : r.user_id === account.id ? 'sent' : 'received')[0] ?? null,
+      });
+      const op = String(body.op ?? '');
+      const person = await client.from('cb_profiles').select('user_id').eq('user_id', target).maybeSingle();
+      if (person.error) fail(500, person.error.message);
+      if (!person.data) fail(404, 'This player is unavailable.');
+      if (!['block', 'unblock'].includes(op) && rows.some((r: any) => r.kind === 'block')) fail(403, 'This player is unavailable.');
+      let update: any;
+      if (op === 'unfollow' || op === 'unblock') update = await client.from('cb_social_links').delete().eq('user_id', account.id).eq('target_id', target).eq('kind', op === 'unfollow' ? 'follow' : 'block');
+      else if (op === 'remove-friend') update = await client.from('cb_social_links').delete().eq('kind', 'friend').or(pair);
+      else if (op === 'accept') update = await client.from('cb_social_links').update({ status: 'accepted' }).eq('user_id', target).eq('target_id', account.id).eq('kind', 'friend').eq('status', 'pending');
+      else if (['follow', 'friend', 'block'].includes(op)) {
+        const exists = rows.some((r: any) => r.kind === op && (op === 'friend' || r.user_id === account.id));
+        if (!exists) update = await client.from('cb_social_links').insert({ user_id: account.id, target_id: target, kind: op, status: op === 'friend' ? 'pending' : 'active' });
+        if (update?.error && update.error.code !== '23505') fail(500, update.error.message);
+        if (op === 'block') update = await client.from('cb_social_links').delete().in('kind', ['friend', 'follow']).or(pair);
+      } else fail(400, 'Unknown social action.');
+      if (update?.error && update.error.code !== '23505') fail(500, update.error.message);
+      return res.status(200).json({ ok: true });
+    }
     if (action === 'search-players') {
       const query = String(body.query ?? '').trim().replace(/^@/, '').toLowerCase(); if (query.length < 2) return res.status(200).json({ players: [] });
       const r = await client.from('cb_profiles').select('user_id,username,display_name,avatar_url,country_code,cbr,gold_points,wins,losses,win_streak').neq('user_id', account.id).or(`username.ilike.%${query}%,display_name.ilike.%${query}%`).limit(10);
@@ -97,9 +130,10 @@ export default async function handler(req: Req, res: Res) {
       const control = String(body.control ?? ''), clock = tc(control), target = typeof body.target === 'string' ? body.target : null, publicChallenge = body.publicChallenge === true;
       if (publicChallenge && target) fail(400, 'Choose one challenge audience.');
       const active = await client.from('cb_matches').select('id').eq('status', 'active').or(`white_id.eq.${account.id},black_id.eq.${account.id}`).limit(1); if (active.error) fail(500, active.error.message); if (active.data?.length) fail(409, 'Finish your current match first.');
-      const match = one<any>(await client.from('cb_matches').insert({ host_id: account.id, white_id: account.id, invite_to: target, code: code(), control, white_ms: clock.seconds * 1000, black_ms: clock.seconds * 1000, last_tick: new Date().toISOString(), white_cbr: account.profile.cbr }).select('*').single());
+      const match = one<any>(await client.from('cb_matches').insert({ host_id: account.id, white_id: account.id, invite_to: target, status: 'waiting', code: code(), control, white_ms: clock.seconds * 1000, black_ms: clock.seconds * 1000, last_tick: new Date().toISOString(), white_cbr: account.profile.cbr }).select('*').single());
       if (publicChallenge) { const event = await client.from('cb_feed').insert({ user_id: account.id, kind: 'challenge', display_name: account.profile.display_name, content: `is looking for a ${clock.group.toLowerCase()} challenge · ${clock.label}.`, challenge_match_id: match.id, expires_at: new Date(now() + 120000).toISOString() }); if (event.error) { await client.from('cb_matches').delete().eq('id', match.id); fail(500, event.error.message); } }
-      return res.status(200).json({ match: await matchView(client, match) });
+      console.info('arena.room-created', { matchId: match.id, publicChallenge });
+      return res.status(200).json({ match: await matchView(client, match), challengePublished: publicChallenge });
     }
     if (action === 'accept-challenge') {
       const id = String(body.id ?? ''), match = await readMatch(client, id); if (match.white_id === account.id) fail(400, 'You cannot accept your own challenge.');
@@ -149,5 +183,5 @@ export default async function handler(req: Req, res: Res) {
     }
     if (action === 'react') { const match = await readMatch(client, String(body.id ?? '')); if (!participant(match, account.id)) fail(403, 'This room is private.'); const reactions = Array.isArray(match.reactions) ? match.reactions : []; reactions.push({ emote: String(body.emote ?? '').slice(0, 8), at: now() }); const changed = one<any>(await client.from('cb_matches').update({ reactions, version: Number(match.version) + 1 }).eq('id', match.id).eq('version', match.version).select('*').maybeSingle()); return res.status(200).json({ match: await matchView(client, changed) }); }
     fail(404, 'This game action is not available during the migration.');
-  } catch (error) { const known = error instanceof ApiError ? error : new ApiError(500, 'The game service could not complete this request. Please try again.'); if (!(error instanceof ApiError)) console.error('Chess Burger arena error', error); return res.status(known.status).json({ error: known.message }); }
+  } catch (error) { const known = error instanceof ApiError ? error : new ApiError(500, 'The game service could not complete this request. Please try again.'); console.error('arena.failed', { action, status: known.status, message: known.message }); return res.status(known.status).json({ error: known.message }); }
 }
