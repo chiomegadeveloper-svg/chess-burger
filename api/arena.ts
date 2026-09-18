@@ -83,6 +83,18 @@ async function publicFeed(client: Db) {
   const people = await playerMap(client, (list.data ?? []).map((e: any) => e.user_id));
   return { events: (list.data ?? []).filter((e: any) => e.kind !== 'challenge' || activeChallenges.has(e.challenge_match_id)).map((e: any) => ({ id: e.kind === 'challenge' && e.challenge_match_id ? `challenge:${e.challenge_match_id}` : e.id, user_id: e.user_id, kind: e.kind, display_name: e.kind === 'announcement' ? 'Chess Burger' : e.display_name, content: e.content, image_url: e.image_url ?? '', expires_at: e.expires_at, cbr_delta: e.cbr_delta ?? 0, gold_delta: e.gold_delta ?? 0, heart_count: e.heart_count ?? 0, created_at: e.created_at, avatar_url: e.kind === 'announcement' ? '/cburger_logo.png' : people.get(e.user_id)?.avatar_url ?? '', cbr: people.get(e.user_id)?.cbr ?? 88 })) };
 }
+async function publicRanks(client: Db) {
+  const r = await client.from('cb_profiles').select('user_id,username,display_name,avatar_url,country_code,cbr,gold_points,wins,losses,win_streak').order('cbr', { ascending: false }).order('wins', { ascending: false }).order('user_id', { ascending: true }).limit(10);
+  if (r.error) fail(500, r.error.message);
+  return { players: r.data ?? [] };
+}
+async function playerRank(client: Db, profile: any): Promise<number> {
+  const cbr = Number(profile.cbr), wins = Number(profile.wins);
+  const ahead = `cbr.gt.${cbr},and(cbr.eq.${cbr},wins.gt.${wins}),and(cbr.eq.${cbr},wins.eq.${wins},user_id.lt.${profile.user_id})`;
+  const r = await client.from('cb_profiles').select('user_id', { count: 'exact', head: true }).or(ahead);
+  if (r.error) fail(500, r.error.message);
+  return (r.count ?? 0) + 1;
+}
 
 export default async function handler(req: Req, res: Res) {
   res.setHeader('Cache-Control', 'no-store');
@@ -91,12 +103,12 @@ export default async function handler(req: Req, res: Res) {
     const client = db(), body = (req.body && typeof req.body === 'object' ? req.body : {}) as Record<string, any>;
     action = String(req.method === 'GET' ? req.query?.action ?? '' : body.action ?? '');
     console.info('arena.request', { action, method: req.method });
-    if (req.method === 'GET') { if (action === 'feed') return res.status(200).json(await publicFeed(client)); fail(404, 'Unknown game request.'); }
+    if (req.method === 'GET') { if (action === 'feed') return res.status(200).json(await publicFeed(client)); if (action === 'ranks') return res.status(200).json(await publicRanks(client)); fail(404, 'Unknown game request.'); }
     const account = await signedIn(client, req);
     // The app refreshes this on sign-in to obtain the authoritative profile.
     // Keep it as a first-class migration action rather than falling through to
     // a 404 on every page load.
-    if (action === 'me') return res.status(200).json({ profile: { ...account.profile, ocbr: 88 } });
+    if (action === 'me') return res.status(200).json({ profile: { ...account.profile, ocbr: 88 }, rank: await playerRank(client, account.profile) });
     if (action === 'social-status' || action === 'social-update') {
       const target = String(body.target ?? '');
       if (!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(target) || target === account.id) fail(400, 'Choose another registered player.');

@@ -71,3 +71,38 @@ test('recipient decline cancels the waiting invitation and expires its feed entr
   assert.ok(r.queries.some(q => q.path.endsWith('/cb_matches') && q.method === 'PATCH' && q.query.includes('invite_to=eq.' + uid)));
   assert.ok(r.writes[1].expires_at);
 });
+
+test('rankings return Supabase CBR order and the signed-in player position', async () => {
+  const oldFetch = globalThis.fetch, oldUrl = process.env.NEXT_PUBLIC_SUPABASE_URL, oldKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://test.supabase.co';
+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-server-key';
+  const top = [{ ...profile, cbr: 130, wins: 3 }, { ...profile, user_id: '33333333-3333-4333-8333-333333333333', cbr: 88, wins: 2 }];
+  globalThis.fetch = async (input) => {
+    const url = new URL(typeof input === 'string' ? input : input.url);
+    if (url.pathname === '/auth/v1/user') return Response.json({ id: uid });
+    if (url.pathname.endsWith('/cb_profiles')) {
+      if (url.searchParams.get('head') === 'true' || url.searchParams.has('or')) return new Response(null, { headers: { 'content-range': '0-0/2' } });
+      if (url.searchParams.get('user_id')?.startsWith('eq.')) return Response.json({ ...profile, wins: 1 });
+      assert.equal(url.searchParams.get('order'), 'cbr.desc,wins.desc,user_id.asc');
+      return Response.json(top);
+    }
+    throw Error('Unexpected request ' + url.pathname);
+  };
+  const invoke = async (method, action) => {
+    const res = { code: 200, body: null, setHeader() {}, status(code) { this.code = code; return this; }, json(body) { this.body = body; } };
+    await handler({ method, query: { action }, body: { action }, headers: { authorization: 'Bearer test-user-token' } }, res);
+    return res;
+  };
+  try {
+    const ranks = await invoke('GET', 'ranks');
+    assert.equal(ranks.code, 200);
+    assert.deepEqual(ranks.body.players, top);
+    const me = await invoke('POST', 'me');
+    assert.equal(me.code, 200);
+    assert.equal(me.body.rank, 3);
+  } finally {
+    globalThis.fetch = oldFetch;
+    if (oldUrl === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL; else process.env.NEXT_PUBLIC_SUPABASE_URL = oldUrl;
+    if (oldKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY; else process.env.SUPABASE_SERVICE_ROLE_KEY = oldKey;
+  }
+});
