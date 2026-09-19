@@ -607,6 +607,10 @@ function AppPage() {
           setTarget(p);
           setTab("online");
         }}
+        onOpenProfile={(userId) => {
+          setViewedUserId(userId);
+          setTab("public-profile");
+        }}
         onClaimed={() => void refreshProfile()}
       />
     );
