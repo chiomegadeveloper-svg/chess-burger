@@ -16,7 +16,7 @@ alter table public.cb_gps_presence enable row level security;
 revoke all on public.cb_gps_presence from anon, authenticated;
 
 create or replace function public.cb_map_stats() returns jsonb
-language sql stable security definer set search_path = public as $
+language sql stable security definer set search_path = public as $function$
   with recent as (
     select p.user_id, p.display_name, p.cbr
     from cb_gps_presence g join cb_profiles p using (user_id)
@@ -30,7 +30,7 @@ language sql stable security definer set search_path = public as $
     'highest_online', (select to_jsonb(r) from recent r order by cbr desc, user_id limit 1),
     'updated_at', now()
   );
-$$;
+$function$;
 grant execute on function public.cb_map_stats() to anon, authenticated;
 
 commit;
