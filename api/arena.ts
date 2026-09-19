@@ -176,6 +176,17 @@ export default async function handler(req: Req, res: Res) {
     // Keep it as a first-class migration action rather than falling through to
     // a 404 on every page load.
     if (action === 'me') return res.status(200).json({ profile: { ...account.profile, ocbr: Number(account.profile.ocbr ?? 88) }, rank: await playerRank(client, account.profile) });
+    if (action === 'public-profile') {
+      const target = String(body.user_id ?? '');
+      if (!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(target)) fail(400, 'Choose a registered player.');
+      if (target !== account.id) {
+        const blocked = await client.from('cb_social_links').select('user_id').eq('kind', 'block').or(`and(user_id.eq.${account.id},target_id.eq.${target}),and(user_id.eq.${target},target_id.eq.${account.id})`).limit(1);
+        if (blocked.error) fail(500, blocked.error.message);
+        if (blocked.data?.length) fail(403, 'This profile is unavailable.');
+      }
+      const profile = one<any>(await client.from('cb_profiles').select('*').eq('user_id', target).maybeSingle());
+      return res.status(200).json({ profile: { ...profile, ocbr: Number(profile.ocbr ?? 88) }, rank: await playerRank(client, profile) });
+    }
     if (action === 'presence') return res.status(200).json(await savePresence(client, account, body));
     if (action === 'nearby') return res.status(200).json(await nearbyPlayers(client, account));
     if (action === 'territory-leaders') {

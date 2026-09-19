@@ -10,7 +10,6 @@ import {
   UserRound,
   Globe2,
   UsersRound,
-  Flag,
   ChevronRight,
   ArrowLeft,
   Radio,
@@ -66,13 +65,6 @@ const modes = [
     meta: "Pair devices",
     Icon: UsersRound,
     key: "pairing",
-  },
-  {
-    name: "Territory Invasion",
-    sub: "Claim a 200 m zone",
-    meta: "+10 CBR",
-    Icon: Flag,
-    key: "territory",
   },
 ];
 const navigation = [
@@ -449,9 +441,7 @@ function AppPage() {
     ? "play"
     : tab === "cms"
       ? "profile"
-      : tab === "territory"
-        ? "map"
-        : tab;
+      : tab;
   const back = (
     <button className="back-button" onClick={() => setTab("play")}>
       <ArrowLeft size={15} />
@@ -607,11 +597,10 @@ function AppPage() {
         />
       </>
     );
-  else if (tab === "map" || tab === "territory")
+  else if (tab === "map")
     content = (
       <NearbyMap
         {...gps}
-        territory={tab === "territory"}
         onInvite={(p) => {
           setTarget(p);
           setTab("online");

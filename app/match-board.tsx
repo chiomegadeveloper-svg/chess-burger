@@ -105,10 +105,11 @@ export default function MatchBoard({
     [reactionUntil, setReactionUntil] = useState(0),
     [reactionError, setReactionError] = useState(""),
     [dragFrom, setDragFrom] = useState<Square | null>(null),
-    [boardTheme, setBoardTheme] = useState<"slate" | "classic" | "wood" | "premium-walnut" | "meta-blue">(() => {
+    [boardTheme, setBoardTheme] = useState<"slate" | "classic" | "wood" | "bubble-gum" | "meta-blue">(() => {
       if (typeof window === "undefined") return "slate";
       const saved = window.localStorage.getItem("cb-board-theme");
-      return saved === "classic" || saved === "wood" || saved === "premium-walnut" || saved === "meta-blue" ? saved : "slate";
+      if (saved === "premium-walnut") return "bubble-gum";
+      return saved === "classic" || saved === "wood" || saved === "bubble-gum" || saved === "meta-blue" ? saved : "slate";
     });
   const dragSource = useRef<Square | null>(null),
     suppressClick = useRef(false);
@@ -197,7 +198,7 @@ export default function MatchBoard({
                   : "Black to move"
                 : "Your move"
               : "Waiting for opponent";
-  function chooseBoardTheme(theme: "slate" | "classic" | "wood" | "premium-walnut" | "meta-blue") {
+  function chooseBoardTheme(theme: "slate" | "classic" | "wood" | "bubble-gum" | "meta-blue") {
     setBoardTheme(theme);
     window.localStorage.setItem("cb-board-theme", theme);
   }
@@ -369,7 +370,7 @@ export default function MatchBoard({
                     aria-label={`${square}${piece ? ` ${piece.color} ${piece.type}` : " empty"}`}
                     aria-disabled={!canPlay}
                   >
-                    <span className="piece">
+                    <span className="piece" data-piece={piece ? piece.color + piece.type : undefined}>
                       {piece
                         ? symbols[piece.color + piece.type]
                         : legal.includes(square)
@@ -436,7 +437,7 @@ export default function MatchBoard({
                 ["slate", "Chess Burger"],
                 ["classic", "Classic green"],
                 ["wood", "Warm wood"],
-                ["premium-walnut", "Kurama"],
+                ["bubble-gum", "Bubble Gum"],
                 ["meta-blue", "Meta Blue"],
               ].map(([theme, label]) => (
                 <button
@@ -445,7 +446,7 @@ export default function MatchBoard({
                   className={boardTheme === theme ? "active" : ""}
                   aria-pressed={boardTheme === theme}
                   onClick={() =>
-                    chooseBoardTheme(theme as "slate" | "classic" | "wood" | "premium-walnut" | "meta-blue")
+                    chooseBoardTheme(theme as "slate" | "classic" | "wood" | "bubble-gum" | "meta-blue")
                   }
                 >
                   <i className={"board-swatch " + theme} aria-hidden="true" />
