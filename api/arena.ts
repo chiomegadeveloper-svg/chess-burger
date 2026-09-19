@@ -18,11 +18,35 @@ const now = () => Date.now();
 const gpsCutoff = () => new Date(now() - 45_000).toISOString();
 
 async function publicRanks(client: Db) {
+  await reconcileAuthProfiles(client);
   const r = await client.from('cb_profiles')
     .select('user_id,username,display_name,avatar_url,country_code,cbr,gold_points,wins,losses,win_streak')
     .order('cbr', { ascending: false }).order('wins', { ascending: false }).order('user_id', { ascending: true }).limit(10);
   if (r.error) fail(500, r.error.message);
   return { players: r.data ?? [] };
+}
+
+function profileSeed(user: any) {
+  const meta = user.user_metadata ?? {};
+  const rawName = String(meta.full_name ?? meta.name ?? meta.display_name ?? user.email?.split('@')[0] ?? 'Chess Burger Player').trim();
+  const base = String(meta.username ?? user.email?.split('@')[0] ?? rawName).toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/^_+|_+$/g, '').slice(0, 15) || 'player';
+  const username = `${base.length < 3 ? `player_${base}` : base}_${String(user.id).replace(/-/g, '').slice(0, 6)}`.slice(0, 24);
+  const candidateAvatar = String(meta.avatar_url ?? meta.picture ?? '').trim();
+  return { user_id: user.id, username, display_name: rawName.slice(0, 60) || 'Chess Burger Player', avatar_url: /^https:\/\//i.test(candidateAvatar) ? candidateAvatar : '', country_code: /^[A-Z]{2}$/.test(String(meta.country_code ?? '')) ? meta.country_code : 'PH' };
+}
+
+async function reconcileAuthProfiles(client: Db) {
+  const [accounts, profiles] = await Promise.all([client.auth.admin.listUsers({ page: 1, perPage: 1000 }), client.from('cb_profiles').select('user_id')]);
+  if (accounts.error) fail(500, accounts.error.message);
+  if (profiles.error) fail(500, profiles.error.message);
+  const existing = new Set((profiles.data ?? []).map((row: any) => row.user_id));
+  const missing = (accounts.data?.users ?? []).filter((user: any) => !existing.has(user.id)).map(profileSeed);
+  if (missing.length) {
+    const inserted = await client.from('cb_profiles').upsert(missing, { onConflict: 'user_id', ignoreDuplicates: true });
+    if (inserted.error) fail(500, inserted.error.message);
+    console.info('arena.profiles-reconciled', { created: missing.length, totalAuthUsers: accounts.data?.total ?? accounts.data?.users?.length ?? 0 });
+  }
+  return Number(accounts.data?.total ?? accounts.data?.users?.length ?? 0);
 }
 async function playerRank(client: Db, profile: any) {
   const cbr = Number(profile.cbr ?? 0), wins = Number(profile.wins ?? 0);
@@ -38,14 +62,14 @@ function metres(aLat: number, aLng: number, bLat: number, bLng: number) {
 }
 async function savePresence(client: Db, account: any, body: Record<string, any>) {
   if (!body.gps) {
-    const removed = await client.from('cb_gps_presence').delete().eq('user_id', account.id);
-    if (removed.error) fail(500, 'GPS presence is not configured. Run the current GPS migration in Supabase.');
+    const removed = await client.from('cb_presence').update({ gps_enabled: false, seen_at: new Date().toISOString() }).eq('user_id', account.id);
+    if (removed.error) fail(500, 'GPS presence is temporarily unavailable.');
     return { ok: true };
   }
   const lat = Number(body.lat), lng = Number(body.lng), accuracy = Math.min(500, Math.max(0, Number(body.accuracy ?? 0)));
   if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) fail(400, 'The GPS reading is invalid.');
-  const saved = await client.from('cb_gps_presence').upsert({ user_id: account.id, lat, lng, accuracy, seen_at: new Date().toISOString() }, { onConflict: 'user_id' });
-  if (saved.error) fail(500, 'GPS presence is not configured. Run the current GPS migration in Supabase.');
+  const saved = await client.from('cb_presence').upsert({ user_id: account.id, latitude: lat, longitude: lng, accuracy, gps_enabled: true, seen_at: new Date().toISOString() }, { onConflict: 'user_id' });
+  if (saved.error) fail(500, 'GPS presence is temporarily unavailable.');
   const barangay = typeof body.barangay === 'string' ? body.barangay.trim().slice(0, 96) : '';
   const locality = typeof body.locality === 'string' ? body.locality.trim().slice(0, 96) : '';
   if (barangay && locality) {
@@ -55,10 +79,10 @@ async function savePresence(client: Db, account: any, body: Record<string, any>)
   return { ok: true };
 }
 async function nearbyPlayers(client: Db, account: any) {
-  const own = await client.from('cb_gps_presence').select('*').eq('user_id', account.id).gt('seen_at', gpsCutoff()).maybeSingle();
-  if (own.error) fail(500, 'GPS presence is not configured. Run the current GPS migration in Supabase.');
+  const own = await client.from('cb_presence').select('*').eq('user_id', account.id).eq('gps_enabled', true).gt('seen_at', gpsCutoff()).maybeSingle();
+  if (own.error) fail(500, 'GPS presence is temporarily unavailable.');
   if (!own.data) return { players: [], territories: [] };
-  const presence = await client.from('cb_gps_presence').select('*').neq('user_id', account.id).gt('seen_at', gpsCutoff());
+  const presence = await client.from('cb_presence').select('*').neq('user_id', account.id).eq('gps_enabled', true).gt('seen_at', gpsCutoff());
   if (presence.error) fail(500, presence.error.message);
   const active = await client.from('cb_matches').select('white_id,black_id').eq('status', 'active');
   if (active.error) fail(500, active.error.message);
@@ -67,10 +91,10 @@ async function nearbyPlayers(client: Db, account: any) {
   const people = await playerMap(client, available.map((p: any) => p.user_id));
   const players = available.map((p: any) => {
     const person = people.get(p.user_id);
-    const distance = metres(Number(own.data.lat), Number(own.data.lng), Number(p.lat), Number(p.lng));
-    return person ? { ...person, lat: Number(p.lat), lng: Number(p.lng), distance } : null;
+    const distance = metres(Number(own.data.latitude), Number(own.data.longitude), Number(p.latitude), Number(p.longitude));
+    return person ? { ...person, lat: Number(p.latitude), lng: Number(p.longitude), distance } : null;
   }).filter((p: any) => p && p.distance <= 10_000).sort((a: any, b: any) => a.distance - b.distance);
-  const zoneRows = await client.from('cb_territories').select('id,user_id,lat,lng').gte('lat', Number(own.data.lat) - .15).lte('lat', Number(own.data.lat) + .15).gte('lng', Number(own.data.lng) - .25).lte('lng', Number(own.data.lng) + .25).limit(100);
+  const zoneRows = await client.from('cb_territories').select('id,user_id,lat,lng').gte('lat', Number(own.data.latitude) - .15).lte('lat', Number(own.data.latitude) + .15).gte('lng', Number(own.data.longitude) - .25).lte('lng', Number(own.data.longitude) + .25).limit(100);
   if (zoneRows.error) return { players, territories: [] };
   const owners = await playerMap(client, (zoneRows.data ?? []).map((z: any) => z.user_id));
   const territories = (zoneRows.data ?? []).map((z: any) => ({ ...z, display_name: owners.get(z.user_id)?.display_name ?? 'Player' }));
@@ -97,7 +121,13 @@ async function signedIn(client: Db, req: Req) {
   const account = await client.auth.getUser(token);
   const user = account.data.user;
   if (account.error || !user) fail(401, 'Please sign in again.');
-  const profile = one<any>(await client.from('cb_profiles').select('*').eq('user_id', user.id).maybeSingle());
+  let profileResult = await client.from('cb_profiles').select('*').eq('user_id', user.id).maybeSingle();
+  if (!profileResult.error && !profileResult.data) {
+    const created = await client.from('cb_profiles').upsert(profileSeed(user), { onConflict: 'user_id', ignoreDuplicates: true });
+    if (created.error) fail(500, created.error.message);
+    profileResult = await client.from('cb_profiles').select('*').eq('user_id', user.id).maybeSingle();
+  }
+  const profile = one<any>(profileResult);
   return { id: user.id, profile };
 }
 async function playerMap(client: Db, ids: string[]) {
@@ -198,14 +228,18 @@ export default async function handler(req: Req, res: Res) {
     // a 404 on every page load.
     if (action === 'me') return res.status(200).json({ profile: { ...account.profile, ocbr: Number(account.profile.ocbr ?? 88) }, rank: await playerRank(client, account.profile) });
     if (action === 'map-stats') {
-      const [stats, authUsers] = await Promise.all([
-        client.rpc('cb_map_stats'),
-        client.auth.admin.listUsers({ page: 1, perPage: 1000 }),
+      const registered = await reconcileAuthProfiles(client);
+      const cutoff = gpsCutoff();
+      const [live, matches, gps, leaders] = await Promise.all([
+        client.from('cb_live_presence').select('user_id', { count: 'exact', head: true }).gt('seen_at', cutoff),
+        client.from('cb_matches').select('id', { count: 'exact', head: true }).eq('status', 'active'),
+        client.from('cb_presence').select('user_id', { count: 'exact', head: true }).eq('gps_enabled', true).gt('seen_at', cutoff),
+        client.from('cb_live_presence').select('user_id,cbr').gt('seen_at', cutoff).order('cbr', { ascending: false }).limit(1),
       ]);
-      if (stats.error) fail(500, stats.error.message);
-      if (authUsers.error) fail(500, authUsers.error.message);
-      const registered = Number(authUsers.data?.total ?? authUsers.data?.users?.length ?? 0);
-      return res.status(200).json({ ...(stats.data ?? {}), registered_users: registered });
+      if (live.error || matches.error || gps.error || leaders.error) fail(500, live.error?.message ?? matches.error?.message ?? gps.error?.message ?? leaders.error?.message ?? 'Unable to load activity totals.');
+      const leader = leaders.data?.[0];
+      const leaderProfile = leader ? (await playerMap(client, [leader.user_id])).get(leader.user_id) : null;
+      return res.status(200).json({ online_users: live.count ?? 0, registered_users: registered, active_matches: matches.count ?? 0, gps_online: gps.count ?? 0, highest_online: leaderProfile ? { user_id: leaderProfile.user_id, display_name: leaderProfile.display_name, cbr: Number(leader.cbr) } : null, updated_at: new Date().toISOString() });
     }
     if (action === 'social-presence') return res.status(200).json({ ok: true });
     if (action === 'social-counts') {
@@ -244,10 +278,10 @@ export default async function handler(req: Req, res: Res) {
       return res.status(200).json({ scope, label, players: ranked.data ?? [] });
     }
     if (action === 'claim') {
-      const presence = await client.from('cb_gps_presence').select('lat,lng,accuracy').eq('user_id', account.id).gt('seen_at', new Date(now() - 30_000).toISOString()).maybeSingle();
-      if (presence.error) fail(500, 'GPS presence is not configured. Run the current GPS migration in Supabase.');
+      const presence = await client.from('cb_presence').select('latitude,longitude,accuracy').eq('user_id', account.id).eq('gps_enabled', true).gt('seen_at', new Date(now() - 30_000).toISOString()).maybeSingle();
+      if (presence.error) fail(500, 'GPS presence is temporarily unavailable.');
       if (!presence.data || Number(presence.data.accuracy) > 100) fail(409, 'Enable GPS and wait for accuracy within 100 m.');
-      const claimed = await client.rpc('cb_claim_territory', { p_user_id: account.id, p_lat: Number(presence.data.lat), p_lng: Number(presence.data.lng) });
+      const claimed = await client.rpc('cb_claim_territory', { p_user_id: account.id, p_lat: Number(presence.data.latitude), p_lng: Number(presence.data.longitude) });
       if (claimed.error) fail(claimed.error.message.includes('gold') ? 409 : 500, claimed.error.message);
       return res.status(200).json({ ok: true, gold_cost: 48, territory: claimed.data });
     }
