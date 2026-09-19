@@ -372,7 +372,9 @@ export default function MatchBoard({
                   >
                     <span className="piece" data-piece={piece ? piece.color + piece.type : undefined}>
                       {piece
-                        ? symbols[piece.color + piece.type]
+                        ? boardTheme === "bubble-gum"
+                          ? <img className="bubble-gum-piece" src={`/boards/bubble-gum/${piece.color}${piece.type}.png`} alt="" draggable={false}/>
+                          : symbols[piece.color + piece.type]
                         : legal.includes(square)
                           ? "·"
                           : ""}
