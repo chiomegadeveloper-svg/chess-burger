@@ -12,7 +12,7 @@ function list(value: unknown, limit: number) {
 }
 function view(row: Record<string, unknown> | null) {
   if (!row) return null;
-  return { ...row, ocbr: 88, featured_photos: list(row.featured_photos, 4), featured_badges: list(row.featured_badges, 5) };
+  return { ...row, ocbr: Number(row.ocbr ?? 88), gold_points: Number(row.gold_points ?? 0), wins: Number(row.wins ?? 0), losses: Number(row.losses ?? 0), win_streak: Number(row.win_streak ?? 0), featured_photos: list(row.featured_photos, 4), featured_badges: list(row.featured_badges, 5) };
 }
 
 export default async function handler(req: Req, res: Res) {
@@ -30,7 +30,15 @@ export default async function handler(req: Req, res: Res) {
     if (authError || !user) return res.status(401).json({ error: 'Your login expired. Sign in again.' });
     const existing = await client.from('cb_profiles').select('*').eq('user_id', user.id).maybeSingle();
     if (existing.error) throw existing.error;
-    if (req.method === 'GET') return res.status(200).json({ profile: view(existing.data) });
+    if (req.method === 'GET') {
+      let row = existing.data;
+      const providerAvatar = cleanUrl(user.user_metadata?.avatar_url ?? user.user_metadata?.picture);
+      if (row && !String(row.avatar_url ?? '').trim() && providerAvatar) {
+        const recovered = await client.from('cb_profiles').update({ avatar_url: providerAvatar }).eq('user_id', user.id).select('*').single();
+        if (!recovered.error) row = recovered.data;
+      }
+      return res.status(200).json({ profile: view(row) });
+    }
 
     const input = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {};
     if (JSON.stringify(input).length > 30000) return res.status(413).json({ error: 'Profile is too large.' });
