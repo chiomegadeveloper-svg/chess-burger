@@ -464,6 +464,10 @@ function AppPage() {
     content = (
       <CommunityFeed
         onMatch={openMatch}
+        onChallenge={(player) => {
+          setTarget(player);
+          setTab("challenge");
+        }}
         onOpenProfile={(userId) => {
           setViewedUserId(userId);
           setTab("public-profile");
