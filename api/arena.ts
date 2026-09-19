@@ -46,6 +46,12 @@ async function savePresence(client: Db, account: any, body: Record<string, any>)
   if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) fail(400, 'The GPS reading is invalid.');
   const saved = await client.from('cb_gps_presence').upsert({ user_id: account.id, lat, lng, accuracy, seen_at: new Date().toISOString() }, { onConflict: 'user_id' });
   if (saved.error) fail(500, 'GPS presence is not configured. Run the current GPS migration in Supabase.');
+  const barangay = typeof body.barangay === 'string' ? body.barangay.trim().slice(0, 96) : '';
+  const locality = typeof body.locality === 'string' ? body.locality.trim().slice(0, 96) : '';
+  if (barangay && locality) {
+    const region = await client.from('cb_player_regions').upsert({ user_id: account.id, barangay, locality, country_code: account.profile.country_code || 'PH', updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
+    if (region.error) console.warn('arena.region-unavailable', { userId: account.id });
+  }
   return { ok: true };
 }
 async function nearbyPlayers(client: Db, account: any) {
@@ -54,13 +60,21 @@ async function nearbyPlayers(client: Db, account: any) {
   if (!own.data) return { players: [], territories: [] };
   const presence = await client.from('cb_gps_presence').select('*').neq('user_id', account.id).gt('seen_at', gpsCutoff());
   if (presence.error) fail(500, presence.error.message);
-  const people = await playerMap(client, (presence.data ?? []).map((p: any) => p.user_id));
-  const players = (presence.data ?? []).map((p: any) => {
+  const active = await client.from('cb_matches').select('white_id,black_id').eq('status', 'active');
+  if (active.error) fail(500, active.error.message);
+  const playing = new Set((active.data ?? []).flatMap((m: any) => [m.white_id, m.black_id]).filter(Boolean));
+  const available = (presence.data ?? []).filter((p: any) => !playing.has(p.user_id));
+  const people = await playerMap(client, available.map((p: any) => p.user_id));
+  const players = available.map((p: any) => {
     const person = people.get(p.user_id);
     const distance = metres(Number(own.data.lat), Number(own.data.lng), Number(p.lat), Number(p.lng));
     return person ? { ...person, lat: Number(p.lat), lng: Number(p.lng), distance } : null;
   }).filter((p: any) => p && p.distance <= 10_000).sort((a: any, b: any) => a.distance - b.distance);
-  return { players, territories: [] };
+  const zoneRows = await client.from('cb_territories').select('id,user_id,lat,lng').gte('lat', Number(own.data.lat) - .15).lte('lat', Number(own.data.lat) + .15).gte('lng', Number(own.data.lng) - .25).lte('lng', Number(own.data.lng) + .25).limit(100);
+  if (zoneRows.error) return { players, territories: [] };
+  const owners = await playerMap(client, (zoneRows.data ?? []).map((z: any) => z.user_id));
+  const territories = (zoneRows.data ?? []).map((z: any) => ({ ...z, display_name: owners.get(z.user_id)?.display_name ?? 'Player' }));
+  return { players, territories };
 }
 const tc = (id: string) => TIME[id] ?? fail(400, 'Choose a valid time control.');
 const code = () => Array.from(crypto.getRandomValues(new Uint8Array(8)), n => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[n % 32] ?? 'A').join('');
@@ -116,6 +130,20 @@ async function settle(client: Db, match: any) {
   const rated = await client.from('cb_matches').update({ rating_applied: true }).eq('id', match.id).eq('rating_applied', false);
   if (rated.error) fail(500, rated.error.message);
 }
+async function finishExpiredMatch(client: Db, match: any) {
+  if (!match || match.status !== 'active') return match;
+  const game = new Chess();
+  if (match.pgn) game.loadPgn(match.pgn);
+  const whiteTurn = game.turn() === 'w';
+  const remaining = Number(whiteTurn ? match.white_ms : match.black_ms) - Math.max(0, now() - Date.parse(match.last_tick));
+  if (remaining > 0) return match;
+  const patch = { status: 'finished', result: whiteTurn ? 'black' : 'white', version: Number(match.version) + 1, last_tick: new Date().toISOString(), [whiteTurn ? 'white_ms' : 'black_ms']: 0 };
+  const changed = await client.from('cb_matches').update(patch).eq('id', match.id).eq('version', match.version).eq('status', 'active').select('*').maybeSingle();
+  if (changed.error) fail(500, changed.error.message);
+  const current = changed.data ?? await readMatch(client, match.id);
+  await settle(client, current);
+  return current;
+}
 async function publicFeed(client: Db) {
   const list = await client.from('cb_feed').select('*').or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`).order('created_at', { ascending: false }).limit(70);
   if (list.error) fail(500, list.error.message);
@@ -150,8 +178,26 @@ export default async function handler(req: Req, res: Res) {
     if (action === 'presence') return res.status(200).json(await savePresence(client, account, body));
     if (action === 'nearby') return res.status(200).json(await nearbyPlayers(client, account));
     if (action === 'territory-leaders') {
-      const ranked = await publicRanks(client);
-      return res.status(200).json({ scope: body.scope === 'barangay' ? 'barangay' : 'city', label: body.scope === 'barangay' ? 'Nearby barangay' : 'Nearby city', players: ranked.players });
+      const scope = body.scope === 'barangay' ? 'barangay' : body.scope === 'city' ? 'city' : null;
+      if (!scope) fail(400, 'Choose a territory ranking.');
+      const own = await client.from('cb_player_regions').select('barangay,locality').eq('user_id', account.id).maybeSingle();
+      if (own.error) fail(500, 'Territory regions are not configured. Run the current GPS migration in Supabase.');
+      if (!own.data) fail(409, 'Keep GPS on briefly so Chess Burger can identify your territory.');
+      const field = scope === 'city' ? 'locality' : 'barangay', label = own.data[field];
+      const regions = await client.from('cb_player_regions').select('user_id').eq(field, label).limit(250);
+      if (regions.error) fail(500, regions.error.message);
+      const ids = (regions.data ?? []).map((r: any) => r.user_id);
+      const ranked = ids.length ? await client.from('cb_profiles').select('user_id,username,display_name,avatar_url,country_code,cbr,gold_points,wins,losses,win_streak').in('user_id', ids).order('cbr', { ascending: false }).order('wins', { ascending: false }).limit(10) : { data: [], error: null };
+      if (ranked.error) fail(500, ranked.error.message);
+      return res.status(200).json({ scope, label, players: ranked.data ?? [] });
+    }
+    if (action === 'claim') {
+      const presence = await client.from('cb_gps_presence').select('lat,lng,accuracy').eq('user_id', account.id).gt('seen_at', new Date(now() - 30_000).toISOString()).maybeSingle();
+      if (presence.error) fail(500, 'GPS presence is not configured. Run the current GPS migration in Supabase.');
+      if (!presence.data || Number(presence.data.accuracy) > 100) fail(409, 'Enable GPS and wait for accuracy within 100 m.');
+      const claimed = await client.rpc('cb_claim_territory', { p_user_id: account.id, p_lat: Number(presence.data.lat), p_lng: Number(presence.data.lng) });
+      if (claimed.error) fail(claimed.error.message.includes('gold') ? 409 : 500, claimed.error.message);
+      return res.status(200).json({ ok: true, gold_cost: 48, territory: claimed.data });
     }
     if (action === 'social-status' || action === 'social-update') {
       const target = String(body.target ?? '');
@@ -233,8 +279,10 @@ export default async function handler(req: Req, res: Res) {
         client.from('cb_matches').select('id,host_id,control,code,created_at').eq('status', 'waiting').eq('invite_to', account.id).gt('created_at', new Date(now() - 120000).toISOString()).order('created_at', { ascending: false }).limit(10),
       ]);
       if (r.error || pending.error) fail(500, r.error?.message ?? pending.error?.message ?? 'Unable to load match state.');
+      const current = r.data ? await finishExpiredMatch(client, r.data) : null;
+      const activeMatch = current?.status === 'active' ? current : null;
       const names = await playerMap(client, (pending.data ?? []).map((invite: any) => invite.host_id));
-      return res.status(200).json({ match: r.data ? await matchView(client, r.data) : null, completed: null, invites: (pending.data ?? []).map((invite: any) => ({ ...invite, host_name: names.get(invite.host_id)?.display_name ?? 'A player' })), fair_play: { total_aborts: 0, cooldown_until: 0 } });
+      return res.status(200).json({ match: activeMatch ? await matchView(client, activeMatch) : null, completed: current?.status === 'finished' ? await matchView(client, current) : null, invites: (pending.data ?? []).map((invite: any) => ({ ...invite, host_name: names.get(invite.host_id)?.display_name ?? 'A player' })), fair_play: { total_aborts: 0, cooldown_until: 0 } });
     }
     if (action === 'cancel-room' || action === 'decline-room') {
       const id = String(body.id ?? '');
