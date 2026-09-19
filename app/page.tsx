@@ -91,7 +91,7 @@ function savedSharedBoard(userId: string) {
     return match?.white_id === userId && match.status === "active" ? match.id : "";
   } catch { return ""; }
 }
-export default function Page() {
+function ChessBurgerApp() {
   const [tab, setTab] = useState("profile"),
     [profile, setProfile] = useState<PlayerProfile | null>(null),
     [replayGame, setReplayGame] = useState<SavedGame | null>(null),
@@ -868,4 +868,17 @@ export default function Page() {
       <Toaster theme="light" position="top-center" richColors closeButton />
     </main>
   );
+}
+
+export default function Page() {
+  const [maintenance, setMaintenance] = useState<{ enabled: boolean; message: string } | null>(null);
+  useEffect(() => {
+    let active = true;
+    void fetch('/api/maintenance', { cache: 'no-store' }).then(r => r.ok ? r.json() : { enabled: false }).then(data => {
+      if (active) setMaintenance({ enabled: data.enabled === true, message: typeof data.message === 'string' ? data.message : '' });
+    }).catch(() => active && setMaintenance({ enabled: false, message: '' }));
+    return () => { active = false; };
+  }, []);
+  if (maintenance?.enabled) return <main className="maintenance-screen"><img src="/cburger_logo.png" alt="Chess Burger"/><p>CHESS BURGER</p><h1>Under maintenance</h1><span>{maintenance.message || 'We are restoring the arena. Please check back soon.'}</span></main>;
+  return <ChessBurgerApp />;
 }

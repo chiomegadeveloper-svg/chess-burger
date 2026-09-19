@@ -15,6 +15,10 @@ const TIME: Record<string, { seconds: number; increment: number; group: string; 
 class ApiError extends Error { constructor(public status: number, message: string) { super(message); } }
 const fail = (status: number, message: string): never => { throw new ApiError(status, message); };
 const now = () => Date.now();
+const distanceMeters = (a: { lat: number; lng: number }, b: { lat: number; lng: number }) => {
+  const rad = Math.PI / 180, dlat = (b.lat - a.lat) * rad, dlng = (b.lng - a.lng) * rad;
+  return 6371000 * 2 * Math.asin(Math.min(1, Math.sqrt(Math.sin(dlat / 2) ** 2 + Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dlng / 2) ** 2)));
+};
 const tc = (id: string) => TIME[id] ?? fail(400, 'Choose a valid time control.');
 const code = () => Array.from(crypto.getRandomValues(new Uint8Array(8)), n => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[n % 32] ?? 'A').join('');
 const one = <T>(r: { data: T | null; error: { message: string } | null }): T => { if (r.error) fail(500, r.error.message); if (!r.data) fail(404, 'This game is no longer available.'); return r.data as T; };
@@ -43,7 +47,7 @@ async function signedIn(client: Db, req: Req) {
 async function playerMap(client: Db, ids: string[]) {
   const unique = [...new Set(ids.filter(Boolean))];
   if (!unique.length) return new Map<string, any>();
-  const r = await client.from('cb_profiles').select('user_id,username,display_name,avatar_url,country_code,cbr,gold_points,wins,losses,win_streak').in('user_id', unique);
+  const r = await client.from('cb_profiles').select('user_id,username,display_name,avatar_url,country_code,cbr,ocbr,gold_points,wins,losses,win_streak').in('user_id', unique);
   if (r.error) fail(500, r.error.message);
   return new Map((r.data ?? []).map((p: any) => [p.user_id, p]));
 }
@@ -71,7 +75,7 @@ async function settle(client: Db, match: any) {
   if (rated.error) fail(500, rated.error.message);
 }
 async function publicFeed(client: Db) {
-  const list = await client.from('cb_feed').select('*').or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`).order('created_at', { ascending: false }).limit(70);
+  const list = await client.from('cb_feed').select('*').or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`).order('created_at', { ascending: false }).limit(250);
   if (list.error) fail(500, list.error.message);
   const challengeIds = (list.data ?? []).filter((e: any) => e.kind === 'challenge' && e.challenge_match_id).map((e: any) => e.challenge_match_id);
   const activeChallenges = new Set<string>();
@@ -84,7 +88,7 @@ async function publicFeed(client: Db) {
   return { events: (list.data ?? []).filter((e: any) => e.kind !== 'challenge' || activeChallenges.has(e.challenge_match_id)).map((e: any) => ({ id: e.kind === 'challenge' && e.challenge_match_id ? `challenge:${e.challenge_match_id}` : e.id, user_id: e.user_id, kind: e.kind, display_name: e.kind === 'announcement' ? 'Chess Burger' : e.display_name, content: e.content, image_url: e.image_url ?? '', expires_at: e.expires_at, cbr_delta: e.cbr_delta ?? 0, gold_delta: e.gold_delta ?? 0, heart_count: e.heart_count ?? 0, created_at: e.created_at, avatar_url: e.kind === 'announcement' ? '/cburger_logo.png' : people.get(e.user_id)?.avatar_url ?? '', cbr: people.get(e.user_id)?.cbr ?? 88 })) };
 }
 async function publicRanks(client: Db) {
-  const r = await client.from('cb_profiles').select('user_id,username,display_name,avatar_url,country_code,cbr,gold_points,wins,losses,win_streak').order('cbr', { ascending: false }).order('wins', { ascending: false }).order('user_id', { ascending: true }).limit(10);
+  const r = await client.from('cb_profiles').select('user_id,username,display_name,avatar_url,country_code,cbr,ocbr,gold_points,wins,losses,win_streak').order('cbr', { ascending: false }).order('wins', { ascending: false }).order('user_id', { ascending: true }).limit(10);
   if (r.error) fail(500, r.error.message);
   return { players: r.data ?? [] };
 }
@@ -94,6 +98,18 @@ async function playerRank(client: Db, profile: any): Promise<number> {
   const r = await client.from('cb_profiles').select('user_id', { count: 'exact', head: true }).or(ahead);
   if (r.error) fail(500, r.error.message);
   return (r.count ?? 0) + 1;
+}
+const gpsCutoff = () => new Date(now() - 45000).toISOString();
+async function nearbyPlayers(client: Db, id: string) {
+  const own = await client.from('cb_gps_presence').select('lat,lng').eq('user_id', id).gt('seen_at', gpsCutoff()).maybeSingle();
+  if (own.error) fail(500, own.error.message);
+  if (!own.data) return { players: [], territories: [] };
+  const { lat, lng } = own.data;
+  const r = await client.from('cb_gps_presence').select('user_id,lat,lng').neq('user_id', id).gt('seen_at', gpsCutoff()).gte('lat', lat - .1).lte('lat', lat + .1).gte('lng', lng - .2).lte('lng', lng + .2).limit(150);
+  if (r.error) fail(500, r.error.message);
+  const nearby = (r.data ?? []).map((p: any) => ({ ...p, distance: Math.round(distanceMeters({ lat, lng }, p)) })).filter((p: any) => p.distance <= 10000);
+  const people = await playerMap(client, nearby.map((p: any) => p.user_id));
+  return { players: nearby.filter((p: any) => people.has(p.user_id)).map((p: any) => ({ ...people.get(p.user_id), lat: Math.round(p.lat * 1000) / 1000, lng: Math.round(p.lng * 1000) / 1000, distance: p.distance })), territories: [] };
 }
 
 export default async function handler(req: Req, res: Res) {
@@ -108,7 +124,27 @@ export default async function handler(req: Req, res: Res) {
     // The app refreshes this on sign-in to obtain the authoritative profile.
     // Keep it as a first-class migration action rather than falling through to
     // a 404 on every page load.
-    if (action === 'me') return res.status(200).json({ profile: { ...account.profile, ocbr: 88 }, rank: await playerRank(client, account.profile) });
+    if (action === 'me') return res.status(200).json({ profile: account.profile, rank: await playerRank(client, account.profile) });
+    if (action === 'presence') {
+      if (body.gps !== true) {
+        const r = await client.from('cb_gps_presence').delete().eq('user_id', account.id);
+        if (r.error) fail(500, r.error.message);
+        return res.status(200).json({ ok: true });
+      }
+      const lat = Number(body.lat), lng = Number(body.lng), accuracy = Number(body.accuracy);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || !Number.isFinite(accuracy) || Math.abs(lat) > 90 || Math.abs(lng) > 180 || accuracy < 0 || accuracy > 500) fail(400, 'Wait for a reliable GPS reading.');
+      const r = await client.from('cb_gps_presence').upsert({ user_id: account.id, lat, lng, accuracy, seen_at: new Date().toISOString() }, { onConflict: 'user_id' });
+      if (r.error) fail(500, r.error.message);
+      return res.status(200).json({ ok: true });
+    }
+    if (action === 'nearby') return res.status(200).json(await nearbyPlayers(client, account.id));
+    if (action === 'public-profile') {
+      const id = String(body.user_id ?? '');
+      if (!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(id)) fail(400, 'Choose a player.');
+      const r = await client.from('cb_profiles').select('*').eq('user_id', id).maybeSingle();
+      const profile = one<any>(r);
+      return res.status(200).json({ profile, rank: await playerRank(client, profile) });
+    }
     if (action === 'social-status' || action === 'social-update') {
       const target = String(body.target ?? '');
       if (!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(target) || target === account.id) fail(400, 'Choose another registered player.');
@@ -142,7 +178,7 @@ export default async function handler(req: Req, res: Res) {
     }
     if (action === 'search-players') {
       const query = String(body.query ?? '').trim().replace(/^@/, '').toLowerCase(); if (query.length < 2) return res.status(200).json({ players: [] });
-      const r = await client.from('cb_profiles').select('user_id,username,display_name,avatar_url,country_code,cbr,gold_points,wins,losses,win_streak').neq('user_id', account.id).or(`username.ilike.%${query}%,display_name.ilike.%${query}%`).limit(10);
+      const r = await client.from('cb_profiles').select('user_id,username,display_name,avatar_url,country_code,cbr,ocbr,gold_points,wins,losses,win_streak').neq('user_id', account.id).or(`username.ilike.%${query}%,display_name.ilike.%${query}%`).limit(10);
       if (r.error) fail(500, r.error.message); return res.status(200).json({ players: r.data ?? [] });
     }
     if (action === 'room') {

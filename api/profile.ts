@@ -12,7 +12,7 @@ function list(value: unknown, limit: number) {
 }
 function view(row: Record<string, unknown> | null) {
   if (!row) return null;
-  return { ...row, ocbr: 88, featured_photos: list(row.featured_photos, 4), featured_badges: list(row.featured_badges, 5) };
+  return { ...row, featured_photos: list(row.featured_photos, 4), featured_badges: list(row.featured_badges, 5) };
 }
 
 export default async function handler(req: Req, res: Res) {

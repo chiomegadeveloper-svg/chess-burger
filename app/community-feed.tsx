@@ -26,7 +26,7 @@ export default function CommunityFeed({onOpenProfile,onMatch}:{onOpenProfile:(us
   if(seq!==request.current)return;
   const all=[...(localFeed.status==='fulfilled'?localFeed.value.events:[])].filter(e=>!e.expires_at||Date.parse(e.expires_at)>Date.now());
   setChallenges(all.filter(e=>e.kind==='challenge').sort((a,b)=>Date.parse(b.created_at)-Date.parse(a.created_at)));
-  let rows=all.filter(e=>e.kind!=='challenge').sort((a,b)=>Date.parse(b.created_at)-Date.parse(a.created_at)).slice(0,50);
+  let rows=all.filter(e=>e.kind!=='challenge').sort((a,b)=>Date.parse(b.created_at)-Date.parse(a.created_at)).slice(0,200);
   if(tab==='first_blood')rows=rows.filter(e=>e.kind==='first_blood');
   if(tab==='announcement')rows=rows.filter(e=>e.kind==='announcement');
   if(tab==='popular')rows.sort((a,b)=>b.heart_count-a.heart_count||Date.parse(b.created_at)-Date.parse(a.created_at));
@@ -58,7 +58,7 @@ export default function CommunityFeed({onOpenProfile,onMatch}:{onOpenProfile:(us
  function selectTab(next:FeedTab){request.current++;setEvents([]);setExpandedImage(null);setStatus("Loading activity…");setTab(next);setPage(1);}
  const pages=Math.max(1,Math.min(5,Math.ceil(total/PAGE_SIZE)));
  return <section className="feed-page">
-  <div className="page-heading"><h1>{tab==="announcement"?"Announcements":"Community feed"}</h1><span className="sample-label">{tab==="announcement"?"Official updates":"Latest 50"}</span></div>
+  <div className="page-heading"><h1>{tab==="announcement"?"Announcements":"Community feed"}</h1><span className="sample-label">{tab==="announcement"?"Official updates":"Latest 200"}</span></div>
   <div className="feed-tabs" role="tablist" aria-label="Community feed views">
    <button role="tab" aria-selected={tab==="recent"} onClick={()=>selectTab("recent")}>Recent feed</button>
    <button role="tab" aria-selected={tab==="popular"} onClick={()=>selectTab("popular")}>Popular</button>
