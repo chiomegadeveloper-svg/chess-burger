@@ -92,7 +92,7 @@ function savedSharedBoard(userId: string) {
     return match?.white_id === userId && match.status === "active" ? match.id : "";
   } catch { return ""; }
 }
-function Page() {
+function AppPage() {
   const [tab, setTab] = useState("profile"),
     [profile, setProfile] = useState<PlayerProfile | null>(null),
     [replayGame, setReplayGame] = useState<SavedGame | null>(null),
