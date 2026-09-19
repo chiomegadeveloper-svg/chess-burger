@@ -115,6 +115,22 @@ async function readMatch(client: Db, id: string): Promise<any> { return one<any>
 const participant = (match: any, id: string) => [match.white_id, match.black_id, match.invite_to].filter(Boolean).includes(id);
 function result(game: Chess): 'white' | 'black' | 'draw' | null { return game.isCheckmate() ? game.turn() === 'w' ? 'black' : 'white' : game.isDraw() ? 'draw' : null; }
 
+async function broadcastMatch(match: any) {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
+  if (!url || !key || !match?.id) return;
+  try {
+    const response = await fetch(`${url}/realtime/v1/api/broadcast`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${key}`, apikey: key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: [{ topic: `cb-match:${match.id}`, event: 'match-updated', payload: { id: match.id, match }, private: false }] }),
+    });
+    if (!response.ok) console.warn('arena.realtime-broadcast-failed', { matchId: match.id, status: response.status });
+  } catch (error) {
+    console.warn('arena.realtime-broadcast-failed', { matchId: match.id, message: String(error) });
+  }
+}
+
 async function settle(client: Db, match: any) {
   if (match.status !== 'finished' || match.rating_applied || !match.black_id || !match.result) return;
   const people = await playerMap(client, [match.white_id, match.black_id]);
@@ -169,6 +185,11 @@ export default async function handler(req: Req, res: Res) {
     if (req.method === 'GET') {
       if (action === 'feed') return res.status(200).json(await publicFeed(client));
       if (action === 'ranks') return res.status(200).json(await publicRanks(client));
+      if (action === 'watch') {
+        const match = await readMatch(client, String(req.query?.id ?? ''));
+        if (match.status === 'waiting') fail(404, 'This match has not started.');
+        return res.status(200).json({ match: await matchView(client, match) });
+      }
       fail(404, 'Unknown game request.');
     }
     const account = await signedIn(client, req);
@@ -176,6 +197,25 @@ export default async function handler(req: Req, res: Res) {
     // Keep it as a first-class migration action rather than falling through to
     // a 404 on every page load.
     if (action === 'me') return res.status(200).json({ profile: { ...account.profile, ocbr: Number(account.profile.ocbr ?? 88) }, rank: await playerRank(client, account.profile) });
+    if (action === 'map-stats') {
+      const [stats, authUsers] = await Promise.all([
+        client.rpc('cb_map_stats'),
+        client.auth.admin.listUsers({ page: 1, perPage: 1000 }),
+      ]);
+      if (stats.error) fail(500, stats.error.message);
+      if (authUsers.error) fail(500, authUsers.error.message);
+      const registered = Number(authUsers.data?.total ?? authUsers.data?.users?.length ?? 0);
+      return res.status(200).json({ ...(stats.data ?? {}), registered_users: registered });
+    }
+    if (action === 'social-presence') return res.status(200).json({ ok: true });
+    if (action === 'social-counts') {
+      const [friends, followers] = await Promise.all([
+        client.from('cb_social_links').select('user_id', { count: 'exact', head: true }).eq('kind', 'friend').eq('status', 'accepted').or(`user_id.eq.${account.id},target_id.eq.${account.id}`),
+        client.from('cb_social_links').select('user_id', { count: 'exact', head: true }).eq('kind', 'follow').eq('target_id', account.id),
+      ]);
+      if (friends.error || followers.error) fail(500, friends.error?.message ?? followers.error?.message ?? 'Unable to load social totals.');
+      return res.status(200).json({ friends: friends.count ?? 0, followers: followers.count ?? 0 });
+    }
     if (action === 'public-profile') {
       const target = String(body.user_id ?? '');
       if (!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(target)) fail(400, 'Choose a registered player.');
@@ -271,7 +311,10 @@ export default async function handler(req: Req, res: Res) {
       if (match.status !== 'waiting' || match.invite_to || Date.parse(match.created_at) <= now() - 120000) fail(404, 'This challenge has expired or was accepted.');
       const event = await client.from('cb_feed').select('id').eq('challenge_match_id', id).eq('kind', 'challenge').gt('expires_at', new Date().toISOString()).maybeSingle(); if (event.error) fail(500, event.error.message); if (!event.data) fail(404, 'This challenge has expired or was accepted.');
       const changed = await client.from('cb_matches').update({ black_id: account.id, black_cbr: account.profile.cbr, status: 'active', version: 1, last_tick: new Date().toISOString() }).eq('id', id).eq('status', 'waiting').is('black_id', null).select('*').maybeSingle(); if (changed.error) fail(500, changed.error.message); if (!changed.data) fail(409, 'This challenge was already accepted.');
-      await client.from('cb_feed').update({ expires_at: new Date().toISOString() }).eq('id', event.data.id); return res.status(200).json({ match: await matchView(client, changed.data) });
+      await client.from('cb_feed').update({ expires_at: new Date().toISOString() }).eq('id', event.data.id);
+      const view = await matchView(client, changed.data);
+      await broadcastMatch(view);
+      return res.status(200).json({ match: view });
     }
     if (action === 'join') {
       const roomCode = String(body.code ?? '').trim().toUpperCase();
@@ -282,7 +325,9 @@ export default async function handler(req: Req, res: Res) {
       const changed = await client.from('cb_matches').update({ black_id: account.id, black_cbr: account.profile.cbr, status: 'active', version: Number(match.version) + 1, last_tick: new Date().toISOString() }).eq('id', match.id).eq('version', match.version).eq('status', 'waiting').is('black_id', null).select('*').maybeSingle();
       if (changed.error) fail(500, changed.error.message);
       if (!changed.data) fail(409, 'This room was already joined.');
-      return res.status(200).json({ match: await matchView(client, changed.data) });
+      const view = await matchView(client, changed.data);
+      await broadcastMatch(view);
+      return res.status(200).json({ match: view });
     }
     if (action === 'match') { const match = await readMatch(client, String(body.id ?? '')); if (!participant(match, account.id)) fail(403, 'This room is private.'); return res.status(200).json({ match: await matchView(client, match) }); }
     if (action === 'state') {
@@ -321,7 +366,9 @@ export default async function handler(req: Req, res: Res) {
       if (changed.error) fail(500, changed.error.message);
       if (!changed.data) return res.status(200).json({ match: await matchView(client, await readMatch(client, match.id)) });
       await settle(client, changed.data);
-      return res.status(200).json({ match: await matchView(client, await readMatch(client, match.id)) });
+      const view = await matchView(client, await readMatch(client, match.id));
+      await broadcastMatch(view);
+      return res.status(200).json({ match: view });
     }
     if (action === 'move' || action === 'resign' || action === 'abort') {
       const match = await readMatch(client, String(body.id ?? '')); if (![match.white_id, match.black_id].includes(account.id)) fail(403, 'Only players may update this match.'); if (Number(body.version) !== Number(match.version)) fail(409, 'The board changed. Please try again.');
@@ -340,9 +387,24 @@ export default async function handler(req: Req, res: Res) {
           patch = { ...patch, pgn: game.pgn(), [whiteTurn ? 'white_ms' : 'black_ms']: remaining + incrementMs, ...(ended ? { status: 'finished', result: ended } : {}) };
         }
       }
-      const changed = await client.from('cb_matches').update(patch).eq('id', match.id).eq('version', match.version).select('*').maybeSingle(); if (changed.error) fail(500, changed.error.message); if (!changed.data) fail(409, 'The board changed. Please try again.'); await settle(client, changed.data); return res.status(200).json({ match: await matchView(client, await readMatch(client, match.id)), fair_play: { total_aborts: 0, cooldown_until: 0 } });
+      const changed = await client.from('cb_matches').update(patch).eq('id', match.id).eq('version', match.version).select('*').maybeSingle();
+      if (changed.error) fail(500, changed.error.message);
+      if (!changed.data) fail(409, 'The board changed. Please try again.');
+      await settle(client, changed.data);
+      const view = await matchView(client, await readMatch(client, match.id));
+      await broadcastMatch(view);
+      return res.status(200).json({ match: view, fair_play: { total_aborts: 0, cooldown_until: 0 } });
     }
-    if (action === 'react') { const match = await readMatch(client, String(body.id ?? '')); if (!participant(match, account.id)) fail(403, 'This room is private.'); const reactions = Array.isArray(match.reactions) ? match.reactions : []; reactions.push({ emote: String(body.emote ?? '').slice(0, 8), at: now() }); const changed = one<any>(await client.from('cb_matches').update({ reactions, version: Number(match.version) + 1 }).eq('id', match.id).eq('version', match.version).select('*').maybeSingle()); return res.status(200).json({ match: await matchView(client, changed) }); }
+    if (action === 'react') {
+      const match = await readMatch(client, String(body.id ?? ''));
+      if (!participant(match, account.id)) fail(403, 'This room is private.');
+      const reactions = Array.isArray(match.reactions) ? match.reactions : [];
+      reactions.push({ emote: String(body.emote ?? '').slice(0, 8), at: now() });
+      const changed = one<any>(await client.from('cb_matches').update({ reactions, version: Number(match.version) + 1 }).eq('id', match.id).eq('version', match.version).select('*').maybeSingle());
+      const view = await matchView(client, changed);
+      await broadcastMatch(view);
+      return res.status(200).json({ match: view });
+    }
     fail(404, 'This game action is not available during the migration.');
   } catch (error) { const known = error instanceof ApiError ? error : new ApiError(500, 'The game service could not complete this request. Please try again.'); console.error('arena.failed', { action, status: known.status, message: known.message }); return res.status(known.status).json({ error: known.message }); }
 }
