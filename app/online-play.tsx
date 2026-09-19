@@ -92,19 +92,17 @@ export function OnlineGame({
     };
     refresh.current = () => void poll();
     void poll();
-    // Realtime broadcasts wake this authoritative read immediately. Polling is
-    // retained only as a quiet recovery path when the channel is unavailable.
-    const timer = setInterval(poll, live ? 8000 : 750);
+    // Gameplay is event-driven. Visibility/focus reads are recovery points,
+    // not a repeating network poll.
     const onVisible = () => { if (document.visibilityState === "visible") void poll(); };
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onVisible);
     return () => {
       alive.current = false;
-      clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onVisible);
     };
-  }, [id, watch, live]);
+  }, [id, watch]);
   useEffect(() => {
     let active = true;
     setLive(false);
@@ -115,9 +113,16 @@ export function OnlineGame({
           .channel(`cb-match:${id}`, {
             config: { broadcast: { self: false, ack: true } },
           })
-          .on("broadcast", { event: "match-updated" }, () => refresh.current())
+          .on("broadcast", { event: "match-updated" }, (event) => {
+            const updated = event.payload?.match as ArenaMatch | undefined;
+            if (updated?.id === id && typeof updated.version === "number") accept(updated);
+            else refresh.current();
+          })
           .subscribe((status) => {
-            if (active) setLive(status === "SUBSCRIBED");
+            if (!active) return;
+            const subscribed = status === "SUBSCRIBED";
+            setLive(subscribed);
+            if (subscribed) refresh.current();
           });
         channel.current = next;
       })
@@ -131,11 +136,11 @@ export function OnlineGame({
       if (current) void current.unsubscribe();
     };
   }, [id]);
-  function announce() {
+  function announce(updated: ArenaMatch) {
     void channel.current?.send({
       type: "broadcast",
       event: "match-updated",
-      payload: { id },
+      payload: { id, match: updated },
     });
   }
   async function move(
@@ -176,7 +181,7 @@ export function OnlineGame({
           setFairPlayNotice("Match aborted. No CBR, Gold, or EXP was awarded to either player.");
         }
       }
-      announce();
+      announce(r.match);
     } catch (e) {
       latest.current = confirmed.version;
       setMatch(confirmed);
@@ -188,8 +193,27 @@ export function OnlineGame({
   async function react(emote: string) {
     const response = await arena<{ match: ArenaMatch }>("react", { id, emote });
     accept(response.match);
-    announce();
+    announce(response.match);
   }
+  useEffect(() => {
+    if (!match || match.status !== "active" || watch || !profile?.user_id) return;
+    const game = gameFromPgn(match.pgn);
+    const whiteTurn = game.turn() === "w";
+    const stored = Number(whiteTurn ? match.white_ms : match.black_ms);
+    const serverNow = Number(match.server_now ?? Date.now());
+    const remaining = Math.max(0, stored - Math.max(0, serverNow - Number(match.last_tick)));
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await arena<{ match: ArenaMatch }>("timeout", { id, version: match.version });
+        accept(response.match);
+        announce(response.match);
+      } catch {
+        refresh.current();
+      }
+    }, remaining + 350);
+    return () => window.clearTimeout(timer);
+  }, [match?.id, match?.version, match?.status, watch, profile?.user_id]);
+
   useEffect(() => {
     if (!match || !premove || busy || watch || !profile?.user_id) return;
     const game = gameFromPgn(match.pgn),
@@ -244,7 +268,7 @@ export function OnlineGame({
               ? "Spectating"
               : live
                 ? "Live"
-                : "Polling backup"
+                : "Connecting…"
         }
       />
     </>
