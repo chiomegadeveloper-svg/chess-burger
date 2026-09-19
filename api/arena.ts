@@ -204,6 +204,20 @@ async function publicFeed(client: Db) {
   const people = await playerMap(client, (list.data ?? []).map((e: any) => e.user_id));
   return { events: (list.data ?? []).filter((e: any) => e.kind !== 'challenge' || activeChallenges.has(e.challenge_match_id)).map((e: any) => ({ id: e.kind === 'challenge' && e.challenge_match_id ? `challenge:${e.challenge_match_id}` : e.id, user_id: e.user_id, kind: e.kind, display_name: e.kind === 'announcement' ? 'Chess Burger' : e.display_name, content: e.content, image_url: e.image_url ?? '', expires_at: e.expires_at, cbr_delta: e.cbr_delta ?? 0, gold_delta: e.gold_delta ?? 0, heart_count: e.heart_count ?? 0, created_at: e.created_at, avatar_url: e.kind === 'announcement' ? '/cburger_logo.png' : people.get(e.user_id)?.avatar_url ?? '', cbr: people.get(e.user_id)?.cbr ?? 88 })) };
 }
+async function publicOnlineUsers(client: Db) {
+  const [presence, active] = await Promise.all([
+    client.from('cb_live_presence').select('user_id,cbr').gt('seen_at', gpsCutoff()).order('cbr', { ascending: false }).limit(100),
+    client.from('cb_matches').select('white_id,black_id').eq('status', 'active'),
+  ]);
+  if (presence.error || active.error) fail(500, presence.error?.message ?? active.error?.message ?? 'Online players are temporarily unavailable.');
+  const playing = new Set((active.data ?? []).flatMap((match: any) => [match.white_id, match.black_id]).filter(Boolean));
+  const people = await playerMap(client, (presence.data ?? []).map((row: any) => row.user_id));
+  const users = (presence.data ?? []).map((row: any) => {
+    const player = people.get(row.user_id);
+    return player ? { ...player, cbr: Number(row.cbr ?? player.cbr ?? 88), available: !playing.has(row.user_id) } : null;
+  }).filter(Boolean);
+  return { users, count: users.length };
+}
 
 export default async function handler(req: Req, res: Res) {
   res.setHeader('Cache-Control', 'no-store');
@@ -214,6 +228,7 @@ export default async function handler(req: Req, res: Res) {
     console.info('arena.request', { action, method: req.method });
     if (req.method === 'GET') {
       if (action === 'feed') return res.status(200).json(await publicFeed(client));
+      if (action === 'online-users') return res.status(200).json(await publicOnlineUsers(client));
       if (action === 'ranks') return res.status(200).json(await publicRanks(client));
       if (action === 'watch') {
         const match = await readMatch(client, String(req.query?.id ?? ''));
@@ -325,6 +340,11 @@ export default async function handler(req: Req, res: Res) {
       const control = String(body.control ?? ''), clock = tc(control), target = typeof body.target === 'string' ? body.target : null, publicChallenge = body.publicChallenge === true;
       if (publicChallenge && target) fail(400, 'Choose one challenge audience.');
       const active = await client.from('cb_matches').select('id').eq('status', 'active').or(`white_id.eq.${account.id},black_id.eq.${account.id}`).limit(1); if (active.error) fail(500, active.error.message); if (active.data?.length) fail(409, 'Finish your current match first.');
+      if (target) {
+        const targetActive = await client.from('cb_matches').select('id').eq('status', 'active').or(`white_id.eq.${target},black_id.eq.${target}`).limit(1);
+        if (targetActive.error) fail(500, targetActive.error.message);
+        if (targetActive.data?.length) fail(409, 'This player is already in an active match.');
+      }
       // A new invitation replaces older unanswered invitations from this host.
       const old = await client.from('cb_matches').select('id').eq('host_id', account.id).eq('status', 'waiting');
       if (old.error) fail(500, old.error.message);
