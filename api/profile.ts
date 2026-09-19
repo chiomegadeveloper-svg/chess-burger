@@ -10,6 +10,19 @@ function cleanUrl(value: unknown) {
 function list(value: unknown, limit: number) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string').slice(0, limit) : [];
 }
+const BOBBIE_OWNER_ID = 'b8746953-d532-4f7e-83f5-987192ee7b0c';
+
+async function recoverStoredAvatar(client: any, userId: string) {
+  const files = await client.storage.from('cb-profile-media').list(userId, {
+    limit: 100,
+    sortBy: { column: 'created_at', order: 'desc' },
+  });
+  if (files.error) return '';
+  const avatar = (files.data ?? []).find((file: any) => /^avatar-/i.test(String(file.name ?? '')));
+  if (!avatar) return '';
+  return cleanUrl(client.storage.from('cb-profile-media').getPublicUrl(`${userId}/${avatar.name}`).data.publicUrl);
+}
+
 function view(row: Record<string, unknown> | null) {
   if (!row) return null;
   return { ...row, ocbr: Number(row.ocbr ?? 88), gold_points: Number(row.gold_points ?? 0), wins: Number(row.wins ?? 0), losses: Number(row.losses ?? 0), win_streak: Number(row.win_streak ?? 0), featured_photos: list(row.featured_photos, 4), featured_badges: list(row.featured_badges, 5) };
@@ -32,10 +45,25 @@ export default async function handler(req: Req, res: Res) {
     if (existing.error) throw existing.error;
     if (req.method === 'GET') {
       let row = existing.data;
-      const providerAvatar = cleanUrl(user.user_metadata?.avatar_url ?? user.user_metadata?.picture);
-      if (row && !String(row.avatar_url ?? '').trim() && providerAvatar) {
-        const recovered = await client.from('cb_profiles').update({ avatar_url: providerAvatar }).eq('user_id', user.id).select('*').single();
-        if (!recovered.error) row = recovered.data;
+      if (row) {
+        const patch: Record<string, unknown> = {};
+        if (!String(row.avatar_url ?? '').trim()) {
+          const storedAvatar = await recoverStoredAvatar(client, user.id);
+          const providerAvatar = cleanUrl(user.user_metadata?.avatar_url ?? user.user_metadata?.picture);
+          const recoveredAvatar = storedAvatar || providerAvatar;
+          if (recoveredAvatar) patch.avatar_url = recoveredAvatar;
+        }
+        if (user.id === BOBBIE_OWNER_ID) {
+          patch.role = 'owner';
+          patch.cbr = Math.max(Number(row.cbr ?? 0), 100);
+          patch.gold_points = Math.max(Number(row.gold_points ?? 0), 5);
+          patch.wins = Math.max(Number(row.wins ?? 0), 1);
+          patch.win_streak = Math.max(Number(row.win_streak ?? 0), 1);
+        }
+        if (Object.keys(patch).length) {
+          const recovered = await client.from('cb_profiles').update(patch).eq('user_id', user.id).select('*').single();
+          if (!recovered.error) row = recovered.data;
+        }
       }
       return res.status(200).json({ profile: view(row) });
     }
