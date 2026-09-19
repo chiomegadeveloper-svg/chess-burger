@@ -247,6 +247,21 @@ export default async function handler(req: Req, res: Res) {
     }
     if (action === 'heart') { const id = String(body.id ?? ''); if (id.startsWith('challenge:')) return res.status(200).json({ ok: true }); const r = body.liked === true ? await client.from('cb_feed_reactions').upsert({ feed_id: id, user_id: account.id }, { onConflict: 'feed_id,user_id' }) : await client.from('cb_feed_reactions').delete().eq('feed_id', id).eq('user_id', account.id); if (r.error) fail(500, r.error.message); return res.status(200).json({ ok: true }); }
     if (action === 'hearts') { const r = await client.from('cb_feed_reactions').select('feed_id').eq('user_id', account.id); if (r.error) fail(500, r.error.message); return res.status(200).json({ ids: (r.data ?? []).map((row: any) => row.feed_id) }); }
+    if (action === 'timeout') {
+      const match = await readMatch(client, String(body.id ?? ''));
+      if (![match.white_id, match.black_id].includes(account.id)) fail(403, 'Only players may update this match.');
+      if (match.status !== 'active') return res.status(200).json({ match: await matchView(client, match) });
+      const game = new Chess(); if (match.pgn) game.loadPgn(match.pgn);
+      const whiteTurn = game.turn() === 'w';
+      const remaining = Number(whiteTurn ? match.white_ms : match.black_ms) - Math.max(0, now() - Date.parse(match.last_tick));
+      if (remaining > 0) fail(409, 'The clock is still running.');
+      const patch = { status: 'finished', result: whiteTurn ? 'black' : 'white', version: Number(match.version) + 1, last_tick: new Date().toISOString(), [whiteTurn ? 'white_ms' : 'black_ms']: 0 };
+      const changed = await client.from('cb_matches').update(patch).eq('id', match.id).eq('version', match.version).eq('status', 'active').select('*').maybeSingle();
+      if (changed.error) fail(500, changed.error.message);
+      if (!changed.data) return res.status(200).json({ match: await matchView(client, await readMatch(client, match.id)) });
+      await settle(client, changed.data);
+      return res.status(200).json({ match: await matchView(client, await readMatch(client, match.id)) });
+    }
     if (action === 'move' || action === 'resign' || action === 'abort') {
       const match = await readMatch(client, String(body.id ?? '')); if (![match.white_id, match.black_id].includes(account.id)) fail(403, 'Only players may update this match.'); if (Number(body.version) !== Number(match.version)) fail(409, 'The board changed. Please try again.');
       let patch: Record<string, unknown> = { version: Number(match.version) + 1, last_tick: new Date().toISOString() };
