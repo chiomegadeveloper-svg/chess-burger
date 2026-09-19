@@ -1,6 +1,7 @@
 "use client";
 const MAINTENANCE_MODE = false;
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import {
   Home,
   MapPin,
@@ -391,8 +392,9 @@ function AppPage() {
     const remembered = localStorage.getItem(activeMatchKey(userId));
     setActiveId(remembered ?? "");
     let live = true,
-      pending = false;
-    const poll = async () => {
+      pending = false,
+      channel: RealtimeChannel | null = null;
+    const refreshState = async () => {
       if (pending || !navigator.onLine) return;
       pending = true;
       try {
@@ -411,16 +413,23 @@ function AppPage() {
         pending = false;
       }
     };
-    void poll();
-    const timer = setInterval(poll, 4000);
-    const onVisible = () => { if (document.visibilityState === "visible") void poll(); };
+    void refreshState();
+    void getSupabase().then((client) => {
+      if (!client || !live) return;
+      channel = client.channel(`cb-user-state:${userId}`)
+        .on("postgres_changes", { event: "*", schema: "public", table: "cb_matches" }, () => void refreshState())
+        .subscribe((status) => { if (status === "SUBSCRIBED") void refreshState(); });
+    });
+    const onVisible = () => { if (document.visibilityState === "visible") void refreshState(); };
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onVisible);
+    window.addEventListener("online", onVisible);
     return () => {
       live = false;
-      clearInterval(timer);
+      if (channel) void channel.unsubscribe();
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onVisible);
+      window.removeEventListener("online", onVisible);
     };
   }, [profile?.user_id]);
   useEffect(() => {
