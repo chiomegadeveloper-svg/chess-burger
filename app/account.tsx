@@ -189,11 +189,9 @@ export default function Account({
       const loaded = data
         ? { ...blankProfile(u.id), ...data }
         : newAccountProfile(u);
-      const hasRequiredPhoto=!!data?.avatar_url?.trim();
       setRegistered(!!data);
-      setEditing(!data||!hasRequiredPhoto);
-      onMembershipChange?.(hasRequiredPhoto);
-      if(data&&!hasRequiredPhoto)setError("Add and save a profile picture to unlock Chess Burger.");
+      setEditing(!data);
+      onMembershipChange?.(!!data);
       if (!live) return;
       setProfile(loaded);
       onLoaded?.(loaded);

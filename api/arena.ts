@@ -15,6 +15,53 @@ const TIME: Record<string, { seconds: number; increment: number; group: string; 
 class ApiError extends Error { constructor(public status: number, message: string) { super(message); } }
 const fail = (status: number, message: string): never => { throw new ApiError(status, message); };
 const now = () => Date.now();
+const gpsCutoff = () => new Date(now() - 45_000).toISOString();
+
+async function publicRanks(client: Db) {
+  const r = await client.from('cb_profiles')
+    .select('user_id,username,display_name,avatar_url,country_code,cbr,gold_points,wins,losses,win_streak')
+    .order('cbr', { ascending: false }).order('wins', { ascending: false }).order('user_id', { ascending: true }).limit(10);
+  if (r.error) fail(500, r.error.message);
+  return { players: r.data ?? [] };
+}
+async function playerRank(client: Db, profile: any) {
+  const cbr = Number(profile.cbr ?? 0), wins = Number(profile.wins ?? 0);
+  const ahead = [`cbr.gt.${cbr}`, `and(cbr.eq.${cbr},wins.gt.${wins})`, `and(cbr.eq.${cbr},wins.eq.${wins},user_id.lt.${profile.user_id})`].join(',');
+  const r = await client.from('cb_profiles').select('user_id', { count: 'exact', head: true }).or(ahead);
+  if (r.error) fail(500, r.error.message);
+  return (r.count ?? 0) + 1;
+}
+function metres(aLat: number, aLng: number, bLat: number, bLng: number) {
+  const rad = Math.PI / 180, dLat = (bLat - aLat) * rad, dLng = (bLng - aLng) * rad;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(aLat * rad) * Math.cos(bLat * rad) * Math.sin(dLng / 2) ** 2;
+  return Math.round(12_742_000 * Math.asin(Math.sqrt(h)));
+}
+async function savePresence(client: Db, account: any, body: Record<string, any>) {
+  if (!body.gps) {
+    const removed = await client.from('cb_gps_presence').delete().eq('user_id', account.id);
+    if (removed.error) fail(500, 'GPS presence is not configured. Run the current GPS migration in Supabase.');
+    return { ok: true };
+  }
+  const lat = Number(body.lat), lng = Number(body.lng), accuracy = Math.min(500, Math.max(0, Number(body.accuracy ?? 0)));
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) fail(400, 'The GPS reading is invalid.');
+  const saved = await client.from('cb_gps_presence').upsert({ user_id: account.id, lat, lng, accuracy, seen_at: new Date().toISOString() }, { onConflict: 'user_id' });
+  if (saved.error) fail(500, 'GPS presence is not configured. Run the current GPS migration in Supabase.');
+  return { ok: true };
+}
+async function nearbyPlayers(client: Db, account: any) {
+  const own = await client.from('cb_gps_presence').select('*').eq('user_id', account.id).gt('seen_at', gpsCutoff()).maybeSingle();
+  if (own.error) fail(500, 'GPS presence is not configured. Run the current GPS migration in Supabase.');
+  if (!own.data) return { players: [], territories: [] };
+  const presence = await client.from('cb_gps_presence').select('*').neq('user_id', account.id).gt('seen_at', gpsCutoff());
+  if (presence.error) fail(500, presence.error.message);
+  const people = await playerMap(client, (presence.data ?? []).map((p: any) => p.user_id));
+  const players = (presence.data ?? []).map((p: any) => {
+    const person = people.get(p.user_id);
+    const distance = metres(Number(own.data.lat), Number(own.data.lng), Number(p.lat), Number(p.lng));
+    return person ? { ...person, lat: Number(p.lat), lng: Number(p.lng), distance } : null;
+  }).filter((p: any) => p && p.distance <= 10_000).sort((a: any, b: any) => a.distance - b.distance);
+  return { players, territories: [] };
+}
 const tc = (id: string) => TIME[id] ?? fail(400, 'Choose a valid time control.');
 const code = () => Array.from(crypto.getRandomValues(new Uint8Array(8)), n => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[n % 32] ?? 'A').join('');
 const one = <T>(r: { data: T | null; error: { message: string } | null }): T => { if (r.error) fail(500, r.error.message); if (!r.data) fail(404, 'This game is no longer available.'); return r.data as T; };
@@ -37,7 +84,6 @@ async function signedIn(client: Db, req: Req) {
   const user = account.data.user;
   if (account.error || !user) fail(401, 'Please sign in again.');
   const profile = one<any>(await client.from('cb_profiles').select('*').eq('user_id', user.id).maybeSingle());
-  if (!profile.avatar_url?.trim()) fail(403, 'Add and save a profile picture to unlock Chess Burger.');
   return { id: user.id, profile };
 }
 async function playerMap(client: Db, ids: string[]) {
@@ -91,12 +137,22 @@ export default async function handler(req: Req, res: Res) {
     const client = db(), body = (req.body && typeof req.body === 'object' ? req.body : {}) as Record<string, any>;
     action = String(req.method === 'GET' ? req.query?.action ?? '' : body.action ?? '');
     console.info('arena.request', { action, method: req.method });
-    if (req.method === 'GET') { if (action === 'feed') return res.status(200).json(await publicFeed(client)); fail(404, 'Unknown game request.'); }
+    if (req.method === 'GET') {
+      if (action === 'feed') return res.status(200).json(await publicFeed(client));
+      if (action === 'ranks') return res.status(200).json(await publicRanks(client));
+      fail(404, 'Unknown game request.');
+    }
     const account = await signedIn(client, req);
     // The app refreshes this on sign-in to obtain the authoritative profile.
     // Keep it as a first-class migration action rather than falling through to
     // a 404 on every page load.
-    if (action === 'me') return res.status(200).json({ profile: { ...account.profile, ocbr: 88 } });
+    if (action === 'me') return res.status(200).json({ profile: { ...account.profile, ocbr: Number(account.profile.ocbr ?? 88) }, rank: await playerRank(client, account.profile) });
+    if (action === 'presence') return res.status(200).json(await savePresence(client, account, body));
+    if (action === 'nearby') return res.status(200).json(await nearbyPlayers(client, account));
+    if (action === 'territory-leaders') {
+      const ranked = await publicRanks(client);
+      return res.status(200).json({ scope: body.scope === 'barangay' ? 'barangay' : 'city', label: body.scope === 'barangay' ? 'Nearby barangay' : 'Nearby city', players: ranked.players });
+    }
     if (action === 'social-status' || action === 'social-update') {
       const target = String(body.target ?? '');
       if (!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(target) || target === account.id) fail(400, 'Choose another registered player.');
