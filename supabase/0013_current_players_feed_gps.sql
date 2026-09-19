@@ -16,9 +16,8 @@ create index if not exists cb_gps_presence_recent_idx on public.cb_gps_presence(
 alter table public.cb_gps_presence enable row level security;
 revoke all on public.cb_gps_presence from anon, authenticated;
 
--- Preserve one signup entry per registered profile. New profiles still create
--- their entry through the existing cb_profile_feed trigger.
-create unique index if not exists cb_feed_signup_once_idx on public.cb_feed(user_id) where kind='profile_created';
+-- Existing databases can already contain duplicate historical signup entries.
+-- The backfill below uses NOT EXISTS, so it does not create another entry.
 create or replace function public.cb_prune_feed() returns trigger
 language plpgsql security definer set search_path='' as $$
 begin
