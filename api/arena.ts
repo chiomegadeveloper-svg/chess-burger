@@ -135,9 +135,10 @@ async function finishExpiredMatch(client: Db, match: any) {
   const game = new Chess();
   if (match.pgn) game.loadPgn(match.pgn);
   const whiteTurn = game.turn() === 'w';
-  const remaining = Number(whiteTurn ? match.white_ms : match.black_ms) - Math.max(0, now() - Date.parse(match.last_tick));
+  const checkedAt = now();
+  const remaining = Number(whiteTurn ? match.white_ms : match.black_ms) - Math.max(0, checkedAt - Date.parse(match.last_tick));
   if (remaining > 0) return match;
-  const patch = { status: 'finished', result: whiteTurn ? 'black' : 'white', version: Number(match.version) + 1, last_tick: new Date().toISOString(), [whiteTurn ? 'white_ms' : 'black_ms']: 0 };
+  const patch = { status: 'finished', result: whiteTurn ? 'black' : 'white', version: Number(match.version) + 1, last_tick: new Date(checkedAt).toISOString(), [whiteTurn ? 'white_ms' : 'black_ms']: 0 };
   const changed = await client.from('cb_matches').update(patch).eq('id', match.id).eq('version', match.version).eq('status', 'active').select('*').maybeSingle();
   if (changed.error) fail(500, changed.error.message);
   const current = changed.data ?? await readMatch(client, match.id);
@@ -301,9 +302,10 @@ export default async function handler(req: Req, res: Res) {
       if (match.status !== 'active') return res.status(200).json({ match: await matchView(client, match) });
       const game = new Chess(); if (match.pgn) game.loadPgn(match.pgn);
       const whiteTurn = game.turn() === 'w';
-      const remaining = Number(whiteTurn ? match.white_ms : match.black_ms) - Math.max(0, now() - Date.parse(match.last_tick));
+      const checkedAt = now();
+      const remaining = Number(whiteTurn ? match.white_ms : match.black_ms) - Math.max(0, checkedAt - Date.parse(match.last_tick));
       if (remaining > 0) fail(409, 'The clock is still running.');
-      const patch = { status: 'finished', result: whiteTurn ? 'black' : 'white', version: Number(match.version) + 1, last_tick: new Date().toISOString(), [whiteTurn ? 'white_ms' : 'black_ms']: 0 };
+      const patch = { status: 'finished', result: whiteTurn ? 'black' : 'white', version: Number(match.version) + 1, last_tick: new Date(checkedAt).toISOString(), [whiteTurn ? 'white_ms' : 'black_ms']: 0 };
       const changed = await client.from('cb_matches').update(patch).eq('id', match.id).eq('version', match.version).eq('status', 'active').select('*').maybeSingle();
       if (changed.error) fail(500, changed.error.message);
       if (!changed.data) return res.status(200).json({ match: await matchView(client, await readMatch(client, match.id)) });
@@ -312,17 +314,19 @@ export default async function handler(req: Req, res: Res) {
     }
     if (action === 'move' || action === 'resign' || action === 'abort') {
       const match = await readMatch(client, String(body.id ?? '')); if (![match.white_id, match.black_id].includes(account.id)) fail(403, 'Only players may update this match.'); if (Number(body.version) !== Number(match.version)) fail(409, 'The board changed. Please try again.');
-      let patch: Record<string, unknown> = { version: Number(match.version) + 1, last_tick: new Date().toISOString() };
+      const actionAt = now();
+      let patch: Record<string, unknown> = { version: Number(match.version) + 1, last_tick: new Date(actionAt).toISOString() };
       if (match.status !== 'active') fail(409, 'This match is no longer active.');
       if (action === 'abort') patch = { ...patch, status: 'cancelled', result: null }; else if (action === 'resign') patch = { ...patch, status: 'finished', result: account.id === match.white_id ? 'black' : 'white' }; else {
         const game = new Chess(); if (match.pgn) game.loadPgn(match.pgn);
         const whiteTurn = game.turn() === 'w';
         if ((whiteTurn ? match.white_id : match.black_id) !== account.id) fail(409, 'Wait for your opponent.');
-        const remaining = Math.max(0, Number(whiteTurn ? match.white_ms : match.black_ms) - Math.max(0, now() - Date.parse(match.last_tick)));
-        if (!remaining) patch = { ...patch, status: 'finished', result: whiteTurn ? 'black' : 'white', [whiteTurn ? 'white_ms' : 'black_ms']: 0 };
+        const remaining = Number(whiteTurn ? match.white_ms : match.black_ms) - Math.max(0, actionAt - Date.parse(match.last_tick));
+        if (remaining <= 0) patch = { ...patch, status: 'finished', result: whiteTurn ? 'black' : 'white', [whiteTurn ? 'white_ms' : 'black_ms']: 0 };
         else {
           try { game.move(body.move); } catch { fail(400, 'That move is not legal.'); }
-          const ended = result(game); patch = { ...patch, pgn: game.pgn(), [whiteTurn ? 'white_ms' : 'black_ms']: remaining + tc(match.control).increment * 1000, ...(ended ? { status: 'finished', result: ended } : {}) };
+          const ended = result(game), incrementMs = tc(match.control).increment * 1000;
+          patch = { ...patch, pgn: game.pgn(), [whiteTurn ? 'white_ms' : 'black_ms']: remaining + incrementMs, ...(ended ? { status: 'finished', result: ended } : {}) };
         }
       }
       const changed = await client.from('cb_matches').update(patch).eq('id', match.id).eq('version', match.version).select('*').maybeSingle(); if (changed.error) fail(500, changed.error.message); if (!changed.data) fail(409, 'The board changed. Please try again.'); await settle(client, changed.data); return res.status(200).json({ match: await matchView(client, await readMatch(client, match.id)), fair_play: { total_aborts: 0, cooldown_until: 0 } });

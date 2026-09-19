@@ -150,14 +150,6 @@ export function OnlineGame({
     if (!match || busy) return;
     const confirmed = match;
     setBusy(true);
-    if (action === "move" && move) {
-      try {
-        const game = gameFromPgn(match.pgn);
-        game.move(move);
-        latest.current = match.version + 0.5;
-        setMatch({ ...match, pgn: game.pgn() });
-      } catch {}
-    }
     try {
       const r = await arena<{
         match: ArenaMatch;
@@ -210,7 +202,7 @@ export function OnlineGame({
       } catch {
         refresh.current();
       }
-    }, remaining + 350);
+    }, remaining + 50);
     return () => window.clearTimeout(timer);
   }, [match?.id, match?.version, match?.status, watch, profile?.user_id]);
 
