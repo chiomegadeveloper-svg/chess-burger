@@ -167,11 +167,13 @@ function AppPage() {
       } = await c.auth.getSession();
       if (!session) return;
       let data = await profileRequest(c);
-      // Earlier versions kept the completed profile on the device.  The
-      // original hosted database is no longer available, so rehydrate a
-      // missing Supabase row from that same user's preserved local profile.
-      // This only runs when Supabase has no row, and never replaces one.
-      if (!data) {
+      // Earlier versions kept the completed profile on the device. Rehydrate
+      // a missing or newly generated default row from that same user's cache.
+      // Only editable profile fields are restored; server-owned ratings,
+      // balances, roles, wins and losses remain untouched.
+      const generatedSuffix = `_${session.user.id.replace(/-/g, "").slice(0, 6)}`;
+      const generatedDefault = !!data?.username?.endsWith(generatedSuffix) && Number(data.cbr ?? 88) === 88 && Number(data.wins ?? 0) === 0 && Number(data.losses ?? 0) === 0;
+      if (!data || generatedDefault) {
         try {
           const cached = JSON.parse(authStorage.getItem("cb-staff-profile") ?? "null") as PlayerProfile | null;
           if (cached?.user_id === session.user.id && cached.username && cached.display_name) {
