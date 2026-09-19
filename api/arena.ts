@@ -15,6 +15,31 @@ const TIME: Record<string, { seconds: number; increment: number; group: string; 
 class ApiError extends Error { constructor(public status: number, message: string) { super(message); } }
 const fail = (status: number, message: string): never => { throw new ApiError(status, message); };
 const now = () => Date.now();
+
+async function publicRanks(client: Db) {
+  const r = await client
+    .from('cb_profiles')
+    .select('user_id,username,display_name,avatar_url,country_code,cbr,gold_points,wins,losses,win_streak')
+    .order('cbr', { ascending: false })
+    .order('wins', { ascending: false })
+    .order('user_id', { ascending: true })
+    .limit(10);
+  if (r.error) fail(500, r.error.message);
+  return { players: r.data ?? [] };
+}
+
+async function playerRank(client: Db, profile: any): Promise<number> {
+  const cbr = Number(profile.cbr ?? 0);
+  const wins = Number(profile.wins ?? 0);
+  const ahead = [
+    `cbr.gt.${cbr}`,
+    `and(cbr.eq.${cbr},wins.gt.${wins})`,
+    `and(cbr.eq.${cbr},wins.eq.${wins},user_id.lt.${profile.user_id})`,
+  ].join(',');
+  const r = await client.from('cb_profiles').select('user_id', { count: 'exact', head: true }).or(ahead);
+  if (r.error) fail(500, r.error.message);
+  return (r.count ?? 0) + 1;
+}
 const tc = (id: string) => TIME[id] ?? fail(400, 'Choose a valid time control.');
 const code = () => Array.from(crypto.getRandomValues(new Uint8Array(8)), n => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[n % 32] ?? 'A').join('');
 const one = <T>(r: { data: T | null; error: { message: string } | null }): T => { if (r.error) fail(500, r.error.message); if (!r.data) fail(404, 'This game is no longer available.'); return r.data as T; };
@@ -91,12 +116,16 @@ export default async function handler(req: Req, res: Res) {
     const client = db(), body = (req.body && typeof req.body === 'object' ? req.body : {}) as Record<string, any>;
     action = String(req.method === 'GET' ? req.query?.action ?? '' : body.action ?? '');
     console.info('arena.request', { action, method: req.method });
-    if (req.method === 'GET') { if (action === 'feed') return res.status(200).json(await publicFeed(client)); fail(404, 'Unknown game request.'); }
+    if (req.method === 'GET') {
+      if (action === 'feed') return res.status(200).json(await publicFeed(client));
+      if (action === 'ranks') return res.status(200).json(await publicRanks(client));
+      fail(404, 'Unknown game request.');
+    }
     const account = await signedIn(client, req);
     // The app refreshes this on sign-in to obtain the authoritative profile.
     // Keep it as a first-class migration action rather than falling through to
     // a 404 on every page load.
-    if (action === 'me') return res.status(200).json({ profile: { ...account.profile, ocbr: 88 } });
+    if (action === 'me') return res.status(200).json({ profile: { ...account.profile, ocbr: 88 }, rank: await playerRank(client, account.profile) });
     if (action === 'social-status' || action === 'social-update') {
       const target = String(body.target ?? '');
       if (!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(target) || target === account.id) fail(400, 'Choose another registered player.');

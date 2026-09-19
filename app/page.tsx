@@ -1,5 +1,4 @@
 "use client";
-const MAINTENANCE_MODE = true;
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Home,
@@ -872,68 +871,5 @@ function AppPage() {
 }
 
 export default function Page() {
-  if (MAINTENANCE_MODE) {
-    return (
-      <main
-        style={{
-          minHeight: "100vh",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "#111111",
-          color: "#ffffff",
-          padding: "24px",
-          textAlign: "center",
-          fontFamily: "Arial, sans-serif",
-        }}
-      >
-        <div style={{ maxWidth: "420px" }}>
-          <img
-            src="/cburger_logo.png"
-            alt="Chess Burger"
-            style={{
-              width: "90px",
-              height: "90px",
-              objectFit: "contain",
-              marginBottom: "20px",
-            }}
-          />
-
-          <h1
-            style={{
-              fontSize: "28px",
-              margin: "0 0 12px",
-              fontWeight: 700,
-            }}
-          >
-            Chess Burger
-          </h1>
-
-          <h2
-            style={{
-              fontSize: "20px",
-              margin: "0 0 16px",
-            }}
-          >
-            Temporarily Under Maintenance
-          </h2>
-
-          <p
-            style={{
-              fontSize: "15px",
-              lineHeight: 1.6,
-              opacity: 0.75,
-              margin: 0,
-            }}
-          >
-            Chess Burger is currently being updated.
-            <br />
-            Please check back soon.
-          </p>
-        </div>
-      </main>
-    );
-  }
-
   return <AppPage />;
 }
