@@ -599,6 +599,76 @@ export default async function handler(req: Req, res: Res) {
       if (friends.error || followers.error) fail(500, friends.error?.message ?? followers.error?.message ?? 'Unable to load social totals.');
       return res.status(200).json({ friends: friends.count ?? 0, followers: followers.count ?? 0 });
     }
+    if (action === 'social-list') {
+      const mode=String(body.mode??'friends'),query=String(body.q??'').trim().replace(/^@/,'').toLowerCase(),page=Math.max(1,Math.floor(Number(body.page)||1));
+      const [profiles,links,presence]=await Promise.all([
+        client.from('cb_profiles').select('user_id,username,display_name,avatar_url,cbr').neq('user_id',account.id).limit(500),
+        client.from('cb_social_links').select('user_id,target_id,kind,status').or(`user_id.eq.${account.id},target_id.eq.${account.id}`),
+        client.from('cb_live_presence').select('*').limit(500),
+      ]);
+      if(profiles.error||links.error||presence.error)fail(500,profiles.error?.message??links.error?.message??presence.error?.message??'Unable to load players.');
+      const rows=links.data??[],blockedIds=new Set(rows.filter((r:any)=>r.kind==='block').map((r:any)=>r.user_id===account.id?r.target_id:r.user_id));
+      const live=new Map((presence.data??[]).map((r:any)=>[r.user_id,liveAt(r)??0]));
+      const relationship=(id:string,kind:string)=>rows.find((r:any)=>r.kind===kind&&((r.user_id===account.id&&r.target_id===id)||(r.user_id===id&&r.target_id===account.id)));
+      let users=(profiles.data??[]).filter((p:any)=>{
+        if(mode!=='blocked'&&blockedIds.has(p.user_id))return false;
+        const friend=relationship(p.user_id,'friend'),follow=relationship(p.user_id,'follow');
+        if(mode==='search')return query.length>0&&(String(p.username).toLowerCase().includes(query)||String(p.display_name).toLowerCase().includes(query));
+        if(mode==='friends')return friend?.status==='accepted';
+        if(mode==='requests')return friend?.status==='pending'&&friend.target_id===account.id;
+        if(mode==='followers')return !!rows.find((r:any)=>r.kind==='follow'&&r.user_id===p.user_id&&r.target_id===account.id);
+        if(mode==='following')return follow?.user_id===account.id;
+        if(mode==='blocked')return !!rows.find((r:any)=>r.kind==='block'&&r.user_id===account.id&&r.target_id===p.user_id);
+        return false;
+      }).map((p:any)=>{const friend=relationship(p.user_id,'friend');return {...p,seen_at:live.get(p.user_id)??0,following:!!rows.find((r:any)=>r.kind==='follow'&&r.user_id===account.id&&r.target_id===p.user_id),friendship:friend?(friend.status==='accepted'?'accepted':friend.user_id===account.id?'sent':'received'):null};});
+      users.sort((a:any,b:any)=>(b.seen_at>a.seen_at?1:b.seen_at<a.seen_at?-1:String(a.display_name).localeCompare(String(b.display_name))));
+      const total=users.length,pages=Math.max(1,Math.ceil(total/10)),current=Math.min(page,pages);users=users.slice((current-1)*10,current*10);
+      return res.status(200).json({users,total,page:current,pages});
+    }
+    if(action==='chat-read'||action==='chat-send'||action==='chat-conversations'||action==='chat-hide'||action==='chat-mute'){
+      const target=String(body.target??''),validTarget=/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(target)&&target!==account.id;
+      if(target&&!validTarget)fail(400,'Choose another registered player.');
+      if(action==='chat-send'){
+        const messageId=String(body.id??''),message=String(body.body??'').trim();
+        if(!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(messageId)||!message||message.length>1000)fail(400,'Write a message of up to 1,000 characters.');
+        const sent=await client.rpc('cb_send_chat_message',{p_id:messageId,p_sender_id:account.id,p_recipient_id:target||null,p_body:message});
+        if(sent.error){if(/cb_send_chat_message|schema cache|function/i.test(sent.error.message))fail(503,'Run supabase/0019_chat_hub.sql in Supabase, then try again.');fail(/blocked|wait|unavailable/i.test(sent.error.message)?409:500,sent.error.message);}
+        return res.status(200).json({ok:true});
+      }
+      if(action==='chat-hide'||action==='chat-mute'){
+        if(!validTarget)fail(400,'Choose a personal conversation.');
+        const patch=action==='chat-hide'?{user_id:account.id,other_user_id:target,hidden_at:new Date().toISOString(),updated_at:new Date().toISOString()}:{user_id:account.id,other_user_id:target,muted:body.muted===true,updated_at:new Date().toISOString()};
+        const saved=await client.from('cb_chat_preferences').upsert(patch,{onConflict:'user_id,other_user_id'});
+        if(saved.error)fail(/cb_chat_preferences|schema cache|relation/i.test(saved.error.message)?503:500,/cb_chat_preferences|schema cache|relation/i.test(saved.error.message)?'Run supabase/0019_chat_hub.sql in Supabase, then try again.':saved.error.message);
+        return res.status(200).json({ok:true});
+      }
+      if(action==='chat-conversations'){
+        const [messages,prefs,links]=await Promise.all([
+          client.from('cb_chat_messages').select('sender_id,recipient_id,body,created_at').or(`sender_id.eq.${account.id},recipient_id.eq.${account.id}`).not('recipient_id','is',null).order('created_at',{ascending:false}).limit(1000),
+          client.from('cb_chat_preferences').select('other_user_id,muted,hidden_at').eq('user_id',account.id),
+          client.from('cb_social_links').select('user_id,target_id,kind').eq('kind','block').or(`user_id.eq.${account.id},target_id.eq.${account.id}`),
+        ]);
+        if(messages.error||prefs.error||links.error)fail(500,messages.error?.message??prefs.error?.message??links.error?.message??'Unable to load conversations.');
+        const settings=new Map<string,any>((prefs.data??[]).map((r:any)=>[r.other_user_id,r])),blockedIds=new Set((links.data??[]).map((r:any)=>r.user_id===account.id?r.target_id:r.user_id)),latest=new Map<string,any>();
+        for(const m of messages.data??[]){const other=m.sender_id===account.id?m.recipient_id:m.sender_id;if(!other||blockedIds.has(other)||latest.has(other))continue;const hidden=settings.get(other)?.hidden_at;if(hidden&&Date.parse(m.created_at)<=Date.parse(hidden))continue;latest.set(other,m);}
+        if(validTarget&&!blockedIds.has(target)&&!latest.has(target))latest.set(target,{body:'',created_at:new Date().toISOString()});
+        const people=await playerMap(client,[...latest.keys()]);
+        const users=[...latest.entries()].map(([id,m]:any)=>{const p=people.get(id);return p?{...p,seen_at:0,following:false,friendship:null,last_message:m.body,last_at:Date.parse(m.created_at),muted:settings.get(id)?.muted===true}:null;}).filter(Boolean);
+        return res.status(200).json({users,total:users.length,page:1,pages:1});
+      }
+      const [blockLinks,prefs]=await Promise.all([
+        client.from('cb_social_links').select('user_id,target_id,kind').eq('kind','block').or(target?`and(user_id.eq.${account.id},target_id.eq.${target}),and(user_id.eq.${target},target_id.eq.${account.id})`:`user_id.eq.${account.id},target_id.eq.${account.id}`),
+        client.from('cb_chat_preferences').select('other_user_id,muted').eq('user_id',account.id),
+      ]);
+      if(blockLinks.error||prefs.error)fail(500,blockLinks.error?.message??prefs.error?.message??'Chat is temporarily unavailable.');
+      if(target&&(blockLinks.data??[]).length)fail(403,'Chat with this player is blocked.');
+      let request=client.from('cb_chat_messages').select('id,sender_id,recipient_id,body,created_at').order('created_at',{ascending:false}).limit(100);
+      request=target?request.or(`and(sender_id.eq.${account.id},recipient_id.eq.${target}),and(sender_id.eq.${target},recipient_id.eq.${account.id})`):request.is('recipient_id',null);
+      const result=await request;if(result.error)fail(/cb_chat_messages|schema cache|relation/i.test(result.error.message)?503:500,/cb_chat_messages|schema cache|relation/i.test(result.error.message)?'Run supabase/0019_chat_hub.sql in Supabase, then try again.':result.error.message);
+      const blockedIds=new Set((blockLinks.data??[]).map((r:any)=>r.user_id===account.id?r.target_id:r.user_id)),mutedIds=new Set((prefs.data??[]).filter((r:any)=>r.muted).map((r:any)=>r.other_user_id));
+      const visible=(result.data??[]).filter((m:any)=>target||(!blockedIds.has(m.sender_id)&&!mutedIds.has(m.sender_id))).reverse(),people=await playerMap(client,visible.map((m:any)=>m.sender_id));
+      return res.status(200).json({messages:visible.map((m:any)=>({...m,display_name:people.get(m.sender_id)?.display_name??'Player',username:people.get(m.sender_id)?.username??'',avatar_url:people.get(m.sender_id)?.avatar_url??'',created_at:Date.parse(m.created_at)})),hasMore:false});
+    }
     if (action === 'public-profile') {
       const target = String(body.user_id ?? '');
       if (!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(target)) fail(400, 'Choose a registered player.');

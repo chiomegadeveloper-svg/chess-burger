@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import type { PlayerProfile } from "./supabase";
 import { levelFor } from "./cbr";
 import type { ArenaPlayer } from "./game-rules";
+import { MessageCircle, ShieldBan, Volume2, VolumeX, X } from "lucide-react";
 export type SocialView = "friends" | "followers" | "chat";
 export function openSocial(view: SocialView, target?: string) {
   window.dispatchEvent(
@@ -32,6 +33,9 @@ type Person = {
   seen_at: number;
   following: boolean;
   friendship: string | null;
+  muted?: boolean;
+  last_message?: string;
+  last_at?: number;
 };
 type Listing = { users: Person[]; total: number; page: number; pages: number };
 type Message = {
@@ -146,9 +150,7 @@ export function SocialButtons({
             {state?.following ? "Following" : "Follow"}
           </button>
           <>
-            {!compact && (
-              <button onClick={() => openSocial("chat", target)}>Chat</button>
-            )}
+            <button onClick={() => openSocial("chat", target)}>Chat</button>
             {!compact && (
               <button
                 className="danger"
@@ -162,6 +164,83 @@ export function SocialButtons({
         </>
       )}
     </div>
+  );
+}
+
+type ChatButtonPosition = { x: number; y: number };
+function savedChatButtonPosition(): ChatButtonPosition | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const saved = JSON.parse(
+      localStorage.getItem("cb-chat-button-position:v1") ?? "null",
+    );
+    return saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)
+      ? saved
+      : null;
+  } catch {
+    return null;
+  }
+}
+export function FloatingChatButton({ visible }: { visible: boolean }) {
+  const [position, setPosition] = useState<ChatButtonPosition | null>(
+      savedChatButtonPosition,
+    ),
+    positionRef = useRef<ChatButtonPosition | null>(position),
+    drag = useRef<{ dx: number; dy: number; moved: boolean } | null>(null);
+  if (!visible) return null;
+  const style = position
+    ? { left: position.x, top: position.y }
+    : { right: 18, bottom: 86 };
+  return (
+    <button
+      type="button"
+      className="floating-chat-button"
+      style={style}
+      aria-label="Open chat. Drag to move."
+      title="Chat · drag to move"
+      onPointerDown={(event) => {
+        const rect = event.currentTarget.getBoundingClientRect();
+        drag.current = {
+          dx: event.clientX - rect.left,
+          dy: event.clientY - rect.top,
+          moved: false,
+        };
+        event.currentTarget.setPointerCapture(event.pointerId);
+      }}
+      onPointerMove={(event) => {
+        if (!drag.current) return;
+        const next = {
+          x: Math.max(
+            8,
+            Math.min(window.innerWidth - 64, event.clientX - drag.current.dx),
+          ),
+          y: Math.max(
+            72,
+            Math.min(window.innerHeight - 132, event.clientY - drag.current.dy),
+          ),
+        };
+        if (Math.abs(event.movementX) + Math.abs(event.movementY) > 2)
+          drag.current.moved = true;
+        positionRef.current = next;
+        setPosition(next);
+      }}
+      onPointerUp={() => {
+        if (!drag.current) return;
+        const moved = drag.current.moved;
+        drag.current = null;
+        if (positionRef.current)
+          try {
+            localStorage.setItem(
+              "cb-chat-button-position:v1",
+              JSON.stringify(positionRef.current),
+            );
+          } catch {}
+        if (!moved) openSocial("chat");
+      }}
+    >
+      <MessageCircle size={24} />
+      <span>Chat</span>
+    </button>
   );
 }
 export function SocialHub({
@@ -240,24 +319,27 @@ export function SocialHub({
     draftKey.current = key;
     setDraft(drafts.current[key] ?? "");
   }, [mode, target]);
-  const chat =
-    view === "chat" &&
-    (mode === "community" || (mode === "personal" && !!target));
+  const chat = view === "chat";
   const refresh = useCallback(async () => {
     if (!open) return;
     const ticket = ++seq.current;
     try {
       if (chat) {
-        const data = await arena<{ messages: Message[]; hasMore: boolean }>(
-          "chat-read",
-          {
-            target: mode === "personal" ? target : "",
-            ...(before ? { before } : {}),
-          },
-        );
+        const [conversations, data] = await Promise.all([
+          mode === "personal"
+            ? arena<Listing>("chat-conversations", { target })
+            : Promise.resolve(null),
+          mode === "community" || target
+            ? arena<{ messages: Message[]; hasMore: boolean }>("chat-read", {
+                target: mode === "personal" ? target : "",
+                ...(before ? { before } : {}),
+              })
+            : Promise.resolve({ messages: [], hasMore: false }),
+        ]);
         if (ticket === seq.current) {
           setMessages(data.messages);
           setHasMore(data.hasMore);
+          if (conversations) setList(conversations);
         }
       } else {
         const data = await arena<Listing>("social-list", {
@@ -309,7 +391,45 @@ export function SocialHub({
     setBusy(true);
     try {
       await arena("social-update", { target: p.user_id, op });
+      const closesChat = op === "block" && target === p.user_id;
+      if (closesChat) {
+        setTarget("");
+        setMessages([]);
+      }
+      if (!closesChat) await refresh();
+      window.dispatchEvent(new Event("cb-social-changed"));
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function hideConversation(userId: string) {
+    setBusy(true);
+    try {
+      await arena("chat-hide", { target: userId });
+      const closesChat = target === userId;
+      if (closesChat) {
+        setTarget("");
+        setMessages([]);
+      } else {
+        await refresh();
+      }
+      toast.success(
+        "Conversation removed. It will return if either player chats again.",
+      );
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function toggleMute(userId: string, muted: boolean) {
+    setBusy(true);
+    try {
+      await arena("chat-mute", { target: userId, muted: !muted });
       await refresh();
+      toast.success(muted ? "Player unmuted." : "Player muted.");
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -347,6 +467,9 @@ export function SocialHub({
       setBusy(false);
     }
   }
+  const selectedConversation = list?.users.find(
+    (person) => person.user_id === target,
+  );
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="social-dialog">
@@ -410,97 +533,166 @@ export function SocialHub({
         )}
         {loading && <p role="status">Loading…</p>}
         {chat ? (
-          <>
+          <div
+            className={
+              mode === "personal" ? "personal-chat-layout" : "chat-main-only"
+            }
+          >
             {mode === "personal" && (
-              <>
-                <button
-                  onClick={() => {
-                    setTarget("");
-                    setBefore(undefined);
-                  }}
-                >
-                  ← Personal conversations
-                </button>
-                <SocialButtons
-                  target={target}
-                  onBlocked={() => {
-                    setMessages([]);
-                    void refresh();
-                  }}
-                />
-              </>
-            )}
-            <div
-              className="chat-history"
-              role="log"
-              aria-label={
-                mode === "community"
-                  ? "Community messages"
-                  : "Personal messages"
-              }
-            >
-              {hasMore && (
-                <button onClick={() => setBefore(messages[0]?.created_at)}>
-                  Older messages
-                </button>
-              )}
-              {before && (
-                <button onClick={() => setBefore(undefined)}>
-                  Latest messages
-                </button>
-              )}
-              {!loading && !error && !messages.length && (
-                <p>No messages yet. Start the conversation.</p>
-              )}
-              {messages.map((m) => (
-                <article
-                  className={m.sender_id === profile?.user_id ? "mine" : ""}
-                  key={m.id}
-                >
-                  <button
-                    className="message-author"
-                    onClick={() => {
-                      if (m.sender_id !== profile?.user_id) {
-                        setTarget(m.sender_id);
-                        setMode("personal");
+              <aside
+                className="personal-chat-rail"
+                aria-label="Personal conversations"
+              >
+                {list?.users.map((person) => (
+                  <div
+                    className={`chat-contact${target === person.user_id ? " active" : ""}`}
+                    key={person.user_id}
+                  >
+                    <button
+                      className="chat-avatar-button"
+                      aria-label={`Chat with ${person.display_name}`}
+                      title={`${person.display_name}${person.muted ? " · muted" : ""}`}
+                      onClick={() => {
+                        setTarget(person.user_id);
                         setBefore(undefined);
-                      }
+                      }}
+                    >
+                      {person.avatar_url ? (
+                        <img src={person.avatar_url} alt="" />
+                      ) : (
+                        <span>{person.display_name[0]}</span>
+                      )}
+                      {person.muted && (
+                        <VolumeX className="chat-muted-mark" size={14} />
+                      )}
+                    </button>
+                    <button
+                      className="chat-contact-remove"
+                      aria-label={`Remove conversation with ${person.display_name}`}
+                      title="Remove conversation"
+                      disabled={busy}
+                      onClick={() => void hideConversation(person.user_id)}
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ))}
+                {!loading && !list?.users.length && (
+                  <small>No personal chats</small>
+                )}
+              </aside>
+            )}
+            <section className="chat-main">
+              {mode === "personal" && target && selectedConversation && (
+                <div className="chat-person-toolbar">
+                  <strong>{selectedConversation.display_name}</strong>
+                  <span />
+                  <button
+                    disabled={busy}
+                    onClick={() =>
+                      void toggleMute(target, !!selectedConversation.muted)
+                    }
+                  >
+                    {selectedConversation.muted ? (
+                      <Volume2 size={15} />
+                    ) : (
+                      <VolumeX size={15} />
+                    )}
+                    {selectedConversation.muted ? "Unmute" : "Mute"}
+                  </button>
+                  <button
+                    className="danger"
+                    disabled={busy}
+                    onClick={() => void act(selectedConversation, "block")}
+                  >
+                    <ShieldBan size={15} /> Block
+                  </button>
+                </div>
+              )}
+              {mode === "personal" && !target ? (
+                <p className="chat-empty">
+                  Choose a player on the left to open a personal chat.
+                </p>
+              ) : (
+                <>
+                  <div
+                    className="chat-history"
+                    role="log"
+                    aria-label={
+                      mode === "community"
+                        ? "Community messages"
+                        : "Personal messages"
+                    }
+                  >
+                    {hasMore && (
+                      <button
+                        onClick={() => setBefore(messages[0]?.created_at)}
+                      >
+                        Older messages
+                      </button>
+                    )}
+                    {before && (
+                      <button onClick={() => setBefore(undefined)}>
+                        Latest messages
+                      </button>
+                    )}
+                    {!loading && !error && !messages.length && (
+                      <p>No messages yet. Start the conversation.</p>
+                    )}
+                    {messages.map((m) => (
+                      <article
+                        className={
+                          m.sender_id === profile?.user_id ? "mine" : ""
+                        }
+                        key={m.id}
+                      >
+                        <button
+                          className="message-author"
+                          onClick={() => {
+                            if (m.sender_id !== profile?.user_id) {
+                              setTarget(m.sender_id);
+                              setMode("personal");
+                              setBefore(undefined);
+                            }
+                          }}
+                        >
+                          {m.display_name}
+                        </button>
+                        <p>{m.body}</p>
+                        <time>
+                          {new Date(m.created_at).toLocaleString([], {
+                            month: "short",
+                            day: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </time>
+                      </article>
+                    ))}
+                  </div>
+                  <form
+                    className="chat-compose"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      void send();
                     }}
                   >
-                    {m.display_name}
-                  </button>
-                  <p>{m.body}</p>
-                  <time>
-                    {new Date(m.created_at).toLocaleString([], {
-                      month: "short",
-                      day: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </time>
-                </article>
-              ))}
-            </div>
-            <form
-              className="chat-compose"
-              onSubmit={(e) => {
-                e.preventDefault();
-                void send();
-              }}
-            >
-              <textarea
-                aria-label="Your message"
-                placeholder="Write a message…"
-                maxLength={1000}
-                value={draft}
-                onChange={(e) => {
-                  setDraft(e.target.value);
-                  drafts.current[draftKey.current] = e.target.value;
-                }}
-              />
-              <button disabled={busy || !draft.trim()}>Send</button>
-            </form>
-          </>
+                    <textarea
+                      aria-label="Your message"
+                      placeholder="Write a message…"
+                      maxLength={1000}
+                      value={draft}
+                      onChange={(e) => {
+                        setDraft(e.target.value);
+                        drafts.current[draftKey.current] = e.target.value;
+                      }}
+                    />
+                    <button disabled={busy || !draft.trim()}>Send</button>
+                  </form>
+                </>
+              )}
+            </section>
+          </div>
         ) : (
           <>
             <div className="social-list">
@@ -535,16 +727,6 @@ export function SocialHub({
                         onClick={() => void act(p, "unblock")}
                       >
                         Unblock
-                      </button>
-                    ) : view === "chat" ? (
-                      <button
-                        onClick={() => {
-                          setTarget(p.user_id);
-                          setMode("personal");
-                          setBefore(undefined);
-                        }}
-                      >
-                        Chat
                       </button>
                     ) : view === "followers" ? (
                       <button
