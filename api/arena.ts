@@ -24,6 +24,7 @@ export const cmsGoldAmount = (value: unknown) => {
   const amount = Number(value);
   return Number.isInteger(amount) && amount >= 1 && amount <= 10_000 ? amount : null;
 };
+export const kingdomNameInput = (value: unknown) => String(value ?? '').trim().replace(/\s+/g, ' ').slice(0, 48);
 
 async function publicRanks(client: Db) {
   await reconcileAuthProfiles(client);
@@ -628,7 +629,7 @@ export default async function handler(req: Req, res: Res) {
       const presence = await client.from('cb_presence').select('latitude,longitude,accuracy').eq('user_id', account.id).eq('gps_enabled', true).gt('seen_at', new Date(now() - 30_000).toISOString()).maybeSingle();
       if (presence.error) fail(500, 'GPS presence is temporarily unavailable.');
       if (!presence.data || Number(presence.data.accuracy) > 100) fail(409, 'Enable GPS and wait for accuracy within 100 m.');
-      const kingdom = String(body.kingdom_name ?? '').trim().replace(/\s+/g, ' ').slice(0, 48);
+      const kingdom = kingdomNameInput(body.kingdom_name);
       if (kingdom.length < 3 || !/[\p{L}\p{N}]/u.test(kingdom)) fail(400, 'Choose a kingdom name between 3 and 48 characters.');
       const latitude = Number(presence.data.latitude), longitude = Number(presence.data.longitude);
       const polygon = kingdomRangePolygon(latitude, longitude);
@@ -650,6 +651,16 @@ export default async function handler(req: Req, res: Res) {
       });
       if (claimed.error) fail(claimed.error.message.includes('gold') ? 409 : 500, claimed.error.message);
       return res.status(200).json({ ok: true, claimed: true, gold_cost: FRESH_TERRITORY_COST, defense_points: 10, territory: claimed.data });
+    }
+    if (action === 'rename-kingdom') {
+      const territoryId = String(body.territory_id ?? '');
+      if (!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(territoryId)) fail(400, 'Choose a valid kingdom.');
+      const kingdom = kingdomNameInput(body.kingdom_name);
+      if (kingdom.length < 3 || !/[\p{L}\p{N}]/u.test(kingdom)) fail(400, 'Choose a kingdom name between 3 and 48 characters.');
+      const renamed = await client.from('cb_territories').update({ barangay: kingdom, updated_at: new Date().toISOString() }).eq('id', territoryId).eq('user_id', account.id).select('id,barangay').maybeSingle();
+      if (renamed.error) fail(500, renamed.error.message);
+      if (!renamed.data) fail(403, 'Only the current KING can rename this kingdom.');
+      return res.status(200).json({ ok: true, territory: renamed.data });
     }
     if (action === 'invasion-challenge') return res.status(200).json(await createInvasionChallenge(client, account, body));
     if (action === 'social-status' || action === 'social-update') {
