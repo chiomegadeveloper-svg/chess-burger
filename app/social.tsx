@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import type { PlayerProfile } from "./supabase";
 import { levelFor } from "./cbr";
 import type { ArenaPlayer } from "./game-rules";
-import { MessageCircle, ShieldBan, Volume2, VolumeX, X } from "lucide-react";
+import { MessageCircle, ShieldBan, Trash2, Users, Volume2, VolumeX, X } from "lucide-react";
 export type SocialView = "friends" | "followers" | "chat";
 type SocialOpenDetail = { view: SocialView; target?: string };
 let socialOpenHandler: ((detail: SocialOpenDetail) => void) | null = null;
@@ -38,6 +38,7 @@ type Person = {
   muted?: boolean;
   last_message?: string;
   last_at?: number;
+  unread?: number;
 };
 type Listing = { users: Person[]; total: number; page: number; pages: number };
 type Message = {
@@ -47,7 +48,9 @@ type Message = {
   display_name: string;
   body: string;
   created_at: number;
+  deleted_at?: string | null;
 };
+type ChatSummary={unread:number;personalUnread:number;communityUnread:number;groups:Array<{id:string;name:string;preview:string;unread:number}>;friends:Person[]};
 export function SocialButtons({
   target,
   onBlocked,
@@ -191,7 +194,9 @@ export function FloatingChatButton({ visible }: { visible: boolean }) {
     ),
     positionRef = useRef<ChatButtonPosition | null>(position),
     drag = useRef<{ dx: number; dy: number; moved: boolean } | null>(null),
-    suppressClick = useRef(false);
+    suppressClick = useRef(false),
+    [unread,setUnread]=useState(0);
+  useEffect(()=>{if(!visible)return;let active=true;const load=()=>void arena<ChatSummary>("chat-summary").then(data=>{if(active)setUnread(data.unread);}).catch(()=>{});load();const timer=setInterval(load,15000);window.addEventListener("cb-chat-changed",load);return()=>{active=false;clearInterval(timer);window.removeEventListener("cb-chat-changed",load);};},[visible]);
   if (!visible) return null;
   const style = position
     ? { left: position.x, top: position.y }
@@ -255,6 +260,7 @@ export function FloatingChatButton({ visible }: { visible: boolean }) {
     >
       <MessageCircle size={24} />
       <span>Chat</span>
+      {unread>0&&<b className="chat-notification" aria-label={`${unread} unread messages`}>{Math.min(99,unread)}</b>}
     </button>
   );
 }
@@ -273,6 +279,10 @@ export function SocialHub({
     [q, setQ] = useState(""),
     [list, setList] = useState<Listing | null>(null),
     [messages, setMessages] = useState<Message[]>([]),
+    [chatSummary,setChatSummary]=useState<ChatSummary|null>(null),
+    [groupId,setGroupId]=useState(""),
+    [groupName,setGroupName]=useState(""),
+    [groupMembers,setGroupMembers]=useState<string[]>([]),
     [hasMore, setHasMore] = useState(false),
     [before, setBefore] = useState<number | undefined>(),
     [draft, setDraft] = useState(""),
@@ -288,7 +298,7 @@ export function SocialHub({
     drafts = useRef<Record<string, string>>({}),
     draftKey = useRef(""),
     current = useRef("");
-  current.current = `${view}:${mode}:${target}:${page}:${q}:${before}`;
+  current.current = `${view}:${mode}:${target}:${groupId}:${page}:${q}:${before}`;
   useEffect(() => {
     const show = (detail: SocialOpenDetail) => {
       if (!profile || profile.user_id === "guest-device") {
@@ -301,10 +311,11 @@ export function SocialHub({
         detail.view === "chat"
           ? detail.target
             ? "personal"
-            : "community"
+            : "personal"
           : detail.view,
       );
       setTarget(detail.target ?? "");
+      setGroupId("");
       setQ("");
       setPage(1);
       setBefore(undefined);
@@ -347,31 +358,34 @@ export function SocialHub({
     return () => document.removeEventListener("keydown", closeOnEscape);
   }, [open]);
   useEffect(() => {
-    const key = mode === "personal" ? target : "community";
+    const key = mode === "personal" ? target : mode === "group" ? groupId : "community";
     draftKey.current = key;
     setDraft(drafts.current[key] ?? "");
-  }, [mode, target]);
+  }, [mode, target, groupId]);
   const chat = view === "chat";
   const refresh = useCallback(async () => {
     if (!open) return;
     const ticket = ++seq.current;
     try {
       if (chat) {
-        const [conversations, data] = await Promise.all([
+        const [conversations, data,summary] = await Promise.all([
           mode === "personal"
             ? arena<Listing>("chat-conversations", { target })
             : Promise.resolve(null),
-          mode === "community" || target
+          mode === "community" || target || groupId
             ? arena<{ messages: Message[]; hasMore: boolean }>("chat-read", {
                 target: mode === "personal" ? target : "",
+                group_id: mode === "group" ? groupId : "",
                 ...(before ? { before } : {}),
               })
             : Promise.resolve({ messages: [], hasMore: false }),
+          arena<ChatSummary>("chat-summary"),
         ]);
         if (ticket === seq.current) {
           setMessages(data.messages);
           setHasMore(data.hasMore);
           if (conversations) setList(conversations);
+          setChatSummary(summary);
         }
       } else {
         const data = await arena<Listing>("social-list", {
@@ -393,7 +407,7 @@ export function SocialHub({
     } finally {
       if (ticket === seq.current) setLoading(false);
     }
-  }, [open, chat, mode, target, q, page, before]);
+  }, [open, chat, mode, target, groupId, q, page, before]);
   useEffect(() => {
     seq.current++;
     setList(null);
@@ -420,6 +434,7 @@ export function SocialHub({
     setPage(1);
     setQ("");
     setTarget("");
+    setGroupId("");
     setBefore(undefined);
     setError("");
   }
@@ -487,10 +502,12 @@ export function SocialHub({
     try {
       await arena("chat-send", {
         target: mode === "personal" ? target : "",
+        group_id: mode === "group" ? groupId : "",
         body,
         id: messageId,
       });
       pendingMessage.current = null;
+      window.dispatchEvent(new Event("cb-chat-changed"));
       drafts.current[key] = "";
       if (context === current.current) {
         setDraft("");
@@ -503,6 +520,8 @@ export function SocialHub({
       setBusy(false);
     }
   }
+  async function deleteMessage(id:string){if(busy)return;setBusy(true);try{await arena("chat-delete",{id});window.dispatchEvent(new Event("cb-chat-changed"));await refresh();}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
+  async function createGroup(){if(busy||groupName.trim().length<3||!groupMembers.length)return;setBusy(true);try{const data=await arena<{group:{id:string}}>("chat-group-create",{name:groupName,member_ids:groupMembers});setGroupName("");setGroupMembers([]);setGroupId(data.group.id);window.dispatchEvent(new Event("cb-chat-changed"));await refresh();}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
   const selectedConversation = list?.users.find(
     (person) => person.user_id === target,
   );
@@ -542,14 +561,14 @@ export function SocialHub({
             ? "Find players and manage your friends."
             : view === "followers"
               ? "See who follows you and follow them back."
-              : "Talk with the community or a player privately."}
+              : "Personal, group and community conversations."}
         </p>
         <div className="social-tabs">
           {(view === "friends"
             ? ["friends", "requests", "blocked"]
             : view === "followers"
               ? ["followers", "following"]
-              : ["community", "personal"]
+              : ["personal", "group", "community"]
           ).map((v) => (
             <button key={v} aria-pressed={mode === v} onClick={() => select(v)}>
               {v === "friends"
@@ -564,7 +583,8 @@ export function SocialHub({
                         ? "Following"
                         : v === "community"
                           ? "Community"
-                          : "Personal"}
+                          : v === "group" ? "Group" : "Personal"}
+              {view==="chat"&&((v==="personal"?chatSummary?.personalUnread:v==="group"?chatSummary?.groups.reduce((n,g)=>n+g.unread,0):chatSummary?.communityUnread)??0)>0&&<b className="chat-tab-badge">{Math.min(99,(v==="personal"?chatSummary?.personalUnread:v==="group"?chatSummary?.groups.reduce((n,g)=>n+g.unread,0):chatSummary?.communityUnread)??0)}</b>}
             </button>
           ))}
         </div>
@@ -592,7 +612,7 @@ export function SocialHub({
         {chat ? (
           <div
             className={
-              mode === "personal" ? "personal-chat-layout" : "chat-main-only"
+              mode === "personal" ? "personal-chat-layout" : mode === "group" ? "personal-chat-layout group-chat-layout" : "chat-main-only"
             }
           >
             {mode === "personal" && (
@@ -623,6 +643,7 @@ export function SocialHub({
                         <VolumeX className="chat-muted-mark" size={14} />
                       )}
                     </button>
+                    {!!person.unread&&<b className="chat-contact-unread">{Math.min(99,person.unread)}</b>}
                     <button
                       className="chat-contact-remove"
                       aria-label={`Remove conversation with ${person.display_name}`}
@@ -639,6 +660,7 @@ export function SocialHub({
                 )}
               </aside>
             )}
+            {mode==="group"&&<aside className="personal-chat-rail group-chat-rail" aria-label="Group conversations"><form className="group-create" onSubmit={e=>{e.preventDefault();void createGroup();}}><input aria-label="Group name" placeholder="Group name" maxLength={48} value={groupName} onChange={e=>setGroupName(e.target.value)}/><div>{chatSummary?.friends.map(friend=><label key={friend.user_id}><input type="checkbox" checked={groupMembers.includes(friend.user_id)} onChange={()=>setGroupMembers(current=>current.includes(friend.user_id)?current.filter(id=>id!==friend.user_id):[...current,friend.user_id])}/><span>{friend.display_name}</span></label>)}</div><button disabled={busy||groupName.trim().length<3||!groupMembers.length}>Create</button></form>{chatSummary?.groups.map(group=><button key={group.id} className={`group-conversation${groupId===group.id?' active':''}`} onClick={()=>{setGroupId(group.id);setBefore(undefined);}}><Users size={18}/><span><strong>{group.name}</strong><small>{group.preview}</small></span>{group.unread>0&&<b>{group.unread}</b>}</button>)}</aside>}
             <section className="chat-main">
               {mode === "personal" && target && selectedConversation && (
                 <div className="chat-person-toolbar">
@@ -666,9 +688,9 @@ export function SocialHub({
                   </button>
                 </div>
               )}
-              {mode === "personal" && !target ? (
+              {(mode === "personal" && !target)||(mode==="group"&&!groupId) ? (
                 <p className="chat-empty">
-                  Choose a player on the left to open a personal chat.
+                  Choose {mode==="group"?'a group':'a player'} on the left to open the conversation.
                 </p>
               ) : (
                 <>
@@ -678,7 +700,7 @@ export function SocialHub({
                     aria-label={
                       mode === "community"
                         ? "Community messages"
-                        : "Personal messages"
+                        : mode === "group" ? "Group messages" : "Personal messages"
                     }
                   >
                     {hasMore && (
@@ -724,6 +746,7 @@ export function SocialHub({
                             minute: "2-digit",
                           })}
                         </time>
+                        {m.sender_id===profile?.user_id&&!m.deleted_at&&<button className="message-delete" aria-label="Delete your message" onClick={()=>void deleteMessage(m.id)}><Trash2 size={12}/> Delete</button>}
                       </article>
                     ))}
                   </div>
