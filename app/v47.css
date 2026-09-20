@@ -14,6 +14,7 @@ img,svg,video,canvas{max-width:100%}
 .social-actions-compact button{min-width:0;max-width:100%}
 .bottom-nav{width:100%;min-width:0}
 .bottom-nav button{min-width:0;overflow:hidden}
+.bottom-nav .play-nav{overflow:visible}
 .bottom-nav button>span:last-child{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 @media(max-width:480px){

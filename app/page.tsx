@@ -46,6 +46,7 @@ import { FloatingChatButton, SocialHub, MatchResult, type MatchSummary } from ".
 import PublicProfile from "./public-profile";
 import InstallPrompt from "./install-prompt";
 import { BagPage, ShopPage } from "./shop";
+import { isProfileComplete } from "./profile-completion";
 
 const modes = [
   {
@@ -168,8 +169,8 @@ function AppPage() {
   );
   const [localOcbr, setLocalOcbr] = useState(88);
   const scroller = useRef<HTMLDivElement>(null),
-    gps = useGpsPresence(profile?.user_id);
-  useLivePresence(profile?.user_id, !!gps.enabled && !!gps.position, activeId, profile?.cbr ?? 88);
+    gps = useGpsPresence(member === true ? profile?.user_id : undefined);
+  useLivePresence(member === true ? profile?.user_id : undefined, !!gps.enabled && !!gps.position, activeId, profile?.cbr ?? 88);
   const refreshProfile = useCallback(async () => {
     try {
       const c = await getSupabase();
@@ -203,9 +204,9 @@ function AppPage() {
         const live = await arena<{ profile: PlayerProfile }>("me");
         current = live.profile;
       } catch {}
-      const hasRequiredPhoto=!!current.avatar_url?.trim();
-      setMember(hasRequiredPhoto);
-      if(!hasRequiredPhoto)setTab("profile");
+      const complete = isProfileComplete(current);
+      setMember(complete);
+      if (!complete) setTab("profile");
       const stored = localStorage.getItem("cb-local-ocbr:" + current.user_id);
       if (stored)
         current = { ...current, ocbr: Math.max(0, Number(stored) || 88) };
@@ -240,12 +241,13 @@ function AppPage() {
     return () => window.removeEventListener("beforeunload", warn);
   }, [localMatchActive]);
   const onSaved = (p: PlayerProfile) => {
-    setMember(!!p.avatar_url?.trim());
+    const complete = isProfileComplete(p);
+    setMember(complete);
     setProfile(p);
     setLocalOcbr(p.ocbr ?? 88);
     window.dispatchEvent(new Event("cb-profile-saved"));
     void refreshProfile();
-    setTab("home");
+    setTab(complete ? "home" : "profile");
   };
   function rateLocal(result: "win" | "loss" | "draw", gameId: string) {
     const ledgerKey = "cb-local-rated-" + (profile?.user_id ?? "guest-device"),
@@ -706,18 +708,31 @@ function AppPage() {
         )}
       </section>
     );
-  if (member === false && tab !== "profile" && !(tab === "pairing" && localMatchActive))
-    content = (
-      <section className="profile-page registration-gate">
-        <div className="page-heading">
-          <h1>Create your player profile</h1>
+  if (member !== true)
+    return (
+      <main className="app-shell registration-locked-shell">
+        <header className="app-header">
+          <div className="brand">
+            <img src="/cburger_logo.png" alt="Chess Burger" />
+            <span>CHESS <b>BURGER</b></span>
+          </div>
+        </header>
+        <div className="scroll-area">
+          <section className="profile-page registration-gate">
+            <div className="page-heading">
+              <h1>Complete your registration</h1>
+              <p>Your name, username, country, and profile photo are required before you can enter Chess Burger.</p>
+            </div>
+            <Account
+              registrationOnly
+              onLoaded={setProfile}
+              onSaved={onSaved}
+              onMembershipChange={setMember}
+            />
+          </section>
         </div>
-        <Account
-          onLoaded={setProfile}
-          onSaved={onSaved}
-          onMembershipChange={setMember}
-        />
-      </section>
+        <Toaster theme="light" position="top-center" richColors closeButton />
+      </main>
     );
   return (
     <main className="app-shell">

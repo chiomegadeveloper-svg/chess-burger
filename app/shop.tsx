@@ -13,12 +13,11 @@ type ShopState = { owned: BannerRental[]; active: string; gold: number; server_n
 const rentalFor = (state: ShopState, id: string) => state.owned.find((item) => item.product_id === id);
 const rentalLabel = (expiresAt?: string) => expiresAt ? `Until ${new Date(expiresAt).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}` : "";
 
-function BannerTile({ banner, expiresAt, active, busy, actionLabel, onAction }: { banner: FeedBanner; expiresAt?: string; active: boolean; busy: boolean; actionLabel: ReactNode; onAction: () => void }) {
+function BannerTile({ banner, expiresAt, active, busy, disableWhenActive = false, actionLabel, onAction }: { banner: FeedBanner; expiresAt?: string; active: boolean; busy: boolean; disableWhenActive?: boolean; actionLabel: ReactNode; onAction: () => void }) {
   return <article className={`banner-product ${active ? "is-active" : ""}`}>
     <div className="banner-product-preview"><span className="banner-swatch" style={{ background: banner.background }} aria-hidden="true" /></div>
     <div className="banner-product-copy"><h3>{banner.name}</h3><span className={`banner-tier-tag ${banner.tier}`}>{banner.tier === "metallic" && <Crown size={10}/>} {banner.tier === "metallic" ? "Premium" : "Pastel"}</span>{expiresAt && <small className="rental-expiry">{rentalLabel(expiresAt)}</small>}</div>
-    {active && <span className="active-rental"><Check size={11}/> Active</span>}
-    <button type="button" disabled={busy} onClick={onAction}>{actionLabel}</button>
+    <button type="button" disabled={busy || (active && disableWhenActive)} onClick={onAction}>{actionLabel}</button>
   </article>;
 }
 
@@ -66,6 +65,6 @@ export function BagPage({ onChanged }: { onChanged: () => void }) {
   const [busy, setBusy] = useState("");
   const activate = async (id: string) => { setBusy(id); try { const data = await arena("activate-feed-banner", { product_id: id }) as { active: string; gold: number }; setState((current) => ({ ...current, active: data.active })); toast.success(`${feedBanner(id)?.name ?? "Banner"} activated.`); onChanged(); } catch (error) { toast.error(error instanceof Error ? error.message : "Unable to activate item."); } finally { setBusy(""); } };
   return <section className="bag-page"><div className="page-heading"><div><h1>My Bag</h1><p>Your active Chess Burger rentals.</p></div><span className="bag-count"><ShoppingBag size={16}/>{state.owned.length}</span></div>
-    {loading ? <p className="account-note">Opening your bag…</p> : state.owned.length === 0 ? <div className="empty-bag"><PackageOpen size={42}/><h2>Your bag is empty</h2><p>Rent a Feed Banner in the Shop and it will appear here until it expires.</p></div> : <div className="bag-tiles">{state.owned.map((rental) => { const banner = feedBanner(rental.product_id); if (!banner) return null; const active = state.active === rental.product_id; return <BannerTile key={rental.product_id} banner={banner} expiresAt={rental.expires_at} active={active} busy={busy === rental.product_id} actionLabel={active ? <><Check size={13}/> Active</> : "Use banner"} onAction={() => void activate(rental.product_id)}/>; })}</div>}
+    {loading ? <p className="account-note">Opening your bag…</p> : state.owned.length === 0 ? <div className="empty-bag"><PackageOpen size={42}/><h2>Your bag is empty</h2><p>Rent a Feed Banner in the Shop and it will appear here until it expires.</p></div> : <div className="bag-tiles">{state.owned.map((rental) => { const banner = feedBanner(rental.product_id); if (!banner) return null; const active = state.active === rental.product_id; return <BannerTile key={rental.product_id} banner={banner} expiresAt={rental.expires_at} active={active} busy={busy === rental.product_id} disableWhenActive actionLabel={active ? <><Check size={13}/> Active</> : "Use banner"} onAction={() => void activate(rental.product_id)}/>; })}</div>}
   </section>;
 }

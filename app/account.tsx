@@ -28,6 +28,7 @@ import RewardEmblems, {
 import { arena } from "./arena-client";
 import { profileRequest } from "./profile-client";
 import { toWebpUnder1Mb, validateImageFile } from "./media";
+import { isProfileComplete } from "./profile-completion";
 
 const emptyPhotos = ["", "", "", ""],
   countries = [
@@ -97,12 +98,14 @@ export default function Account({
   onOpenCms,
   onLoaded,
   onMembershipChange,
+  registrationOnly = false,
 }: {
   onLoaded?: (profile: PlayerProfile) => void;
   onSaved: (profile: PlayerProfile) => void;
   cardOnly?: boolean;
   onOpenCms?: () => void;
   onMembershipChange?: (member: boolean) => void;
+  registrationOnly?: boolean;
 }) {
   const [client, setClient] = useState<SupabaseClient | null>(null),
     [user, setUser] = useState<User | null>(null),
@@ -148,7 +151,7 @@ export default function Account({
           setProfile(cached);
           setGuest(false);
           onLoaded?.(cached);
-          onMembershipChange?.(cached.user_id !== "guest-device");
+          onMembershipChange?.(isProfileComplete(cached));
         }
       } catch {}
       setLoading(false);
@@ -189,9 +192,10 @@ export default function Account({
       const loaded = data
         ? { ...blankProfile(u.id), ...data }
         : newAccountProfile(u);
-      setRegistered(!!data);
-      setEditing(!data);
-      onMembershipChange?.(!!data);
+      const complete = isProfileComplete(loaded);
+      setRegistered(complete);
+      setEditing(!complete);
+      onMembershipChange?.(complete);
       if (!live) return;
       setProfile(loaded);
       onLoaded?.(loaded);
@@ -543,6 +547,10 @@ export default function Account({
         throw Object.assign(new Error("A profile picture is required to use Chess Burger."), {
           code: "avatar_required",
         });
+      if (!/^[A-Z]{2}$/.test(profile.country_code.trim().toUpperCase()))
+        throw Object.assign(new Error("Choose your country."), {
+          code: "country_required",
+        });
       const payload = {
         user_id: profile.user_id,
         username,
@@ -559,7 +567,7 @@ export default function Account({
       setProfile(saved);
       setRegistered(true);
       setEditing(false);
-      onMembershipChange?.(true);
+      onMembershipChange?.(isProfileComplete(saved));
       authStorage.setItem("cb-staff-profile", JSON.stringify(saved));
       onSaved(saved);
       toast.success("Profile saved securely.");
@@ -569,7 +577,8 @@ export default function Account({
         issue.code === "username_taken" ||
           issue.code === "username_format" ||
           issue.code === "name_required" ||
-          issue.code === "avatar_required"
+          issue.code === "avatar_required" ||
+          issue.code === "country_required"
           ? (issue.message ?? "Check your profile details.")
           : `Profile could not be saved${issue.message ? ": " + issue.message : ". Please try again."}`,
       );
@@ -917,7 +926,7 @@ export default function Account({
         <div className="account-toolbar">
           <span>Personal profile</span>
           <div className="account-controls">
-            {isStaff && (
+            {isStaff && !registrationOnly && (
               <button
                 type="button"
                 className="cms-access-button"
@@ -1027,7 +1036,7 @@ export default function Account({
           Keep me logged in
         </label>
         <div className="account-controls">
-          {isStaff && (
+          {isStaff && !registrationOnly && (
             <button
               type="button"
               className="cms-access-button"
@@ -1074,7 +1083,7 @@ export default function Account({
           <p>
             {flag(profile.country_code)} Level {level.level} · {level.name}
           </p>
-          {isStaff && (
+          {isStaff && !registrationOnly && (
             <button type="button" className="role-badge" onClick={onOpenCms}>
               {profile.role === "owner" ? "OWNER" : "GM ADMIN"}
             </button>
