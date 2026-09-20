@@ -351,6 +351,10 @@ async function broadcastMatch(match: any) {
 
 async function settle(client: Db, match: any) {
   if (match.status !== 'finished' || match.rating_applied || !match.black_id || !match.result) return;
+  if (match.match_kind === 'invasion') {
+    const invasion = await client.rpc('cb_settle_territory_invasion', { p_match_id: match.id });
+    if (invasion.error) fail(/cb_settle_territory_invasion|schema cache|function/i.test(invasion.error.message) ? 503 : 500, /cb_settle_territory_invasion|schema cache|function/i.test(invasion.error.message) ? 'Run supabase/0014_barangay_territory_defense.sql in Supabase, then try again.' : invasion.error.message);
+  }
   if (['queue', 'wager'].includes(String(match.play_mode ?? 'normal'))) {
     const paid = await client.rpc('cb_settle_match_gold', { p_match_id: match.id });
     if (paid.error) fail(500, paid.error.message);
@@ -781,6 +785,35 @@ export default async function handler(req: Req, res: Res) {
       const removed = await client.from('cb_match_queue').delete().eq('user_id', account.id).is('match_id', null);
       if (removed.error) fail(500, removed.error.message);
       return res.status(200).json({ ok: true });
+    }
+    if (action === 'invasion-challenge') {
+      await requireFairPlayReady(client,account.id);
+      const territoryId=String(body.territory_id??''),control=String(body.control??'');
+      if(!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(territoryId))fail(400,'Choose a valid kingdom.');
+      const clock=tc(control);
+      const territory=await client.from('cb_territories').select('id,user_id,lat,lng,defense_points').eq('id',territoryId).maybeSingle();
+      if(territory.error)fail(/defense_points|schema cache/i.test(territory.error.message)?503:500,/defense_points|schema cache/i.test(territory.error.message)?'Run supabase/0014_barangay_territory_defense.sql in Supabase, then try again.':territory.error.message);
+      const ownerId=String(territory.data?.user_id??'');
+      if(!territory.data||!ownerId||Number(territory.data.defense_points??0)<=0)fail(409,'This kingdom no longer has a KING. Refresh the map to invade it.');
+      if(ownerId===account.id)fail(400,'You cannot challenge your own kingdom.');
+      if(Number(account.profile.gold_points??0)<18)fail(409,'You need at least 18 Gold to challenge this KING.');
+      const ownerPresence=await client.from('cb_presence').select('latitude,longitude').eq('user_id',ownerId).eq('gps_enabled',true).gt('seen_at',gpsCutoff()).maybeSingle();
+      if(ownerPresence.error)fail(500,'The KING GPS status is temporarily unavailable.');
+      if(!ownerPresence.data||metres(Number(territory.data.lat),Number(territory.data.lng),Number(ownerPresence.data.latitude),Number(ownerPresence.data.longitude))>1000)fail(409,'The KING is no longer inside the kingdom range.');
+      const active=await client.from('cb_matches').select('id,white_id,black_id').eq('status','active').or(`white_id.eq.${account.id},black_id.eq.${account.id},white_id.eq.${ownerId},black_id.eq.${ownerId}`).limit(1);
+      if(active.error)fail(500,active.error.message);
+      if(active.data?.length)fail(409,'You or the KING is already in an active match.');
+      const waiting=await client.from('cb_matches').select('id').eq('status','waiting').eq('match_kind','invasion').eq('territory_id',territoryId).or(`and(host_id.eq.${account.id},invite_to.eq.${ownerId}),and(host_id.eq.${ownerId},invite_to.eq.${account.id})`).gt('created_at',new Date(now()-120000).toISOString()).limit(1);
+      if(waiting.error)fail(/match_kind|territory_id|schema cache/i.test(waiting.error.message)?503:500,/match_kind|territory_id|schema cache/i.test(waiting.error.message)?'Run supabase/0014_barangay_territory_defense.sql in Supabase, then try again.':waiting.error.message);
+      if(waiting.data?.length)fail(409,'A challenge for this kingdom is already waiting.');
+      const old=await client.from('cb_matches').update({status:'cancelled'}).eq('host_id',account.id).eq('status','waiting');
+      if(old.error)fail(500,old.error.message);
+      const unqueued=await client.from('cb_match_queue').delete().eq('user_id',account.id).is('match_id',null);
+      if(unqueued.error)fail(500,unqueued.error.message);
+      const created=await client.from('cb_matches').insert({host_id:account.id,white_id:account.id,invite_to:ownerId,status:'waiting',code:code(),control,white_ms:clock.seconds*1000,black_ms:clock.seconds*1000,last_tick:new Date().toISOString(),white_cbr:account.profile.cbr,play_mode:'normal',wager_gold:0,public_challenge:false,match_kind:'invasion',territory_id:territoryId,invasion_challenger_id:account.id,invasion_fee_paid:false}).select('*').single();
+      if(created.error)fail(/match_kind|territory_id|invasion_|schema cache/i.test(created.error.message)?503:500,/match_kind|territory_id|invasion_|schema cache/i.test(created.error.message)?'Run supabase/0014_barangay_territory_defense.sql in Supabase, then try again.':created.error.message);
+      console.info('arena.invasion-created',{matchId:created.data.id,territoryId,challengerId:account.id,ownerId});
+      return res.status(200).json({match:await matchView(client,created.data)});
     }
     if (action === 'room') {
       await requireFairPlayReady(client,account.id);
