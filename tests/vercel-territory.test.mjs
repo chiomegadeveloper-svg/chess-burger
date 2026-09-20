@@ -32,11 +32,11 @@ test('multipolygon containment supports separated barangay islands',()=>{
 });
 
 
-test('kingdom ranges are closed 2 km GPS polygons',()=>{
+test('kingdom ranges are closed 2 km² GPS square polygons',()=>{
  const range=kingdomRangePolygon(11.244,125.003);
  assert.equal(range.type,'Polygon');
- assert.equal(range.coordinates[0].length,33);
+ assert.equal(range.coordinates[0].length,5);
  assert.equal(polygonContains(range,11.244,125.003),true);
- // Roughly 2.8 km north: outside a 2 km claim range.
- assert.equal(polygonContains(range,11.269,125.003),false);
+ // Roughly 800 m north: outside a square whose half-side is 707 m.
+ assert.equal(polygonContains(range,11.2512,125.003),false);
 });
