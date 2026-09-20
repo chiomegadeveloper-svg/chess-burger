@@ -216,7 +216,11 @@ async function nearbyPlayers(client: Db, account: any) {
   if(nearbyZones.error||ownedZones.error)return {players,territories:[]};
   const merged=[...(nearbyZones.data??[]),...(ownedZones.data??[])].filter((zone:any,index:number,rows:any[])=>rows.findIndex(other=>other.id===zone.id)===index);
   const owners=await playerMap(client,merged.map((zone:any)=>zone.user_id));
-  const territories=merged.map((zone:any)=>({...zone,is_owner:zone.user_id===account.id,display_name:owners.get(zone.user_id)?.display_name??'Player'}));
+  const onlineOwners = new Set([account.id, ...(presence.data ?? []).map((row: any) => row.user_id)]);
+  const territories=merged.map((zone:any)=>{
+    const owner=owners.get(zone.user_id);
+    return {...zone,centroid_lat:Number(zone.lat),centroid_lng:Number(zone.lng),defense_points:10,online:onlineOwners.has(zone.user_id),is_owner:zone.user_id===account.id,display_name:owner?.display_name??'Player',username:owner?.username??'',avatar_url:owner?.avatar_url??'',cbr:Number(owner?.cbr??0),country_code:owner?.country_code??''};
+  });
   return { players, territories };
 }
 const tc = (id: string) => TIME[id] ?? fail(400, 'Choose a valid time control.');
@@ -542,12 +546,17 @@ export default async function handler(req: Req, res: Res) {
       return res.status(200).json({ scope, label, players: ranked.data ?? [] });
     }
     if (action === 'claim') {
+      const kingdomName=String(body.kingdom_name??'').trim().replace(/\s+/g,' ');
+      if(kingdomName.length<3||kingdomName.length>40)fail(400,'Kingdom name must be 3 to 40 characters.');
       const presence = await client.from('cb_presence').select('latitude,longitude,accuracy').eq('user_id', account.id).eq('gps_enabled', true).gt('seen_at', new Date(now() - 30_000).toISOString()).maybeSingle();
       if (presence.error) fail(500, 'GPS presence is temporarily unavailable.');
       if (!presence.data || Number(presence.data.accuracy) > 100) fail(409, 'Enable GPS and wait for accuracy within 100 m.');
       const claimed = await client.rpc('cb_claim_territory', { p_user_id: account.id, p_lat: Number(presence.data.latitude), p_lng: Number(presence.data.longitude) });
       if (claimed.error) fail(claimed.error.message.includes('gold') ? 409 : 500, claimed.error.message);
-      return res.status(200).json({ ok: true, gold_cost: 48, territory: claimed.data });
+      const saved=await client.from('cb_territories').update({kingdom_name:kingdomName}).eq('id',claimed.data).eq('user_id',account.id).select('id,user_id,lat,lng,kingdom_name').maybeSingle();
+      if(saved.error)fail(500,saved.error.message);
+      if(!saved.data)fail(500,'Your kingdom could not be named.');
+      return res.status(200).json({ ok: true, claimed: true, defense_points: 10, gold_cost: 48, territory: saved.data });
     }
     if(action==='territory-name'){const territoryId=String(body.territory_id??''),kingdomName=String(body.kingdom_name??'').trim().replace(/\s+/g,' ');if(!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(territoryId))fail(400,'Choose a valid kingdom.');if(kingdomName.length<3||kingdomName.length>40)fail(400,'Kingdom name must be 3 to 40 characters.');const saved=await client.from('cb_territories').update({kingdom_name:kingdomName}).eq('id',territoryId).eq('user_id',account.id).select('id,user_id,lat,lng,kingdom_name').maybeSingle();if(saved.error)fail(500,saved.error.message);if(!saved.data)fail(403,'Only the kingdom owner can rename it.');return res.status(200).json({territory:{...saved.data,is_owner:true,display_name:account.profile.display_name}});}
     if (action === 'social-status' || action === 'social-update') {

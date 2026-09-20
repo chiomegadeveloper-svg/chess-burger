@@ -9,10 +9,16 @@ test('current API territory rows supply valid Leaflet center and polygon',()=>{
  const zone=data.territories[0];
  assert.equal(zone.centroid_lat,11.244);assert.equal(zone.centroid_lng,125.003);
  assert.equal(zone.barangay,'Omega Kingdom');assert.equal(zone.is_owner,true);
+ assert.equal(zone.kingdom_name,'Omega Kingdom');
  assert.equal(validBoundary(zone.boundary),true);
  // These undefined coordinates caused Leaflet to unmount the entire app.
  assert.equal(Number.isNaN(Number(zone.centroid_lat)),false);
  assert.equal(Number.isNaN(Number(zone.centroid_lng)),false);
+});
+test('an unnamed legacy territory is labelled clearly without pre-filling a fake name',()=>{
+ const zone=normalizeNearby({territories:[{...legacy,kingdom_name:null}]}).territories[0];
+ assert.equal(zone.kingdom_name,'');
+ assert.equal(zone.barangay,'Unnamed kingdom');
 });
 test('existing valid polygons and territory metadata are preserved',()=>{
  const boundary=kingdomBoundary(11.244,125.003);

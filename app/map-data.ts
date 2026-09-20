@@ -4,7 +4,7 @@ export type NearbyPlayer = ArenaPlayer & {lat: number; lng: number; distance: nu
 type Polygon = {type: 'Polygon'; coordinates: number[][][]};
 type MultiPolygon = {type: 'MultiPolygon'; coordinates: number[][][][]};
 export type Zone = {
-  id: string; user_id: string; barangay_key: string; barangay: string; locality: string;
+  id: string; user_id: string; barangay_key: string; barangay: string; kingdom_name: string; locality: string;
   boundary: Polygon | MultiPolygon; centroid_lat: number; centroid_lng: number;
   defense_points: number | null; online: boolean; is_owner: boolean;
   display_name: string; username: string; avatar_url: string; cbr: number | null; country_code: string;
@@ -68,9 +68,10 @@ export function normalizeNearby(value: unknown): {players: NearbyPlayer[]; terri
     if (!record(row) || !text(row.id) || !text(row.user_id)) continue;
     const center = mapCoordinates(row.centroid_lat, row.centroid_lng) ?? mapCoordinates(row.lat, row.lng);
     if (!center) continue;
+    const kingdomName = text(row.kingdom_name).trim();
     territories.push({
       id: text(row.id), user_id: text(row.user_id), barangay_key: text(row.barangay_key),
-      barangay: text(row.kingdom_name) || text(row.barangay) || 'Kingdom', locality: text(row.locality),
+      barangay: kingdomName || text(row.barangay) || 'Unnamed kingdom', kingdom_name: kingdomName, locality: text(row.locality),
       boundary: validBoundary(row.boundary) ? row.boundary : kingdomBoundary(center.lat, center.lng),
       centroid_lat: center.lat, centroid_lng: center.lng, defense_points: numeric(row.defense_points),
       online: row.online === true, is_owner: row.is_owner === true,
