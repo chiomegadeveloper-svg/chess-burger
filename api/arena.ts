@@ -86,15 +86,15 @@ export function polygonContains(boundary: any, lat: number, lng: number) {
   const polygons = boundary?.type === 'Polygon' ? [boundary.coordinates] : boundary?.type === 'MultiPolygon' ? boundary.coordinates : [];
   return polygons.some((polygon: number[][][]) => Array.isArray(polygon?.[0]) && ringContains([lng, lat], polygon[0]) && !polygon.slice(1).some((hole: number[][]) => ringContains([lng, lat], hole)));
 }
-export function kingdomRangePolygon(lat: number, lng: number, radiusM = 2_000, sides = 32) {
-  const earthRadius = 6_371_008.8, phi1 = lat * Math.PI / 180, lambda1 = lng * Math.PI / 180, angular = radiusM / earthRadius;
-  const coordinates = Array.from({ length: sides }, (_, index) => {
-    const bearing = index * 2 * Math.PI / sides;
-    const phi2 = Math.asin(Math.sin(phi1) * Math.cos(angular) + Math.cos(phi1) * Math.sin(angular) * Math.cos(bearing));
-    const lambda2 = lambda1 + Math.atan2(Math.sin(bearing) * Math.sin(angular) * Math.cos(phi1), Math.cos(angular) - Math.sin(phi1) * Math.sin(phi2));
-    return [Number((lambda2 * 180 / Math.PI).toFixed(7)), Number((phi2 * 180 / Math.PI).toFixed(7))];
-  });
-  coordinates.push(coordinates[0]!);
+export function kingdomRangePolygon(lat: number, lng: number, areaM2 = 2_000_000) {
+  // A true square kilometre-area territory: √2 km per side for 2 km².
+  const halfSideM = Math.sqrt(areaM2) / 2, latMetres = 111_320, lngMetres = Math.max(1, latMetres * Math.cos(lat * Math.PI / 180));
+  const north = halfSideM / latMetres, east = halfSideM / lngMetres;
+  const coordinates = [
+    [lng - east, lat + north], [lng + east, lat + north],
+    [lng + east, lat - north], [lng - east, lat - north],
+    [lng - east, lat + north],
+  ].map(([x,y])=>[Number(x.toFixed(7)),Number(y.toFixed(7))]);
   return { type: 'Polygon' as const, coordinates: [coordinates] };
 }
 function usableBoundary(value: any) {
@@ -183,7 +183,14 @@ async function nearbyPlayers(client: Db, account: any) {
   const fields = 'id,user_id,barangay_key,barangay,locality,boundary,centroid_lat,centroid_lng,defense_points,captured_at,updated_at,created_at';
   const zoneRows = await client.from('cb_territories').select(fields).order('updated_at', { ascending: false }).limit(250);
   if (zoneRows.error) return { players, territories: [] };
-  const rows = (zoneRows.data ?? []).filter((row: any) => usableBoundary(row.boundary) && polygonContains(row.boundary, Number(own.data.latitude), Number(own.data.longitude))).slice(0, 1);
+  const allZones = zoneRows.data ?? [];
+  const staleKingdoms = allZones.filter((row: any) => String(row.barangay_key ?? '').startsWith('kingdom:') && usableBoundary(row.boundary) && row.boundary.coordinates?.[0]?.length !== 5 && Number.isFinite(Number(row.centroid_lat)) && Number.isFinite(Number(row.centroid_lng)));
+  if (staleKingdoms.length) await Promise.all(staleKingdoms.map(async (row: any) => {
+    const boundary = kingdomRangePolygon(Number(row.centroid_lat), Number(row.centroid_lng));
+    row.boundary = boundary;
+    await client.from('cb_territories').update({ boundary, radius_m: Math.sqrt(2_000_000) / 2, updated_at: new Date().toISOString() }).eq('id', row.id);
+  }));
+  const rows = allZones.filter((row: any) => usableBoundary(row.boundary) && polygonContains(row.boundary, Number(own.data.latitude), Number(own.data.longitude))).slice(0, 1);
   const owners = await playerMap(client, rows.map((z: any) => z.user_id));
   const ownerIds = [...new Set(rows.map((z: any) => z.user_id))];
   const ownerPresence = ownerIds.length ? await client.from('cb_live_presence').select('*').in('user_id', ownerIds) : { data: [], error: null };
@@ -608,8 +615,8 @@ export default async function handler(req: Req, res: Res) {
       const key = `kingdom:${latitude.toFixed(4)}:${longitude.toFixed(4)}`;
       const existing = await client.from('cb_territories').select('id,barangay,centroid_lat,centroid_lng,boundary').order('updated_at', { ascending: false }).limit(250);
       if (existing.error) fail(500, existing.error.message);
-      const overlap = (existing.data ?? []).find((zone: any) => (Number.isFinite(Number(zone.centroid_lat)) && Number.isFinite(Number(zone.centroid_lng)) && metres(latitude, longitude, Number(zone.centroid_lat), Number(zone.centroid_lng)) < 4_000) || (usableBoundary(zone.boundary) && polygonContains(zone.boundary, latitude, longitude)));
-      if (overlap) fail(409, `This 2 km range overlaps ${overlap.barangay || 'an existing kingdom'}. Move outside its range before claiming.`);
+      const overlap = (existing.data ?? []).find((zone: any) => (Number.isFinite(Number(zone.centroid_lat)) && Number.isFinite(Number(zone.centroid_lng)) && Math.abs(latitude - Number(zone.centroid_lat)) * 111_320 < Math.sqrt(2_000_000) && Math.abs(longitude - Number(zone.centroid_lng)) * 111_320 * Math.cos(latitude * Math.PI / 180) < Math.sqrt(2_000_000)) || (usableBoundary(zone.boundary) && polygonContains(zone.boundary, latitude, longitude)));
+      if (overlap) fail(409, `This 2 km² kingdom overlaps ${overlap.barangay || 'an existing kingdom'}. Move outside its range before claiming.`);
       const region = await client.from('cb_player_regions').select('locality').eq('user_id', account.id).maybeSingle();
       if (region.error) fail(500, region.error.message);
       const claimed = await client.rpc('cb_claim_barangay_territory', {
