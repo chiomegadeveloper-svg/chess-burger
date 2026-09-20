@@ -285,6 +285,17 @@ const tc = (id: string) => TIME[id] ?? fail(400, 'Choose a valid time control.')
 const code = () => Array.from(crypto.getRandomValues(new Uint8Array(8)), n => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[n % 32] ?? 'A').join('');
 const one = <T>(r: { data: T | null; error: { message: string } | null }): T => { if (r.error) fail(500, r.error.message); if (!r.data) fail(404, 'This game is no longer available.'); return r.data as T; };
 
+export function cmsUsername(value: unknown) {
+  return String(value ?? '').trim().replace(/^@+/, '').toLowerCase();
+}
+export function cmsGoldAmount(value: unknown) {
+  const amount=Number(value);
+  return Number.isInteger(amount)&&amount>=1&&amount<=10_000?amount:null;
+}
+export function kingdomNameInput(value: unknown) {
+  return String(value??'').trim().replace(/\s+/g,' ').slice(0,48);
+}
+
 function db(): Db {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
@@ -294,6 +305,13 @@ function db(): Db {
   // instructions or Unicode characters without ever logging the credential.
   if (!/^[\x21-\x7e]+$/.test(key)) fail(503, 'The Vercel Supabase server key contains invalid characters. Replace it with the exact key from Supabase, then redeploy Preview.');
   return createClient(url as string, key as string, { auth: { autoRefreshToken: false, persistSession: false } }) as Db;
+}
+function userScopedDb(req:Req):Db{
+  const url=process.env.NEXT_PUBLIC_SUPABASE_URL??process.env.VITE_SUPABASE_URL;
+  const key=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY??process.env.VITE_SUPABASE_PUBLISHABLE_KEY??process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY??process.env.VITE_SUPABASE_ANON_KEY??process.env.SUPABASE_SERVICE_ROLE_KEY??'';
+  const header=req.headers.authorization,authorization=Array.isArray(header)?header[0]:header;
+  if(!url||!key||!authorization)fail(503,'The CMS database connection is unavailable.');
+  return createClient(url,key,{global:{headers:{Authorization:authorization}},auth:{autoRefreshToken:false,persistSession:false}}) as Db;
 }
 async function signedIn(client: Db, req: Req) {
   const header = req.headers.authorization;
@@ -594,6 +612,23 @@ export default async function handler(req: Req, res: Res) {
     // Keep it as a first-class migration action rather than falling through to
     // a 404 on every page load.
     if (action === 'me') return res.status(200).json({ profile: { ...account.profile, ocbr: Number(account.profile.ocbr ?? 88) }, rank: await playerRank(client, account.profile) });
+    if(action==='grant-gold'){
+      if(account.profile.role!=='owner')fail(403,'Only an Owner can grant Gold.');
+      const username=cmsUsername(body.username),amount=cmsGoldAmount(body.amount),requestId=String(body.request_id??'');
+      if(!/^[a-z0-9_]{2,40}$/.test(username))fail(400,'Enter a valid player username.');
+      if(amount===null)fail(400,'Enter 1–10,000 Gold.');
+      if(!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(requestId))fail(400,'A valid request ID is required.');
+      const granted=await userScopedDb(req).rpc('cb_grant_gold',{p_username:username,p_amount:amount});
+      if(granted.error){
+        const message=String(granted.error.message??'Gold could not be granted.');
+        if(/cb_grant_gold|schema cache|function/i.test(message))fail(503,'Run supabase/v8-upgrade.sql in Supabase, then try again.');
+        if(/owner only/i.test(message))fail(403,'Only an Owner can grant Gold.');
+        if(/player not found/i.test(message))fail(404,'Player not found. Check the username and try again.');
+        fail(409,message);
+      }
+      console.info('arena.gold-granted',{actorId:account.id,username,amount,requestId});
+      return res.status(200).json({ok:true,username,amount});
+    }
     if (action === 'heartbeat') return res.status(200).json(await saveLiveHeartbeat(client, account.id));
     if (action === 'map-stats') {
       const registered = await reconcileAuthProfiles(client);
