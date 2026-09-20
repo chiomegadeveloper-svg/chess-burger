@@ -6,7 +6,8 @@ export type BoardMove = { from: string; to: string; promotion?: string };
 export type OfferKind = 'takeback' | 'draw';
 export type MatchOffer = {
   id: string; kind: OfferKind; by: string; at: number; expires_at: number;
-  pgn: string; plies: number;
+  pgn: string; plies: number; rollback_pgn?: string;
+  white_ms?: number; black_ms?: number;
 };
 export type GameMeta = {
   requests?: Record<string, { takeback: number; draw: number }>;
@@ -75,10 +76,13 @@ export function applyMatchAction(match: ArenaMatch, actor: string, action: strin
     const increment = timeControl(match.control).increment * 1000, result = boardResult(c.game);
     const moveIds = [...(meta.move_ids ?? [])];
     if (typeof input.request_id === 'string' && input.request_id.length <= 80) moveIds.push(input.request_id);
+    const moveMeta = pending?.kind === 'takeback' && pending.by !== actor
+      ? currentMeta
+      : clearOffer(currentMeta, 'position-changed');
     return { ...next, pgn: c.game.pgn(), white_ms: c.white_ms + (c.whiteTurn ? increment : 0),
       black_ms: c.black_ms + (c.whiteTurn ? 0 : increment), last_tick: at,
       status: result ? 'finished' : 'active', result,
-      game_meta: { ...clearOffer(currentMeta, 'position-changed'), move_ids: moveIds } };
+      game_meta: { ...moveMeta, move_ids: moveIds } };
   }
   if (action === 'resign' || action === 'abort') return { ...next, white_ms: c.white_ms, black_ms: c.black_ms,
     last_tick: at, status: action === 'abort' ? 'cancelled' : 'finished',
@@ -91,40 +95,38 @@ export function applyMatchAction(match: ArenaMatch, actor: string, action: strin
     if (!['takeback', 'draw'].includes(kind) || typeof id !== 'string' || !/^[a-zA-Z0-9_-]{8,80}$/.test(id)) reject('Invalid match request.', 400);
     if (pending) reject('Answer the pending request first.');
     if (!remainingRequests(match, actor, kind)) reject(`You have used all 3 ${kind === 'draw' ? 'draw offers' : 'takeback requests'} in this match.`);
-    let plies = 0;
+    let plies = 0, rollback_pgn = match.pgn;
     if (kind === 'takeback') {
       const history = c.game.history({ verbose: true });
       const color = actor === match.white_id ? 'w' : 'b';
       const ownLast = history.findLastIndex(move => move.color === color);
       if (ownLast < 0) reject('You have not made a move to take back.');
       plies = history.length - ownLast;
+      const rollback = gameFromPgn(match.pgn);
+      for (let index = 0; index < plies; index++) rollback.undo();
+      rollback_pgn = rollback.pgn();
     }
     const used = currentMeta.requests?.[actor] ?? { takeback: 0, draw: 0 };
     return { ...next, game_meta: { ...currentMeta,
       requests: { ...currentMeta.requests, [actor]: { ...used, [kind]: used[kind] + 1 } },
       request_ids: [...(currentMeta.request_ids ?? []), id],
-      pending: { id, kind, by: actor, at, expires_at: at + OFFER_LIFETIME_MS, pgn: match.pgn, plies } } };
+      pending: { id, kind, by: actor, at, expires_at: at + OFFER_LIFETIME_MS,
+        pgn: match.pgn, plies, rollback_pgn, white_ms: c.white_ms, black_ms: c.black_ms } } };
   }
   if (action === 'respond-offer') {
     if (!pending || pending.id !== input.request_id) reject('This request expired or was already answered.');
     if (pending.by === actor) reject('Only your opponent can approve or decline your request.', 403);
     if (typeof input.accept !== 'boolean') reject('Choose Accept or Decline.', 400);
-    if (pending.pgn !== match.pgn) reject('The position changed. This request is no longer valid.');
+    if (pending.kind === 'draw' && pending.pgn !== match.pgn) reject('The position changed. This request is no longer valid.');
     const game_meta: GameMeta = { ...currentMeta, pending: null,
       last: { id: pending.id, kind: pending.kind, by: pending.by, outcome: input.accept ? 'accepted' : 'declined' } };
     if (!input.accept) return { ...next, game_meta };
     if (pending.kind === 'draw') return { ...next, game_meta, status: 'finished', result: 'draw',
       white_ms: c.white_ms, black_ms: c.black_ms, last_tick: at };
-    let { white_ms, black_ms } = c;
-    const increment = timeControl(match.control).increment * 1000;
-    for (let index = 0; index < pending.plies; index++) {
-      const undone = c.game.undo();
-      if (!undone) reject('There is no move to take back.');
-      // Do not refund thinking time or allow farming increment by takebacks.
-      if (undone.color === 'w') white_ms = Math.max(0, white_ms - increment);
-      else black_ms = Math.max(0, black_ms - increment);
-    }
-    const restored = { ...next, game_meta, pgn: c.game.pgn(), white_ms, black_ms, last_tick: at };
+    if (typeof pending.rollback_pgn !== 'string' || !Number.isFinite(pending.white_ms) || !Number.isFinite(pending.black_ms))
+      reject('This takeback request cannot restore its saved position.');
+    const restored = { ...next, game_meta, pgn: pending.rollback_pgn,
+      white_ms: pending.white_ms, black_ms: pending.black_ms, last_tick: at };
     return flag(restored, at) ?? restored;
   }
   reject('Unknown match action.', 400);
