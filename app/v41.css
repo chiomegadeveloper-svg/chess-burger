@@ -1,0 +1,65 @@
+/* Final responsive Community Feed tab navigation */
+.feed-page .feed-tabs{
+  display:grid!important;
+  grid-template-columns:repeat(5,minmax(0,1fr))!important;
+  align-items:stretch;
+  gap:4px!important;
+  width:100%;
+  padding:5px!important;
+  overflow:visible!important;
+}
+.feed-page .feed-tabs>button{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:4px;
+  min-width:0!important;
+  width:100%;
+  min-height:42px;
+  padding:8px 5px!important;
+  border-radius:10px;
+  overflow:hidden;
+  white-space:nowrap!important;
+  text-overflow:ellipsis;
+  font-size:clamp(9px,1.15vw,12px)!important;
+  line-height:1.1;
+}
+.feed-page .feed-tabs>.online-feed-tab{
+  background:linear-gradient(145deg,#ffbd4e,#e98218)!important;
+  border:1px solid #ffd98c!important;
+  color:#241506!important;
+  font-weight:800;
+  box-shadow:inset 0 1px 0 #fff8,0 3px 8px #9f57073d!important;
+}
+.feed-page .feed-tabs>.online-feed-tab:hover,
+.feed-page .feed-tabs>.online-feed-tab[aria-selected=true]{
+  background:linear-gradient(145deg,#ffc961,#ed8619)!important;
+  color:#1c1005!important;
+  box-shadow:inset 0 1px 0 #fff9,0 0 0 2px #ffb13255,0 4px 10px #0004!important;
+}
+.feed-page .feed-tabs>.online-feed-tab span{
+  flex:0 0 auto;
+}
+@media(max-width:650px){
+  .feed-page .feed-tabs{gap:2px!important;padding:3px!important}
+  .feed-page .feed-tabs>button{
+    min-height:38px;
+    gap:2px;
+    padding:7px 1px!important;
+    font-size:clamp(7px,2.15vw,9px)!important;
+    letter-spacing:-.12px;
+  }
+  .feed-page .feed-tabs>.online-feed-tab span{
+    min-width:14px;
+    height:14px;
+    margin-left:0;
+    padding:0 3px;
+    font-size:7px;
+  }
+}
+@media(max-width:380px){
+  .feed-page .feed-tabs>button{
+    font-size:7px!important;
+    letter-spacing:-.25px;
+  }
+}
