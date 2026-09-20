@@ -1,4 +1,4 @@
-CHESS BURGER V46 VERIFIED PATCH
+CHESS BURGER V47 GAMEPLAY ACTIONS HOTFIX
 
 Copy the folders and files in this ZIP directly into the chess-burger repository root.
 Choose Replace files when Windows asks.
@@ -13,6 +13,7 @@ app/gameplay.css (new)
 app/layout.tsx (changed)
 app/local-pairing.tsx (changed)
 app/match-actions.ts (new)
+app/match-board.tsx (changed; actions moved above board)
 app/match-requests.tsx (new)
 app/match-sync.ts (new)
 app/online-game.tsx (new)
@@ -26,3 +27,6 @@ app/page.tsx explicitly restores the original direct Map route to prevent the
 full black-screen crash.
 
 This exact staged patch completed the production build successfully.
+
+V47 fixes plain-text Vercel errors, Resign/Abort/Move/Takeback/Draw routing,
+and places Take Back / Offer Draw directly below the match heading.

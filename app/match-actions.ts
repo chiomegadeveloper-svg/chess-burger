@@ -1,4 +1,4 @@
-import { boardResult, gameFromPgn, timeControl, type ArenaMatch } from './game-rules.ts';
+import { boardResult, gameFromPgn, timeControl, type ArenaMatch } from './game-rules';
 
 export const REQUEST_LIMIT = 3;
 export const OFFER_LIFETIME_MS = 30_000;

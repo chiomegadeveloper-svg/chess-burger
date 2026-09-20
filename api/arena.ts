@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { Chess } from 'chess.js';
-import { FAST_MATCH_ACTIONS, fastMatchAction } from './_match.ts';
-import { MatchActionError } from '../app/match-actions.ts';
+import { FAST_MATCH_ACTIONS, fastMatchAction } from './_match';
+import { MatchActionError } from '../app/match-actions';
 
 type Req = { method?: string; query?: Record<string, string | string[] | undefined>; body?: unknown; headers: Record<string, string | string[] | undefined> };
 type Res = { status: (code: number) => Res; json: (body: unknown) => void; setHeader: (name: string, value: string) => void };

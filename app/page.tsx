@@ -25,7 +25,6 @@ import SharedBoard from "./shared-board";
 import Account from "./account";
 import CommunityFeed from "./community-feed";
 import RecentPlays from "./recent-plays";
-// v46 map stability: keep Leaflet mounted directly without a wrapper.
 import NearbyMap from "./nearby-map";
 import LocalPairing from "./local-pairing";
 import Cms from "./cms";

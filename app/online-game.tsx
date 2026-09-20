@@ -141,9 +141,9 @@ function LiveGame({ id, profile, onFinished, watch = false }: Props) {
       onResign={watch ? undefined : () => void action('resign')} onAbort={watch ? undefined : () => void action('abort')}
       onReact={watch ? undefined : async emote => { const response = await arena<{match:ArenaMatch}>('react', {id, emote}); if (mounted.current) { sync.accept(response.match); hint(); } }}
       connection={error ? 'Reconnecting…' : pending ? 'Syncing move…' : watch ? 'Spectating' : live ? 'Live · v46' : 'Connecting · v46'}
+      matchActions={!watch && confirmed && profile?.user_id ? <div className="match-requests-top"><MatchRequests match={confirmed} ownId={profile.user_id}
+        disabled={!!pending || actionBusy} onOffer={(kind: OfferKind) => void action('offer', { kind, request_id: crypto.randomUUID() })}
+        onRespond={(request_id, accept) => { setPremove(null); void action('respond-offer', { request_id, accept }); }} /></div> : undefined}
     />
-    {!watch && confirmed && profile?.user_id && <MatchRequests match={confirmed} ownId={profile.user_id}
-      disabled={!!pending || actionBusy} onOffer={(kind: OfferKind) => void action('offer', { kind, request_id: crypto.randomUUID() })}
-      onRespond={(request_id, accept) => { setPremove(null); void action('respond-offer', { request_id, accept }); }} />}
   </>;
 }

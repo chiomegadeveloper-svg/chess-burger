@@ -27,6 +27,7 @@ import "../app/v42.css";
 import "../app/v43.css";
 import "../app/v44.css";
 import "../app/v45.css";
+import "../app/gameplay.css";
 import Page from "../app/page";
 
 createRoot(document.getElementById("root")!).render(

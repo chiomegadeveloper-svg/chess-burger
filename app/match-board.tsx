@@ -74,6 +74,7 @@ export default function MatchBoard({
   onResign,
   onAbort,
   onReact,
+  matchActions,
   busy = false,
   connection = "Live",
   bothSides = false,
@@ -86,6 +87,7 @@ export default function MatchBoard({
   onResign?: () => void;
   onAbort?: () => void;
   onReact?: (emote: string) => Promise<void> | void;
+  matchActions?: React.ReactNode;
   busy?: boolean;
   connection?: string;
   bothSides?: boolean;
@@ -333,6 +335,7 @@ export default function MatchBoard({
         </div>
         <span className="connection-label">{connection}</span>
       </div>
+      {matchActions}
       <div className="game-layout">
         <div className="match-board-column">
           {strip(reversed ? "white" : "black")}

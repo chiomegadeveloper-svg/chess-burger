@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { applyMatchAction, MatchActionError } from '../app/match-actions.ts';
-import type { ArenaMatch } from '../app/game-rules.ts';
+import { applyMatchAction, MatchActionError } from '../app/match-actions';
+import type { ArenaMatch } from '../app/game-rules';
 
 export const FAST_MATCH_ACTIONS = new Set(['match', 'move', 'resign', 'abort', 'timeout', 'offer', 'respond-offer']);
 type Request = { headers: Record<string, string | string[] | undefined> };

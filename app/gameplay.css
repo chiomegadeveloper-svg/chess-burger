@@ -44,3 +44,8 @@
   .territory-v46-panel>.gold-button{grid-column:2;width:100%}
 }
 .map-recovery{margin:24px auto;max-width:720px;text-align:center}.map-recovery p{margin:8px 0 16px}
+.match-requests-top{width:min(100%,860px);margin:0 auto 10px}
+.match-requests-top .match-requests{margin:0;padding:10px 12px;border:1px solid rgba(34,223,243,.28);border-radius:12px;background:rgba(15,25,32,.82)}
+.match-requests-top .match-request-buttons{display:flex;gap:8px;flex-wrap:wrap}
+.match-requests-top .match-request-buttons button{display:inline-flex;align-items:center;gap:5px;min-height:36px;padding:8px 12px;border-radius:9px}
+.match-requests-top .rules-caption{margin:7px 0 0;font-size:10px;opacity:.72}
