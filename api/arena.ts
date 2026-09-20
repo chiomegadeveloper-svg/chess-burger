@@ -204,15 +204,37 @@ async function publicFeed(client: Db) {
   const people = await playerMap(client, (list.data ?? []).map((e: any) => e.user_id));
   return { events: (list.data ?? []).filter((e: any) => e.kind !== 'challenge' || activeChallenges.has(e.challenge_match_id)).map((e: any) => ({ id: e.kind === 'challenge' && e.challenge_match_id ? `challenge:${e.challenge_match_id}` : e.id, user_id: e.user_id, kind: e.kind, display_name: e.kind === 'announcement' ? 'Chess Burger' : e.display_name, content: e.content, image_url: e.image_url ?? '', expires_at: e.expires_at, cbr_delta: e.cbr_delta ?? 0, gold_delta: e.gold_delta ?? 0, heart_count: e.heart_count ?? 0, created_at: e.created_at, avatar_url: e.kind === 'announcement' ? '/cburger_logo.png' : people.get(e.user_id)?.avatar_url ?? '', cbr: people.get(e.user_id)?.cbr ?? 88 })) };
 }
+async function saveLiveHeartbeat(client: Db, userId: string) {
+  const stamp = new Date().toISOString();
+  const candidates = ['seen_at', 'last_seen_at', 'updated_at', 'last_seen'];
+  let lastError: any = null;
+  for (const field of candidates) {
+    const saved = await client.from('cb_live_presence').upsert({ user_id: userId, [field]: stamp }, { onConflict: 'user_id' });
+    if (!saved.error) return { ok: true, field };
+    lastError = saved.error;
+    if (!/column .* does not exist|schema cache/i.test(String(saved.error.message ?? ''))) break;
+  }
+  fail(500, lastError?.message ?? 'Online presence is temporarily unavailable.');
+}
+function liveAt(row: any) {
+  const value = row.seen_at ?? row.last_seen_at ?? row.updated_at ?? row.last_seen ?? null;
+  const parsed = value ? Date.parse(String(value)) : NaN;
+  return Number.isFinite(parsed) ? parsed : null;
+}
 async function publicOnlineUsers(client: Db) {
   const [presence, active] = await Promise.all([
-    client.from('cb_live_presence').select('user_id').gt('seen_at', gpsCutoff()).limit(100),
+    client.from('cb_live_presence').select('*').limit(100),
     client.from('cb_matches').select('white_id,black_id').eq('status', 'active'),
   ]);
   if (presence.error || active.error) fail(500, presence.error?.message ?? active.error?.message ?? 'Online players are temporarily unavailable.');
+  const cutoff = now() - 60_000;
+  const recent = (presence.data ?? []).filter((row: any) => {
+    const timestamp = liveAt(row);
+    return timestamp === null ? row.online !== false && row.is_online !== false : timestamp > cutoff;
+  });
   const playing = new Set((active.data ?? []).flatMap((match: any) => [match.white_id, match.black_id]).filter(Boolean));
-  const people = await playerMap(client, (presence.data ?? []).map((row: any) => row.user_id));
-  const users = (presence.data ?? []).map((row: any) => {
+  const people = await playerMap(client, recent.map((row: any) => row.user_id));
+  const users = recent.map((row: any) => {
     const player = people.get(row.user_id);
     return player ? { ...player, cbr: Number(player.cbr ?? 88), available: !playing.has(row.user_id) } : null;
   }).filter(Boolean).sort((a: any, b: any) => b.cbr - a.cbr);
@@ -242,6 +264,7 @@ export default async function handler(req: Req, res: Res) {
     // Keep it as a first-class migration action rather than falling through to
     // a 404 on every page load.
     if (action === 'me') return res.status(200).json({ profile: { ...account.profile, ocbr: Number(account.profile.ocbr ?? 88) }, rank: await playerRank(client, account.profile) });
+    if (action === 'heartbeat') return res.status(200).json(await saveLiveHeartbeat(client, account.id));
     if (action === 'map-stats') {
       const registered = await reconcileAuthProfiles(client);
       const cutoff = gpsCutoff();
