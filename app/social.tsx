@@ -176,19 +176,68 @@ export function SocialButtons({
 }
 
 export function FloatingChatButton({ visible }: { visible: boolean }) {
-  const [unread,setUnread]=useState(0);
+  const [unread,setUnread]=useState(0),
+    [position,setPosition]=useState<{x:number;y:number}|null>(null),
+    positionRef=useRef<{x:number;y:number}|null>(null),
+    drag=useRef<{dx:number;dy:number;moved:boolean}|null>(null),
+    suppressClick=useRef(false);
+  const clampPosition=useCallback((x:number,y:number)=>({
+    x:Math.max(8,Math.min(window.innerWidth-52,x)),
+    y:Math.max(68,Math.min(window.innerHeight-118,y)),
+  }),[]);
+  useEffect(()=>{
+    if(!visible)return;
+    const restore=()=>{
+      let saved:{x:number;y:number}|null=null;
+      try{saved=JSON.parse(localStorage.getItem("cb-chat-icon-position:v2")??"null");}catch{}
+      setPosition(current=>{
+        const source=current??saved;
+        const next=source&&Number.isFinite(source.x)&&Number.isFinite(source.y)
+          ?clampPosition(source.x,source.y)
+          :clampPosition(window.innerWidth-58,window.innerHeight-142);
+        positionRef.current=next;
+        return next;
+      });
+    };
+    restore();
+    window.addEventListener("resize",restore);
+    window.addEventListener("orientationchange",restore);
+    return()=>{window.removeEventListener("resize",restore);window.removeEventListener("orientationchange",restore);};
+  },[visible,clampPosition]);
   useEffect(()=>{if(!visible)return;let active=true;const load=()=>void arena<ChatSummary>("chat-summary").then(data=>{if(active)setUnread(data.unread);}).catch(()=>{});load();const timer=setInterval(load,15000);window.addEventListener("cb-chat-changed",load);return()=>{active=false;clearInterval(timer);window.removeEventListener("cb-chat-changed",load);};},[visible]);
   if (!visible) return null;
   return (
     <button
       type="button"
       className="floating-chat-button"
+      style={position?{left:position.x,top:position.y}:undefined}
       aria-label="Open chat"
-      title="Open chat"
-      onClick={() => openSocial("chat")}
+      title="Chat · drag to move"
+      onPointerDown={event=>{
+        const rect=event.currentTarget.getBoundingClientRect();
+        drag.current={dx:event.clientX-rect.left,dy:event.clientY-rect.top,moved:false};
+        event.currentTarget.setPointerCapture(event.pointerId);
+      }}
+      onPointerMove={event=>{
+        if(!drag.current)return;
+        const next=clampPosition(event.clientX-drag.current.dx,event.clientY-drag.current.dy);
+        if(Math.abs(event.movementX)+Math.abs(event.movementY)>2)drag.current.moved=true;
+        positionRef.current=next;
+        setPosition(next);
+      }}
+      onPointerUp={()=>{
+        if(!drag.current)return;
+        suppressClick.current=drag.current.moved;
+        drag.current=null;
+        if(positionRef.current)try{localStorage.setItem("cb-chat-icon-position:v2",JSON.stringify(positionRef.current));}catch{}
+      }}
+      onPointerCancel={()=>{drag.current=null;}}
+      onClick={()=>{
+        if(suppressClick.current){suppressClick.current=false;return;}
+        openSocial("chat");
+      }}
     >
-      <MessageCircle size={24} />
-      <span>Chat</span>
+      <MessageCircle size={21} />
       {unread>0&&<b className="chat-notification" aria-label={`${unread} unread messages`}>{Math.min(99,unread)}</b>}
     </button>
   );
