@@ -43,3 +43,4 @@
   .nearby-page .territory-panel>.gold-button,
   .territory-v46-panel>.gold-button{grid-column:2;width:100%}
 }
+.map-recovery{margin:24px auto;max-width:720px;text-align:center}.map-recovery p{margin:8px 0 16px}
