@@ -22,3 +22,8 @@ test("chat popup stays visible, polls gently, and retries one expired session", 
   assert.match(client, /response\.status === 401/);
   assert.match(client, /client\.auth\.refreshSession\(\)/);
 });
+
+test("feed chat launcher keeps fixed viewport positioning", () => {
+  assert.match(css, /\.floating-chat-button\{position:fixed/);
+  assert.doesNotMatch(css, /\.floating-chat-button,\.social-tabs button\{position:relative/);
+});
