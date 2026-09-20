@@ -1,6 +1,6 @@
 'use client';
 import {useEffect} from 'react';
-import {getSupabase} from './supabase';
+import {arena} from './arena-client';
 
 /** A short-lived activity signal. Never stores GPS coordinates in Supabase. */
 export function useLivePresence(userId?:string, gpsEnabled=false, activeMatchId='', cbr=88){
@@ -11,15 +11,7 @@ export function useLivePresence(userId?:string, gpsEnabled=false, activeMatchId=
       if(!alive || sending || !navigator.onLine || document.visibilityState==='hidden')return;
       sending=true;
       try{
-        const client=await getSupabase();
-        if(!client || !alive)return;
-        const {data:{session}}=await client.auth.getSession();
-        if(!session || session.user.id!==userId || !alive)return;
-        const {error}=await client.from('cb_live_presence').upsert({
-          user_id:userId,
-          seen_at:new Date().toISOString()
-        },{onConflict:'user_id'});
-        if(error)console.warn('Live presence unavailable:',error.message);
+        await arena('heartbeat');
       }catch(e){console.warn('Live presence unavailable:',e);}
       finally{sending=false;}
     };
