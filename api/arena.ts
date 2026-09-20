@@ -16,6 +16,15 @@ class ApiError extends Error { status: number; constructor(status: number, messa
 const fail = (status: number, message: string): never => { throw new ApiError(status, message); };
 const now = () => Date.now();
 const gpsCutoff = () => new Date(now() - 45_000).toISOString();
+const onlineCutoff = () => now() - 60_000;
+const FRESH_TERRITORY_COST = 48;
+const INVASION_CHALLENGE_COST = 18;
+export const cmsUsername = (value: unknown) => String(value ?? '').trim().replace(/^@+/, '').toLowerCase();
+export const cmsGoldAmount = (value: unknown) => {
+  const amount = Number(value);
+  return Number.isInteger(amount) && amount >= 1 && amount <= 10_000 ? amount : null;
+};
+export const kingdomNameInput = (value: unknown) => String(value ?? '').trim().replace(/\s+/g, ' ').slice(0, 48);
 
 async function publicRanks(client: Db) {
   await reconcileAuthProfiles(client);
@@ -32,7 +41,7 @@ function profileSeed(user: any) {
   const base = String(meta.username ?? user.email?.split('@')[0] ?? rawName).toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/^_+|_+$/g, '').slice(0, 15) || 'player';
   const username = `${base.length < 3 ? `player_${base}` : base}_${String(user.id).replace(/-/g, '').slice(0, 6)}`.slice(0, 24);
   const candidateAvatar = String(meta.avatar_url ?? meta.picture ?? '').trim();
-  return { user_id: user.id, username, display_name: rawName.slice(0, 60) || 'Chess Burger Player', avatar_url: /^https:\/\//i.test(candidateAvatar) ? candidateAvatar : '', country_code: /^[A-Z]{2}$/.test(String(meta.country_code ?? '')) ? meta.country_code : 'PH' };
+  return { user_id: user.id, username, display_name: rawName.slice(0, 60) || 'Chess Burger Player', avatar_url: /^https:\/\//i.test(candidateAvatar) ? candidateAvatar : '', country_code: /^[A-Z]{2}$/.test(String(meta.country_code ?? '')) ? meta.country_code : 'PH', gold_points: 88 };
 }
 
 async function reconcileAuthProfiles(client: Db) {
@@ -59,6 +68,94 @@ function metres(aLat: number, aLng: number, bLat: number, bLng: number) {
   const rad = Math.PI / 180, dLat = (bLat - aLat) * rad, dLng = (bLng - aLng) * rad;
   const h = Math.sin(dLat / 2) ** 2 + Math.cos(aLat * rad) * Math.cos(bLat * rad) * Math.sin(dLng / 2) ** 2;
   return Math.round(12_742_000 * Math.asin(Math.sqrt(h)));
+}
+export function barangayKey(barangay: string, locality: string) {
+  const clean = (value: string) => value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  return `${clean(locality)}:${clean(barangay)}`.slice(0, 190);
+}
+function ringContains(point: [number, number], ring: number[][]) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i] ?? [], [xj, yj] = ring[j] ?? [];
+    if (![xi, yi, xj, yj].every(Number.isFinite)) continue;
+    const crosses = (yi > point[1]) !== (yj > point[1]) && point[0] < ((xj - xi) * (point[1] - yi)) / ((yj - yi) || Number.EPSILON) + xi;
+    if (crosses) inside = !inside;
+  }
+  return inside;
+}
+export function polygonContains(boundary: any, lat: number, lng: number) {
+  const polygons = boundary?.type === 'Polygon' ? [boundary.coordinates] : boundary?.type === 'MultiPolygon' ? boundary.coordinates : [];
+  return polygons.some((polygon: number[][][]) => Array.isArray(polygon?.[0]) && ringContains([lng, lat], polygon[0]) && !polygon.slice(1).some((hole: number[][]) => ringContains([lng, lat], hole)));
+}
+export function kingdomRangePolygon(lat: number, lng: number, areaM2 = 2_000_000) {
+  // A true square kilometre-area territory: √2 km per side for 2 km².
+  const halfSideM = Math.sqrt(areaM2) / 2, latMetres = 111_320, lngMetres = Math.max(1, latMetres * Math.cos(lat * Math.PI / 180));
+  const north = halfSideM / latMetres, east = halfSideM / lngMetres;
+  const coordinates = [
+    [lng - east, lat + north], [lng + east, lat + north],
+    [lng + east, lat - north], [lng - east, lat - north],
+    [lng - east, lat + north],
+  ].map(([x,y])=>[Number(x.toFixed(7)),Number(y.toFixed(7))]);
+  return { type: 'Polygon' as const, coordinates: [coordinates] };
+}
+export function isTwoSquareKilometreSquare(boundary: any, latitude: number) {
+  const ring = boundary?.type === 'Polygon' ? boundary.coordinates?.[0] : null;
+  if (!Array.isArray(ring) || ring.length !== 5 || !ring.every((point: any) => Array.isArray(point) && point.length >= 2 && point.slice(0, 2).every(Number.isFinite))) return false;
+  const latitudes = ring.map((point: number[]) => point[1]);
+  const longitudes = ring.map((point: number[]) => point[0]);
+  const heightM = (Math.max(...latitudes) - Math.min(...latitudes)) * 111_320;
+  const widthM = (Math.max(...longitudes) - Math.min(...longitudes)) * 111_320 * Math.cos(latitude * Math.PI / 180);
+  const targetSideM = Math.sqrt(2_000_000);
+  return Math.abs(heightM - targetSideM) < 10 && Math.abs(widthM - targetSideM) < 10;
+}
+function usableBoundary(value: any) {
+  if (!value || !['Polygon', 'MultiPolygon'].includes(value.type) || !Array.isArray(value.coordinates)) return false;
+  try { return JSON.stringify(value).length <= 750_000; } catch { return false; }
+}
+async function resolveBarangayBoundary(barangay: string, locality: string, lat: number, lng: number) {
+  const common = { headers: { Accept: 'application/json', 'User-Agent': 'ChessBurger/1.0 (https://chessburger.site)' } };
+  const fetchJson = async (url: URL) => {
+    try {
+      const response = await fetch(url, { ...common, signal: AbortSignal.timeout(7_000) });
+      return response.ok ? await response.json() : null;
+    } catch { return null; }
+  };
+  const isArea = (item: any) => usableBoundary(item?.geojson)
+    && polygonContains(item.geojson, lat, lng)
+    && (item.class === 'boundary' || item.type === 'administrative'
+      || ['suburb', 'quarter', 'neighbourhood', 'village', 'hamlet', 'municipality'].includes(item.addresstype));
+  const coreName = barangay.replace(/^\s*(barangay|brgy\.?|bgy\.?)\s*/i, '').trim();
+  const queries = [...new Set([
+    `${barangay}, ${locality}, Philippines`,
+    `${coreName}, ${locality}, Philippines`,
+    `Barangay ${coreName}, ${locality}, Philippines`,
+  ])];
+  let selected: any = null;
+  for (const q of queries) {
+    const search = new URL('https://nominatim.openstreetmap.org/search');
+    search.search = new URLSearchParams({
+      format: 'jsonv2', addressdetails: '1', polygon_geojson: '1',
+      countrycodes: 'ph', limit: '10', dedupe: '0', q,
+      viewbox: `${lng - .12},${lat + .12},${lng + .12},${lat - .12}`,
+    }).toString();
+    const candidates = await fetchJson(search);
+    selected = Array.isArray(candidates) ? candidates.find(isArea) : null;
+    if (selected) break;
+  }
+  // Barangays are tagged at different administrative levels in different
+  // Philippine cities. Walk outward from neighbourhood to municipality until
+  // Nominatim returns the smallest administrative polygon containing the GPS.
+  if (!selected) for (const zoom of [16, 15, 14, 13, 12, 11, 10]) {
+    const reverse = new URL('https://nominatim.openstreetmap.org/reverse');
+    reverse.search = new URLSearchParams({
+      format: 'jsonv2', addressdetails: '1', polygon_geojson: '1',
+      layer: 'address', zoom: String(zoom), lat: String(lat), lon: String(lng),
+    }).toString();
+    const item = await fetchJson(reverse);
+    if (isArea(item)) { selected = item; break; }
+  }
+  if (!selected) fail(409, 'The polygon boundary for this barangay is unavailable. Keep GPS on and try again.');
+  return { boundary: selected.geojson, centroidLat: Number(selected.lat ?? lat), centroidLng: Number(selected.lon ?? lng) };
 }
 async function savePresence(client: Db, account: any, body: Record<string, any>) {
   if (!body.gps) {
@@ -94,10 +191,35 @@ async function nearbyPlayers(client: Db, account: any) {
     const distance = metres(Number(own.data.latitude), Number(own.data.longitude), Number(p.latitude), Number(p.longitude));
     return person ? { ...person, lat: Number(p.latitude), lng: Number(p.longitude), distance } : null;
   }).filter((p: any) => p && p.distance <= 10_000).sort((a: any, b: any) => a.distance - b.distance);
-  const zoneRows = await client.from('cb_territories').select('id,user_id,lat,lng').gte('lat', Number(own.data.latitude) - .15).lte('lat', Number(own.data.latitude) + .15).gte('lng', Number(own.data.longitude) - .25).lte('lng', Number(own.data.longitude) + .25).limit(100);
+  const fields = 'id,user_id,barangay_key,barangay,locality,boundary,centroid_lat,centroid_lng,defense_points,captured_at,updated_at,created_at';
+  const zoneRows = await client.from('cb_territories').select(fields).order('updated_at', { ascending: false }).limit(250);
   if (zoneRows.error) return { players, territories: [] };
-  const owners = await playerMap(client, (zoneRows.data ?? []).map((z: any) => z.user_id));
-  const territories = (zoneRows.data ?? []).map((z: any) => ({ ...z, display_name: owners.get(z.user_id)?.display_name ?? 'Player' }));
+  const allZones = zoneRows.data ?? [];
+  // Normalize every legacy territory, including irregular barangay polygons, to
+  // an exact 2 km² square. The signed-in owner's territory follows their
+  // current verified GPS location; other territories keep their saved centre.
+  const staleKingdoms = allZones.filter((row: any) => usableBoundary(row.boundary) && Number.isFinite(Number(row.centroid_lat)) && Number.isFinite(Number(row.centroid_lng)) && !isTwoSquareKilometreSquare(row.boundary, Number(row.centroid_lat)));
+  if (staleKingdoms.length) await Promise.all(staleKingdoms.map(async (row: any) => {
+    const ownTerritory = row.user_id === account.id;
+    const centerLat = ownTerritory ? Number(own.data.latitude) : Number(row.centroid_lat);
+    const centerLng = ownTerritory ? Number(own.data.longitude) : Number(row.centroid_lng);
+    if (!Number.isFinite(centerLat) || !Number.isFinite(centerLng)) return;
+    const boundary = kingdomRangePolygon(centerLat, centerLng);
+    Object.assign(row, { boundary, centroid_lat: centerLat, centroid_lng: centerLng });
+    // radius_m is a legacy schema marker constrained to 2000. The boundary is
+    // authoritative and is exactly 2,000,000 m² (not a 2 km radius).
+    const normalized = await client.from('cb_territories').update({ boundary, centroid_lat: centerLat, centroid_lng: centerLng, radius_m: 2000, updated_at: new Date().toISOString() }).eq('id', row.id);
+    if (normalized.error) console.warn('arena.territory-normalize-failed', { territoryId: row.id, message: normalized.error.message });
+  }));
+  const rows = allZones.filter((row: any) => usableBoundary(row.boundary) && polygonContains(row.boundary, Number(own.data.latitude), Number(own.data.longitude))).slice(0, 1);
+  const owners = await playerMap(client, rows.map((z: any) => z.user_id));
+  const ownerIds = [...new Set(rows.map((z: any) => z.user_id))];
+  const ownerPresence = ownerIds.length ? await client.from('cb_live_presence').select('*').in('user_id', ownerIds) : { data: [], error: null };
+  const onlineOwners = new Set((ownerPresence.data ?? []).filter((row: any) => (liveAt(row) ?? 0) > onlineCutoff()).map((row: any) => row.user_id));
+  const territories = rows.map((z: any) => {
+    const owner = owners.get(z.user_id);
+    return { ...z, centroid_lat: Number(z.centroid_lat), centroid_lng: Number(z.centroid_lng), defense_points: Number(z.defense_points ?? 10), online: onlineOwners.has(z.user_id), is_owner: z.user_id === account.id, display_name: owner?.display_name ?? 'Player', username: owner?.username ?? 'player', avatar_url: owner?.avatar_url ?? '', cbr: Number(owner?.cbr ?? 88), country_code: owner?.country_code ?? 'PH' };
+  });
   return { players, territories };
 }
 const tc = (id: string) => TIME[id] ?? fail(400, 'Choose a valid time control.');
@@ -172,6 +294,10 @@ async function settle(client: Db, match: any) {
     const updated = await client.from('cb_profiles').update({ cbr: Math.max(0, p.cbr + delta), gold_points: p.gold_points + gold, wins: p.wins + (won ? 1 : 0), losses: p.losses + (lost ? 1 : 0), win_streak: won ? p.win_streak + 1 : 0 }).eq('user_id', p.user_id);
     if (updated.error) fail(500, updated.error.message);
     if (won) { const event = await client.from('cb_feed').insert({ user_id: p.user_id, kind: 'win', display_name: p.display_name, content: `won a ${tc(match.control).group.toLowerCase()} match.`, cbr_delta: delta, gold_delta: gold }); if (event.error) fail(500, event.error.message); }
+  }
+  if (match.match_kind === 'invasion') {
+    const territory = await client.rpc('cb_settle_territory_invasion', { p_match_id: match.id });
+    if (territory.error) fail(500, territory.error.message);
   }
   const rated = await client.from('cb_matches').update({ rating_applied: true }).eq('id', match.id).eq('rating_applied', false);
   if (rated.error) fail(500, rated.error.message);
@@ -333,6 +459,57 @@ async function queuedMatch(client: Db, account: any, controlId: string) {
   return { match: view, searching: false };
 }
 
+async function ownerIsOnline(client: Db, userId: string) {
+  const live = await client.from('cb_live_presence').select('*').eq('user_id', userId).maybeSingle();
+  if (live.error) fail(500, 'Online presence is temporarily unavailable.');
+  return !!live.data && (liveAt(live.data) ?? 0) > onlineCutoff();
+}
+
+async function createInvasionChallenge(client: Db, account: any, body: Record<string, any>) {
+  const territoryId = String(body.territory_id ?? ''), control = String(body.control ?? ''), clock = tc(control);
+  if (!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(territoryId)) fail(400, 'Choose a valid barangay territory.');
+  const territory = one<any>(await client.from('cb_territories').select('id,user_id,barangay,locality,boundary,defense_points').eq('id', territoryId).maybeSingle());
+  if (territory.user_id === account.id) fail(400, 'You already own this barangay territory.');
+  if (!usableBoundary(territory.boundary)) fail(409, 'This legacy territory must be upgraded to a barangay polygon first.');
+  if (Number(account.profile.gold_points ?? 0) < INVASION_CHALLENGE_COST) fail(409, `You need ${INVASION_CHALLENGE_COST} Gold to challenge this KING.`);
+
+  const position = await client.from('cb_presence').select('latitude,longitude,accuracy').eq('user_id', account.id).eq('gps_enabled', true).gt('seen_at', new Date(now() - 30_000).toISOString()).maybeSingle();
+  if (position.error) fail(500, 'GPS presence is temporarily unavailable.');
+  if (!position.data || Number(position.data.accuracy) > 100) fail(409, 'Enable GPS and wait for accuracy within 100 m.');
+  if (!polygonContains(territory.boundary, Number(position.data.latitude), Number(position.data.longitude))) fail(403, 'Enter this barangay before challenging its KING.');
+  if (!await ownerIsOnline(client, territory.user_id)) fail(409, 'The territory owner is offline. Challenge again when the KING is online.');
+
+  const [challengerActive, ownerActive, currentInvasion] = await Promise.all([
+    activeMatchFor(client, account.id),
+    activeMatchFor(client, territory.user_id),
+    client.from('cb_matches').select('id').eq('territory_id', territory.id).in('status', ['waiting', 'active']).gt('created_at', new Date(now() - 120_000).toISOString()).limit(1),
+  ]);
+  if (challengerActive) fail(409, 'Finish your current match first.');
+  if (ownerActive) fail(409, 'The territory owner is already playing.');
+  if (currentInvasion.error) fail(500, currentInvasion.error.message);
+  if (currentInvasion.data?.length) fail(409, 'This territory already has an active defense challenge.');
+
+  const old = await client.from('cb_matches').update({ status: 'cancelled' }).eq('host_id', account.id).eq('status', 'waiting');
+  if (old.error) fail(500, old.error.message);
+  const match = one<any>(await client.from('cb_matches').insert({
+    host_id: account.id,
+    white_id: account.id,
+    invite_to: territory.user_id,
+    status: 'waiting',
+    code: code(),
+    control,
+    white_ms: clock.seconds * 1000,
+    black_ms: clock.seconds * 1000,
+    last_tick: new Date().toISOString(),
+    white_cbr: Number(account.profile.cbr ?? 88),
+    match_kind: 'invasion',
+    territory_id: territory.id,
+    invasion_challenger_id: account.id,
+  }).select('*').single());
+  console.info('arena.invasion-created', { matchId: match.id, territoryId: territory.id });
+  return { match: await matchView(client, match), gold_cost: INVASION_CHALLENGE_COST, charged: false };
+}
+
 export default async function handler(req: Req, res: Res) {
   res.setHeader('Cache-Control', 'no-store');
   let action = '';
@@ -382,6 +559,37 @@ export default async function handler(req: Req, res: Res) {
       });
     }
     if (action === 'social-presence') return res.status(200).json({ ok: true });
+    if (action === 'grant-gold') {
+      if (!['owner', 'admin'].includes(String(account.profile.role ?? ''))) fail(403, 'Owner or GM access is required.');
+      const username = cmsUsername(body.username), amount = cmsGoldAmount(body.amount), requestId = String(body.request_id ?? '').toLowerCase();
+      if (!username) fail(400, 'Enter a registered username.');
+      if (amount === null) fail(400, 'Enter 1–10,000 Gold.');
+      if (!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(requestId)) fail(400, 'A valid request ID is required.');
+      const target = await client.from('cb_profiles').select('user_id,gold_points,username').eq('username', username).maybeSingle();
+      if (target.error) fail(500, target.error.message);
+      if (!target.data) fail(404, 'Player not found. Ask them to sign in to the updated app first.');
+      const ledgerId = `cms-grant:${requestId}`;
+      const ledger = await client.from('cb_gold_ledger').insert({ id: ledgerId, user_id: target.data.user_id, delta: amount, kind: 'staff_grant', reference_id: requestId });
+      if (ledger.error?.code === '23505') return res.status(200).json({ ok: true, duplicate: true });
+      if (ledger.error) fail(500, ledger.error.message);
+      let granted = false;
+      for (let attempt = 0; attempt < 3 && !granted; attempt++) {
+        const current = attempt === 0 ? target : await client.from('cb_profiles').select('user_id,gold_points,username').eq('user_id', target.data.user_id).maybeSingle();
+        if (current.error || !current.data) break;
+        const before = Number(current.data.gold_points ?? 0);
+        const changed = await client.from('cb_profiles').update({ gold_points: before + amount }).eq('user_id', target.data.user_id).eq('gold_points', before).select('user_id').maybeSingle();
+        if (changed.error) break;
+        granted = !!changed.data;
+      }
+      if (!granted) {
+        await client.from('cb_gold_ledger').delete().eq('id', ledgerId);
+        fail(409, 'Gold changed at the same time. Please press Grant Gold again.');
+      }
+      const logged = await client.from('cb_admin_logs').insert({ actor_user_id: account.id, action: 'grant_gold', details: { username, amount, request_id: requestId } });
+      if (logged.error) console.warn('arena.grant-gold-log-failed', { actorId: account.id, targetId: target.data.user_id });
+      console.info('arena.gold-granted', { actorId: account.id, targetId: target.data.user_id, amount });
+      return res.status(200).json({ ok: true, username, amount });
+    }
     if (action === 'social-counts') {
       const [friends, followers] = await Promise.all([
         client.from('cb_social_links').select('user_id', { count: 'exact', head: true }).eq('kind', 'friend').eq('status', 'accepted').or(`user_id.eq.${account.id},target_id.eq.${account.id}`),
@@ -421,10 +629,40 @@ export default async function handler(req: Req, res: Res) {
       const presence = await client.from('cb_presence').select('latitude,longitude,accuracy').eq('user_id', account.id).eq('gps_enabled', true).gt('seen_at', new Date(now() - 30_000).toISOString()).maybeSingle();
       if (presence.error) fail(500, 'GPS presence is temporarily unavailable.');
       if (!presence.data || Number(presence.data.accuracy) > 100) fail(409, 'Enable GPS and wait for accuracy within 100 m.');
-      const claimed = await client.rpc('cb_claim_territory', { p_user_id: account.id, p_lat: Number(presence.data.latitude), p_lng: Number(presence.data.longitude) });
+      const kingdom = kingdomNameInput(body.kingdom_name);
+      if (kingdom.length < 3 || !/[\p{L}\p{N}]/u.test(kingdom)) fail(400, 'Choose a kingdom name between 3 and 48 characters.');
+      const latitude = Number(presence.data.latitude), longitude = Number(presence.data.longitude);
+      const polygon = kingdomRangePolygon(latitude, longitude);
+      const key = `kingdom:${latitude.toFixed(4)}:${longitude.toFixed(4)}`;
+      const existing = await client.from('cb_territories').select('id,barangay,centroid_lat,centroid_lng,boundary').order('updated_at', { ascending: false }).limit(250);
+      if (existing.error) fail(500, existing.error.message);
+      const overlap = (existing.data ?? []).find((zone: any) => (Number.isFinite(Number(zone.centroid_lat)) && Number.isFinite(Number(zone.centroid_lng)) && Math.abs(latitude - Number(zone.centroid_lat)) * 111_320 < Math.sqrt(2_000_000) && Math.abs(longitude - Number(zone.centroid_lng)) * 111_320 * Math.cos(latitude * Math.PI / 180) < Math.sqrt(2_000_000)) || (usableBoundary(zone.boundary) && polygonContains(zone.boundary, latitude, longitude)));
+      if (overlap) fail(409, `This 2 km² kingdom overlaps ${overlap.barangay || 'an existing kingdom'}. Move outside its range before claiming.`);
+      const region = await client.from('cb_player_regions').select('locality').eq('user_id', account.id).maybeSingle();
+      if (region.error) fail(500, region.error.message);
+      const claimed = await client.rpc('cb_claim_barangay_territory', {
+        p_user_id: account.id,
+        p_barangay_key: key,
+        p_barangay: kingdom,
+        p_locality: region.data?.locality || 'Chess Burger Kingdom',
+        p_boundary: polygon,
+        p_centroid_lat: latitude,
+        p_centroid_lng: longitude,
+      });
       if (claimed.error) fail(claimed.error.message.includes('gold') ? 409 : 500, claimed.error.message);
-      return res.status(200).json({ ok: true, gold_cost: 48, territory: claimed.data });
+      return res.status(200).json({ ok: true, claimed: true, gold_cost: FRESH_TERRITORY_COST, defense_points: 10, territory: claimed.data });
     }
+    if (action === 'rename-kingdom') {
+      const territoryId = String(body.territory_id ?? '');
+      if (!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(territoryId)) fail(400, 'Choose a valid kingdom.');
+      const kingdom = kingdomNameInput(body.kingdom_name);
+      if (kingdom.length < 3 || !/[\p{L}\p{N}]/u.test(kingdom)) fail(400, 'Choose a kingdom name between 3 and 48 characters.');
+      const renamed = await client.from('cb_territories').update({ barangay: kingdom, updated_at: new Date().toISOString() }).eq('id', territoryId).eq('user_id', account.id).select('id,barangay').maybeSingle();
+      if (renamed.error) fail(500, renamed.error.message);
+      if (!renamed.data) fail(403, 'Only the current KING can rename this kingdom.');
+      return res.status(200).json({ ok: true, territory: renamed.data });
+    }
+    if (action === 'invasion-challenge') return res.status(200).json(await createInvasionChallenge(client, account, body));
     if (action === 'social-status' || action === 'social-update') {
       const target = String(body.target ?? '');
       if (!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(target) || target === account.id) fail(400, 'Choose another registered player.');
@@ -510,6 +748,14 @@ export default async function handler(req: Req, res: Res) {
       if (match.white_id === account.id) fail(400, 'You cannot join your own room.');
       if (match.invite_to && match.invite_to !== account.id) fail(403, 'This invitation belongs to another player.');
       if (Date.parse(match.created_at) <= now() - 120000) fail(410, 'This invitation has expired.');
+      if (match.match_kind === 'invasion') {
+        const accepted = await client.rpc('cb_accept_invasion', { p_match_id: match.id, p_owner_id: account.id });
+        if (accepted.error) fail(/Gold|expired|changed|available/i.test(accepted.error.message) ? 409 : 500, accepted.error.message);
+        const current = await readMatch(client, match.id);
+        const view = await matchView(client, current);
+        await broadcastMatch(view);
+        return res.status(200).json({ match: view });
+      }
       const changed = await client.from('cb_matches').update({ black_id: account.id, black_cbr: account.profile.cbr, status: 'active', version: Number(match.version) + 1, last_tick: new Date().toISOString() }).eq('id', match.id).eq('version', match.version).eq('status', 'waiting').is('black_id', null).select('*').maybeSingle();
       if (changed.error) fail(500, changed.error.message);
       if (!changed.data) fail(409, 'This room was already joined.');
@@ -522,7 +768,7 @@ export default async function handler(req: Req, res: Res) {
     if (action === 'state') {
       const [r, pending] = await Promise.all([
         client.from('cb_matches').select('*').eq('status', 'active').or(`white_id.eq.${account.id},black_id.eq.${account.id}`).order('created_at', { ascending: false }).limit(1).maybeSingle(),
-        client.from('cb_matches').select('id,host_id,control,code,created_at').eq('status', 'waiting').eq('invite_to', account.id).gt('created_at', new Date(now() - 120000).toISOString()).order('created_at', { ascending: false }).limit(10),
+        client.from('cb_matches').select('*').eq('status', 'waiting').eq('invite_to', account.id).gt('created_at', new Date(now() - 120000).toISOString()).order('created_at', { ascending: false }).limit(10),
       ]);
       if (r.error || pending.error) fail(500, r.error?.message ?? pending.error?.message ?? 'Unable to load match state.');
       const current = r.data ? await finishExpiredMatch(client, r.data) : null;
