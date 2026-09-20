@@ -27,6 +27,7 @@ import "./v43.css";
 import "./v44.css";
 import "./v45.css";
 import "./gameplay.css";
+import "./v46.css";
 
 export const metadata: Metadata = {
   title: "Chess Burger",

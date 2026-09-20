@@ -332,7 +332,8 @@ async function signedIn(client: Db, req: Req) {
 async function playerMap(client: Db, ids: string[]) {
   const unique = [...new Set(ids.filter(Boolean))];
   if (!unique.length) return new Map<string, any>();
-  const r = await client.from('cb_profiles').select('user_id,username,display_name,avatar_url,country_code,cbr,gold_points,wins,losses,win_streak').in('user_id', unique);
+  let r = await client.from('cb_profiles').select('user_id,username,display_name,avatar_url,country_code,cbr,gold_points,wins,losses,win_streak,active_feed_banner').in('user_id', unique);
+  if (r.error && /active_feed_banner|schema cache/i.test(r.error.message)) r = await client.from('cb_profiles').select('user_id,username,display_name,avatar_url,country_code,cbr,gold_points,wins,losses,win_streak').in('user_id', unique);
   if (r.error) fail(500, r.error.message);
   return new Map((r.data ?? []).map((p: any) => [p.user_id, p]));
 }
@@ -445,7 +446,7 @@ async function publicFeed(client: Db) {
     for (const m of waiting.data ?? []) activeChallenges.set(m.id, m);
   }
   const people = await playerMap(client, visible.map((e: any) => e.user_id));
-  return { events: visible.filter((e: any) => e.kind !== 'challenge' || activeChallenges.has(e.challenge_match_id)).map((e: any) => { const match = activeChallenges.get(e.challenge_match_id); return { id: e.kind === 'challenge' && e.challenge_match_id ? `challenge:${e.challenge_match_id}` : e.id, user_id: e.user_id, kind: e.kind, display_name: e.kind === 'announcement' ? 'Chess Burger' : e.display_name, content: e.content, image_url: e.image_url ?? '', expires_at: e.expires_at, cbr_delta: e.cbr_delta ?? 0, gold_delta: e.gold_delta ?? 0, heart_count: e.heart_count ?? 0, created_at: e.created_at, avatar_url: e.kind === 'announcement' ? '/cburger_logo.png' : people.get(e.user_id)?.avatar_url ?? '', cbr: people.get(e.user_id)?.cbr ?? 88, play_mode: match?.play_mode ?? 'normal', wager_gold: Number(match?.wager_gold ?? 0) }; }) };
+  return { events: visible.filter((e: any) => e.kind !== 'challenge' || activeChallenges.has(e.challenge_match_id)).map((e: any) => { const match = activeChallenges.get(e.challenge_match_id); return { id: e.kind === 'challenge' && e.challenge_match_id ? `challenge:${e.challenge_match_id}` : e.id, user_id: e.user_id, kind: e.kind, display_name: e.kind === 'announcement' ? 'Chess Burger' : e.display_name, content: e.content, image_url: e.image_url ?? '', expires_at: e.expires_at, cbr_delta: e.cbr_delta ?? 0, gold_delta: e.gold_delta ?? 0, heart_count: e.heart_count ?? 0, created_at: e.created_at, avatar_url: e.kind === 'announcement' ? '/cburger_logo.png' : people.get(e.user_id)?.avatar_url ?? '', cbr: people.get(e.user_id)?.cbr ?? 88, feed_banner: e.kind === 'announcement' ? '' : people.get(e.user_id)?.active_feed_banner ?? '', play_mode: match?.play_mode ?? 'normal', wager_gold: Number(match?.wager_gold ?? 0) }; }) };
 }
 async function saveLiveHeartbeat(client: Db, userId: string) {
   const stamp = new Date().toISOString();
@@ -612,6 +613,24 @@ export default async function handler(req: Req, res: Res) {
     // Keep it as a first-class migration action rather than falling through to
     // a 404 on every page load.
     if (action === 'me') return res.status(200).json({ profile: { ...account.profile, ocbr: Number(account.profile.ocbr ?? 88) }, rank: await playerRank(client, account.profile) });
+    if(action==='shop-banners'){
+      const items=await client.from('cb_user_items').select('product_id').eq('user_id',account.id);
+      if(items.error)fail(503,'Run supabase/0021_feed_banner_shop.sql in Supabase, then try again.');
+      return res.status(200).json({owned:(items.data??[]).map((item:any)=>item.product_id),active:account.profile.active_feed_banner??'',gold:Number(account.profile.gold_points??0)});
+    }
+    if(action==='buy-feed-banner'){
+      const productId=String(body.product_id??''),requestId=String(body.request_id??'');
+      if(!/^(pastel|metal)-[a-z-]{2,30}$/.test(productId)||!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(requestId))fail(400,'Choose a valid Feed Banner.');
+      const bought=await client.rpc('cb_buy_feed_banner',{p_user_id:account.id,p_product_id:productId,p_request_id:requestId});
+      if(bought.error){const message=String(bought.error.message??'Purchase failed.');if(/cb_buy_feed_banner|cb_user_items|schema cache|function/i.test(message))fail(503,'Run supabase/0021_feed_banner_shop.sql in Supabase, then try again.');if(/not enough gold/i.test(message))fail(409,'You do not have enough Gold for this banner.');fail(409,message);}
+      return res.status(200).json(bought.data);
+    }
+    if(action==='activate-feed-banner'){
+      const productId=String(body.product_id??'');if(!/^(pastel|metal)-[a-z-]{2,30}$/.test(productId))fail(400,'Choose a valid Feed Banner.');
+      const activated=await client.rpc('cb_activate_feed_banner',{p_user_id:account.id,p_product_id:productId});
+      if(activated.error){const message=String(activated.error.message??'Activation failed.');if(/cb_activate_feed_banner|schema cache|function/i.test(message))fail(503,'Run supabase/0021_feed_banner_shop.sql in Supabase, then try again.');if(/not owned/i.test(message))fail(403,'Purchase this banner before activating it.');fail(409,message);}
+      return res.status(200).json({active:activated.data,gold:Number(account.profile.gold_points??0)});
+    }
     if(action==='grant-gold'){
       if(account.profile.role!=='owner')fail(403,'Only an Owner can grant Gold.');
       const username=cmsUsername(body.username),amount=cmsGoldAmount(body.amount),requestId=String(body.request_id??'');

@@ -17,6 +17,8 @@ import {
   CreditCard,
   ShoppingBag,
   ShieldCheck,
+  PackageOpen,
+  Castle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
@@ -43,6 +45,7 @@ import { profileRequest } from "./profile-client";
 import { FloatingChatButton, SocialHub, MatchResult, type MatchSummary } from "./social";
 import PublicProfile from "./public-profile";
 import InstallPrompt from "./install-prompt";
+import { BagPage, ShopPage } from "./shop";
 
 const modes = [
   {
@@ -71,8 +74,10 @@ const navigation = [
   { key: "home", label: "Home", Icon: Home },
   { key: "map", label: "Map", Icon: MapPin },
   { key: "card", label: "Card", Icon: CreditCard },
+  { key: "bag", label: "Bag", Icon: PackageOpen },
   { key: "play", label: "Play", Icon: Swords },
   { key: "shop", label: "Shop", Icon: ShoppingBag },
+  { key: "guild", label: "Guild", Icon: Castle },
   { key: "rank", label: "Rank", Icon: Trophy },
   { key: "profile", label: "Profile", Icon: UserRound },
 ];
@@ -671,31 +676,9 @@ function AppPage() {
         />
       </section>
     );
-  else if (tab === "shop")
-    content = (
-      <section className="shop-page">
-        <div className="page-heading">
-          <h1>Chess Burger shop</h1>
-          <span className="sample-label">{profile?.gold_points ?? 0} Gold</span>
-        </div>
-        <div className="shop-grid">
-          {[
-            ["♞", "Avatar frames", "Decorative player-card frames."],
-            ["♛", "Board themes", "Metallic boards and pieces."],
-            ["♟", "Gold rewards", "Reward items for your collection."],
-          ].map(([icon, name, desc]) => (
-            <article key={name}>
-              <span className="shop-icon">{icon}</span>
-              <div>
-                <h2>{name}</h2>
-                <p>{desc}</p>
-              </div>
-              <span className="shop-status">Coming soon</span>
-            </article>
-          ))}
-        </div>
-      </section>
-    );
+  else if (tab === "shop") content = <ShopPage profile={profile} onChanged={() => void refreshProfile()} />;
+  else if (tab === "bag") content = <BagPage onChanged={() => void refreshProfile()} />;
+  else if (tab === "guild") content = <section className="guild-page"><div className="coming-soon-panel"><Castle size={46}/><span>Guild</span><h1>Coming soon</h1><p>Build your guild, gather teammates, and compete together in a future update.</p></div></section>;
   else if (tab === "cms" && staff)
     content = <Cms profile={profile} onClose={() => setTab("profile")} />;
   else
