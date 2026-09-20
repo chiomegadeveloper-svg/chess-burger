@@ -551,12 +551,29 @@ export default async function handler(req: Req, res: Res) {
       const presence = await client.from('cb_presence').select('latitude,longitude,accuracy').eq('user_id', account.id).eq('gps_enabled', true).gt('seen_at', new Date(now() - 30_000).toISOString()).maybeSingle();
       if (presence.error) fail(500, 'GPS presence is temporarily unavailable.');
       if (!presence.data || Number(presence.data.accuracy) > 100) fail(409, 'Enable GPS and wait for accuracy within 100 m.');
-      const claimed = await client.rpc('cb_claim_territory', { p_user_id: account.id, p_lat: Number(presence.data.latitude), p_lng: Number(presence.data.longitude) });
+      const requestedLat=Number(body.lat),requestedLng=Number(body.lng),requestedAccuracy=Number(body.accuracy);
+      if(!Number.isFinite(requestedLat)||!Number.isFinite(requestedLng)||requestedAccuracy>100||metres(requestedLat,requestedLng,Number(presence.data.latitude),Number(presence.data.longitude))>100)fail(409,'Your GPS location changed. Wait for the map dot to settle, then try again.');
+      const claimed = await client.rpc('cb_claim_territory', { p_user_id: account.id, p_lat: requestedLat, p_lng: requestedLng });
       if (claimed.error) fail(claimed.error.message.includes('gold') ? 409 : 500, claimed.error.message);
       const saved=await client.from('cb_territories').update({kingdom_name:kingdomName}).eq('id',claimed.data).eq('user_id',account.id).select('id,user_id,lat,lng,kingdom_name').maybeSingle();
       if(saved.error)fail(500,saved.error.message);
       if(!saved.data)fail(500,'Your kingdom could not be named.');
       return res.status(200).json({ ok: true, claimed: true, defense_points: 10, gold_cost: 48, territory: saved.data });
+    }
+    if(action==='territory-relocate'){
+      const territoryId=String(body.territory_id??''),lat=Number(body.lat),lng=Number(body.lng),accuracy=Number(body.accuracy);
+      if(!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(territoryId))fail(400,'Choose a valid kingdom.');
+      if(!Number.isFinite(lat)||!Number.isFinite(lng)||accuracy>100)fail(400,'Wait for a GPS reading within 100 m.');
+      const presence=await client.from('cb_presence').select('latitude,longitude,accuracy').eq('user_id',account.id).eq('gps_enabled',true).gt('seen_at',new Date(now()-10_000).toISOString()).maybeSingle();
+      if(presence.error)fail(500,'GPS presence is temporarily unavailable.');
+      if(!presence.data||Number(presence.data.accuracy)>100||metres(lat,lng,Number(presence.data.latitude),Number(presence.data.longitude))>100)fail(409,'Your GPS location changed. Wait for the map dot to settle, then try again.');
+      const occupied=await client.from('cb_territories').select('id,lat,lng').neq('id',territoryId).limit(500);
+      if(occupied.error)fail(500,occupied.error.message);
+      if((occupied.data??[]).some((zone:any)=>metres(lat,lng,Number(zone.lat),Number(zone.lng))<4_000))fail(409,'This 2 km territory overlaps an occupied kingdom.');
+      const saved=await client.from('cb_territories').update({lat,lng}).eq('id',territoryId).eq('user_id',account.id).select('id,user_id,lat,lng,kingdom_name').maybeSingle();
+      if(saved.error)fail(500,saved.error.message);
+      if(!saved.data)fail(403,'Only the kingdom owner can move it.');
+      return res.status(200).json({ok:true,territory:saved.data});
     }
     if(action==='territory-name'){const territoryId=String(body.territory_id??''),kingdomName=String(body.kingdom_name??'').trim().replace(/\s+/g,' ');if(!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(territoryId))fail(400,'Choose a valid kingdom.');if(kingdomName.length<3||kingdomName.length>40)fail(400,'Kingdom name must be 3 to 40 characters.');const saved=await client.from('cb_territories').update({kingdom_name:kingdomName}).eq('id',territoryId).eq('user_id',account.id).select('id,user_id,lat,lng,kingdom_name').maybeSingle();if(saved.error)fail(500,saved.error.message);if(!saved.data)fail(403,'Only the kingdom owner can rename it.');return res.status(200).json({territory:{...saved.data,is_owner:true,display_name:account.profile.display_name}});}
     if (action === 'social-status' || action === 'social-update') {
