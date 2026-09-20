@@ -1,12 +1,16 @@
 import { createClient } from '@supabase/supabase-js';
 import { Chess } from 'chess.js';
-import { FAST_MATCH_ACTIONS, fastMatchAction, MatchActionError } from '../lib/match-v49';
 
 type Req = { method?: string; query?: Record<string, string | string[] | undefined>; body?: unknown; headers: Record<string, string | string[] | undefined> };
 type Res = { status: (code: number) => Res; json: (body: unknown) => void; setHeader: (name: string, value: string) => void };
 // The Supabase schema is managed in SQL migrations, so the server route uses
 // runtime checks instead of a generated TypeScript database declaration.
 type Db = any;
+
+// Load the gameplay mutation engine only when a player actually performs a
+// match action. Public Home, Map, and Rank requests must never be able to
+// crash because a gameplay helper failed to initialize in Vercel.
+const FAST_MATCH_ACTIONS = new Set(['match', 'move', 'resign', 'abort', 'timeout', 'offer', 'respond-offer']);
 
 const TIME: Record<string, { seconds: number; increment: number; group: string; label: string }> = {
   '1+0': { seconds: 60, increment: 0, group: 'Bullet', label: '1 min' }, '1+1': { seconds: 60, increment: 1, group: 'Bullet', label: '1 + 1' }, '2+1': { seconds: 120, increment: 1, group: 'Bullet', label: '2 + 1' },
@@ -363,7 +367,10 @@ export default async function handler(req: Req, res: Res) {
       }
       fail(404, 'Unknown game request.');
     }
-    if (FAST_MATCH_ACTIONS.has(action)) return res.status(200).json(await fastMatchAction(client, req, action, body, settle));
+    if (FAST_MATCH_ACTIONS.has(action)) {
+      const { fastMatchAction } = await import('../lib/match-v49');
+      return res.status(200).json(await fastMatchAction(client, req, action, body, settle));
+    }
     const account = await signedIn(client, req);
     // The app refreshes this on sign-in to obtain the authoritative profile.
     // Keep it as a first-class migration action rather than falling through to
@@ -603,5 +610,14 @@ export default async function handler(req: Req, res: Res) {
       return res.status(200).json({ match: view });
     }
     fail(404, 'This game action is not available during the migration.');
-  } catch (error) { const known = error instanceof ApiError ? error : error instanceof MatchActionError ? new ApiError(error.status, error.message) : new ApiError(500, 'The game service could not complete this request. Please try again.'); console.error('arena.failed', { action, status: known.status, message: known.message }); return res.status(known.status).json({ error: known.message }); }
+  } catch (error) {
+    const matchFailure = error instanceof Error && error.name === 'MatchActionError' && typeof (error as any).status === 'number';
+    const known = error instanceof ApiError
+      ? error
+      : matchFailure
+        ? new ApiError((error as any).status, error.message)
+        : new ApiError(500, 'The game service could not complete this request. Please try again.');
+    console.error('arena.failed', { action, status: known.status, message: known.message, stack: error instanceof Error ? error.stack : String(error) });
+    return res.status(known.status).json({ error: known.message });
+  }
 }
