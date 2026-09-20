@@ -31,12 +31,12 @@ export default function MatchRequests({ match, ownId, disabled, onOffer, onRespo
     </div>
     {pending ? <div className="match-offer" role="status">
       <strong>{pending.by === ownId ? 'Waiting for your opponent' : pending.kind === 'draw' ? 'Your opponent offers a draw' : 'Your opponent requests a takeback'}</strong>
-      <p>{pending.kind === 'takeback' ? 'Undo the requester’s last move and your reply, if played. Used time is not refunded.' : 'Accept to end this game as a draw.'}</p>
+      <p>{pending.kind === 'takeback' ? 'Accept to return both affected pieces and restore the clocks to the exact request moment.' : 'Accept to end this game as a draw.'}</p>
       {pending.by !== ownId && <div className="match-offer-actions">
         <button type="button" disabled={disabled} onClick={() => onRespond(pending.id, true)}>Accept {pending.kind}</button>
         <button type="button" disabled={disabled} onClick={() => onRespond(pending.id, false)}>Decline</button>
       </div>}
-      <small>Expires in {Math.max(0, Math.ceil((pending.expires_at - now) / 1000))}s. The chess clocks keep running.</small>
+      <small>Expires in {Math.max(0, Math.ceil((pending.expires_at - now) / 1000))}s. If the requester moves again, the request is cancelled and still counts as one attempt.</small>
     </div> : last ? <p role="status" className="match-offer-result">{last.kind === 'draw' ? 'Draw offer' : 'Takeback'} {last.outcome === 'position-changed' ? 'expired because a move was played' : last.outcome}.</p> : null}
     <p className="rules-caption">3 requests of each type per player, per match. Declined and expired requests count too.</p>
   </section>;
