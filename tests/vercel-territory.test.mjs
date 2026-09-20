@@ -37,6 +37,11 @@ test('kingdom ranges are closed 2 km² GPS square polygons',()=>{
  assert.equal(range.type,'Polygon');
  assert.equal(range.coordinates[0].length,5);
  assert.equal(polygonContains(range,11.244,125.003),true);
+ const ring=range.coordinates[0];
+ const northSouth=Math.abs(ring[0][1]-ring[3][1])*111_320;
+ const eastWest=Math.abs(ring[0][0]-ring[1][0])*111_320*Math.cos(11.244*Math.PI/180);
+ assert.ok(Math.abs(northSouth-Math.sqrt(2_000_000))<2);
+ assert.ok(Math.abs(eastWest-Math.sqrt(2_000_000))<2);
  // Roughly 800 m north: outside a square whose half-side is 707 m.
  assert.equal(polygonContains(range,11.2512,125.003),false);
 });
