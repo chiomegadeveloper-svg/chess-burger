@@ -48,7 +48,8 @@ namespace MatchEngine {
       const ended = c.chess.isCheckmate() ? (c.chess.turn() === 'w' ? 'black' : 'white') : c.chess.isDraw() ? 'draw' : null;
       const ids = [...(meta.move_ids ?? [])];
       if (typeof input.request_id === 'string') ids.push(input.request_id.slice(0, 80));
-      return { ...next, pgn: c.chess.pgn(), white_ms: c.white_ms + (c.white ? increment : 0), black_ms: c.black_ms + (c.white ? 0 : increment), last_tick: at, status: ended ? 'finished' : 'active', result: ended, game_meta: { ...clear(currentMeta, 'position-changed'), move_ids: ids } };
+      const moveMeta = pending?.kind === 'takeback' && pending.by !== actor ? currentMeta : clear(currentMeta, 'position-changed');
+      return { ...next, pgn: c.chess.pgn(), white_ms: c.white_ms + (c.white ? increment : 0), black_ms: c.black_ms + (c.white ? 0 : increment), last_tick: at, status: ended ? 'finished' : 'active', result: ended, game_meta: { ...moveMeta, move_ids: ids } };
     }
     if (action === 'resign' || action === 'abort') return { ...next, white_ms: c.white_ms, black_ms: c.black_ms, last_tick: at, status: action === 'abort' ? 'cancelled' : 'finished', result: action === 'abort' ? null : actor === row.white_id ? 'black' : 'white', game_meta: clear(currentMeta, 'position-changed') };
     if (action === 'offer') {
@@ -57,28 +58,29 @@ namespace MatchEngine {
       if (pending) reject('Answer the pending request first.');
       const used = currentMeta.requests?.[actor] ?? { takeback: 0, draw: 0 };
       if (used[kind] >= LIMIT) reject(`You have used all 3 ${kind === 'draw' ? 'draw offers' : 'takeback requests'} in this match.`);
-      let plies = 0;
+      let plies = 0, rollback_pgn = row.pgn;
       if (kind === 'takeback') {
         const history = c.chess.history({ verbose: true }), color = actor === row.white_id ? 'w' : 'b';
         let own = -1;
         for (let i = history.length - 1; i >= 0; i--) if (history[i]?.color === color) { own = i; break; }
         if (own < 0) reject('You have not made a move to take back.');
         plies = history.length - own;
+        const rollback = game(row);
+        for (let i = 0; i < plies; i++) rollback.undo();
+        rollback_pgn = rollback.pgn();
       }
-      return { ...next, game_meta: { ...currentMeta, requests: { ...currentMeta.requests, [actor]: { ...used, [kind]: used[kind] + 1 } }, request_ids: [...(currentMeta.request_ids ?? []), id], pending: { id, kind, by: actor, at, expires_at: at + OFFER_MS, pgn: row.pgn, plies } } };
+      return { ...next, game_meta: { ...currentMeta, requests: { ...currentMeta.requests, [actor]: { ...used, [kind]: used[kind] + 1 } }, request_ids: [...(currentMeta.request_ids ?? []), id], pending: { id, kind, by: actor, at, expires_at: at + OFFER_MS, pgn: row.pgn, plies, rollback_pgn, white_ms: c.white_ms, black_ms: c.black_ms } } };
     }
     if (action === 'respond-offer') {
       if (!pending || pending.id !== input.request_id) reject('This request expired or was already answered.');
       if (pending.by === actor) reject('Only your opponent can approve or decline your request.', 403);
       if (typeof input.accept !== 'boolean') reject('Choose Accept or Decline.', 400);
-      if (pending.pgn !== row.pgn) reject('The position changed. This request is no longer valid.');
+      if (pending.kind === 'draw' && pending.pgn !== row.pgn) reject('The position changed. This request is no longer valid.');
       const game_meta = { ...currentMeta, pending: null, last: { id: pending.id, kind: pending.kind, by: pending.by, outcome: input.accept ? 'accepted' : 'declined' } };
       if (!input.accept) return { ...next, game_meta };
       if (pending.kind === 'draw') return { ...next, game_meta, status: 'finished', result: 'draw', white_ms: c.white_ms, black_ms: c.black_ms, last_tick: at };
-      let white_ms = c.white_ms, black_ms = c.black_ms;
-      const increment = (increments[row.control] ?? 0) * 1000;
-      for (let i = 0; i < pending.plies; i++) { const undone = c.chess.undo(); if (!undone) reject('There is no move to take back.'); if (undone.color === 'w') white_ms = Math.max(0, white_ms - increment); else black_ms = Math.max(0, black_ms - increment); }
-      return { ...next, game_meta, pgn: c.chess.pgn(), white_ms, black_ms, last_tick: at };
+      if (typeof pending.rollback_pgn !== 'string' || !Number.isFinite(pending.white_ms) || !Number.isFinite(pending.black_ms)) reject('This takeback request cannot restore its saved position.');
+      return { ...next, game_meta, pgn: pending.rollback_pgn, white_ms: pending.white_ms, black_ms: pending.black_ms, last_tick: at };
     }
     return reject('Unknown match action.', 400);
   }
@@ -546,6 +548,9 @@ export default async function handler(req: Req, res: Res) {
       return res.status(200).json({ scope, label, players: ranked.data ?? [] });
     }
     if (action === 'claim') {
+      const owned = await client.from('cb_territories').select('id,kingdom_name').eq('user_id', account.id).limit(1).maybeSingle();
+      if (owned.error) fail(500, owned.error.message);
+      if (owned.data) fail(409, `You already rule ${owned.data.kingdom_name || 'a kingdom'}. Open its KING card to manage it.`);
       const kingdomName=String(body.kingdom_name??'').trim().replace(/\s+/g,' ');
       if(kingdomName.length<3||kingdomName.length>40)fail(400,'Kingdom name must be 3 to 40 characters.');
       const presence = await client.from('cb_presence').select('latitude,longitude,accuracy').eq('user_id', account.id).eq('gps_enabled', true).gt('seen_at', new Date(now() - 30_000).toISOString()).maybeSingle();
@@ -559,6 +564,21 @@ export default async function handler(req: Req, res: Res) {
       if(saved.error)fail(500,saved.error.message);
       if(!saved.data)fail(500,'Your kingdom could not be named.');
       return res.status(200).json({ ok: true, claimed: true, defense_points: 10, gold_cost: 48, territory: saved.data });
+    }
+    if(action==='territory-relocate'){
+      const territoryId=String(body.territory_id??''),lat=Number(body.lat),lng=Number(body.lng),accuracy=Number(body.accuracy);
+      if(!territoryId||territoryId.length>128||!/^[a-z0-9-]+$/i.test(territoryId))fail(400,'Choose a valid kingdom.');
+      if(!Number.isFinite(lat)||!Number.isFinite(lng)||accuracy>100)fail(400,'Wait for a GPS reading within 100 m.');
+      const presence=await client.from('cb_presence').select('latitude,longitude,accuracy').eq('user_id',account.id).eq('gps_enabled',true).gt('seen_at',new Date(now()-10_000).toISOString()).maybeSingle();
+      if(presence.error)fail(500,'GPS presence is temporarily unavailable.');
+      if(!presence.data||Number(presence.data.accuracy)>100||metres(lat,lng,Number(presence.data.latitude),Number(presence.data.longitude))>100)fail(409,'Your GPS location changed. Wait for the map dot to settle, then try again.');
+      const occupied=await client.from('cb_territories').select('id,lat,lng').neq('id',territoryId).limit(500);
+      if(occupied.error)fail(500,occupied.error.message);
+      if((occupied.data??[]).some((zone:any)=>metres(lat,lng,Number(zone.lat),Number(zone.lng))<4_000))fail(409,'This 2 km territory overlaps an occupied kingdom.');
+      const saved=await client.from('cb_territories').update({lat,lng}).eq('id',territoryId).eq('user_id',account.id).select('id,user_id,lat,lng,kingdom_name').maybeSingle();
+      if(saved.error)fail(500,saved.error.message);
+      if(!saved.data)fail(403,'Only the kingdom owner can move it.');
+      return res.status(200).json({ok:true,territory:saved.data});
     }
     if(action==='territory-name'){const territoryId=String(body.territory_id??''),kingdomName=String(body.kingdom_name??'').trim().replace(/\s+/g,' ');if(!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(territoryId))fail(400,'Choose a valid kingdom.');if(kingdomName.length<3||kingdomName.length>40)fail(400,'Kingdom name must be 3 to 40 characters.');const saved=await client.from('cb_territories').update({kingdom_name:kingdomName}).eq('id',territoryId).eq('user_id',account.id).select('id,user_id,lat,lng,kingdom_name').maybeSingle();if(saved.error)fail(500,saved.error.message);if(!saved.data)fail(403,'Only the kingdom owner can rename it.');return res.status(200).json({territory:{...saved.data,is_owner:true,display_name:account.profile.display_name}});}
     if (action === 'social-status' || action === 'social-update') {
