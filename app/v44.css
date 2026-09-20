@@ -1,0 +1,120 @@
+/* Compact ChessBurger player-card preview for Online avatars */
+.online-directory .online-profile-preview{
+  position:absolute!important;
+  z-index:100!important;
+  top:calc(100% + 10px)!important;
+  left:50%!important;
+  width:min(350px,calc(100vw - 28px))!important;
+  max-width:350px!important;
+  padding:13px!important;
+  transform:translateX(-50%)!important;
+  overflow:visible!important;
+  box-sizing:border-box!important;
+  border:2px solid #c8a842!important;
+  border-radius:16px!important;
+  background:linear-gradient(115deg,#293238,#0e171b 56%,#243138)!important;
+  box-shadow:inset 0 0 0 2px #11181c,inset 0 0 0 3px #786b35,0 16px 38px #000d!important;
+  color:#f4f7f8!important;
+}
+.online-profile-preview .online-preview-logo{
+  display:block!important;
+  width:28px!important;
+  height:28px!important;
+  max-width:28px!important;
+  max-height:28px!important;
+  margin:0 auto 9px!important;
+  border:1px solid #d9b84e;
+  border-radius:50%!important;
+  object-fit:cover!important;
+}
+.online-preview-identity{
+  display:grid;
+  grid-template-columns:72px minmax(0,1fr) 45px;
+  gap:11px;
+  align-items:center;
+}
+.online-preview-portrait{
+  display:grid!important;
+  place-items:center!important;
+  width:72px!important;
+  height:72px!important;
+  min-width:72px!important;
+  min-height:72px!important;
+  max-width:72px!important;
+  max-height:72px!important;
+  padding:0!important;
+  overflow:hidden!important;
+  box-sizing:border-box!important;
+  border:3px solid #5ee4ee!important;
+  outline:2px solid #d7b44d!important;
+  border-radius:50%!important;
+  background:#244e59!important;
+  color:#fff!important;
+  font-size:24px!important;
+  box-shadow:0 0 14px #43dce94a!important;
+}
+.online-preview-portrait>img{
+  display:block!important;
+  width:100%!important;
+  height:100%!important;
+  max-width:72px!important;
+  max-height:72px!important;
+  object-fit:cover!important;
+  object-position:center!important;
+  border-radius:50%!important;
+}
+.online-preview-copy{min-width:0;text-align:left}
+.online-preview-copy>small{display:block;color:#b5c9cf;font-size:9px;line-height:1.45}
+.online-preview-copy>small:first-child{color:#55dce9;text-transform:uppercase}
+.online-preview-copy>strong{display:block;margin:2px 0;font-size:17px;line-height:1.18;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.online-preview-copy>span{display:block;color:#42e98a;font-size:10px}
+.online-preview-level{
+  display:block!important;
+  width:45px!important;
+  height:55px!important;
+  max-width:45px!important;
+  max-height:55px!important;
+  object-fit:contain!important;
+  filter:drop-shadow(0 3px 5px #000b);
+}
+.online-preview-stats{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  margin-top:13px;
+  padding-top:9px;
+  border-top:1px solid #56c7d2;
+  text-align:center;
+}
+.online-preview-stats>div+div{border-left:1px solid #8e7b43}
+.online-preview-stats b{display:block;font-size:16px;line-height:1.15}
+.online-preview-stats small{display:block;margin-top:2px;color:#aebfc5;font-size:8px;text-transform:uppercase}
+.online-preview-actions{display:flex;align-items:center;justify-content:center;gap:7px;margin-top:11px}
+.online-preview-actions button,.online-preview-actions span{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:5px;
+  min-height:30px;
+  padding:6px 10px;
+  border:1px solid #4d5b63;
+  border-radius:8px;
+  background:#202c32;
+  color:#dbe7ea;
+  font-size:9px;
+}
+.online-preview-actions button{cursor:pointer}
+.online-preview-actions .challenge{border-color:#b89035;background:linear-gradient(145deg,#e8c66c,#9e7022);color:#171107;font-weight:700}
+.online-profile-preview>.online-card-close{z-index:3}
+@media(max-width:650px){
+  .online-directory .online-profile-preview{
+    position:fixed!important;
+    top:auto!important;
+    right:12px!important;
+    bottom:82px!important;
+    left:12px!important;
+    width:auto!important;
+    max-width:350px!important;
+    margin:auto!important;
+    transform:none!important;
+  }
+}
