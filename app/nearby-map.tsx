@@ -56,8 +56,15 @@ function NearbyMapContent({enabled,position,toggle,error:gpsError,onInvite,onOpe
  },[ready,position,enabled,players,zones]);
 
  async function reloadZones(){const data=normalizeNearby(await arena<unknown>('nearby'));setZones(data.territories);setOwnedCount(data.ownedCount);setSlotLimit(data.slotLimit);return data.territories;}
- async function syncCurrentGps(){if(!position)throw new Error('Waiting for a current GPS reading.');await arena('presence',{gps:true,...position});}
- async function claim(){if(!territoryDataReady)return;setBusy(true);setError('');try{await syncCurrentGps();const result=await arena<{claimed:boolean;defense_points:number;territory:{id:string}}>('claim',{kingdom_name:kingdomName,...position!});onClaimed();const current=await reloadZones();setSelectedZone(current.find(zone=>zone.id===result.territory.id)??null);setChallengeStatus(`${kingdomName.trim()} now has a KING with ${result.defense_points} defense points.`);}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
+ async function currentClaimPosition(){
+  if(!position)throw new Error('Waiting for a current GPS reading.');
+  if(!navigator.geolocation)return position;
+  try{
+   const fresh=await new Promise<GeolocationPosition>((resolve,reject)=>navigator.geolocation.getCurrentPosition(resolve,reject,{enableHighAccuracy:true,maximumAge:0,timeout:15000}));
+   return {lat:fresh.coords.latitude,lng:fresh.coords.longitude,accuracy:fresh.coords.accuracy};
+  }catch{return position;}
+ }
+ async function claim(){if(!territoryDataReady)return;setBusy(true);setError('');try{const claimPosition=await currentClaimPosition();await arena('presence',{gps:true,...claimPosition});const result=await arena<{claimed:boolean;defense_points:number;territory:{id:string}}>('claim',{kingdom_name:kingdomName,...claimPosition});onClaimed();const current=await reloadZones();setSelectedZone(current.find(zone=>zone.id===result.territory.id)??null);setChallengeStatus(`${kingdomName.trim()} now has a KING with ${result.defense_points} defense points.`);}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
  async function renameKingdom(zone:Zone){setBusy(true);setError('');setChallengeStatus('');try{const result=await arena<{territory:{id:string;kingdom_name:string}}>('territory-name',{territory_id:zone.id,kingdom_name:renameName});const current=await reloadZones();const updated=current.find(item=>item.id===result.territory.id)??null;setSelectedZone(updated);setChallengeStatus(`Your kingdom is now named ${result.territory.kingdom_name}.`);}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
  async function challenge(zone:Zone){setBusy(true);setError('');setChallengeStatus('');try{await arena<{match:ArenaMatch}>('invasion-challenge',{territory_id:zone.id,control});setChallengeStatus(`Challenge sent to ${zone.display_name}. The 18 Gold fee is charged only when the KING accepts.`);}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
  async function openLeaders(scope:TerritoryScope){setLeaderBusy(true);setError('');try{setLeaders(await arena<Leaders>('territory-leaders',{scope}));}catch(e){setError((e as Error).message);}finally{setLeaderBusy(false);}}

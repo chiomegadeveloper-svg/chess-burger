@@ -137,6 +137,7 @@ class ApiError extends Error { status: number; constructor(status: number, messa
 const fail = (status: number, message: string): never => { throw new ApiError(status, message); };
 const now = () => Date.now();
 const gpsCutoff = () => new Date(now() - 45_000).toISOString();
+const CLAIM_ACCURACY_METRES = 250;
 
 async function publicRanks(client: Db) {
   await reconcileAuthProfiles(client);
@@ -605,9 +606,10 @@ export default async function handler(req: Req, res: Res) {
       if(kingdomName.length<3||kingdomName.length>40)fail(400,'Kingdom name must be 3 to 40 characters.');
       const presence = await client.from('cb_presence').select('latitude,longitude,accuracy').eq('user_id', account.id).eq('gps_enabled', true).gt('seen_at', new Date(now() - 30_000).toISOString()).maybeSingle();
       if (presence.error) fail(500, 'GPS presence is temporarily unavailable.');
-      if (!presence.data || Number(presence.data.accuracy) > 100) fail(409, 'Enable GPS and wait for accuracy within 100 m.');
+      if (!presence.data || !Number.isFinite(Number(presence.data.accuracy)) || Number(presence.data.accuracy) > CLAIM_ACCURACY_METRES) fail(409, `Enable GPS and wait for accuracy within ${CLAIM_ACCURACY_METRES} m.`);
       const requestedLat=Number(body.lat),requestedLng=Number(body.lng),requestedAccuracy=Number(body.accuracy);
-      if(!Number.isFinite(requestedLat)||!Number.isFinite(requestedLng)||requestedAccuracy>100||metres(requestedLat,requestedLng,Number(presence.data.latitude),Number(presence.data.longitude))>100)fail(409,'Your GPS location changed. Wait for the map dot to settle, then try again.');
+      const allowedDrift=Math.max(100,Math.min(CLAIM_ACCURACY_METRES,requestedAccuracy));
+      if(!Number.isFinite(requestedLat)||!Number.isFinite(requestedLng)||!Number.isFinite(requestedAccuracy)||requestedAccuracy<0||requestedAccuracy>CLAIM_ACCURACY_METRES||metres(requestedLat,requestedLng,Number(presence.data.latitude),Number(presence.data.longitude))>allowedDrift)fail(409,'Your GPS location changed. Wait for the map dot to settle, then try again.');
       const claimed = await client.rpc('cb_claim_territory_v2', {p_user_id:account.id,p_lat:requestedLat,p_lng:requestedLng,p_accuracy:requestedAccuracy,p_kingdom_name:kingdomName});
       if(claimed.error){if(/cb_claim_territory_v2|schema cache|function/i.test(claimed.error.message))fail(503,'Run supabase/0016_three_kingdom_slots_decay.sql in Supabase, then try again.');fail(409,claimed.error.message);}
       const saved=await client.from('cb_territories').select('id,user_id,lat,lng,kingdom_name,defense_points').eq('id',claimed.data).eq('user_id',account.id).maybeSingle();

@@ -93,8 +93,8 @@ declare
   owned_count integer;
 begin
   if p_lat not between -90 and 90 or p_lng not between -180 and 180
-     or p_accuracy is null or p_accuracy<0 or p_accuracy>100 then
-    raise exception 'Enable GPS and wait for accuracy within 100 m.';
+     or p_accuracy is null or p_accuracy<0 or p_accuracy>250 then
+    raise exception 'Enable GPS and wait for accuracy within 250 m.';
   end if;
   if char_length(trim(coalesce(p_kingdom_name,''))) not between 3 and 40 then
     raise exception 'Kingdom name must be 3 to 40 characters.';
