@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {barangayKey,kingdomRangePolygon,polygonContains} from '../api/arena.ts';
+import {barangayKey,isTwoSquareKilometreSquare,kingdomRangePolygon,polygonContains} from '../api/arena.ts';
 
 test('barangay keys are stable across case, spacing, and accents',()=>{
  assert.equal(barangayKey('Brgy. San José','Tacloban City'),'tacloban-city:brgy-san-jose');
@@ -42,6 +42,8 @@ test('kingdom ranges are closed 2 km² GPS square polygons',()=>{
  const eastWest=Math.abs(ring[0][0]-ring[1][0])*111_320*Math.cos(11.244*Math.PI/180);
  assert.ok(Math.abs(northSouth-Math.sqrt(2_000_000))<2);
  assert.ok(Math.abs(eastWest-Math.sqrt(2_000_000))<2);
+ assert.equal(isTwoSquareKilometreSquare(range,11.244),true);
+ assert.equal(isTwoSquareKilometreSquare(kingdomRangePolygon(11.244,125.003,Math.PI*2_000**2),11.244),false);
  // Roughly 800 m north: outside a square whose half-side is 707 m.
  assert.equal(polygonContains(range,11.2512,125.003),false);
 });
