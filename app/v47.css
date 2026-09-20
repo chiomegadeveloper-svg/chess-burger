@@ -1,0 +1,65 @@
+/* Viewport-safe application shell and compact phone layouts. */
+html,body,#root{min-width:0;width:100%;max-width:100%}
+body{overflow-x:clip}
+.app-shell{width:min(100%,1160px);max-width:100%;min-width:0;overflow:clip}
+.app-header,.scroll-area,.bottom-nav,.app-shell>*{min-width:0;max-width:100%}
+.scroll-area{overflow-x:clip}
+.scroll-area>*,.feed-page,.community-list,.feed-cloud,.feed-copy{min-width:0;max-width:100%}
+img,svg,video,canvas{max-width:100%}
+.page-heading{min-width:0}
+.page-heading h1{min-width:0;overflow-wrap:anywhere}
+.sample-label{flex:0 0 auto}
+.feed-copy p,.feed-activity,.feed-name{max-width:100%;overflow-wrap:anywhere}
+.social-actions-compact{max-width:100%;flex-wrap:wrap}
+.social-actions-compact button{min-width:0;max-width:100%}
+.bottom-nav{width:100%;min-width:0}
+.bottom-nav button{min-width:0;overflow:hidden}
+.bottom-nav button>span:last-child{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+@media(max-width:480px){
+ .app-shell{grid-template-rows:52px minmax(0,1fr) calc(58px + env(safe-area-inset-bottom))}
+ .app-header{padding-inline:10px}
+ .brand{min-width:0;gap:6px;font-size:10px;letter-spacing:.2px}
+ .brand img{width:27px;height:27px;flex:0 0 auto}
+ .header-actions{flex:0 0 auto;gap:7px}
+ .scroll-area,.rank-scroll,.board-scroll{padding-left:8px!important;padding-right:8px!important}
+ .page-heading{align-items:center;gap:6px}
+ .page-heading h1{font-size:clamp(17px,5.4vw,21px)}
+ .sample-label{font-size:8px}
+ .feed-page .feed-tabs{gap:1px!important;padding:2px!important}
+ .feed-page .feed-tabs>button{min-height:34px;padding:5px 1px!important;font-size:clamp(6.5px,2vw,8px)!important;letter-spacing:-.25px}
+ .feed-page .feed-cloud{grid-template-columns:34px 34px minmax(0,1fr) 24px!important;gap:6px!important;min-height:64px;padding:8px 6px!important}
+ .feed-page .feed-player,.feed-page .feed-avatar,.feed-page .feed-level{width:34px!important;height:34px!important}
+ .feed-page .feed-copy p{font-size:10px!important;line-height:1.35!important}
+ .feed-page .feed-meta{gap:4px;flex-wrap:wrap}
+ .feed-page .heart-button{min-width:24px!important;padding:2px!important}
+ .feed-page .heart-button svg{width:14px;height:14px}
+ .social-actions-compact{gap:4px;margin-top:5px}
+ .social-actions-compact button{min-height:25px;padding:3px 6px;font-size:8px}
+ .bottom-nav{padding-inline:0}
+ .bottom-nav button{padding-inline:0;font-size:6.5px;letter-spacing:-.25px}
+ .bottom-nav .nav-icon-shell{width:25px;height:25px}
+ .bottom-nav .nav-icon-shell>svg{width:15px;height:15px}
+ .bottom-nav .play-nav .nav-icon-shell{width:42px;height:42px;margin-top:-14px}
+ .bottom-nav .play-nav .nav-icon-shell svg{width:23px;height:23px}
+ .shop-grid article{grid-template-columns:38px minmax(0,1fr) auto;gap:8px}
+ .shop-grid article>span{width:36px;height:36px}
+}
+
+@media(max-width:350px){
+ .app-header{padding-inline:7px}
+ .scroll-area,.rank-scroll,.board-scroll{padding-left:6px!important;padding-right:6px!important}
+ .feed-page .feed-cloud{grid-template-columns:31px 31px minmax(0,1fr) 22px!important;gap:4px!important;padding-inline:5px!important}
+ .feed-page .feed-player,.feed-page .feed-avatar,.feed-page .feed-level{width:31px!important;height:31px!important}
+ .bottom-nav button>span:last-child{font-size:0}
+ .bottom-nav button>span:last-child:after{content:""}
+ .bottom-nav .play-nav>span:last-child{font-size:6px}
+ .shop-grid article{grid-template-columns:34px minmax(0,1fr)}
+ .shop-grid article>button{grid-column:2;justify-self:start}
+}
+
+@media(min-width:651px) and (max-width:1024px){
+ .app-header{padding-inline:clamp(18px,3vw,28px)}
+ .scroll-area{padding-inline:clamp(18px,4vw,32px)}
+ .bottom-nav button{font-size:clamp(8px,1.2vw,10px)}
+}
