@@ -546,6 +546,9 @@ export default async function handler(req: Req, res: Res) {
       return res.status(200).json({ scope, label, players: ranked.data ?? [] });
     }
     if (action === 'claim') {
+      const owned=await client.from('cb_territories').select('id,kingdom_name').eq('user_id',account.id).limit(1).maybeSingle();
+      if(owned.error)fail(500,owned.error.message);
+      if(owned.data)fail(409,`You already rule ${owned.data.kingdom_name||'a kingdom'}. Open its KING card to manage it.`);
       const kingdomName=String(body.kingdom_name??'').trim().replace(/\s+/g,' ');
       if(kingdomName.length<3||kingdomName.length>40)fail(400,'Kingdom name must be 3 to 40 characters.');
       const presence = await client.from('cb_presence').select('latitude,longitude,accuracy').eq('user_id', account.id).eq('gps_enabled', true).gt('seen_at', new Date(now() - 30_000).toISOString()).maybeSingle();
@@ -558,7 +561,7 @@ export default async function handler(req: Req, res: Res) {
       if(!saved.data)fail(500,'Your kingdom could not be named.');
       return res.status(200).json({ ok: true, claimed: true, defense_points: 10, gold_cost: 48, territory: saved.data });
     }
-    if(action==='territory-name'){const territoryId=String(body.territory_id??''),kingdomName=String(body.kingdom_name??'').trim().replace(/\s+/g,' ');if(!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(territoryId))fail(400,'Choose a valid kingdom.');if(kingdomName.length<3||kingdomName.length>40)fail(400,'Kingdom name must be 3 to 40 characters.');const saved=await client.from('cb_territories').update({kingdom_name:kingdomName}).eq('id',territoryId).eq('user_id',account.id).select('id,user_id,lat,lng,kingdom_name').maybeSingle();if(saved.error)fail(500,saved.error.message);if(!saved.data)fail(403,'Only the kingdom owner can rename it.');return res.status(200).json({territory:{...saved.data,is_owner:true,display_name:account.profile.display_name}});}
+    if(action==='territory-name'){const territoryId=String(body.territory_id??''),kingdomName=String(body.kingdom_name??'').trim().replace(/\s+/g,' ');if(!territoryId||territoryId.length>128||!/^[a-z0-9-]+$/i.test(territoryId))fail(400,'Choose a valid kingdom.');if(kingdomName.length<3||kingdomName.length>40)fail(400,'Kingdom name must be 3 to 40 characters.');const saved=await client.from('cb_territories').update({kingdom_name:kingdomName}).eq('id',territoryId).eq('user_id',account.id).select('id,user_id,lat,lng,kingdom_name').maybeSingle();if(saved.error)fail(500,saved.error.message);if(!saved.data)fail(403,'Only the kingdom owner can rename it.');return res.status(200).json({territory:{...saved.data,is_owner:true,display_name:account.profile.display_name}});}
     if (action === 'social-status' || action === 'social-update') {
       const target = String(body.target ?? '');
       if (!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(target) || target === account.id) fail(400, 'Choose another registered player.');
