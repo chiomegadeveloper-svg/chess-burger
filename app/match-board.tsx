@@ -186,7 +186,7 @@ export default function MatchBoard({
   const tc = timeControl(match.control),
     result =
       match.status === "cancelled"
-        ? "Match aborted · no rewards awarded"
+        ? match.game_meta?.last?.kind === 'abort' && match.game_meta.last.by === ownId ? "You aborted the match · no rewards awarded" : "Match aborted by opponent · no rewards awarded"
         : match.result === "draw"
         ? "Draw"
         : match.result
@@ -481,7 +481,7 @@ export default function MatchBoard({
           {confirmAbort && (
             <div className="resign-confirm abort-confirm" role="alertdialog" aria-label="Abort match">
               <p>Abort this match?</p>
-              <small>Both players receive no CBR, Gold, or EXP. Every fifth abort triggers a 1-minute cooldown.</small>
+              <small>Both players receive no CBR, Gold, or EXP. Your third abort triggers a 2-minute cooldown before you can play again.</small>
               <button
                 disabled={busy}
                 onClick={() => {

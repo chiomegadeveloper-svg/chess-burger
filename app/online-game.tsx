@@ -17,7 +17,7 @@ export default function OnlineGame(props: Props) {
 function LiveGame({ id, profile, onFinished, watch = false }: Props) {
   const [sync] = useState(() => new MatchSync(id, watch ? undefined : profile?.user_id));
   const { match, confirmed, pending, error } = useSyncExternalStore(sync.subscribe, sync.getSnapshot, sync.getSnapshot);
-  const [live, setLive] = useState(false), [actionBusy, setActionBusy] = useState(false);
+  const [live, setLive] = useState(false), [actionBusy, setActionBusy] = useState(false),[abortNotice,setAbortNotice]=useState('');
   const [premove, setPremove] = useState<BoardMove | null>(null);
   const mounted = useRef(false), reading = useRef<Promise<void> | null>(null), actionLock = useRef(false);
   const channel = useRef<RealtimeChannel | null>(null), finished = useRef(false);
@@ -101,15 +101,15 @@ function LiveGame({ id, profile, onFinished, watch = false }: Props) {
     if (watch || actionLock.current || state.pending || !state.confirmed) return;
     actionLock.current = true; setActionBusy(true);
     try {
-      const response = await arena<{ match: ArenaMatch }>(name, { id, version: state.confirmed.version, ...body });
-      if (mounted.current) { sync.accept(response.match); hint(); }
+      const response = await arena<{match:ArenaMatch;fair_play?:{total_aborts:number;cooldown_until:number;aborts_remaining:number}}>(name, { id, version: state.confirmed.version, ...body });
+      if (mounted.current) { sync.accept(response.match);if(name==='abort'&&response.fair_play)setAbortNotice(response.fair_play.cooldown_until>Date.now()?'You reached 3 aborts and cannot start another match for 2 minutes.':`${response.fair_play.aborts_remaining} abort${response.fair_play.aborts_remaining===1?'':'s'} remaining before cooldown.`);hint(); }
     } catch (e) {
       if (mounted.current) { sync.setError((e as Error).message); void refresh(); }
     } finally { actionLock.current = false; if (mounted.current) setActionBusy(false); }
   }, [id, hint, refresh, sync, watch]);
   useEffect(() => {
     const decision = confirmed?.game_meta?.last;
-    if (decision?.kind === 'takeback' && decision.outcome === 'accepted' && decision.id !== lastTakeback.current) {
+    if (decision?.kind === 'takeback' && decision.outcome === 'accepted' && decision.id && decision.id !== lastTakeback.current) {
       lastTakeback.current = decision.id; setPremove(null); return;
     }
     if (!confirmed || !premove || pending || watch) return;
@@ -118,6 +118,7 @@ function LiveGame({ id, profile, onFinished, watch = false }: Props) {
     setPremove(null);
     void move(premove);
   }, [confirmed, premove, pending, actionBusy, watch, profile?.user_id, move]);
+  useEffect(()=>{if(confirmed?.status!=='cancelled')return;const by=confirmed.game_meta?.last?.kind==='abort'?confirmed.game_meta.last.by:'';setAbortNotice(current=>current||(by===profile?.user_id?'You ended this match. No CBR, Gold, or EXP was awarded.':'Your opponent ended the match. No CBR, Gold, or EXP was awarded.'));},[confirmed?.status,confirmed?.version,profile?.user_id]);
   useEffect(() => {
     if (!confirmed || confirmed.status !== 'active' || pending || actionBusy || watch) return;
     const game = gameFromPgn(confirmed.pgn), white = game.turn() === 'w';
@@ -136,6 +137,7 @@ function LiveGame({ id, profile, onFinished, watch = false }: Props) {
   if (!match) return <p className="cloud-panel" role="status">{error || 'Opening your board…'}</p>;
   return <>
     {error && <p className="inline-error" role="alert">{error}</p>}
+    {abortNotice&&<div className="abort-notice" role="alert"><strong>Match aborted</strong><span>{abortNotice}</span></div>}
     <MatchBoard match={match} ownId={profile?.user_id} onMove={watch ? undefined : value => void move(value)}
       premove={premove} onPremove={watch ? undefined : setPremove}
       onResign={watch ? undefined : () => void action('resign')} onAbort={watch ? undefined : () => void action('abort')}
