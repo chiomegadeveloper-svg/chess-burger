@@ -86,6 +86,17 @@ export function polygonContains(boundary: any, lat: number, lng: number) {
   const polygons = boundary?.type === 'Polygon' ? [boundary.coordinates] : boundary?.type === 'MultiPolygon' ? boundary.coordinates : [];
   return polygons.some((polygon: number[][][]) => Array.isArray(polygon?.[0]) && ringContains([lng, lat], polygon[0]) && !polygon.slice(1).some((hole: number[][]) => ringContains([lng, lat], hole)));
 }
+export function kingdomRangePolygon(lat: number, lng: number, radiusM = 2_000, sides = 32) {
+  const earthRadius = 6_371_008.8, phi1 = lat * Math.PI / 180, lambda1 = lng * Math.PI / 180, angular = radiusM / earthRadius;
+  const coordinates = Array.from({ length: sides }, (_, index) => {
+    const bearing = index * 2 * Math.PI / sides;
+    const phi2 = Math.asin(Math.sin(phi1) * Math.cos(angular) + Math.cos(phi1) * Math.sin(angular) * Math.cos(bearing));
+    const lambda2 = lambda1 + Math.atan2(Math.sin(bearing) * Math.sin(angular) * Math.cos(phi1), Math.cos(angular) - Math.sin(phi1) * Math.sin(phi2));
+    return [Number((lambda2 * 180 / Math.PI).toFixed(7)), Number((phi2 * 180 / Math.PI).toFixed(7))];
+  });
+  coordinates.push(coordinates[0]!);
+  return { type: 'Polygon' as const, coordinates: [coordinates] };
+}
 function usableBoundary(value: any) {
   if (!value || !['Polygon', 'MultiPolygon'].includes(value.type) || !Array.isArray(value.coordinates)) return false;
   try { return JSON.stringify(value).length <= 750_000; } catch { return false; }
@@ -169,15 +180,10 @@ async function nearbyPlayers(client: Db, account: any) {
     const distance = metres(Number(own.data.latitude), Number(own.data.longitude), Number(p.latitude), Number(p.longitude));
     return person ? { ...person, lat: Number(p.latitude), lng: Number(p.longitude), distance } : null;
   }).filter((p: any) => p && p.distance <= 10_000).sort((a: any, b: any) => a.distance - b.distance);
-  const region = await client.from('cb_player_regions').select('barangay,locality').eq('user_id', account.id).maybeSingle();
-  if (region.error || !region.data) return { players, territories: [] };
   const fields = 'id,user_id,barangay_key,barangay,locality,boundary,centroid_lat,centroid_lng,defense_points,captured_at,updated_at,created_at';
-  const key = barangayKey(region.data.barangay, region.data.locality);
-  let zoneRows = await client.from('cb_territories').select(fields).eq('barangay_key', key).order('created_at', { ascending: false }).limit(10);
+  const zoneRows = await client.from('cb_territories').select(fields).order('updated_at', { ascending: false }).limit(250);
   if (zoneRows.error) return { players, territories: [] };
-  if (!zoneRows.data?.length) zoneRows = await client.from('cb_territories').select(fields).eq('barangay', region.data.barangay).eq('locality', region.data.locality).order('created_at', { ascending: false }).limit(10);
-  if (zoneRows.error) return { players, territories: [] };
-  const rows = (zoneRows.data ?? []).filter((row: any) => usableBoundary(row.boundary)).slice(0, 1);
+  const rows = (zoneRows.data ?? []).filter((row: any) => usableBoundary(row.boundary) && polygonContains(row.boundary, Number(own.data.latitude), Number(own.data.longitude))).slice(0, 1);
   const owners = await playerMap(client, rows.map((z: any) => z.user_id));
   const ownerIds = [...new Set(rows.map((z: any) => z.user_id))];
   const ownerPresence = ownerIds.length ? await client.from('cb_live_presence').select('*').in('user_id', ownerIds) : { data: [], error: null };
@@ -595,29 +601,25 @@ export default async function handler(req: Req, res: Res) {
       const presence = await client.from('cb_presence').select('latitude,longitude,accuracy').eq('user_id', account.id).eq('gps_enabled', true).gt('seen_at', new Date(now() - 30_000).toISOString()).maybeSingle();
       if (presence.error) fail(500, 'GPS presence is temporarily unavailable.');
       if (!presence.data || Number(presence.data.accuracy) > 100) fail(409, 'Enable GPS and wait for accuracy within 100 m.');
-      const region = await client.from('cb_player_regions').select('barangay,locality').eq('user_id', account.id).maybeSingle();
-      if (region.error || !region.data) fail(409, 'Keep GPS on while Chess Burger identifies your barangay.');
-      const polygon = await resolveBarangayBoundary(region.data.barangay, region.data.locality, Number(presence.data.latitude), Number(presence.data.longitude));
-      const key = barangayKey(region.data.barangay, region.data.locality);
-      let existing = await client.from('cb_territories').select('id,user_id,boundary,defense_points').eq('barangay_key', key).order('created_at', { ascending: false }).limit(1).maybeSingle();
+      const kingdom = String(body.kingdom_name ?? '').trim().replace(/\s+/g, ' ').slice(0, 48);
+      if (kingdom.length < 3 || !/[\p{L}\p{N}]/u.test(kingdom)) fail(400, 'Choose a kingdom name between 3 and 48 characters.');
+      const latitude = Number(presence.data.latitude), longitude = Number(presence.data.longitude);
+      const polygon = kingdomRangePolygon(latitude, longitude);
+      const key = `kingdom:${latitude.toFixed(4)}:${longitude.toFixed(4)}`;
+      const existing = await client.from('cb_territories').select('id,barangay,centroid_lat,centroid_lng,boundary').order('updated_at', { ascending: false }).limit(250);
       if (existing.error) fail(500, existing.error.message);
-      if (!existing.data) existing = await client.from('cb_territories').select('id,user_id,boundary,defense_points').eq('barangay', region.data.barangay).eq('locality', region.data.locality).order('created_at', { ascending: false }).limit(1).maybeSingle();
-      if (existing.error) fail(500, existing.error.message);
-      if (existing.data) {
-        if (!usableBoundary(existing.data.boundary)) {
-          const upgraded = await client.from('cb_territories').update({ barangay_key: key, barangay: region.data.barangay, locality: region.data.locality, boundary: polygon.boundary, centroid_lat: polygon.centroidLat, centroid_lng: polygon.centroidLng, defense_points: Math.max(1, Number(existing.data.defense_points ?? 10)), updated_at: new Date().toISOString() }).eq('id', existing.data.id);
-          if (upgraded.error) fail(500, upgraded.error.message);
-        }
-        return res.status(200).json({ ok: true, claimed: false, restored: true, defense_points: Math.max(1, Number(existing.data.defense_points ?? 10)), territory: existing.data.id });
-      }
+      const overlap = (existing.data ?? []).find((zone: any) => (Number.isFinite(Number(zone.centroid_lat)) && Number.isFinite(Number(zone.centroid_lng)) && metres(latitude, longitude, Number(zone.centroid_lat), Number(zone.centroid_lng)) < 4_000) || (usableBoundary(zone.boundary) && polygonContains(zone.boundary, latitude, longitude)));
+      if (overlap) fail(409, `This 2 km range overlaps ${overlap.barangay || 'an existing kingdom'}. Move outside its range before claiming.`);
+      const region = await client.from('cb_player_regions').select('locality').eq('user_id', account.id).maybeSingle();
+      if (region.error) fail(500, region.error.message);
       const claimed = await client.rpc('cb_claim_barangay_territory', {
         p_user_id: account.id,
         p_barangay_key: key,
-        p_barangay: region.data.barangay,
-        p_locality: region.data.locality,
-        p_boundary: polygon.boundary,
-        p_centroid_lat: polygon.centroidLat,
-        p_centroid_lng: polygon.centroidLng,
+        p_barangay: kingdom,
+        p_locality: region.data?.locality || 'Chess Burger Kingdom',
+        p_boundary: polygon,
+        p_centroid_lat: latitude,
+        p_centroid_lng: longitude,
       });
       if (claimed.error) fail(claimed.error.message.includes('gold') ? 409 : 500, claimed.error.message);
       return res.status(200).json({ ok: true, claimed: true, gold_cost: FRESH_TERRITORY_COST, defense_points: 10, territory: claimed.data });
