@@ -87,15 +87,45 @@ function usableBoundary(value: any) {
 }
 async function resolveBarangayBoundary(barangay: string, locality: string, lat: number, lng: number) {
   const common = { headers: { Accept: 'application/json', 'User-Agent': 'ChessBurger/1.0 (https://chessburger.site)' } };
-  const search = new URL('https://nominatim.openstreetmap.org/search');
-  search.search = new URLSearchParams({ format: 'jsonv2', addressdetails: '1', polygon_geojson: '1', countrycodes: 'ph', limit: '6', q: `${barangay}, ${locality}, Philippines` }).toString();
-  let candidates: any[] = [];
-  try { const response = await fetch(search, common); if (response.ok) candidates = await response.json() as any[]; } catch {}
-  let selected = candidates.find(item => usableBoundary(item.geojson) && polygonContains(item.geojson, lat, lng));
-  if (!selected) {
+  const fetchJson = async (url: URL) => {
+    try {
+      const response = await fetch(url, { ...common, signal: AbortSignal.timeout(7_000) });
+      return response.ok ? await response.json() : null;
+    } catch { return null; }
+  };
+  const isArea = (item: any) => usableBoundary(item?.geojson)
+    && polygonContains(item.geojson, lat, lng)
+    && (item.class === 'boundary' || item.type === 'administrative'
+      || ['suburb', 'quarter', 'neighbourhood', 'village', 'hamlet', 'municipality'].includes(item.addresstype));
+  const coreName = barangay.replace(/^\s*(barangay|brgy\.?|bgy\.?)\s*/i, '').trim();
+  const queries = [...new Set([
+    `${barangay}, ${locality}, Philippines`,
+    `${coreName}, ${locality}, Philippines`,
+    `Barangay ${coreName}, ${locality}, Philippines`,
+  ])];
+  let selected: any = null;
+  for (const q of queries) {
+    const search = new URL('https://nominatim.openstreetmap.org/search');
+    search.search = new URLSearchParams({
+      format: 'jsonv2', addressdetails: '1', polygon_geojson: '1',
+      countrycodes: 'ph', limit: '10', dedupe: '0', q,
+      viewbox: `${lng - .12},${lat + .12},${lng + .12},${lat - .12}`,
+    }).toString();
+    const candidates = await fetchJson(search);
+    selected = Array.isArray(candidates) ? candidates.find(isArea) : null;
+    if (selected) break;
+  }
+  // Barangays are tagged at different administrative levels in different
+  // Philippine cities. Walk outward from neighbourhood to municipality until
+  // Nominatim returns the smallest administrative polygon containing the GPS.
+  if (!selected) for (const zoom of [16, 15, 14, 13, 12, 11, 10]) {
     const reverse = new URL('https://nominatim.openstreetmap.org/reverse');
-    reverse.search = new URLSearchParams({ format: 'jsonv2', addressdetails: '1', polygon_geojson: '1', zoom: '14', lat: String(lat), lon: String(lng) }).toString();
-    try { const response = await fetch(reverse, common); if (response.ok) { const item = await response.json(); if (usableBoundary(item?.geojson) && polygonContains(item.geojson, lat, lng)) selected = item; } } catch {}
+    reverse.search = new URLSearchParams({
+      format: 'jsonv2', addressdetails: '1', polygon_geojson: '1',
+      layer: 'address', zoom: String(zoom), lat: String(lat), lon: String(lng),
+    }).toString();
+    const item = await fetchJson(reverse);
+    if (isArea(item)) { selected = item; break; }
   }
   if (!selected) fail(409, 'The polygon boundary for this barangay is unavailable. Keep GPS on and try again.');
   return { boundary: selected.geojson, centroidLat: Number(selected.lat ?? lat), centroidLng: Number(selected.lon ?? lng) };
