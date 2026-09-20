@@ -288,10 +288,14 @@ function AppPage() {
     });
   }
   useEffect(() => {
+    const clockTap = new Audio("/audio/chess-clock-tap.wav");
+    clockTap.volume = 0.65;
+    clockTap.preload = "auto";
+    void clockTap.play().catch(() => {});
     const splash = setTimeout(() => {
       setShowSplash(false);
       setShowWelcome(true);
-    }, 5000);
+    }, 4000);
     if ("serviceWorker" in navigator) {
       const updating = !!navigator.serviceWorker.controller;
       let reloaded = false;
@@ -378,6 +382,7 @@ function AppPage() {
     window.addEventListener("cb-signed-out", clear);
     return () => {
       clearTimeout(splash);
+      clockTap.pause();
       unsubscribe();
       window.removeEventListener("online", refreshProfile);
       window.removeEventListener("cb-signed-out", clear);
@@ -724,10 +729,16 @@ function AppPage() {
           role="status"
           aria-label="Chess Burger is loading"
         >
-          <img src="/cburger_logo.png" alt="Chess Burger" />
-          <strong>
-            CHESS <b>BURGER</b>
-          </strong>
+          <div className="splash-brand-lockup">
+            <img src="/splash/chess-burger-logo.webp" alt="" />
+            <strong>CHESS <b>BURGER</b></strong>
+          </div>
+          <img
+            className="splash-battle-art"
+            src="/splash/chess-battle.webp"
+            alt="Chess Burger pieces charging into battle"
+          />
+          <small>CHESS BURGER ALL RIGHTS RESERVED 2026</small>
         </div>
       )}
       {showWelcome && !showSplash && (
