@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { Chess } from 'chess.js';
-import { FAST_MATCH_ACTIONS, fastMatchAction, MatchActionError } from './_match_v47';
+import { FAST_MATCH_ACTIONS, fastMatchAction, MatchActionError } from '../lib/match-v49';
 
 type Req = { method?: string; query?: Record<string, string | string[] | undefined>; body?: unknown; headers: Record<string, string | string[] | undefined> };
 type Res = { status: (code: number) => Res; json: (body: unknown) => void; setHeader: (name: string, value: string) => void };
@@ -194,17 +194,21 @@ async function finishExpiredMatch(client: Db, match: any) {
   return current;
 }
 async function publicFeed(client: Db) {
-  const list = await client.from('cb_feed').select('*').or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`).order('created_at', { ascending: false }).limit(70);
+  // Keep the public feed compatible with databases created before expires_at
+  // was added. Filtering an optional column in PostgREST can otherwise take
+  // the entire Home page down.
+  const list = await client.from('cb_feed').select('*').order('created_at', { ascending: false }).limit(70);
   if (list.error) fail(500, list.error.message);
-  const challengeIds = (list.data ?? []).filter((e: any) => e.kind === 'challenge' && e.challenge_match_id).map((e: any) => e.challenge_match_id);
+  const visible = (list.data ?? []).filter((event: any) => !event.expires_at || Date.parse(event.expires_at) > now());
+  const challengeIds = visible.filter((e: any) => e.kind === 'challenge' && e.challenge_match_id).map((e: any) => e.challenge_match_id);
   const activeChallenges = new Set<string>();
   if (challengeIds.length) {
     const waiting = await client.from('cb_matches').select('id').in('id', challengeIds).eq('status', 'waiting').is('invite_to', null).gt('created_at', new Date(now() - 120000).toISOString());
     if (waiting.error) fail(500, waiting.error.message);
     for (const m of waiting.data ?? []) activeChallenges.add(m.id);
   }
-  const people = await playerMap(client, (list.data ?? []).map((e: any) => e.user_id));
-  return { events: (list.data ?? []).filter((e: any) => e.kind !== 'challenge' || activeChallenges.has(e.challenge_match_id)).map((e: any) => ({ id: e.kind === 'challenge' && e.challenge_match_id ? `challenge:${e.challenge_match_id}` : e.id, user_id: e.user_id, kind: e.kind, display_name: e.kind === 'announcement' ? 'Chess Burger' : e.display_name, content: e.content, image_url: e.image_url ?? '', expires_at: e.expires_at, cbr_delta: e.cbr_delta ?? 0, gold_delta: e.gold_delta ?? 0, heart_count: e.heart_count ?? 0, created_at: e.created_at, avatar_url: e.kind === 'announcement' ? '/cburger_logo.png' : people.get(e.user_id)?.avatar_url ?? '', cbr: people.get(e.user_id)?.cbr ?? 88 })) };
+  const people = await playerMap(client, visible.map((e: any) => e.user_id));
+  return { events: visible.filter((e: any) => e.kind !== 'challenge' || activeChallenges.has(e.challenge_match_id)).map((e: any) => ({ id: e.kind === 'challenge' && e.challenge_match_id ? `challenge:${e.challenge_match_id}` : e.id, user_id: e.user_id, kind: e.kind, display_name: e.kind === 'announcement' ? 'Chess Burger' : e.display_name, content: e.content, image_url: e.image_url ?? '', expires_at: e.expires_at, cbr_delta: e.cbr_delta ?? 0, gold_delta: e.gold_delta ?? 0, heart_count: e.heart_count ?? 0, created_at: e.created_at, avatar_url: e.kind === 'announcement' ? '/cburger_logo.png' : people.get(e.user_id)?.avatar_url ?? '', cbr: people.get(e.user_id)?.cbr ?? 88 })) };
 }
 async function saveLiveHeartbeat(client: Db, userId: string) {
   const stamp = new Date().toISOString();
