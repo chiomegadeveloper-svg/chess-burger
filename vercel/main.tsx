@@ -21,6 +21,11 @@ import "../app/v36.css";
 import "../app/v37.css";
 import "../app/v38.css";
 import "../app/v39.css";
+import "../app/v40.css";
+import "../app/v41.css";
+import "../app/v42.css";
+import "../app/v43.css";
+import "../app/v44.css";
 import Page from "../app/page";
 
 createRoot(document.getElementById("root")!).render(
