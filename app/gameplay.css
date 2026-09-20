@@ -1,0 +1,21 @@
+/* v46: input is never gated by a move animation; clocks render separately. */
+.interactive-board .sq{touch-action:none;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent}
+.interactive-board .piece{pointer-events:none;transition:none!important;animation:none!important}
+.interactive-board .sq.dragging>.piece{opacity:.25}
+.chess-drag-ghost{display:none;position:fixed;left:0;top:0;z-index:9999;width:52px;height:52px;place-items:center;pointer-events:none;font-family:Georgia,serif;font-size:47px;color:#eafaff;text-shadow:0 2px 5px #000;will-change:transform}
+.match-requests{margin:12px 0;padding:12px 0;border-top:1px solid #46515d;border-bottom:1px solid #46515d}
+.match-request-buttons{display:flex;flex-wrap:wrap;gap:8px}
+.game-info .match-request-buttons button{flex:1;gap:5px;padding:8px;color:#dffaff;background:#24333e;border:1px solid #477485;box-shadow:none;font-size:11px}
+.match-request-buttons small{white-space:nowrap;font-size:9px;color:#75eaff}
+.match-request-buttons button:disabled,.match-offer-actions button:disabled{opacity:.45;cursor:not-allowed}
+.match-offer{margin-top:10px;padding:12px;border:1px solid #00e5ff;border-radius:10px;background:#162c36;color:#e9fbff}
+.match-offer strong{display:block;font-size:12px}.match-offer p{margin:6px 0;font-size:11px}.match-offer small{display:block;font-size:10px;color:#b5d7df}
+.match-offer-actions{display:flex;gap:8px;margin:10px 0}
+.game-info .match-offer-actions button{background:#00e5ff;color:#00232c;border:0;box-shadow:none}
+.game-info .match-offer-actions button+button{background:#3b4855;color:#fff}
+.match-offer-result{font-size:11px;color:#9ceef8}
+.match-requests button:focus-visible{outline:2px solid #00e5ff;outline-offset:3px}
+.territory-v46>.nearby-page>.territory-panel{display:none}
+.territory-v46-panel{margin-top:16px;display:flex;gap:14px;align-items:center}
+.territory-v46-panel>div{flex:1}.territory-v46-panel label{display:grid;gap:6px;margin-top:10px;font-size:.78rem}
+.territory-v46-panel input{width:100%;padding:12px;border-radius:10px;border:1px solid rgba(34,223,243,.35);background:#101820;color:#fff}
