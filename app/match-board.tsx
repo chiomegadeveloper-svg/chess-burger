@@ -31,6 +31,12 @@ const symbols: Record<string, string> = {
   bn: "♞",
   bp: "♟",
 };
+const promotionNames = {
+  q: "Queen",
+  r: "Rook",
+  b: "Bishop",
+  n: "Knight",
+} as const;
 const emotes = [
   ["haha", "Haha!"],
   ["easy", "Easy"],
@@ -93,9 +99,11 @@ export default function MatchBoard({
   bothSides?: boolean;
 }) {
   const [selected, setSelected] = useState<Square | null>(null),
-    [promotion, setPromotion] = useState<{ from: string; to: string } | null>(
-      null,
-    ),
+    [promotion, setPromotion] = useState<{
+      from: string;
+      to: string;
+      premove?: boolean;
+    } | null>(null),
     [replay, setReplay] = useState<number | null>(null),
     [flip, setFlip] = useState(false),
     [tick, setTick] = useState(Date.now()),
@@ -215,8 +223,11 @@ export default function MatchBoard({
       else onMove?.({ from, to });
       return;
     }
-    if (canPremove && chess.get(to)?.color !== myColor)
-      onPremove?.({ from, to, promotion: "q" });
+    if (canPremove && chess.get(to)?.color !== myColor) {
+      if (chess.get(from)?.type === "p" && ["1", "8"].includes(to[1]))
+        setPromotion({ from, to, premove: true });
+      else onPremove?.({ from, to });
+    }
   }
   function click(square: Square) {
     if (suppressClick.current) return;
@@ -399,6 +410,34 @@ export default function MatchBoard({
                 );
               })}
             </div>
+            {promotion && (
+              <div className="promotion-overlay" role="dialog" aria-modal="true" aria-label="Choose promotion piece">
+                <div className="promotion-picker">
+                  <strong>Promote pawn to</strong>
+                  <div>
+                    {(["q", "r", "b", "n"] as const).map((piece) => {
+                      return (
+                        <button
+                          type="button"
+                          key={piece}
+                          onClick={() => {
+                            const move = { from: promotion.from, to: promotion.to, promotion: piece };
+                            if (promotion.premove) onPremove?.(move);
+                            else onMove?.(move);
+                            setPromotion(null);
+                          }}
+                          aria-label={`Promote to ${promotionNames[piece]}`}
+                        >
+                          <span aria-hidden="true">{symbols[myColor + piece]}</span>
+                          <small>{promotionNames[piece]}</small>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <button type="button" className="promotion-cancel" onClick={() => setPromotion(null)}>Cancel</button>
+                </div>
+              </div>
+            )}
           </div>
           {strip(reversed ? "black" : "white")}
         </div>
@@ -418,23 +457,6 @@ export default function MatchBoard({
               premove.
             </p>
           ) : null}
-          {promotion && (
-            <div className="promotion-picker">
-              <p>Promote to</p>
-              {["q", "r", "b", "n"].map((piece) => (
-                <button
-                  key={piece}
-                  onClick={() => {
-                    onMove?.({ ...promotion, promotion: piece });
-                    setPromotion(null);
-                  }}
-                  aria-label={`Promote to ${({ q: "queen", r: "rook", b: "bishop", n: "knight" } as Record<string, string>)[piece]}`}
-                >
-                  {symbols[chess.turn() + piece]}
-                </button>
-              ))}
-            </div>
-          )}
           <section className="board-theme-picker" aria-label="Board color">
             <span>Board color</span>
             <div>

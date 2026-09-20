@@ -175,117 +175,17 @@ export function SocialButtons({
   );
 }
 
-type ChatButtonPosition = { x: number; y: number };
-function savedChatButtonPosition(): ChatButtonPosition | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const saved = JSON.parse(
-      localStorage.getItem("cb-chat-button-position:v1") ?? "null",
-    );
-    return saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)
-      ? saved
-      : null;
-  } catch {
-    return null;
-  }
-}
 export function FloatingChatButton({ visible }: { visible: boolean }) {
-  const [position, setPosition] = useState<ChatButtonPosition | null>(
-      savedChatButtonPosition,
-    ),
-    positionRef = useRef<ChatButtonPosition | null>(position),
-    drag = useRef<{ dx: number; dy: number; moved: boolean } | null>(null),
-    suppressClick = useRef(false),
-    [unread,setUnread]=useState(0);
-  useEffect(() => {
-    if (!visible) return;
-    const keepOnScreen = () => {
-      const current = positionRef.current;
-      if (!current) return;
-      const next = {
-        x: Math.max(8, Math.min(window.innerWidth - 70, current.x)),
-        y: Math.max(72, Math.min(window.innerHeight - 150, current.y)),
-      };
-      if (next.x !== current.x || next.y !== current.y) {
-        positionRef.current = next;
-        setPosition(next);
-        try {
-          localStorage.setItem(
-            "cb-chat-button-position:v1",
-            JSON.stringify(next),
-          );
-        } catch {}
-      }
-    };
-    keepOnScreen();
-    window.addEventListener("resize", keepOnScreen);
-    window.addEventListener("orientationchange", keepOnScreen);
-    return () => {
-      window.removeEventListener("resize", keepOnScreen);
-      window.removeEventListener("orientationchange", keepOnScreen);
-    };
-  }, [visible]);
+  const [unread,setUnread]=useState(0);
   useEffect(()=>{if(!visible)return;let active=true;const load=()=>void arena<ChatSummary>("chat-summary").then(data=>{if(active)setUnread(data.unread);}).catch(()=>{});load();const timer=setInterval(load,15000);window.addEventListener("cb-chat-changed",load);return()=>{active=false;clearInterval(timer);window.removeEventListener("cb-chat-changed",load);};},[visible]);
   if (!visible) return null;
-  const style = position
-    ? { left: position.x, top: position.y }
-    : { right: 18, bottom: 86 };
   return (
     <button
       type="button"
       className="floating-chat-button"
-      style={style}
-      aria-label="Open chat. Drag to move."
-      title="Chat · drag to move"
-      onPointerDown={(event) => {
-        const rect = event.currentTarget.getBoundingClientRect();
-        drag.current = {
-          dx: event.clientX - rect.left,
-          dy: event.clientY - rect.top,
-          moved: false,
-        };
-        event.currentTarget.setPointerCapture(event.pointerId);
-      }}
-      onPointerMove={(event) => {
-        if (!drag.current) return;
-        const next = {
-          x: Math.max(
-            8,
-            Math.min(window.innerWidth - 64, event.clientX - drag.current.dx),
-          ),
-          y: Math.max(
-            72,
-            Math.min(window.innerHeight - 132, event.clientY - drag.current.dy),
-          ),
-        };
-        if (Math.abs(event.movementX) + Math.abs(event.movementY) > 2)
-          drag.current.moved = true;
-        positionRef.current = next;
-        setPosition(next);
-      }}
-      onPointerUp={() => {
-        if (!drag.current) return;
-        const moved = drag.current.moved;
-        drag.current = null;
-        suppressClick.current = moved;
-        if (positionRef.current)
-          try {
-            localStorage.setItem(
-              "cb-chat-button-position:v1",
-              JSON.stringify(positionRef.current),
-            );
-          } catch {}
-      }}
-      onPointerCancel={() => {
-        drag.current = null;
-      }}
-      onClick={() => {
-        if (suppressClick.current) {
-          suppressClick.current = false;
-          return;
-        }
-        openSocial("chat");
-      }}
+      aria-label="Open chat"
+      title="Open chat"
+      onClick={() => openSocial("chat")}
     >
       <MessageCircle size={24} />
       <span>Chat</span>

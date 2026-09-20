@@ -28,6 +28,18 @@ button.gold-button,.cloud-panel button.gold-button{background:linear-gradient(14
  .nearby-page .page-heading{gap:8px}.nearby-page .page-heading h1{font-size:20px}.gps-toggle{font-size:10px;white-space:nowrap;padding:8px}.live-map{height:clamp(220px,42dvh,360px)}.selected-neighbor,.territory-panel{gap:9px;flex-wrap:wrap}.selected-neighbor h2,.territory-panel h2{font-size:12px}.territory-panel button{min-height:37px;font-size:11px;padding:8px 12px}.live-match{gap:9px;padding:13px}.live-match strong{font-size:11px}.live-match small,.live-match>span:last-child{font-size:9px}.live-match .player-avatar{width:28px;height:28px}
  .board-scroll{padding:9px 14px 17px}.board-scroll .back-button{font-size:11px;margin-bottom:6px}.network-scene .page-heading h1{font-size:19px}.network-scene .page-heading{margin-bottom:8px}.network-scene .game-layout{grid-template-columns:minmax(0,1fr);gap:13px}.network-scene .board-stage{height:min(calc(100vw - 30px),max(140px,calc(100dvh - 294px)))}.network-scene .game-player-strip{width:min(100%,max(140px,calc(100dvh - 294px)));padding:5px 8px;min-height:43px;gap:8px;border-radius:9px}.game-player-strip strong{font-size:11px}.game-player-strip small{font-size:8px}.game-player-strip time{font-size:17px;min-width:60px}.game-player-strip .player-avatar{width:27px;height:27px}.match-board-column{gap:5px}.network-scene .game-info{padding:13px}.game-info .move-log{max-height:100px}.connection-label{font-size:9px;max-width:110px;text-align:right}.network-scene .interactive-board{border-width:3px}.cms-heading h1{font-size:20px}.cms-tabs button{font-size:11px}.bottom-nav button{font-size:9px}
 }
+
+/* Promotion chooser stays directly over the board on every screen size. */
+.network-scene .board-stage{position:relative}
+.promotion-overlay{position:absolute;inset:0;z-index:20;display:grid;place-items:center;padding:14px;background:#081015c7;backdrop-filter:blur(4px);border-radius:5px}
+.promotion-overlay .promotion-picker{width:min(92%,390px);border:1px solid #45d8e5;border-radius:15px;padding:16px;margin:0;background:linear-gradient(145deg,#222b32,#131a20);color:#f2f6f8;box-shadow:0 16px 45px #000b,0 0 24px #24d6e333;text-align:center}
+.promotion-picker strong{display:block;margin-bottom:12px;font-size:15px}
+.promotion-picker>div{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}
+.promotion-picker>div button{display:grid;place-items:center;gap:2px;min-width:0;padding:7px 3px;border:1px solid #49606b;border-radius:10px;background:#19252c;color:#fff}
+.promotion-picker>div button:hover,.promotion-picker>div button:focus-visible{border-color:#4ce7f3;background:#1b3b44}
+.promotion-picker>div button span{font-family:Georgia,serif;font-size:34px;line-height:1}
+.promotion-picker>div button small{font-family:Poppins,sans-serif;font-size:10px;color:#aeeaf0}
+.promotion-cancel{margin-top:12px;padding:7px 14px;border:1px solid #596873;border-radius:8px;background:#222b32;color:#c6d2d8}
 @media(prefers-reduced-motion:reduce){.search-status>svg{animation:none}}
 .interactive-board .sq{position:relative}.interactive-board .sq.move-origin{box-shadow:inset 0 0 0 4px #f0c84b,inset 0 0 22px #f0c84b99;z-index:1}.interactive-board .sq.move-origin:after{content:"";position:absolute;inset:20%;border-radius:50%;background:#1c283688;box-shadow:0 0 12px #101820aa;pointer-events:none}.interactive-board .sq.move-destination{box-shadow:inset 0 0 0 4px #55d8e8,inset 0 0 20px #55d8e877;z-index:1}
 /* V11 player identity card */
