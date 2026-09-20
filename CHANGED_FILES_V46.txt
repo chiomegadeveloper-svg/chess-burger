@@ -1,12 +1,13 @@
-CHESS BURGER V47 GAMEPLAY ACTIONS HOTFIX
+CHESS BURGER V48 SERVER RECOVERY + GAMEPLAY HOTFIX
 
 Copy the folders and files in this ZIP directly into the chess-burger repository root.
 Choose Replace files when Windows asks.
 
 GitHub Desktop should then show these source changes:
 
-api/_match.ts (new)
+api/_match_v47.ts (new self-contained Vercel match server)
 api/arena.ts (changed)
+app/arena-client.ts (changed; Home/Map plain-text error handling)
 app/arena-client-v46.ts (new)
 app/game-rules.ts (changed)
 app/gameplay.css (new)
@@ -28,5 +29,6 @@ full black-screen crash.
 
 This exact staged patch completed the production build successfully.
 
-V47 fixes plain-text Vercel errors, Resign/Abort/Move/Takeback/Draw routing,
-and places Take Back / Offer Draw directly below the match heading.
+V48 removes the server function's dependency on client app modules, fixes
+FUNCTION_INVOCATION_FAILED across Home/Map/gameplay, retains safe plain-text
+error handling, and places Take Back / Offer Draw below the match heading.
