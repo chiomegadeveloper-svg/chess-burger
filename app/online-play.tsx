@@ -143,12 +143,47 @@ export function OnlineGame({
       payload: { id, match: updated },
     });
   }
+  function previewMove(
+    current: ArenaMatch,
+    nextMove: { from: string; to: string; promotion?: string },
+  ) {
+    const game = gameFromPgn(current.pgn);
+    const whiteTurn = game.turn() === "w";
+    const movedAt = Date.now();
+    const stored = Number(whiteTurn ? current.white_ms : current.black_ms);
+    const remaining = Math.max(0, stored - Math.max(0, movedAt - Number(current.last_tick)));
+    if (remaining <= 0) throw Error("Your clock has expired.");
+    game.move(nextMove);
+    const increment = timeControl(current.control).increment * 1000;
+    return {
+      ...current,
+      pgn: game.pgn(),
+      version: current.version + 1,
+      white_ms: whiteTurn ? remaining + increment : current.white_ms,
+      black_ms: whiteTurn ? current.black_ms : remaining + increment,
+      last_tick: movedAt,
+      server_now: movedAt,
+      // The server alone settles checkmate, draw, ratings, and rewards.
+      result: null,
+    };
+  }
   async function move(
     action: "move" | "resign" | "abort",
     move?: { from: string; to: string; promotion?: string },
   ) {
     if (!match || busy) return;
     const confirmed = match;
+    if (action === "move" && move) {
+      try {
+        const optimistic = previewMove(confirmed, move);
+        latest.current = optimistic.version;
+        setMatch(optimistic);
+        setError("");
+      } catch (e) {
+        setError((e as Error).message);
+        return;
+      }
+    }
     setBusy(true);
     try {
       const r = await arena<{
