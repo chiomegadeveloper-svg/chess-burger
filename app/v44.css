@@ -1,13 +1,13 @@
 /* Compact ChessBurger player-card preview for Online avatars */
 .online-directory .online-profile-preview{
-  position:absolute!important;
-  z-index:100!important;
-  top:calc(100% + 10px)!important;
+  position:fixed!important;
+  z-index:1000!important;
+  top:50%!important;
   left:50%!important;
   width:min(350px,calc(100vw - 28px))!important;
   max-width:350px!important;
   padding:13px!important;
-  transform:translateX(-50%)!important;
+  transform:translate(-50%,-50%)!important;
   overflow:visible!important;
   box-sizing:border-box!important;
   border:2px solid #c8a842!important;
@@ -104,17 +104,20 @@
 }
 .online-preview-actions button{cursor:pointer}
 .online-preview-actions .challenge{border-color:#b89035;background:linear-gradient(145deg,#e8c66c,#9e7022);color:#171107;font-weight:700}
-.online-profile-preview>.online-card-close{z-index:3}
 @media(max-width:650px){
   .online-directory .online-profile-preview{
-    position:fixed!important;
-    top:auto!important;
-    right:12px!important;
-    bottom:82px!important;
-    left:12px!important;
-    width:auto!important;
+    top:50%!important;
+    right:auto!important;
+    bottom:auto!important;
+    left:50%!important;
+    width:calc(100vw - 24px)!important;
     max-width:350px!important;
-    margin:auto!important;
-    transform:none!important;
+    margin:0!important;
+    transform:translate(-50%,-50%)!important;
   }
+  .online-preview-identity{grid-template-columns:64px minmax(0,1fr) 40px;gap:8px}
+  .online-preview-portrait{width:64px!important;height:64px!important;min-width:64px!important;min-height:64px!important;max-width:64px!important;max-height:64px!important}
+  .online-preview-portrait>img{max-width:64px!important;max-height:64px!important}
+  .online-preview-copy>strong{font-size:15px}
+  .online-preview-level{width:40px!important;height:49px!important}
 }
