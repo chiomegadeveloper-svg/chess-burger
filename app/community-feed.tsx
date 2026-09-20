@@ -69,9 +69,9 @@ export default function CommunityFeed({onOpenProfile,onMatch,onChallenge}:{onOpe
  const shownOnline=onlineUsers.filter(player=>!search||player.display_name.toLowerCase().includes(search)||player.username.toLowerCase().includes(search));
  return <section className="feed-page">
   <div className="page-heading"><h1>{tab==="announcement"?"Announcements":tab==="online"?"Online players":"Community feed"}</h1><span className="sample-label">{tab==="announcement"?"Official updates":tab==="online"?`${onlineUsers.length} online`:"Latest 50"}</span></div>
-  <div className="feed-tabs" role="tablist" aria-label="Community feed views">
+  <div className="feed-tabs" role="tablist" aria-label="Community feed views" style={{display:"grid",gridTemplateColumns:"repeat(5,minmax(0,1fr))",width:"100%"}}>
    <button role="tab" aria-selected={tab==="recent"} onClick={()=>selectTab("recent")}>Recent feed</button>
-   <button className="online-feed-tab" role="tab" aria-selected={tab==="online"} onClick={()=>selectTab("online")}>Online <span aria-label={`${onlineUsers.length} users online`}>{onlineUsers.length}</span></button>
+   <button className="online-feed-tab" role="tab" aria-selected={tab==="online"} style={{background:"linear-gradient(145deg,#ffbd4e,#e98218)",color:"#241506",fontWeight:800}} onClick={()=>selectTab("online")}>Online <span aria-label={`${onlineUsers.length} users online`}>{onlineUsers.length}</span></button>
    <button role="tab" aria-selected={tab==="popular"} onClick={()=>selectTab("popular")}>Popular</button>
    <button role="tab" aria-selected={tab==="first_blood"} onClick={()=>selectTab("first_blood")}>First blood</button>
    <button role="tab" aria-selected={tab==="announcement"} onClick={()=>selectTab("announcement")}>Announcements</button>
