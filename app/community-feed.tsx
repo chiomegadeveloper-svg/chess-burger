@@ -54,7 +54,8 @@ export default function CommunityFeed({onOpenProfile,onMatch,onChallenge}:{onOpe
    users.unshift({...me.value.profile,available:true});
   }
   setOnlineUsers(users);
-  const all=[...(localFeed.status==='fulfilled'?localFeed.value.events:[])].filter(e=>!e.expires_at||Date.parse(e.expires_at)>Date.now());
+  const ownProfile=me.status==='fulfilled'?me.value.profile as ArenaPlayer&{active_feed_banner?:string}:null;
+  const all=[...(localFeed.status==='fulfilled'?localFeed.value.events:[])].map(event=>event.feed_banner||!ownProfile||event.user_id!==ownProfile.user_id?event:{...event,feed_banner:ownProfile.active_feed_banner??''}).filter(e=>!e.expires_at||Date.parse(e.expires_at)>Date.now());
   setChallenges(all.filter(e=>e.kind==='challenge').sort((a,b)=>Date.parse(b.created_at)-Date.parse(a.created_at)));
   let rows=all.filter(e=>e.kind!=='challenge').sort((a,b)=>Date.parse(b.created_at)-Date.parse(a.created_at)).slice(0,50);
   if(tab==='first_blood')rows=rows.filter(e=>e.kind==='first_blood');
