@@ -1,11 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
+import { createPortal } from "react-dom";
 import { arena } from "./arena-client";
 import { toast } from "sonner";
 import type { PlayerProfile } from "./supabase";
@@ -13,9 +8,16 @@ import { levelFor } from "./cbr";
 import type { ArenaPlayer } from "./game-rules";
 import { MessageCircle, ShieldBan, Volume2, VolumeX, X } from "lucide-react";
 export type SocialView = "friends" | "followers" | "chat";
+type SocialOpenDetail = { view: SocialView; target?: string };
+let socialOpenHandler: ((detail: SocialOpenDetail) => void) | null = null;
 export function openSocial(view: SocialView, target?: string) {
+  const detail = { view, target };
+  if (socialOpenHandler) {
+    socialOpenHandler(detail);
+    return;
+  }
   window.dispatchEvent(
-    new CustomEvent("cb-social-open", { detail: { view, target } }),
+    new CustomEvent("cb-social-open", { detail }),
   );
 }
 type Status = {
@@ -150,7 +152,9 @@ export function SocialButtons({
             {state?.following ? "Following" : "Follow"}
           </button>
           <>
-            <button onClick={() => openSocial("chat", target)}>Chat</button>
+            <button type="button" onClick={() => openSocial("chat", target)}>
+              Chat
+            </button>
             {!compact && (
               <button
                 className="danger"
@@ -186,7 +190,8 @@ export function FloatingChatButton({ visible }: { visible: boolean }) {
       savedChatButtonPosition,
     ),
     positionRef = useRef<ChatButtonPosition | null>(position),
-    drag = useRef<{ dx: number; dy: number; moved: boolean } | null>(null);
+    drag = useRef<{ dx: number; dy: number; moved: boolean } | null>(null),
+    suppressClick = useRef(false);
   if (!visible) return null;
   const style = position
     ? { left: position.x, top: position.y }
@@ -228,6 +233,7 @@ export function FloatingChatButton({ visible }: { visible: boolean }) {
         if (!drag.current) return;
         const moved = drag.current.moved;
         drag.current = null;
+        suppressClick.current = moved;
         if (positionRef.current)
           try {
             localStorage.setItem(
@@ -235,7 +241,16 @@ export function FloatingChatButton({ visible }: { visible: boolean }) {
               JSON.stringify(positionRef.current),
             );
           } catch {}
-        if (!moved) openSocial("chat");
+      }}
+      onPointerCancel={() => {
+        drag.current = null;
+      }}
+      onClick={() => {
+        if (suppressClick.current) {
+          suppressClick.current = false;
+          return;
+        }
+        openSocial("chat");
       }}
     >
       <MessageCircle size={24} />
@@ -275,18 +290,21 @@ export function SocialHub({
     current = useRef("");
   current.current = `${view}:${mode}:${target}:${page}:${q}:${before}`;
   useEffect(() => {
-    const show = (e: Event) => {
+    const show = (detail: SocialOpenDetail) => {
       if (!profile || profile.user_id === "guest-device") {
         toast.info("Sign in to use friends and chat.");
         return;
       }
-      const d = (e as CustomEvent).detail;
       seq.current++;
-      setView(d.view);
+      setView(detail.view);
       setMode(
-        d.view === "chat" ? (d.target ? "personal" : "community") : d.view,
+        detail.view === "chat"
+          ? detail.target
+            ? "personal"
+            : "community"
+          : detail.view,
       );
-      setTarget(d.target ?? "");
+      setTarget(detail.target ?? "");
       setQ("");
       setPage(1);
       setBefore(undefined);
@@ -295,9 +313,15 @@ export function SocialHub({
       setError("");
       setOpen(true);
     };
-    window.addEventListener("cb-social-open", show);
-    return () => window.removeEventListener("cb-social-open", show);
-  }, [profile?.user_id]);
+    const onOpen = (event: Event) =>
+      show((event as CustomEvent<SocialOpenDetail>).detail);
+    socialOpenHandler = show;
+    window.addEventListener("cb-social-open", onOpen);
+    return () => {
+      if (socialOpenHandler === show) socialOpenHandler = null;
+      window.removeEventListener("cb-social-open", onOpen);
+    };
+  }, [profile]);
   useEffect(() => {
     if (!profile || profile.user_id === "guest-device") return;
     const ping = () => {
@@ -314,6 +338,14 @@ export function SocialHub({
     pendingMessage.current = null;
     setDraft("");
   }, [profile?.user_id]);
+  useEffect(() => {
+    if (!open) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
+  }, [open]);
   useEffect(() => {
     const key = mode === "personal" ? target : "community";
     draftKey.current = key;
@@ -366,9 +398,13 @@ export function SocialHub({
     seq.current++;
     setList(null);
     setMessages([]);
+    if (!open) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     const timeout = setTimeout(() => void refresh(), 200),
-      timer = setInterval(() => void refresh(), 5000);
+      timer = setInterval(() => void refresh(), 15000);
     const changed = () => void refresh();
     window.addEventListener("cb-social-changed", changed);
     return () => {
@@ -377,7 +413,7 @@ export function SocialHub({
       clearInterval(timer);
       window.removeEventListener("cb-social-changed", changed);
     };
-  }, [refresh]);
+  }, [open, refresh]);
   function select(next: string) {
     seq.current++;
     setMode(next);
@@ -470,23 +506,44 @@ export function SocialHub({
   const selectedConversation = list?.users.find(
     (person) => person.user_id === target,
   );
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="social-dialog">
-        <DialogTitle>
+  if (!open || typeof document === "undefined") return null;
+  return createPortal(
+    <div
+      className="social-dialog-overlay"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) setOpen(false);
+      }}
+    >
+      <section
+        className="social-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="social-dialog-title"
+        aria-describedby="social-dialog-description"
+      >
+        <button
+          type="button"
+          className="social-dialog-close"
+          aria-label="Close social window"
+          onClick={() => setOpen(false)}
+        >
+          <X size={18} />
+        </button>
+        <h2 id="social-dialog-title">
           {view === "friends"
             ? "Friends"
             : view === "followers"
               ? "Followers"
               : "Chat"}
-        </DialogTitle>
-        <DialogDescription>
+        </h2>
+        <p id="social-dialog-description" className="social-dialog-description">
           {view === "friends"
             ? "Find players and manage your friends."
             : view === "followers"
               ? "See who follows you and follow them back."
               : "Talk with the community or a player privately."}
-        </DialogDescription>
+        </p>
         <div className="social-tabs">
           {(view === "friends"
             ? ["friends", "requests", "blocked"]
@@ -811,8 +868,9 @@ export function SocialHub({
             )}
           </>
         )}
-      </DialogContent>
-    </Dialog>
+      </section>
+    </div>,
+    document.body,
   );
 }
 export type MatchSummary = {
