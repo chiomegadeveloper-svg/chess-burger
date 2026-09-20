@@ -25,7 +25,7 @@ async function recoverStoredAvatar(client: any, userId: string) {
 
 function view(row: Record<string, unknown> | null) {
   if (!row) return null;
-  return { ...row, ocbr: Number(row.ocbr ?? 88), gold_points: Number(row.gold_points ?? 0), wins: Number(row.wins ?? 0), losses: Number(row.losses ?? 0), win_streak: Number(row.win_streak ?? 0), featured_photos: list(row.featured_photos, 4), featured_badges: list(row.featured_badges, 5) };
+  return { ...row, ocbr: Number(row.ocbr ?? 88), gold_points: Number(row.gold_points ?? 88), wins: Number(row.wins ?? 0), losses: Number(row.losses ?? 0), win_streak: Number(row.win_streak ?? 0), featured_photos: list(row.featured_photos, 4), featured_badges: list(row.featured_badges, 5) };
 }
 
 export default async function handler(req: Req, res: Res) {
