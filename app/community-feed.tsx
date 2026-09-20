@@ -71,10 +71,10 @@ export default function CommunityFeed({onOpenProfile,onMatch,onChallenge}:{onOpe
   <div className="page-heading"><h1>{tab==="announcement"?"Announcements":tab==="online"?"Online players":"Community feed"}</h1><span className="sample-label">{tab==="announcement"?"Official updates":tab==="online"?`${onlineUsers.length} online`:"Latest 50"}</span></div>
   <div className="feed-tabs" role="tablist" aria-label="Community feed views">
    <button role="tab" aria-selected={tab==="recent"} onClick={()=>selectTab("recent")}>Recent feed</button>
+   <button className="online-feed-tab" role="tab" aria-selected={tab==="online"} onClick={()=>selectTab("online")}>Online <span aria-label={`${onlineUsers.length} users online`}>{onlineUsers.length}</span></button>
    <button role="tab" aria-selected={tab==="popular"} onClick={()=>selectTab("popular")}>Popular</button>
    <button role="tab" aria-selected={tab==="first_blood"} onClick={()=>selectTab("first_blood")}>First blood</button>
    <button role="tab" aria-selected={tab==="announcement"} onClick={()=>selectTab("announcement")}>Announcements</button>
-   <button className="online-feed-tab" role="tab" aria-selected={tab==="online"} onClick={()=>selectTab("online")}>Online <span aria-label={`${onlineUsers.length} users online`}>{onlineUsers.length}</span></button>
   </div>
   {tab==='recent'&&challenges.length>0&&<section className="pinned-challenges" aria-label="Open challenges"><h2>Open challenges</h2>{challenges.map(event=><article className="pinned-challenge" key={event.id}>
     <span className="challenge-glow" aria-hidden="true"/><span className="challenge-info"><Swords size={19}/><span><strong>{event.display_name}</strong><small>{event.content.replace(/^is looking for a /,'').replace(/^is looking for /,'')}</small></span></span>
