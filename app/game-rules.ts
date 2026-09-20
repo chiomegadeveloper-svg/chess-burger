@@ -1,4 +1,5 @@
 import { Chess } from "chess.js";
+import type {GameMeta} from './match-actions';
 
 export const TIME_CONTROLS = [
   { id: "1+0", group: "Bullet", label: "1 min", seconds: 60, increment: 0 },
@@ -105,6 +106,7 @@ export type ArenaMatch = {
   rating_applied: number;
   created_at: number;
   reactions?: string;
+  game_meta?: GameMeta;
   white?: ArenaPlayer;
   black?: ArenaPlayer;
   server_now?: number;

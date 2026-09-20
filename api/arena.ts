@@ -1,5 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { Chess } from 'chess.js';
+import { FAST_MATCH_ACTIONS, fastMatchAction } from './_match.ts';
+import { MatchActionError } from '../app/match-actions.ts';
 
 type Req = { method?: string; query?: Record<string, string | string[] | undefined>; body?: unknown; headers: Record<string, string | string[] | undefined> };
 type Res = { status: (code: number) => Res; json: (body: unknown) => void; setHeader: (name: string, value: string) => void };
@@ -94,10 +96,11 @@ async function nearbyPlayers(client: Db, account: any) {
     const distance = metres(Number(own.data.latitude), Number(own.data.longitude), Number(p.latitude), Number(p.longitude));
     return person ? { ...person, lat: Number(p.latitude), lng: Number(p.longitude), distance } : null;
   }).filter((p: any) => p && p.distance <= 10_000).sort((a: any, b: any) => a.distance - b.distance);
-  const zoneRows = await client.from('cb_territories').select('id,user_id,lat,lng').gte('lat', Number(own.data.latitude) - .15).lte('lat', Number(own.data.latitude) + .15).gte('lng', Number(own.data.longitude) - .25).lte('lng', Number(own.data.longitude) + .25).limit(100);
-  if (zoneRows.error) return { players, territories: [] };
-  const owners = await playerMap(client, (zoneRows.data ?? []).map((z: any) => z.user_id));
-  const territories = (zoneRows.data ?? []).map((z: any) => ({ ...z, display_name: owners.get(z.user_id)?.display_name ?? 'Player' }));
+  const [nearbyZones,ownedZones]=await Promise.all([client.from('cb_territories').select('id,user_id,lat,lng,kingdom_name').gte('lat',Number(own.data.latitude)-.15).lte('lat',Number(own.data.latitude)+.15).gte('lng',Number(own.data.longitude)-.25).lte('lng',Number(own.data.longitude)+.25).limit(100),client.from('cb_territories').select('id,user_id,lat,lng,kingdom_name').eq('user_id',account.id).limit(1)]);
+  if(nearbyZones.error||ownedZones.error)return {players,territories:[]};
+  const merged=[...(nearbyZones.data??[]),...(ownedZones.data??[])].filter((zone:any,index:number,rows:any[])=>rows.findIndex(other=>other.id===zone.id)===index);
+  const owners=await playerMap(client,merged.map((zone:any)=>zone.user_id));
+  const territories=merged.map((zone:any)=>({...zone,is_owner:zone.user_id===account.id,display_name:owners.get(zone.user_id)?.display_name??'Player'}));
   return { players, territories };
 }
 const tc = (id: string) => TIME[id] ?? fail(400, 'Choose a valid time control.');
@@ -357,6 +360,7 @@ export default async function handler(req: Req, res: Res) {
       }
       fail(404, 'Unknown game request.');
     }
+    if (FAST_MATCH_ACTIONS.has(action)) return res.status(200).json(await fastMatchAction(client, req, action, body, settle));
     const account = await signedIn(client, req);
     // The app refreshes this on sign-in to obtain the authoritative profile.
     // Keep it as a first-class migration action rather than falling through to
@@ -425,6 +429,7 @@ export default async function handler(req: Req, res: Res) {
       if (claimed.error) fail(claimed.error.message.includes('gold') ? 409 : 500, claimed.error.message);
       return res.status(200).json({ ok: true, gold_cost: 48, territory: claimed.data });
     }
+    if(action==='territory-name'){const territoryId=String(body.territory_id??''),kingdomName=String(body.kingdom_name??'').trim().replace(/\s+/g,' ');if(!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(territoryId))fail(400,'Choose a valid kingdom.');if(kingdomName.length<3||kingdomName.length>40)fail(400,'Kingdom name must be 3 to 40 characters.');const saved=await client.from('cb_territories').update({kingdom_name:kingdomName}).eq('id',territoryId).eq('user_id',account.id).select('id,user_id,lat,lng,kingdom_name').maybeSingle();if(saved.error)fail(500,saved.error.message);if(!saved.data)fail(403,'Only the kingdom owner can rename it.');return res.status(200).json({territory:{...saved.data,is_owner:true,display_name:account.profile.display_name}});}
     if (action === 'social-status' || action === 'social-update') {
       const target = String(body.target ?? '');
       if (!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(target) || target === account.id) fail(400, 'Choose another registered player.');
@@ -595,5 +600,5 @@ export default async function handler(req: Req, res: Res) {
       return res.status(200).json({ match: view });
     }
     fail(404, 'This game action is not available during the migration.');
-  } catch (error) { const known = error instanceof ApiError ? error : new ApiError(500, 'The game service could not complete this request. Please try again.'); console.error('arena.failed', { action, status: known.status, message: known.message }); return res.status(known.status).json({ error: known.message }); }
+  } catch (error) { const known = error instanceof ApiError ? error : error instanceof MatchActionError ? new ApiError(error.status, error.message) : new ApiError(500, 'The game service could not complete this request. Please try again.'); console.error('arena.failed', { action, status: known.status, message: known.message }); return res.status(known.status).json({ error: known.message }); }
 }

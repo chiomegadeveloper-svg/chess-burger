@@ -1,0 +1,28 @@
+CHESS BURGER V46 VERIFIED PATCH
+
+Copy the folders and files in this ZIP directly into the chess-burger repository root.
+Choose Replace files when Windows asks.
+
+GitHub Desktop should then show these source changes:
+
+api/_match.ts (new)
+api/arena.ts (changed)
+app/arena-client-v46.ts (new)
+app/game-rules.ts (changed)
+app/gameplay.css (new)
+app/layout.tsx (changed)
+app/local-pairing.tsx (changed)
+app/match-actions.ts (new)
+app/match-requests.tsx (new)
+app/match-sync.ts (new)
+app/online-game.tsx (new)
+app/online-play.tsx (changed)
+app/page.tsx (changed; restores the stable direct Map route)
+supabase/0014_gameplay_v46.sql (new)
+supabase/0015_territory_ownership_names.sql (new)
+vercel/main.tsx (changed)
+
+app/page.tsx explicitly restores the original direct Map route to prevent the
+full black-screen crash.
+
+This exact staged patch completed the production build successfully.
