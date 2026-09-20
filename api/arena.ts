@@ -19,6 +19,11 @@ const gpsCutoff = () => new Date(now() - 45_000).toISOString();
 const onlineCutoff = () => now() - 60_000;
 const FRESH_TERRITORY_COST = 48;
 const INVASION_CHALLENGE_COST = 18;
+export const cmsUsername = (value: unknown) => String(value ?? '').trim().replace(/^@+/, '').toLowerCase();
+export const cmsGoldAmount = (value: unknown) => {
+  const amount = Number(value);
+  return Number.isInteger(amount) && amount >= 1 && amount <= 10_000 ? amount : null;
+};
 
 async function publicRanks(client: Db) {
   await reconcileAuthProfiles(client);
@@ -520,6 +525,37 @@ export default async function handler(req: Req, res: Res) {
       });
     }
     if (action === 'social-presence') return res.status(200).json({ ok: true });
+    if (action === 'grant-gold') {
+      if (!['owner', 'admin'].includes(String(account.profile.role ?? ''))) fail(403, 'Owner or GM access is required.');
+      const username = cmsUsername(body.username), amount = cmsGoldAmount(body.amount), requestId = String(body.request_id ?? '').toLowerCase();
+      if (!username) fail(400, 'Enter a registered username.');
+      if (amount === null) fail(400, 'Enter 1–10,000 Gold.');
+      if (!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/.test(requestId)) fail(400, 'A valid request ID is required.');
+      const target = await client.from('cb_profiles').select('user_id,gold_points,username').eq('username', username).maybeSingle();
+      if (target.error) fail(500, target.error.message);
+      if (!target.data) fail(404, 'Player not found. Ask them to sign in to the updated app first.');
+      const ledgerId = `cms-grant:${requestId}`;
+      const ledger = await client.from('cb_gold_ledger').insert({ id: ledgerId, user_id: target.data.user_id, delta: amount, kind: 'staff_grant', reference_id: requestId });
+      if (ledger.error?.code === '23505') return res.status(200).json({ ok: true, duplicate: true });
+      if (ledger.error) fail(500, ledger.error.message);
+      let granted = false;
+      for (let attempt = 0; attempt < 3 && !granted; attempt++) {
+        const current = attempt === 0 ? target : await client.from('cb_profiles').select('user_id,gold_points,username').eq('user_id', target.data.user_id).maybeSingle();
+        if (current.error || !current.data) break;
+        const before = Number(current.data.gold_points ?? 0);
+        const changed = await client.from('cb_profiles').update({ gold_points: before + amount }).eq('user_id', target.data.user_id).eq('gold_points', before).select('user_id').maybeSingle();
+        if (changed.error) break;
+        granted = !!changed.data;
+      }
+      if (!granted) {
+        await client.from('cb_gold_ledger').delete().eq('id', ledgerId);
+        fail(409, 'Gold changed at the same time. Please press Grant Gold again.');
+      }
+      const logged = await client.from('cb_admin_logs').insert({ actor_user_id: account.id, action: 'grant_gold', details: { username, amount, request_id: requestId } });
+      if (logged.error) console.warn('arena.grant-gold-log-failed', { actorId: account.id, targetId: target.data.user_id });
+      console.info('arena.gold-granted', { actorId: account.id, targetId: target.data.user_id, amount });
+      return res.status(200).json({ ok: true, username, amount });
+    }
     if (action === 'social-counts') {
       const [friends, followers] = await Promise.all([
         client.from('cb_social_links').select('user_id', { count: 'exact', head: true }).eq('kind', 'friend').eq('status', 'accepted').or(`user_id.eq.${account.id},target_id.eq.${account.id}`),
