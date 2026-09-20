@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import handler from '../api/arena.ts';
 
 const uid = '11111111-1111-4111-8111-111111111111';
-const profile = { user_id: uid, display_name: 'Test player', avatar_url: 'https://example.com/avatar.webp', cbr: 88 };
+const profile = { user_id: uid, display_name: 'Test player', avatar_url: 'https://example.com/avatar.webp', cbr: 88, gold_points: 88 };
 const match = { id: '22222222-2222-4222-8222-222222222222', white_id: uid, status: 'waiting', control: '10+0', version: 0, created_at: new Date().toISOString(), last_tick: new Date().toISOString() };
 
-async function request(publicChallenge, rejectFeed = false, action = 'room') {
+async function request(publicChallenge, rejectFeed = false, action = 'room', extra = {}) {
   const original = globalThis.fetch;
   const oldUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const oldKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -21,6 +21,7 @@ async function request(publicChallenge, rejectFeed = false, action = 'room') {
     let status = 200;
     if (url.pathname === '/auth/v1/user') body = { id: uid };
     else if (url.pathname.endsWith('/cb_profiles')) body = url.searchParams.has('user_id') && url.searchParams.get('user_id').startsWith('eq.') ? profile : [profile];
+    else if (url.pathname.endsWith('/cb_match_queue')) body = null;
     else if (url.pathname.endsWith('/cb_matches')) {
       if (method === 'POST') { writes.push(JSON.parse(init.body)); body = match; }
       else if (method === 'PATCH') { writes.push(JSON.parse(init.body)); body = { id: match.id }; }
@@ -35,7 +36,7 @@ async function request(publicChallenge, rejectFeed = false, action = 'room') {
   };
   const res = { code: 200, body: null, setHeader() {}, status(code) { this.code = code; return this; }, json(body) { this.body = body; } };
   try {
-    await handler({ method: 'POST', headers: { authorization: 'Bearer test-user-token' }, body: { action, id: match.id, control: '10+0', publicChallenge } }, res);
+    await handler({ method: 'POST', headers: { authorization: 'Bearer test-user-token' }, body: { action, id: match.id, control: '10+0', publicChallenge, ...extra } }, res);
     return { ...res, writes, queries };
   } finally {
     globalThis.fetch = original;
@@ -57,6 +58,13 @@ test('private room is never reported as a public challenge', async () => {
   assert.equal(r.code, 200);
   assert.equal(r.body.challengePublished, false);
   assert.equal(r.writes.length, 1);
+});
+test('wager challenge stores the equal Gold stake and announces it in feed', async () => {
+  const r = await request(true, false, 'room', { play_mode: 'wager', wager_gold: 18 });
+  assert.equal(r.code, 200);
+  assert.equal(r.writes[0].play_mode, 'wager');
+  assert.equal(r.writes[0].wager_gold, 18);
+  assert.match(r.writes[1].content, /Wager 18 Gold/);
 });
 test('failed feed insert cannot return a publication success', async () => {
   const r = await request(true, true);
