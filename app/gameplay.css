@@ -62,3 +62,11 @@
 @keyframes splash-art-enter{from{opacity:0;transform:translateY(12px) scale(.985)}to{opacity:1;transform:none}}
 @media(max-height:680px){.splash-screen{gap:12px!important;padding-top:12px!important;padding-bottom:12px!important}.splash-screen .splash-brand-lockup img{width:72px!important;height:72px!important}.splash-screen .splash-brand-lockup strong{font-size:29px!important}.splash-screen .splash-battle-art{height:min(60dvh,390px)!important;min-height:230px!important;border-radius:25px!important}.splash-screen small{font-size:11px}}
 @media(prefers-reduced-motion:reduce){.splash-screen .splash-battle-art{animation:none!important}}
+
+/* Feed identity: avatar and level receive equal, separate emphasis. */
+.feed-page .feed-cloud{grid-template-columns:50px 50px minmax(0,1fr) auto!important;gap:12px!important}
+.feed-page .feed-player{position:static!important;display:grid!important;place-items:center!important;width:50px!important;height:50px!important;padding:0!important}
+.feed-page .feed-avatar{width:48px!important;height:48px!important}
+.feed-page .feed-level{position:static!important;display:block!important;width:48px!important;height:48px!important;object-fit:contain!important;filter:drop-shadow(0 3px 4px #0008)!important}
+.feed-page .feed-cloud.kind-announcement{grid-template-columns:50px minmax(0,1fr) auto!important}
+@media(max-width:650px){.feed-page .feed-cloud{grid-template-columns:40px 40px minmax(0,1fr) auto!important;gap:8px!important}.feed-page .feed-player{width:40px!important;height:40px!important}.feed-page .feed-avatar,.feed-page .feed-level{width:40px!important;height:40px!important}.feed-page .feed-cloud.kind-announcement{grid-template-columns:40px minmax(0,1fr) auto!important}}

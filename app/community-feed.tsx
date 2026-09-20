@@ -9,7 +9,7 @@ import {arena} from "./arena-client";
 import {SocialButtons} from "./social";
 import {levelFor} from "./cbr";
 import type {ArenaMatch,ArenaPlayer} from "./game-rules";
-type CommunityEvent=FeedEvent&{origin?:"arena";play_mode?:"normal"|"wager";wager_gold?:number};
+type CommunityEvent=FeedEvent&{origin?:"arena"};
 type OnlinePlayer=ArenaPlayer&{available:boolean};
 
 type FeedTab="recent"|"popular"|"first_blood"|"announcement"|"online";
@@ -39,7 +39,7 @@ const cardStyles:Record<string,CSSProperties>={
 
 export default function CommunityFeed({onOpenProfile,onMatch,onChallenge}:{onOpenProfile:(userId:string)=>void;onMatch:(id:string)=>void;onChallenge:(player:ArenaPlayer)=>void}){
  const[tab,setTab]=useState<FeedTab>("recent"),[page,setPage]=useState(1),[events,setEvents]=useState<CommunityEvent[]>([]);
- const[challenges,setChallenges]=useState<CommunityEvent[]>([]),[accepting,setAccepting]=useState<string|null>(null),[pendingWager,setPendingWager]=useState<CommunityEvent|null>(null);
+ const[challenges,setChallenges]=useState<CommunityEvent[]>([]),[accepting,setAccepting]=useState<string|null>(null);
  const[expandedImage,setExpandedImage]=useState<string|null>(null);
  const[onlineUsers,setOnlineUsers]=useState<OnlinePlayer[]>([]),[onlineSearch,setOnlineSearch]=useState(''),[onlineCard,setOnlineCard]=useState<string|null>(null),[onlinePage,setOnlinePage]=useState(1);
  const request=useRef(0),onlineCloseTimer=useRef<ReturnType<typeof setTimeout>|null>(null);
@@ -80,16 +80,14 @@ export default function CommunityFeed({onOpenProfile,onMatch,onChallenge}:{onOpe
   try{await arena('heart',{id:event.id,liked:!has});}
   catch{toast.error('Reaction was not saved.');await refresh();}finally{pendingHearts.current.delete(event.id);}
  }
- async function joinChallenge(event:CommunityEvent){
+ async function acceptChallenge(event:CommunityEvent){
   if(!userId){toast.info('Sign in to accept this challenge.');return;}
   if(accepting)return;
   setAccepting(event.id);
-  try{const r=await arena<{match:ArenaMatch}>('accept-challenge',{id:event.id.slice('challenge:'.length)});setPendingWager(null);onMatch(r.match.id);}
+  try{const r=await arena<{match:ArenaMatch}>('accept-challenge',{id:event.id.slice('challenge:'.length)});onMatch(r.match.id);}
   catch(e){toast.error((e as Error).message);void refresh();}
   finally{setAccepting(null);}
  }
- function acceptChallenge(event:CommunityEvent){if(event.play_mode==='wager'&&Number(event.wager_gold)>0)setPendingWager(event);else void joinChallenge(event);}
- async function rejectWager(){if(!pendingWager)return;try{await arena('reject-challenge',{id:pendingWager.id.slice('challenge:'.length)});setPendingWager(null);toast.info('Wager rejected. The challenge remains in the feed until its 2-minute expiry.');void refresh();}catch(e){toast.error((e as Error).message);}}
  function keepOnlineCard(id:string){if(onlineCloseTimer.current)clearTimeout(onlineCloseTimer.current);onlineCloseTimer.current=null;setOnlineCard(id);}
  function closeOnlineCard(delay=700){if(onlineCloseTimer.current)clearTimeout(onlineCloseTimer.current);onlineCloseTimer.current=setTimeout(()=>setOnlineCard(null),delay);}
  useEffect(()=>()=>{if(onlineCloseTimer.current)clearTimeout(onlineCloseTimer.current);},[]);
@@ -101,7 +99,6 @@ export default function CommunityFeed({onOpenProfile,onMatch,onChallenge}:{onOpe
  const onlinePages=Math.max(1,Math.ceil(shownOnline.length/ONLINE_PAGE_SIZE));
  const visibleOnline=shownOnline.slice((onlinePage-1)*ONLINE_PAGE_SIZE,onlinePage*ONLINE_PAGE_SIZE);
  return <section className="feed-page">
-  {pendingWager&&typeof document!=='undefined'&&createPortal(<div className="wager-overlay"><section className="wager-dialog" role="dialog" aria-modal="true" aria-labelledby="wager-invite-title"><h2 id="wager-invite-title">Match the wager?</h2><p>{pendingWager.display_name} is betting <strong>{pendingWager.wager_gold} Gold</strong>. The same amount is deducted from both players when you accept. The winner receives the combined pot.</p><div className="social-actions"><button onClick={()=>void rejectWager()}>Reject challenge</button><button className="gold-button" disabled={accepting!==null} onClick={()=>void joinChallenge(pendingWager)}>{accepting?'Matching…':`Match ${pendingWager.wager_gold} Gold`}</button></div></section></div>,document.body)}
   <div className="page-heading"><h1>{tab==="announcement"?"Announcements":tab==="online"?"Online players":"Community feed"}</h1><span className="sample-label">{tab==="announcement"?"Official updates":tab==="online"?`${onlineUsers.length} online`:"Latest 50"}</span></div>
   <div className="feed-tabs" role="tablist" aria-label="Community feed views" style={{display:"grid",gridTemplateColumns:"repeat(5,minmax(0,1fr))",width:"100%"}}>
    <button role="tab" aria-selected={tab==="recent"} onClick={()=>selectTab("recent")}>Recent feed</button>
@@ -112,7 +109,7 @@ export default function CommunityFeed({onOpenProfile,onMatch,onChallenge}:{onOpe
   </div>
   {tab==='recent'&&challenges.length>0&&<section className="pinned-challenges" aria-label="Open challenges"><h2>Open challenges</h2>{challenges.map(event=><article className="pinned-challenge" key={event.id}>
     <span className="challenge-glow" aria-hidden="true"/><span className="challenge-info"><Swords size={19}/><span><strong>{event.display_name}</strong><small>{event.content.replace(/^is looking for a /,'').replace(/^is looking for /,'')}</small></span></span>
-    <button className="gold-button" disabled={accepting!==null||event.user_id===userId} onClick={()=>acceptChallenge(event)}>{event.user_id===userId?'Your challenge':accepting===event.id?'Joining…':event.play_mode==='wager'?`Wager ${event.wager_gold} Gold`:'Accept challenge'}</button>
+    <button className="gold-button" disabled={accepting!==null||event.user_id===userId} onClick={()=>void acceptChallenge(event)}>{event.user_id===userId?'Your challenge':accepting===event.id?'Joining…':'Accept challenge'}</button>
   </article>)}</section>}
   {status&&<p className="account-note" role="status">{status}</p>}
   {tab==='online'&&<section className="online-directory" aria-label="Online players">
@@ -134,7 +131,8 @@ export default function CommunityFeed({onOpenProfile,onMatch,onChallenge}:{onOpe
    {onlinePages>1&&<nav className="feed-pagination online-pagination" aria-label="Online player pages"><button disabled={onlinePage===1} onClick={()=>{setOnlineCard(null);setOnlinePage(value=>value-1);}}><ChevronLeft size={15}/>Previous</button><span>Page {onlinePage} of {onlinePages}</span><button disabled={onlinePage>=onlinePages} onClick={()=>{setOnlineCard(null);setOnlinePage(value=>value+1);}}>Next<ChevronRight size={15}/></button></nav>}
   </section>}
   <ol className="community-list">{events.map(event=>{const date=new Date(event.created_at),level=levelFor(event.cbr),announcement=event.kind==='announcement',avatarUrl=announcement?'/cburger_logo.png':event.avatar_url;return <li key={event.id} className={`feed-cloud kind-${event.kind}`}>
-   <button className="feed-player" disabled={announcement} onClick={()=>!announcement&&onOpenProfile(event.user_id)} aria-label={announcement?'Chess Burger announcement':`Open ${event.display_name}'s profile`}><span className="feed-avatar">{avatarUrl?<img src={avatarUrl} alt=""/>:event.display_name.charAt(0)}</span>{!announcement&&<img className="feed-level" src={`/levels/level-${String(level.level-1).padStart(2,"0")}.png`} alt={`Level ${level.level}`}/>}</button>
+   <button className="feed-player" disabled={announcement} onClick={()=>!announcement&&onOpenProfile(event.user_id)} aria-label={announcement?'Chess Burger announcement':`Open ${event.display_name}'s profile`}><span className="feed-avatar">{avatarUrl?<img src={avatarUrl} alt=""/>:event.display_name.charAt(0)}</span></button>
+   {!announcement&&<img className="feed-level" src={`/levels/level-${String(level.level-1).padStart(2,"0")}.png`} alt={`Level ${level.level}`}/>}
    <div className="feed-copy"><div className="feed-meta"><span className="feed-kind">{labels[event.kind]??event.kind.replaceAll("_"," ")}</span><time dateTime={event.created_at}>{date.toLocaleDateString([],{month:"short",day:"numeric"})} · {date.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"})}</time></div><p>{announcement?<strong className="feed-name">Chess Burger</strong>:<button className="feed-name" onClick={()=>onOpenProfile(event.user_id)}>{event.display_name}</button>}<span className="feed-activity"> {event.content||"shared an update."}</span></p>{announcement&&<span className="announcement-pin">PINNED ANNOUNCEMENT</span>}{event.image_url&&<button type="button" className={"announcement-image-button "+(expandedImage===event.id?"expanded":"")} aria-expanded={expandedImage===event.id} aria-label={(expandedImage===event.id?"Collapse":"Expand")+" announcement photo"} onClick={()=>setExpandedImage(current=>current===event.id?null:event.id)}><img className="announcement-image" src={event.image_url} alt="Announcement attachment"/></button>}<div className="feed-rewards">{event.cbr_delta!==0&&<span className="feed-detail">{event.cbr_delta>0?"+":""}{event.cbr_delta} CBR</span>}{event.gold_delta!==0&&<span className="feed-gold">{event.gold_delta>0?"+":""}{event.gold_delta} Gold</span>}</div>{!announcement&&userId&&event.user_id!==userId&&<SocialButtons key={userId+":"+event.user_id} target={event.user_id} compact/>}</div>
    <button className={"heart-button "+(reacted.has(event.id)?"reacted":"")} aria-label={(reacted.has(event.id)?"Remove":"Add")+" heart reaction"} aria-pressed={reacted.has(event.id)} onClick={()=>void toggleHeart(event)}><Heart size={17} fill={reacted.has(event.id)?"currentColor":"none"}/><span>{event.heart_count}</span></button>
   </li>})}</ol>
