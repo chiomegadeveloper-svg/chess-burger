@@ -16,6 +16,9 @@ class ApiError extends Error { status: number; constructor(status: number, messa
 const fail = (status: number, message: string): never => { throw new ApiError(status, message); };
 const now = () => Date.now();
 const gpsCutoff = () => new Date(now() - 45_000).toISOString();
+const onlineCutoff = () => now() - 60_000;
+const FRESH_TERRITORY_COST = 48;
+const INVASION_CHALLENGE_COST = 18;
 
 async function publicRanks(client: Db) {
   await reconcileAuthProfiles(client);
@@ -32,7 +35,7 @@ function profileSeed(user: any) {
   const base = String(meta.username ?? user.email?.split('@')[0] ?? rawName).toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/^_+|_+$/g, '').slice(0, 15) || 'player';
   const username = `${base.length < 3 ? `player_${base}` : base}_${String(user.id).replace(/-/g, '').slice(0, 6)}`.slice(0, 24);
   const candidateAvatar = String(meta.avatar_url ?? meta.picture ?? '').trim();
-  return { user_id: user.id, username, display_name: rawName.slice(0, 60) || 'Chess Burger Player', avatar_url: /^https:\/\//i.test(candidateAvatar) ? candidateAvatar : '', country_code: /^[A-Z]{2}$/.test(String(meta.country_code ?? '')) ? meta.country_code : 'PH' };
+  return { user_id: user.id, username, display_name: rawName.slice(0, 60) || 'Chess Burger Player', avatar_url: /^https:\/\//i.test(candidateAvatar) ? candidateAvatar : '', country_code: /^[A-Z]{2}$/.test(String(meta.country_code ?? '')) ? meta.country_code : 'PH', gold_points: 88 };
 }
 
 async function reconcileAuthProfiles(client: Db) {
@@ -59,6 +62,43 @@ function metres(aLat: number, aLng: number, bLat: number, bLng: number) {
   const rad = Math.PI / 180, dLat = (bLat - aLat) * rad, dLng = (bLng - aLng) * rad;
   const h = Math.sin(dLat / 2) ** 2 + Math.cos(aLat * rad) * Math.cos(bLat * rad) * Math.sin(dLng / 2) ** 2;
   return Math.round(12_742_000 * Math.asin(Math.sqrt(h)));
+}
+export function barangayKey(barangay: string, locality: string) {
+  const clean = (value: string) => value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  return `${clean(locality)}:${clean(barangay)}`.slice(0, 190);
+}
+function ringContains(point: [number, number], ring: number[][]) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i] ?? [], [xj, yj] = ring[j] ?? [];
+    if (![xi, yi, xj, yj].every(Number.isFinite)) continue;
+    const crosses = (yi > point[1]) !== (yj > point[1]) && point[0] < ((xj - xi) * (point[1] - yi)) / ((yj - yi) || Number.EPSILON) + xi;
+    if (crosses) inside = !inside;
+  }
+  return inside;
+}
+export function polygonContains(boundary: any, lat: number, lng: number) {
+  const polygons = boundary?.type === 'Polygon' ? [boundary.coordinates] : boundary?.type === 'MultiPolygon' ? boundary.coordinates : [];
+  return polygons.some((polygon: number[][][]) => Array.isArray(polygon?.[0]) && ringContains([lng, lat], polygon[0]) && !polygon.slice(1).some((hole: number[][]) => ringContains([lng, lat], hole)));
+}
+function usableBoundary(value: any) {
+  if (!value || !['Polygon', 'MultiPolygon'].includes(value.type) || !Array.isArray(value.coordinates)) return false;
+  try { return JSON.stringify(value).length <= 750_000; } catch { return false; }
+}
+async function resolveBarangayBoundary(barangay: string, locality: string, lat: number, lng: number) {
+  const common = { headers: { Accept: 'application/json', 'User-Agent': 'ChessBurger/1.0 (https://chessburger.site)' } };
+  const search = new URL('https://nominatim.openstreetmap.org/search');
+  search.search = new URLSearchParams({ format: 'jsonv2', addressdetails: '1', polygon_geojson: '1', countrycodes: 'ph', limit: '6', q: `${barangay}, ${locality}, Philippines` }).toString();
+  let candidates: any[] = [];
+  try { const response = await fetch(search, common); if (response.ok) candidates = await response.json() as any[]; } catch {}
+  let selected = candidates.find(item => usableBoundary(item.geojson) && polygonContains(item.geojson, lat, lng));
+  if (!selected) {
+    const reverse = new URL('https://nominatim.openstreetmap.org/reverse');
+    reverse.search = new URLSearchParams({ format: 'jsonv2', addressdetails: '1', polygon_geojson: '1', zoom: '14', lat: String(lat), lon: String(lng) }).toString();
+    try { const response = await fetch(reverse, common); if (response.ok) { const item = await response.json(); if (usableBoundary(item?.geojson) && polygonContains(item.geojson, lat, lng)) selected = item; } } catch {}
+  }
+  if (!selected) fail(409, 'The polygon boundary for this barangay is unavailable. Keep GPS on and try again.');
+  return { boundary: selected.geojson, centroidLat: Number(selected.lat ?? lat), centroidLng: Number(selected.lon ?? lng) };
 }
 async function savePresence(client: Db, account: any, body: Record<string, any>) {
   if (!body.gps) {
@@ -94,10 +134,23 @@ async function nearbyPlayers(client: Db, account: any) {
     const distance = metres(Number(own.data.latitude), Number(own.data.longitude), Number(p.latitude), Number(p.longitude));
     return person ? { ...person, lat: Number(p.latitude), lng: Number(p.longitude), distance } : null;
   }).filter((p: any) => p && p.distance <= 10_000).sort((a: any, b: any) => a.distance - b.distance);
-  const zoneRows = await client.from('cb_territories').select('id,user_id,lat,lng').gte('lat', Number(own.data.latitude) - .15).lte('lat', Number(own.data.latitude) + .15).gte('lng', Number(own.data.longitude) - .25).lte('lng', Number(own.data.longitude) + .25).limit(100);
+  const region = await client.from('cb_player_regions').select('barangay,locality').eq('user_id', account.id).maybeSingle();
+  if (region.error || !region.data) return { players, territories: [] };
+  const fields = 'id,user_id,barangay_key,barangay,locality,boundary,centroid_lat,centroid_lng,defense_points,captured_at,updated_at,created_at';
+  const key = barangayKey(region.data.barangay, region.data.locality);
+  let zoneRows = await client.from('cb_territories').select(fields).eq('barangay_key', key).order('created_at', { ascending: false }).limit(10);
   if (zoneRows.error) return { players, territories: [] };
-  const owners = await playerMap(client, (zoneRows.data ?? []).map((z: any) => z.user_id));
-  const territories = (zoneRows.data ?? []).map((z: any) => ({ ...z, display_name: owners.get(z.user_id)?.display_name ?? 'Player' }));
+  if (!zoneRows.data?.length) zoneRows = await client.from('cb_territories').select(fields).eq('barangay', region.data.barangay).eq('locality', region.data.locality).order('created_at', { ascending: false }).limit(10);
+  if (zoneRows.error) return { players, territories: [] };
+  const rows = (zoneRows.data ?? []).filter((row: any) => usableBoundary(row.boundary)).slice(0, 1);
+  const owners = await playerMap(client, rows.map((z: any) => z.user_id));
+  const ownerIds = [...new Set(rows.map((z: any) => z.user_id))];
+  const ownerPresence = ownerIds.length ? await client.from('cb_live_presence').select('*').in('user_id', ownerIds) : { data: [], error: null };
+  const onlineOwners = new Set((ownerPresence.data ?? []).filter((row: any) => (liveAt(row) ?? 0) > onlineCutoff()).map((row: any) => row.user_id));
+  const territories = rows.map((z: any) => {
+    const owner = owners.get(z.user_id);
+    return { ...z, centroid_lat: Number(z.centroid_lat), centroid_lng: Number(z.centroid_lng), defense_points: Number(z.defense_points ?? 10), online: onlineOwners.has(z.user_id), is_owner: z.user_id === account.id, display_name: owner?.display_name ?? 'Player', username: owner?.username ?? 'player', avatar_url: owner?.avatar_url ?? '', cbr: Number(owner?.cbr ?? 88), country_code: owner?.country_code ?? 'PH' };
+  });
   return { players, territories };
 }
 const tc = (id: string) => TIME[id] ?? fail(400, 'Choose a valid time control.');
@@ -172,6 +225,10 @@ async function settle(client: Db, match: any) {
     const updated = await client.from('cb_profiles').update({ cbr: Math.max(0, p.cbr + delta), gold_points: p.gold_points + gold, wins: p.wins + (won ? 1 : 0), losses: p.losses + (lost ? 1 : 0), win_streak: won ? p.win_streak + 1 : 0 }).eq('user_id', p.user_id);
     if (updated.error) fail(500, updated.error.message);
     if (won) { const event = await client.from('cb_feed').insert({ user_id: p.user_id, kind: 'win', display_name: p.display_name, content: `won a ${tc(match.control).group.toLowerCase()} match.`, cbr_delta: delta, gold_delta: gold }); if (event.error) fail(500, event.error.message); }
+  }
+  if (match.match_kind === 'invasion') {
+    const territory = await client.rpc('cb_settle_territory_invasion', { p_match_id: match.id });
+    if (territory.error) fail(500, territory.error.message);
   }
   const rated = await client.from('cb_matches').update({ rating_applied: true }).eq('id', match.id).eq('rating_applied', false);
   if (rated.error) fail(500, rated.error.message);
@@ -333,6 +390,57 @@ async function queuedMatch(client: Db, account: any, controlId: string) {
   return { match: view, searching: false };
 }
 
+async function ownerIsOnline(client: Db, userId: string) {
+  const live = await client.from('cb_live_presence').select('*').eq('user_id', userId).maybeSingle();
+  if (live.error) fail(500, 'Online presence is temporarily unavailable.');
+  return !!live.data && (liveAt(live.data) ?? 0) > onlineCutoff();
+}
+
+async function createInvasionChallenge(client: Db, account: any, body: Record<string, any>) {
+  const territoryId = String(body.territory_id ?? ''), control = String(body.control ?? ''), clock = tc(control);
+  if (!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(territoryId)) fail(400, 'Choose a valid barangay territory.');
+  const territory = one<any>(await client.from('cb_territories').select('id,user_id,barangay,locality,boundary,defense_points').eq('id', territoryId).maybeSingle());
+  if (territory.user_id === account.id) fail(400, 'You already own this barangay territory.');
+  if (!usableBoundary(territory.boundary)) fail(409, 'This legacy territory must be upgraded to a barangay polygon first.');
+  if (Number(account.profile.gold_points ?? 0) < INVASION_CHALLENGE_COST) fail(409, `You need ${INVASION_CHALLENGE_COST} Gold to challenge this KING.`);
+
+  const position = await client.from('cb_presence').select('latitude,longitude,accuracy').eq('user_id', account.id).eq('gps_enabled', true).gt('seen_at', new Date(now() - 30_000).toISOString()).maybeSingle();
+  if (position.error) fail(500, 'GPS presence is temporarily unavailable.');
+  if (!position.data || Number(position.data.accuracy) > 100) fail(409, 'Enable GPS and wait for accuracy within 100 m.');
+  if (!polygonContains(territory.boundary, Number(position.data.latitude), Number(position.data.longitude))) fail(403, 'Enter this barangay before challenging its KING.');
+  if (!await ownerIsOnline(client, territory.user_id)) fail(409, 'The territory owner is offline. Challenge again when the KING is online.');
+
+  const [challengerActive, ownerActive, currentInvasion] = await Promise.all([
+    activeMatchFor(client, account.id),
+    activeMatchFor(client, territory.user_id),
+    client.from('cb_matches').select('id').eq('territory_id', territory.id).in('status', ['waiting', 'active']).gt('created_at', new Date(now() - 120_000).toISOString()).limit(1),
+  ]);
+  if (challengerActive) fail(409, 'Finish your current match first.');
+  if (ownerActive) fail(409, 'The territory owner is already playing.');
+  if (currentInvasion.error) fail(500, currentInvasion.error.message);
+  if (currentInvasion.data?.length) fail(409, 'This territory already has an active defense challenge.');
+
+  const old = await client.from('cb_matches').update({ status: 'cancelled' }).eq('host_id', account.id).eq('status', 'waiting');
+  if (old.error) fail(500, old.error.message);
+  const match = one<any>(await client.from('cb_matches').insert({
+    host_id: account.id,
+    white_id: account.id,
+    invite_to: territory.user_id,
+    status: 'waiting',
+    code: code(),
+    control,
+    white_ms: clock.seconds * 1000,
+    black_ms: clock.seconds * 1000,
+    last_tick: new Date().toISOString(),
+    white_cbr: Number(account.profile.cbr ?? 88),
+    match_kind: 'invasion',
+    territory_id: territory.id,
+    invasion_challenger_id: account.id,
+  }).select('*').single());
+  console.info('arena.invasion-created', { matchId: match.id, territoryId: territory.id });
+  return { match: await matchView(client, match), gold_cost: INVASION_CHALLENGE_COST, charged: false };
+}
+
 export default async function handler(req: Req, res: Res) {
   res.setHeader('Cache-Control', 'no-store');
   let action = '';
@@ -421,10 +529,34 @@ export default async function handler(req: Req, res: Res) {
       const presence = await client.from('cb_presence').select('latitude,longitude,accuracy').eq('user_id', account.id).eq('gps_enabled', true).gt('seen_at', new Date(now() - 30_000).toISOString()).maybeSingle();
       if (presence.error) fail(500, 'GPS presence is temporarily unavailable.');
       if (!presence.data || Number(presence.data.accuracy) > 100) fail(409, 'Enable GPS and wait for accuracy within 100 m.');
-      const claimed = await client.rpc('cb_claim_territory', { p_user_id: account.id, p_lat: Number(presence.data.latitude), p_lng: Number(presence.data.longitude) });
+      const region = await client.from('cb_player_regions').select('barangay,locality').eq('user_id', account.id).maybeSingle();
+      if (region.error || !region.data) fail(409, 'Keep GPS on while Chess Burger identifies your barangay.');
+      const polygon = await resolveBarangayBoundary(region.data.barangay, region.data.locality, Number(presence.data.latitude), Number(presence.data.longitude));
+      const key = barangayKey(region.data.barangay, region.data.locality);
+      let existing = await client.from('cb_territories').select('id,user_id,boundary,defense_points').eq('barangay_key', key).order('created_at', { ascending: false }).limit(1).maybeSingle();
+      if (existing.error) fail(500, existing.error.message);
+      if (!existing.data) existing = await client.from('cb_territories').select('id,user_id,boundary,defense_points').eq('barangay', region.data.barangay).eq('locality', region.data.locality).order('created_at', { ascending: false }).limit(1).maybeSingle();
+      if (existing.error) fail(500, existing.error.message);
+      if (existing.data) {
+        if (!usableBoundary(existing.data.boundary)) {
+          const upgraded = await client.from('cb_territories').update({ barangay_key: key, barangay: region.data.barangay, locality: region.data.locality, boundary: polygon.boundary, centroid_lat: polygon.centroidLat, centroid_lng: polygon.centroidLng, defense_points: Math.max(1, Number(existing.data.defense_points ?? 10)), updated_at: new Date().toISOString() }).eq('id', existing.data.id);
+          if (upgraded.error) fail(500, upgraded.error.message);
+        }
+        return res.status(200).json({ ok: true, claimed: false, restored: true, defense_points: Math.max(1, Number(existing.data.defense_points ?? 10)), territory: existing.data.id });
+      }
+      const claimed = await client.rpc('cb_claim_barangay_territory', {
+        p_user_id: account.id,
+        p_barangay_key: key,
+        p_barangay: region.data.barangay,
+        p_locality: region.data.locality,
+        p_boundary: polygon.boundary,
+        p_centroid_lat: polygon.centroidLat,
+        p_centroid_lng: polygon.centroidLng,
+      });
       if (claimed.error) fail(claimed.error.message.includes('gold') ? 409 : 500, claimed.error.message);
-      return res.status(200).json({ ok: true, gold_cost: 48, territory: claimed.data });
+      return res.status(200).json({ ok: true, claimed: true, gold_cost: FRESH_TERRITORY_COST, defense_points: 10, territory: claimed.data });
     }
+    if (action === 'invasion-challenge') return res.status(200).json(await createInvasionChallenge(client, account, body));
     if (action === 'social-status' || action === 'social-update') {
       const target = String(body.target ?? '');
       if (!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(target) || target === account.id) fail(400, 'Choose another registered player.');
@@ -510,6 +642,14 @@ export default async function handler(req: Req, res: Res) {
       if (match.white_id === account.id) fail(400, 'You cannot join your own room.');
       if (match.invite_to && match.invite_to !== account.id) fail(403, 'This invitation belongs to another player.');
       if (Date.parse(match.created_at) <= now() - 120000) fail(410, 'This invitation has expired.');
+      if (match.match_kind === 'invasion') {
+        const accepted = await client.rpc('cb_accept_invasion', { p_match_id: match.id, p_owner_id: account.id });
+        if (accepted.error) fail(/Gold|expired|changed|available/i.test(accepted.error.message) ? 409 : 500, accepted.error.message);
+        const current = await readMatch(client, match.id);
+        const view = await matchView(client, current);
+        await broadcastMatch(view);
+        return res.status(200).json({ match: view });
+      }
       const changed = await client.from('cb_matches').update({ black_id: account.id, black_cbr: account.profile.cbr, status: 'active', version: Number(match.version) + 1, last_tick: new Date().toISOString() }).eq('id', match.id).eq('version', match.version).eq('status', 'waiting').is('black_id', null).select('*').maybeSingle();
       if (changed.error) fail(500, changed.error.message);
       if (!changed.data) fail(409, 'This room was already joined.');
@@ -522,7 +662,7 @@ export default async function handler(req: Req, res: Res) {
     if (action === 'state') {
       const [r, pending] = await Promise.all([
         client.from('cb_matches').select('*').eq('status', 'active').or(`white_id.eq.${account.id},black_id.eq.${account.id}`).order('created_at', { ascending: false }).limit(1).maybeSingle(),
-        client.from('cb_matches').select('id,host_id,control,code,created_at').eq('status', 'waiting').eq('invite_to', account.id).gt('created_at', new Date(now() - 120000).toISOString()).order('created_at', { ascending: false }).limit(10),
+        client.from('cb_matches').select('*').eq('status', 'waiting').eq('invite_to', account.id).gt('created_at', new Date(now() - 120000).toISOString()).order('created_at', { ascending: false }).limit(10),
       ]);
       if (r.error || pending.error) fail(500, r.error?.message ?? pending.error?.message ?? 'Unable to load match state.');
       const current = r.data ? await finishExpiredMatch(client, r.data) : null;

@@ -51,7 +51,7 @@ const blankProfile = (id = "guest-device"): PlayerProfile => ({
   featured_badges: [],
   cbr: 88,
   ocbr: 88,
-  gold_points: 0,
+  gold_points: 88,
   win_streak: 0,
   wins: 0,
   losses: 0,
