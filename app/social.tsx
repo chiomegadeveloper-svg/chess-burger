@@ -641,6 +641,9 @@ export type MatchSummary = {
   ratingLabel?: "CBR" | "OCBR";
   ratingValue?: number;
   goldDelta?: number;
+  goldPayout?: number;
+  playMode?: "normal" | "wager" | "queue";
+  wagerGold?: number;
   opponent?: ArenaPlayer;
   local?: boolean;
 };
@@ -728,11 +731,23 @@ export function MatchResult({
             </>
           )}
         </div>
-        {!result.local && result.goldDelta !== undefined && (
+        {!result.local && (result.goldDelta !== undefined || result.goldPayout !== undefined) && (
           <p className="result-gold">
-            {result.goldDelta
-              ? `+${result.goldDelta} Gold earned`
-              : "No Gold for a drawn match"}
+            {result.playMode === "wager"
+              ? result.outcome === "win"
+                ? `+${result.goldPayout ?? result.wagerGold! * 2} Gold wager winnings`
+                : result.outcome === "draw"
+                  ? `${result.wagerGold ?? 0} Gold wager refunded`
+                  : `−${result.wagerGold ?? 0} Gold wager lost`
+              : result.playMode === "queue"
+                ? result.outcome === "win"
+                  ? `+${result.goldPayout ?? 11} Gold online-match winnings`
+                  : result.outcome === "draw"
+                    ? "3 Gold entry refunded"
+                    : "−3 Gold online-match entry"
+                : result.goldDelta
+                  ? `${result.goldDelta > 0 ? "+" : ""}${result.goldDelta} Gold earned`
+                  : "No Gold awarded"}
           </p>
         )}
         {!result.local && (

@@ -48,7 +48,8 @@ namespace MatchEngine {
       const ended = c.chess.isCheckmate() ? (c.chess.turn() === 'w' ? 'black' : 'white') : c.chess.isDraw() ? 'draw' : null;
       const ids = [...(meta.move_ids ?? [])];
       if (typeof input.request_id === 'string') ids.push(input.request_id.slice(0, 80));
-      return { ...next, pgn: c.chess.pgn(), white_ms: c.white_ms + (c.white ? increment : 0), black_ms: c.black_ms + (c.white ? 0 : increment), last_tick: at, status: ended ? 'finished' : 'active', result: ended, game_meta: { ...clear(currentMeta, 'position-changed'), move_ids: ids } };
+      const moveMeta = pending?.kind === 'takeback' && pending.by !== actor ? currentMeta : clear(currentMeta, 'position-changed');
+      return { ...next, pgn: c.chess.pgn(), white_ms: c.white_ms + (c.white ? increment : 0), black_ms: c.black_ms + (c.white ? 0 : increment), last_tick: at, status: ended ? 'finished' : 'active', result: ended, game_meta: { ...moveMeta, move_ids: ids } };
     }
     if (action === 'resign' || action === 'abort') return { ...next, white_ms: c.white_ms, black_ms: c.black_ms, last_tick: at, status: action === 'abort' ? 'cancelled' : 'finished', result: action === 'abort' ? null : actor === row.white_id ? 'black' : 'white', game_meta: action === 'abort' ? { ...clear(currentMeta, 'position-changed'), last: { kind: 'abort', by: actor, outcome: 'cancelled', at } } : clear(currentMeta, 'position-changed') };
     if (action === 'offer') {
@@ -57,28 +58,29 @@ namespace MatchEngine {
       if (pending) reject('Answer the pending request first.');
       const used = currentMeta.requests?.[actor] ?? { takeback: 0, draw: 0 };
       if (used[kind] >= LIMIT) reject(`You have used all 3 ${kind === 'draw' ? 'draw offers' : 'takeback requests'} in this match.`);
-      let plies = 0;
+      let plies = 0, rollback_pgn = row.pgn;
       if (kind === 'takeback') {
         const history = c.chess.history({ verbose: true }), color = actor === row.white_id ? 'w' : 'b';
         let own = -1;
         for (let i = history.length - 1; i >= 0; i--) if (history[i]?.color === color) { own = i; break; }
         if (own < 0) reject('You have not made a move to take back.');
         plies = history.length - own;
+        const rollback = game(row);
+        for (let i = 0; i < plies; i++) rollback.undo();
+        rollback_pgn = rollback.pgn();
       }
-      return { ...next, game_meta: { ...currentMeta, requests: { ...currentMeta.requests, [actor]: { ...used, [kind]: used[kind] + 1 } }, request_ids: [...(currentMeta.request_ids ?? []), id], pending: { id, kind, by: actor, at, expires_at: at + OFFER_MS, pgn: row.pgn, plies } } };
+      return { ...next, game_meta: { ...currentMeta, requests: { ...currentMeta.requests, [actor]: { ...used, [kind]: used[kind] + 1 } }, request_ids: [...(currentMeta.request_ids ?? []), id], pending: { id, kind, by: actor, at, expires_at: at + OFFER_MS, pgn: row.pgn, plies, rollback_pgn, white_ms: c.white_ms, black_ms: c.black_ms } } };
     }
     if (action === 'respond-offer') {
       if (!pending || pending.id !== input.request_id) reject('This request expired or was already answered.');
       if (pending.by === actor) reject('Only your opponent can approve or decline your request.', 403);
       if (typeof input.accept !== 'boolean') reject('Choose Accept or Decline.', 400);
-      if (pending.pgn !== row.pgn) reject('The position changed. This request is no longer valid.');
+      if (pending.kind === 'draw' && pending.pgn !== row.pgn) reject('The position changed. This request is no longer valid.');
       const game_meta = { ...currentMeta, pending: null, last: { id: pending.id, kind: pending.kind, by: pending.by, outcome: input.accept ? 'accepted' : 'declined' } };
       if (!input.accept) return { ...next, game_meta };
       if (pending.kind === 'draw') return { ...next, game_meta, status: 'finished', result: 'draw', white_ms: c.white_ms, black_ms: c.black_ms, last_tick: at };
-      let white_ms = c.white_ms, black_ms = c.black_ms;
-      const increment = (increments[row.control] ?? 0) * 1000;
-      for (let i = 0; i < pending.plies; i++) { const undone = c.chess.undo(); if (!undone) reject('There is no move to take back.'); if (undone.color === 'w') white_ms = Math.max(0, white_ms - increment); else black_ms = Math.max(0, black_ms - increment); }
-      return { ...next, game_meta, pgn: c.chess.pgn(), white_ms, black_ms, last_tick: at };
+      if (typeof pending.rollback_pgn !== 'string' || !Number.isFinite(pending.white_ms) || !Number.isFinite(pending.black_ms)) reject('This takeback request cannot restore its saved position.');
+      return { ...next, game_meta, pgn: pending.rollback_pgn, white_ms: pending.white_ms, black_ms: pending.black_ms, last_tick: at };
     }
     return reject('Unknown match action.', 400);
   }
@@ -297,7 +299,14 @@ async function playerMap(client: Db, ids: string[]) {
 }
 async function matchView(client: Db, row: any) {
   const players = await playerMap(client, [row.white_id, row.black_id]);
-  return { ...row, created_at: Date.parse(row.created_at), last_tick: Date.parse(row.last_tick), white_ms: Number(row.white_ms), black_ms: Number(row.black_ms), version: Number(row.version), white_cbr: Number(row.white_cbr), black_cbr: Number(row.black_cbr), rating_applied: row.rating_applied ? 1 : 0, reactions: JSON.stringify(Array.isArray(row.reactions) ? row.reactions : []), white: players.get(row.white_id), black: row.black_id ? players.get(row.black_id) : null, server_now: now() };
+  let gold_changes:Record<string,number>|undefined,gold_payouts:Record<string,number>|undefined;
+  if(row.status==='finished'&&['queue','wager'].includes(String(row.play_mode??'normal'))){
+    const ledger=await client.from('cb_gold_ledger').select('user_id,delta,kind').eq('reference_id',row.id);
+    if(ledger.error)fail(500,ledger.error.message);
+    gold_changes={};gold_payouts={};
+    for(const entry of ledger.data??[]){const id=String(entry.user_id),delta=Number(entry.delta??0);gold_changes[id]=(gold_changes[id]??0)+delta;if(delta>0&&String(entry.kind).endsWith('_payout'))gold_payouts[id]=(gold_payouts[id]??0)+delta;}
+  }
+  return { ...row, created_at: Date.parse(row.created_at), last_tick: Date.parse(row.last_tick), white_ms: Number(row.white_ms), black_ms: Number(row.black_ms), version: Number(row.version), white_cbr: Number(row.white_cbr), black_cbr: Number(row.black_cbr), rating_applied: row.rating_applied ? 1 : 0, reactions: JSON.stringify(Array.isArray(row.reactions) ? row.reactions : []), white: players.get(row.white_id), black: row.black_id ? players.get(row.black_id) : null, gold_changes, gold_payouts, server_now: now() };
 }
 async function readMatch(client: Db, id: string): Promise<any> { return one<any>(await client.from('cb_matches').select('*').eq('id', id).maybeSingle()); }
 const participant = (match: any, id: string) => [match.white_id, match.black_id, match.invite_to].filter(Boolean).includes(id);
@@ -321,12 +330,17 @@ async function broadcastMatch(match: any) {
 
 async function settle(client: Db, match: any) {
   if (match.status !== 'finished' || match.rating_applied || !match.black_id || !match.result) return;
+  if (['queue', 'wager'].includes(String(match.play_mode ?? 'normal'))) {
+    const paid = await client.rpc('cb_settle_match_gold', { p_match_id: match.id });
+    if (paid.error) fail(500, paid.error.message);
+  }
   const people = await playerMap(client, [match.white_id, match.black_id]);
   const white = people.get(match.white_id), black = people.get(match.black_id); if (!white || !black) return;
   for (const [p, side, rival] of [[white, 'white', black], [black, 'black', white]] as const) {
     const won = match.result === side, lost = match.result !== 'draw' && !won;
     const delta = won ? 8 + (p.win_streak + 1 >= 4 ? 2 : 0) + (Math.abs(p.cbr - rival.cbr) > 10 ? Math.floor(rival.cbr * .1) : 0) : lost ? -Math.min(10, p.cbr) : 0;
-    const gold = won ? 5 + (p.win_streak >= 5 ? 2 : 0) : lost ? 1 : 0;
+    const goldMatch = ['queue', 'wager'].includes(String(match.play_mode ?? 'normal'));
+    const gold = goldMatch ? 0 : won ? 5 + (p.win_streak >= 5 ? 2 : 0) : lost ? 1 : 0;
     const updated = await client.from('cb_profiles').update({ cbr: Math.max(0, p.cbr + delta), gold_points: p.gold_points + gold, wins: p.wins + (won ? 1 : 0), losses: p.losses + (lost ? 1 : 0), win_streak: won ? p.win_streak + 1 : 0 }).eq('user_id', p.user_id);
     if (updated.error) fail(500, updated.error.message);
     if (won) { const event = await client.from('cb_feed').insert({ user_id: p.user_id, kind: 'win', display_name: p.display_name, content: `won a ${tc(match.control).group.toLowerCase()} match.`, cbr_delta: delta, gold_delta: gold }); if (event.error) fail(500, event.error.message); }
@@ -357,14 +371,14 @@ async function publicFeed(client: Db) {
   if (list.error) fail(500, list.error.message);
   const visible = (list.data ?? []).filter((event: any) => !event.expires_at || Date.parse(event.expires_at) > now());
   const challengeIds = visible.filter((e: any) => e.kind === 'challenge' && e.challenge_match_id).map((e: any) => e.challenge_match_id);
-  const activeChallenges = new Set<string>();
+  const activeChallenges = new Map<string, any>();
   if (challengeIds.length) {
-    const waiting = await client.from('cb_matches').select('id').in('id', challengeIds).eq('status', 'waiting').is('invite_to', null).gt('created_at', new Date(now() - 120000).toISOString());
+    const waiting = await client.from('cb_matches').select('id,play_mode,wager_gold').in('id', challengeIds).eq('status', 'waiting').is('invite_to', null).gt('created_at', new Date(now() - 120000).toISOString());
     if (waiting.error) fail(500, waiting.error.message);
-    for (const m of waiting.data ?? []) activeChallenges.add(m.id);
+    for (const m of waiting.data ?? []) activeChallenges.set(m.id, m);
   }
   const people = await playerMap(client, visible.map((e: any) => e.user_id));
-  return { events: visible.filter((e: any) => e.kind !== 'challenge' || activeChallenges.has(e.challenge_match_id)).map((e: any) => ({ id: e.kind === 'challenge' && e.challenge_match_id ? `challenge:${e.challenge_match_id}` : e.id, user_id: e.user_id, kind: e.kind, display_name: e.kind === 'announcement' ? 'Chess Burger' : e.display_name, content: e.content, image_url: e.image_url ?? '', expires_at: e.expires_at, cbr_delta: e.cbr_delta ?? 0, gold_delta: e.gold_delta ?? 0, heart_count: e.heart_count ?? 0, created_at: e.created_at, avatar_url: e.kind === 'announcement' ? '/cburger_logo.png' : people.get(e.user_id)?.avatar_url ?? '', cbr: people.get(e.user_id)?.cbr ?? 88 })) };
+  return { events: visible.filter((e: any) => e.kind !== 'challenge' || activeChallenges.has(e.challenge_match_id)).map((e: any) => { const match = activeChallenges.get(e.challenge_match_id); return { id: e.kind === 'challenge' && e.challenge_match_id ? `challenge:${e.challenge_match_id}` : e.id, user_id: e.user_id, kind: e.kind, display_name: e.kind === 'announcement' ? 'Chess Burger' : e.display_name, content: e.content, image_url: e.image_url ?? '', expires_at: e.expires_at, cbr_delta: e.cbr_delta ?? 0, gold_delta: e.gold_delta ?? 0, heart_count: e.heart_count ?? 0, created_at: e.created_at, avatar_url: e.kind === 'announcement' ? '/cburger_logo.png' : people.get(e.user_id)?.avatar_url ?? '', cbr: people.get(e.user_id)?.cbr ?? 88, play_mode: match?.play_mode ?? 'normal', wager_gold: Number(match?.wager_gold ?? 0) }; }) };
 }
 async function saveLiveHeartbeat(client: Db, userId: string) {
   const stamp = new Date().toISOString();
@@ -426,6 +440,7 @@ export function pickQueueCandidate(rows: any[], ownId: string, ownSeenAt: string
 async function queuedMatch(client: Db, account: any, controlId: string) {
   await requireFairPlayReady(client,account.id);
   const clock = tc(controlId);
+  if (Number(account.profile.gold_points ?? 0) < 3) fail(409, 'You need at least 3 Gold to enter online pairing.');
   const compatible = Object.entries(TIME).filter(([, value]) => value.group === clock.group).map(([id]) => id);
   const active = await activeMatchFor(client, account.id);
   if (active) {
@@ -456,7 +471,7 @@ async function queuedMatch(client: Db, account: any, controlId: string) {
   if (!candidate) return { match: null, searching: true };
 
   const opponent = ratings.get(candidate.user_id);
-  if (!opponent || await activeMatchFor(client, candidate.user_id) || await activeMatchFor(client, account.id)) return { match: null, searching: true };
+  if (!opponent || Number(opponent.gold_points ?? 0) < 3 || await activeMatchFor(client, candidate.user_id) || await activeMatchFor(client, account.id)) return { match: null, searching: true };
 
   const matchId = crypto.randomUUID();
   const created = await client.from('cb_matches').insert({
@@ -473,6 +488,8 @@ async function queuedMatch(client: Db, account: any, controlId: string) {
     last_tick: new Date().toISOString(),
     white_cbr: Number(opponent.cbr ?? 88),
     black_cbr: Number(account.profile.cbr ?? 88),
+    play_mode: 'queue',
+    wager_gold: 3,
   }).select('*').single();
   if (created.error) fail(500, created.error.message);
 
@@ -485,12 +502,14 @@ async function queuedMatch(client: Db, account: any, controlId: string) {
     return { match: current ? await matchView(client, current) : null, searching: !current };
   }
 
-  const started = await client.from('cb_matches').update({ status: 'active', version: 1, last_tick: new Date().toISOString() }).eq('id', matchId).eq('status', 'waiting').select('*').maybeSingle();
+  const started = await client.rpc('cb_activate_gold_match', { p_match_id: matchId, p_acceptor_id: account.id });
   if (started.error || !started.data) {
     await client.from('cb_matches').delete().eq('id', matchId).eq('status', 'waiting');
-    fail(409, 'Another player matched first. Searching again…');
+    fail(409, started.error?.message ?? 'Another player matched first. Searching again…');
   }
-  const view = await matchView(client, started.data);
+  const startedMatch = Array.isArray(started.data) ? started.data[0] : started.data;
+  if (!startedMatch) fail(409, 'Another player matched first. Searching again…');
+  const view = await matchView(client, startedMatch);
   await broadcastMatch(view);
   console.info('arena.queue-matched', { matchId, control: controlId });
   return { match: view, searching: false };
@@ -642,6 +661,10 @@ export default async function handler(req: Req, res: Res) {
     if (action === 'room') {
       await requireFairPlayReady(client,account.id);
       const control = String(body.control ?? ''), clock = tc(control), target = typeof body.target === 'string' ? body.target : null, publicChallenge = body.publicChallenge === true;
+      const playMode = body.play_mode === 'wager' && (target || publicChallenge) ? 'wager' : 'normal';
+      const wagerGold = playMode === 'wager' ? Number(body.wager_gold) : 0;
+      if (playMode === 'wager' && (!Number.isInteger(wagerGold) || wagerGold < 1 || wagerGold > 10000)) fail(400, 'Choose a whole Gold wager from 1 to 10,000.');
+      if (playMode === 'wager' && Number(account.profile.gold_points ?? 0) < wagerGold) fail(409, `You need ${wagerGold} Gold to create this wager.`);
       if (publicChallenge && target) fail(400, 'Choose one challenge audience.');
       const active = await client.from('cb_matches').select('id').eq('status', 'active').or(`white_id.eq.${account.id},black_id.eq.${account.id}`).limit(1); if (active.error) fail(500, active.error.message); if (active.data?.length) fail(409, 'Finish your current match first.');
       if (target) {
@@ -661,8 +684,8 @@ export default async function handler(req: Req, res: Res) {
       }
       const unqueued = await client.from('cb_match_queue').delete().eq('user_id', account.id).is('match_id', null);
       if (unqueued.error) fail(500, unqueued.error.message);
-      const match = one<any>(await client.from('cb_matches').insert({ host_id: account.id, white_id: account.id, invite_to: target, status: 'waiting', code: code(), control, white_ms: clock.seconds * 1000, black_ms: clock.seconds * 1000, last_tick: new Date().toISOString(), white_cbr: account.profile.cbr }).select('*').single());
-      if (publicChallenge) { const event = await client.from('cb_feed').insert({ user_id: account.id, kind: 'challenge', display_name: account.profile.display_name, content: `is looking for a ${clock.group.toLowerCase()} challenge · ${clock.label}.`, challenge_match_id: match.id, expires_at: new Date(now() + 120000).toISOString() }); if (event.error) { await client.from('cb_matches').delete().eq('id', match.id); fail(500, event.error.message); } }
+      const match = one<any>(await client.from('cb_matches').insert({ host_id: account.id, white_id: account.id, invite_to: target, status: 'waiting', code: code(), control, white_ms: clock.seconds * 1000, black_ms: clock.seconds * 1000, last_tick: new Date().toISOString(), white_cbr: account.profile.cbr, play_mode: playMode, wager_gold: wagerGold, public_challenge: publicChallenge }).select('*').single());
+      if (publicChallenge) { const event = await client.from('cb_feed').insert({ user_id: account.id, kind: 'challenge', display_name: account.profile.display_name, content: `is looking for a ${clock.group.toLowerCase()} challenge · ${clock.label}${playMode === 'wager' ? ` · Wager ${wagerGold} Gold` : ''}.`, challenge_match_id: match.id, expires_at: new Date(now() + 120000).toISOString() }); if (event.error) { await client.from('cb_matches').delete().eq('id', match.id); fail(500, event.error.message); } }
       console.info('arena.room-created', { matchId: match.id, publicChallenge });
       return res.status(200).json({ match: await matchView(client, match), challengePublished: publicChallenge });
     }
@@ -671,9 +694,10 @@ export default async function handler(req: Req, res: Res) {
       const id = String(body.id ?? ''), match = await readMatch(client, id); if (match.white_id === account.id) fail(400, 'You cannot accept your own challenge.');
       if (match.status !== 'waiting' || match.invite_to || Date.parse(match.created_at) <= now() - 120000) fail(404, 'This challenge has expired or was accepted.');
       const event = await client.from('cb_feed').select('id').eq('challenge_match_id', id).eq('kind', 'challenge').gt('expires_at', new Date().toISOString()).maybeSingle(); if (event.error) fail(500, event.error.message); if (!event.data) fail(404, 'This challenge has expired or was accepted.');
-      const changed = await client.from('cb_matches').update({ black_id: account.id, black_cbr: account.profile.cbr, status: 'active', version: 1, last_tick: new Date().toISOString() }).eq('id', id).eq('status', 'waiting').is('black_id', null).select('*').maybeSingle(); if (changed.error) fail(500, changed.error.message); if (!changed.data) fail(409, 'This challenge was already accepted.');
+      const changed = await client.rpc('cb_activate_gold_match', { p_match_id: id, p_acceptor_id: account.id }); if (changed.error) fail(/Gold|accepted|available/i.test(changed.error.message) ? 409 : 500, changed.error.message);
+      const activeChallenge = Array.isArray(changed.data) ? changed.data[0] : changed.data; if (!activeChallenge) fail(409, 'This challenge was already accepted.');
       await client.from('cb_feed').update({ expires_at: new Date().toISOString() }).eq('id', event.data.id);
-      const view = await matchView(client, changed.data);
+      const view = await matchView(client, activeChallenge);
       await client.from('cb_match_queue').delete().in('user_id', [match.white_id, account.id]);
       await broadcastMatch(view);
       return res.status(200).json({ match: view });
@@ -685,10 +709,19 @@ export default async function handler(req: Req, res: Res) {
       if (match.white_id === account.id) fail(400, 'You cannot join your own room.');
       if (match.invite_to && match.invite_to !== account.id) fail(403, 'This invitation belongs to another player.');
       if (Date.parse(match.created_at) <= now() - 120000) fail(410, 'This invitation has expired.');
-      const changed = await client.from('cb_matches').update({ black_id: account.id, black_cbr: account.profile.cbr, status: 'active', version: Number(match.version) + 1, last_tick: new Date().toISOString() }).eq('id', match.id).eq('version', match.version).eq('status', 'waiting').is('black_id', null).select('*').maybeSingle();
-      if (changed.error) fail(500, changed.error.message);
-      if (!changed.data) fail(409, 'This room was already joined.');
-      const view = await matchView(client, changed.data);
+      if (match.match_kind === 'invasion') {
+        const accepted = await client.rpc('cb_accept_invasion', { p_match_id: match.id, p_owner_id: account.id });
+        if (accepted.error) fail(/Gold|expired|changed|available/i.test(accepted.error.message) ? 409 : 500, accepted.error.message);
+        const current = await readMatch(client, match.id);
+        const view = await matchView(client, current);
+        await broadcastMatch(view);
+        return res.status(200).json({ match: view });
+      }
+      const changed = await client.rpc('cb_activate_gold_match', { p_match_id: match.id, p_acceptor_id: account.id });
+      if (changed.error) fail(/Gold|accepted|available/i.test(changed.error.message) ? 409 : 500, changed.error.message);
+      const activeRoom = Array.isArray(changed.data) ? changed.data[0] : changed.data;
+      if (!activeRoom) fail(409, 'This room was already joined.');
+      const view = await matchView(client, activeRoom);
       await client.from('cb_match_queue').delete().in('user_id', [match.white_id, account.id]);
       await broadcastMatch(view);
       return res.status(200).json({ match: view });
@@ -697,7 +730,7 @@ export default async function handler(req: Req, res: Res) {
     if (action === 'state') {
       const [r, pending] = await Promise.all([
         client.from('cb_matches').select('*').eq('status', 'active').or(`white_id.eq.${account.id},black_id.eq.${account.id}`).order('created_at', { ascending: false }).limit(1).maybeSingle(),
-        client.from('cb_matches').select('id,host_id,control,code,created_at').eq('status', 'waiting').eq('invite_to', account.id).gt('created_at', new Date(now() - 120000).toISOString()).order('created_at', { ascending: false }).limit(10),
+        client.from('cb_matches').select('id,host_id,control,code,created_at,play_mode,wager_gold,match_kind').eq('status', 'waiting').eq('invite_to', account.id).gt('created_at', new Date(now() - 120000).toISOString()).order('created_at', { ascending: false }).limit(10),
       ]);
       if (r.error || pending.error) fail(500, r.error?.message ?? pending.error?.message ?? 'Unable to load match state.');
       const current = r.data ? await finishExpiredMatch(client, r.data) : null;
@@ -713,6 +746,11 @@ export default async function handler(req: Req, res: Res) {
       const expired = await client.from('cb_feed').update({ expires_at: new Date().toISOString() }).eq('kind', 'challenge').eq('challenge_match_id', id);
       if (expired.error) fail(500, expired.error.message);
       return res.status(200).json({ ok: true });
+    }
+    if (action === 'reject-challenge') {
+      const match = await readMatch(client, String(body.id ?? ''));
+      if (!match.public_challenge || match.status !== 'waiting') fail(409, 'This feed challenge is no longer available.');
+      return res.status(200).json({ ok: true, expires_at: new Date(Date.parse(match.created_at) + 120_000).toISOString() });
     }
     if (action === 'heart') { const id = String(body.id ?? ''); if (id.startsWith('challenge:')) return res.status(200).json({ ok: true }); const r = body.liked === true ? await client.from('cb_feed_reactions').upsert({ feed_id: id, user_id: account.id }, { onConflict: 'feed_id,user_id' }) : await client.from('cb_feed_reactions').delete().eq('feed_id', id).eq('user_id', account.id); if (r.error) fail(500, r.error.message); return res.status(200).json({ ok: true }); }
     if (action === 'hearts') { const r = await client.from('cb_feed_reactions').select('feed_id').eq('user_id', account.id); if (r.error) fail(500, r.error.message); return res.status(200).json({ ids: (r.data ?? []).map((row: any) => row.feed_id) }); }
