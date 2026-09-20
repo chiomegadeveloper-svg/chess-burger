@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowLeft, Check, PackageOpen, Palette, ShoppingBag } from "lucide-react";
+import { ArrowLeft, Check, Crown, PackageOpen, ShoppingBag } from "lucide-react";
 import { toast } from "sonner";
 import { arena } from "./arena-client";
 import { FEED_BANNERS, feedBanner, type FeedBanner } from "./feed-banner-catalog";
@@ -11,10 +11,10 @@ type ShopState = { owned: string[]; active: string; gold: number };
 
 function BannerTile({ banner, owned, active, busy, onAction }: { banner: FeedBanner; owned: boolean; active: boolean; busy: boolean; onAction: () => void }) {
   return <article className={`banner-product ${active ? "is-active" : ""}`}>
-    <span className="banner-swatch" style={{ background: banner.background }} aria-hidden="true" />
-    <div><h3>{banner.name}</h3><p>{banner.tier === "metallic" ? "Metallic finish" : "Pastel color"}</p></div>
+    <div className="banner-product-preview"><span className="banner-swatch" style={{ background: banner.background }} aria-hidden="true" /></div>
+    <div className="banner-product-copy"><h3>{banner.name}</h3><span className={`banner-tier-tag ${banner.tier}`}>{banner.tier === "metallic" && <Crown size={10}/>} {banner.tier === "metallic" ? "Premium" : "Pastel"}</span></div>
     <button type="button" disabled={busy || active} onClick={onAction}>
-      {active ? <><Check size={13}/> Active</> : owned ? "Activate" : `${banner.price} Gold`}
+      {active ? <><Check size={13}/> Active</> : owned ? "Activate" : <><span className="gold-coin">●</span>{banner.price} Gold</>}
     </button>
   </article>;
 }
@@ -41,18 +41,18 @@ export function ShopPage({ profile, onChanged }: { profile: PlayerProfile | null
   };
   if (open) return <section className="shop-page banner-store">
     <button className="back-button" type="button" onClick={() => setOpen(false)}><ArrowLeft size={16}/> Shop</button>
-    <div className="page-heading"><div><h1>Feed Banners</h1><p>Give every post on your feed a signature color.</p></div><span className="sample-label">{state.gold || profile?.gold_points || 0} Gold</span></div>
+    <div className="page-heading banner-heading"><div><span className="shop-eyebrow">Personalize your feed</span><h1>Feed Banner Colors</h1><p>Choose a signature color for every post you share.</p></div><span className="sample-label">{state.gold || profile?.gold_points || 0} Gold</span></div>
     {loading ? <p className="account-note">Loading banner collection…</p> : <>
-      {(["pastel", "metallic"] as const).map((tier) => <section className="banner-tier" key={tier}><h2>{tier === "pastel" ? "Pastel collection" : "Metallic collection"}</h2><div className="banner-products">{FEED_BANNERS.filter((banner) => banner.tier === tier).map((banner) => <BannerTile key={banner.id} banner={banner} owned={state.owned.includes(banner.id)} active={state.active === banner.id} busy={busy === banner.id} onAction={() => void act(banner)}/>)}</div></section>)}
+      {(["pastel", "metallic"] as const).map((tier) => <section className={`banner-tier ${tier}`} key={tier}><div className="banner-tier-heading"><span>{tier === "pastel" ? "Basic collection" : "Premium collection"}</span><h2>{tier === "pastel" ? "Pastel Colors" : "Metallic Colors"}</h2><p>{tier === "pastel" ? "Soft, clean colors for a friendly feed." : "Reflective finishes for a distinctive profile."}</p></div><div className="banner-products">{FEED_BANNERS.filter((banner) => banner.tier === tier).map((banner) => <BannerTile key={banner.id} banner={banner} owned={state.owned.includes(banner.id)} active={state.active === banner.id} busy={busy === banner.id} onAction={() => void act(banner)}/>)}</div></section>)}
     </>}
   </section>;
   return <section className="shop-page">
     <div className="page-heading"><h1>Chess Burger shop</h1><span className="sample-label">{state.gold || profile?.gold_points || 0} Gold</span></div>
     <div className="shop-grid">
       {[["♞","Avatar frames","Decorative player-card frames."],["♛","Board themes","Metallic boards and pieces."],["♟","Gold rewards","Reward items for your collection."]].map(([icon,name,desc]) => <article key={name}><span className="shop-icon">{icon}</span><div><h2>{name}</h2><p>{desc}</p></div><span className="shop-status">Coming soon</span></article>)}
-      <button className="shop-category-ready" type="button" onClick={() => setOpen(true)}>
-        <span className="shop-icon"><Palette size={24}/></span><span className="shop-category-copy"><strong>Feed Banners</strong><small>20 pastel and metallic colors for your feed.</small></span><span className="shop-category-action">View colors</span>
-      </button>
+      <article className="shop-category-ready">
+        <span className="shop-icon banner-category-icon"><span className="category-color-circle" aria-hidden="true"/></span><div><h2>Feed Banners</h2><p>Pastel and metallic colors for your community posts.</p></div><button type="button" onClick={() => setOpen(true)}>View colors</button>
+      </article>
     </div>
   </section>;
 }
