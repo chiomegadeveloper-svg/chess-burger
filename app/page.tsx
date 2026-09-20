@@ -129,6 +129,7 @@ function AppPage() {
         username: profile.username,
         avatar_url: profile.avatar_url,
         cbr: profile.cbr,
+        gold_points: profile.gold_points,
         wins: profile.wins,
         losses: profile.losses,
         win_streak: profile.win_streak,
@@ -154,6 +155,7 @@ function AppPage() {
         goldPayout: m.gold_payouts?.[ownId] ?? 0,
         playMode: m.play_mode ?? "normal",
         wagerGold: Number(m.wager_gold ?? 0),
+        control: m.control,
         opponent,
       });
     },
@@ -273,7 +275,7 @@ function AppPage() {
       id: m.id,
       outcome: result,
       delta,
-      player: profile ?? { cbr: 88, wins: 0, losses: 0, win_streak: 0 },
+      player: profile ?? { cbr: 88, gold_points: 88, wins: 0, losses: 0, win_streak: 0 },
       ratingLabel: "OCBR",
       ratingValue: Math.max(0, localOcbr + delta),
       opponent: side === "white" ? m.black : m.white,
@@ -925,6 +927,12 @@ function AppPage() {
       </nav>
       <MatchResult
         result={summary}
+        onRematchStarted={(id) => {
+          setSummary(null);
+          setMatchId(id);
+          setActiveId(id);
+          setTab("game");
+        }}
         onReplay={
           summary && !summary.local
             ? () => {

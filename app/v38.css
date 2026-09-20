@@ -18,6 +18,7 @@
   color: #f4cf73;
   font-weight: 700;
 }
+.result-rematch{display:grid;gap:10px;margin:12px 0;padding:12px;border:1px solid #445862;border-radius:14px;background:#151e23}.result-rematch-open{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;border-color:#d0ad52!important;background:linear-gradient(145deg,#44391f,#28271f)!important;color:#f3d77f!important;font-weight:700}.result-rematch-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;text-align:left}.result-rematch-heading small{color:#aebfc6;font-size:11px}.result-rematch-modes{display:grid;grid-template-columns:1fr 1fr;gap:7px}.result-rematch-modes>button{display:flex;align-items:center;gap:8px;min-height:54px;padding:8px 10px;text-align:left;border-color:#465b65!important;background:#1d292f!important}.result-rematch-modes>button.chosen{border-color:#d4b255!important;background:#3a321f!important;color:#f2d477!important;box-shadow:inset 0 0 0 1px #d4b255}.result-rematch-modes span{display:grid;gap:1px}.result-rematch-modes small{font-size:9px;color:#aebfc6}.result-rematch-bet{display:grid;grid-template-columns:auto minmax(80px,120px);align-items:center;gap:5px 10px;text-align:left;font-size:12px;font-weight:700}.result-rematch-bet input{width:100%;padding:8px;border:1px solid #526b76;border-radius:8px;background:#0f171b;color:#fff;font:600 15px Poppins,sans-serif}.result-rematch-bet small{grid-column:1/-1;color:#aebfc6;font-size:10px;font-weight:400}.result-rematch>p{margin:0;color:#9ceef8;font-size:12px}
 .match-reactions {
   margin-top: 15px;
   padding-top: 14px;
@@ -129,6 +130,7 @@
   .result-actions {
     grid-template-columns: 1fr;
   }
+  .result-rematch-modes{grid-template-columns:1fr}
 }
 
 

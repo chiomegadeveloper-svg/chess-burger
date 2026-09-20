@@ -11,7 +11,7 @@ const css = readFileSync(new URL("../app/social.css", import.meta.url), "utf8");
 
 test("chat buttons use the mounted popup bridge and a normal click", () => {
   assert.match(social, /socialOpenHandler\(detail\)/);
-  assert.match(social, /onClick=\{\(\) => \{[\s\S]*openSocial\("chat"\)/);
+  assert.match(social, /onClick=\{\(\)\s*=>\s*\{[\s\S]*openSocial\("chat"\)/);
   assert.match(social, /return createPortal\(/);
   assert.match(social, /className="social-dialog-overlay"/);
 });

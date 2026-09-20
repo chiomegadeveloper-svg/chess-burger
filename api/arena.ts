@@ -784,7 +784,16 @@ export default async function handler(req: Req, res: Res) {
     }
     if (action === 'room') {
       await requireFairPlayReady(client,account.id);
-      const control = String(body.control ?? ''), clock = tc(control), target = typeof body.target === 'string' ? body.target : null, publicChallenge = body.publicChallenge === true;
+      let control = String(body.control ?? ''), target = typeof body.target === 'string' ? body.target : null;
+      const rematchOf=String(body.rematch_of??''),publicChallenge = body.publicChallenge === true;
+      if(rematchOf){
+        if(!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(rematchOf))fail(400,'Choose a valid completed match.');
+        const previous=await readMatch(client,rematchOf);
+        if(previous.status!=='finished'||!previous.black_id||![previous.white_id,previous.black_id].includes(account.id))fail(403,'This match is not available for a rematch.');
+        target=previous.white_id===account.id?previous.black_id:previous.white_id;
+        control=previous.control;
+      }
+      const clock = tc(control);
       const playMode = body.play_mode === 'wager' && (target || publicChallenge) ? 'wager' : 'normal';
       const wagerGold = playMode === 'wager' ? Number(body.wager_gold) : 0;
       if (playMode === 'wager' && (!Number.isInteger(wagerGold) || wagerGold < 1 || wagerGold > 10000)) fail(400, 'Choose a whole Gold wager from 1 to 10,000.');
@@ -795,6 +804,11 @@ export default async function handler(req: Req, res: Res) {
         const targetActive = await client.from('cb_matches').select('id').eq('status', 'active').or(`white_id.eq.${target},black_id.eq.${target}`).limit(1);
         if (targetActive.error) fail(500, targetActive.error.message);
         if (targetActive.data?.length) fail(409, 'This player is already in an active match.');
+        if(rematchOf){
+          const pendingRematch=await client.from('cb_matches').select('id').eq('status','waiting').gt('created_at',new Date(now()-120000).toISOString()).or(`and(host_id.eq.${account.id},invite_to.eq.${target}),and(host_id.eq.${target},invite_to.eq.${account.id})`).limit(1);
+          if(pendingRematch.error)fail(500,pendingRematch.error.message);
+          if(pendingRematch.data?.length)fail(409,'A rematch offer between these players is already waiting.');
+        }
       }
       // A new invitation replaces older unanswered invitations from this host.
       const old = await client.from('cb_matches').select('id').eq('host_id', account.id).eq('status', 'waiting');

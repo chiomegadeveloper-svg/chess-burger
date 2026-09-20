@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import type { PlayerProfile } from "./supabase";
 import { levelFor } from "./cbr";
 import type { ArenaPlayer } from "./game-rules";
-import { MessageCircle, ShieldBan, Trash2, Users, Volume2, VolumeX, X } from "lucide-react";
+import { Coins, MessageCircle, RotateCcw, ShieldBan, Swords, Trash2, Users, Volume2, VolumeX, X } from "lucide-react";
 export type SocialView = "friends" | "followers" | "chat";
 type SocialOpenDetail = { view: SocialView; target?: string };
 let socialOpenHandler: ((detail: SocialOpenDetail) => void) | null = null;
@@ -898,7 +898,7 @@ export function SocialHub({
 export type MatchSummary = {
   id: string;
   outcome: "win" | "loss" | "draw";
-  player: Pick<ArenaPlayer, "cbr" | "wins" | "losses" | "win_streak">;
+  player: Pick<ArenaPlayer, "cbr" | "gold_points" | "wins" | "losses" | "win_streak">;
   delta: number;
   ratingLabel?: "CBR" | "OCBR";
   ratingValue?: number;
@@ -906,6 +906,7 @@ export type MatchSummary = {
   goldPayout?: number;
   playMode?: "normal" | "wager" | "queue";
   wagerGold?: number;
+  control?: string;
   opponent?: ArenaPlayer;
   local?: boolean;
 };
@@ -913,17 +914,77 @@ export function MatchResult({
   result,
   onLobby,
   onReplay,
+  onRematchStarted,
 }: {
   result: MatchSummary | null;
   onLobby: () => void;
   onReplay?: () => void;
+  onRematchStarted?: (matchId: string) => void;
 }) {
+  const [rematchOpen, setRematchOpen] = useState(false),
+    [rematchMode, setRematchMode] = useState<"normal" | "wager">("normal"),
+    [rematchGold, setRematchGold] = useState(1),
+    [rematchBusy, setRematchBusy] = useState(false),
+    [rematchId, setRematchId] = useState(""),
+    [rematchStatus, setRematchStatus] = useState("");
+  const startRematch = useRef(onRematchStarted);
+  startRematch.current = onRematchStarted;
+  useEffect(() => {
+    setRematchOpen(false);
+    setRematchMode("normal");
+    setRematchGold(1);
+    setRematchId("");
+    setRematchStatus("");
+  }, [result?.id]);
+  useEffect(() => {
+    if (!rematchId) return;
+    let active = true;
+    const poll = async () => {
+      try {
+        const data = await arena<{ match: ArenaMatch }>("match", { id: rematchId });
+        if (!active) return;
+        if (data.match.status === "active") {
+          setRematchStatus("Rematch accepted. Opening the board…");
+          startRematch.current?.(data.match.id);
+        } else if (data.match.status === "cancelled") {
+          setRematchId("");
+          setRematchStatus("The rematch invitation was cancelled.");
+        }
+      } catch (e) {
+        if (active) setRematchStatus((e as Error).message);
+      }
+    };
+    void poll();
+    const timer = setInterval(() => void poll(), 2000);
+    return () => { active = false; clearInterval(timer); };
+  }, [rematchId]);
   const level = levelFor(result?.player.cbr),
     remaining =
       level.level === 10 ? 0 : level.max + 1 - (result?.player.cbr ?? 0);
   if (!result) return null;
   const ratingLabel = result.ratingLabel ?? "CBR",
     ratingValue = result.ratingValue ?? result.player.cbr;
+  const canRematch = !result.local && !!result.opponent && result.opponent.user_id !== "guest-device" && !result.opponent.user_id.startsWith("local-") && result.opponent.user_id !== "shared-black";
+  async function offerRematch() {
+    if (!result?.opponent || !result.control) return;
+    setRematchBusy(true);
+    setRematchStatus("");
+    try {
+      const data = await arena<{ match: ArenaMatch }>("room", {
+        control: result.control,
+        target: result.opponent.user_id,
+        play_mode: rematchMode,
+        wager_gold: rematchMode === "wager" ? rematchGold : 0,
+        rematch_of: result.id,
+      });
+      setRematchId(data.match.id);
+      setRematchStatus(`${rematchMode === "wager" ? `${rematchGold} Gold wager` : "Normal rematch"} offered to ${result.opponent.display_name}.`);
+    } catch (e) {
+      setRematchStatus((e as Error).message);
+    } finally {
+      setRematchBusy(false);
+    }
+  }
   return (
     <div className="result-overlay" role="presentation">
       <section
@@ -1025,6 +1086,39 @@ export function MatchResult({
                 : "Maximum level reached"}
             </p>
           </>
+        )}
+        {canRematch && (
+          <div className="result-rematch">
+            {!rematchOpen ? (
+              <button type="button" className="result-rematch-open" onClick={() => setRematchOpen(true)}>
+                <RotateCcw size={16} /> Offer a rematch
+              </button>
+            ) : (
+              <>
+                <div className="result-rematch-heading"><strong>Rematch offer</strong><small>Same {result.control} time control</small></div>
+                <div className="result-rematch-modes">
+                  <button type="button" className={rematchMode === "normal" ? "chosen" : ""} aria-pressed={rematchMode === "normal"} disabled={!!rematchId} onClick={() => setRematchMode("normal")}>
+                    <Swords size={16} /><span><strong>Normal</strong><small>Standard Gold rewards</small></span>
+                  </button>
+                  <button type="button" className={rematchMode === "wager" ? "chosen" : ""} aria-pressed={rematchMode === "wager"} disabled={!!rematchId} onClick={() => setRematchMode("wager")}>
+                    <Coins size={16} /><span><strong>Wager</strong><small>Both players stake equally</small></span>
+                  </button>
+                </div>
+                {rematchMode === "wager" && !rematchId && (
+                  <label className="result-rematch-bet">Gold bet
+                    <input type="number" inputMode="numeric" min={1} max={Math.min(10000, result.player.gold_points)} value={rematchGold} onChange={(event) => setRematchGold(Math.max(0, Math.floor(Number(event.target.value) || 0)))} />
+                    <small>You have {result.player.gold_points} Gold.</small>
+                  </label>
+                )}
+                {!rematchId && (
+                  <button type="button" className="gold-button wide" disabled={rematchBusy || (rematchMode === "wager" && (rematchGold < 1 || rematchGold > result.player.gold_points || rematchGold > 10000))} onClick={() => void offerRematch()}>
+                    {rematchBusy ? "Sending…" : rematchMode === "wager" ? `Offer ${rematchGold} Gold rematch` : "Offer normal rematch"}
+                  </button>
+                )}
+                {rematchStatus && <p role="status">{rematchStatus}</p>}
+              </>
+            )}
+          </div>
         )}
         {result.opponent &&
         result.opponent.user_id !== "guest-device" &&
