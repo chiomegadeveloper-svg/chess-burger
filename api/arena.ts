@@ -206,7 +206,7 @@ async function publicFeed(client: Db) {
 }
 async function publicOnlineUsers(client: Db) {
   const [presence, active] = await Promise.all([
-    client.from('cb_live_presence').select('user_id,cbr').gt('seen_at', gpsCutoff()).order('cbr', { ascending: false }).limit(100),
+    client.from('cb_live_presence').select('user_id').gt('seen_at', gpsCutoff()).limit(100),
     client.from('cb_matches').select('white_id,black_id').eq('status', 'active'),
   ]);
   if (presence.error || active.error) fail(500, presence.error?.message ?? active.error?.message ?? 'Online players are temporarily unavailable.');
@@ -214,8 +214,8 @@ async function publicOnlineUsers(client: Db) {
   const people = await playerMap(client, (presence.data ?? []).map((row: any) => row.user_id));
   const users = (presence.data ?? []).map((row: any) => {
     const player = people.get(row.user_id);
-    return player ? { ...player, cbr: Number(row.cbr ?? player.cbr ?? 88), available: !playing.has(row.user_id) } : null;
-  }).filter(Boolean);
+    return player ? { ...player, cbr: Number(player.cbr ?? 88), available: !playing.has(row.user_id) } : null;
+  }).filter(Boolean).sort((a: any, b: any) => b.cbr - a.cbr);
   return { users, count: users.length };
 }
 
@@ -245,16 +245,16 @@ export default async function handler(req: Req, res: Res) {
     if (action === 'map-stats') {
       const registered = await reconcileAuthProfiles(client);
       const cutoff = gpsCutoff();
-      const [live, matches, gps, leaders] = await Promise.all([
+      const [live, matches, gps, liveRows] = await Promise.all([
         client.from('cb_live_presence').select('user_id', { count: 'exact', head: true }).gt('seen_at', cutoff),
         client.from('cb_matches').select('id', { count: 'exact', head: true }).eq('status', 'active'),
         client.from('cb_presence').select('user_id', { count: 'exact', head: true }).eq('gps_enabled', true).gt('seen_at', cutoff),
-        client.from('cb_live_presence').select('user_id,cbr').gt('seen_at', cutoff).order('cbr', { ascending: false }).limit(1),
+        client.from('cb_live_presence').select('user_id').gt('seen_at', cutoff).limit(100),
       ]);
-      if (live.error || matches.error || gps.error || leaders.error) fail(500, live.error?.message ?? matches.error?.message ?? gps.error?.message ?? leaders.error?.message ?? 'Unable to load activity totals.');
-      const leader = leaders.data?.[0];
-      const leaderProfile = leader ? (await playerMap(client, [leader.user_id])).get(leader.user_id) : null;
-      return res.status(200).json({ online_users: live.count ?? 0, registered_users: registered, active_matches: matches.count ?? 0, gps_online: gps.count ?? 0, highest_online: leaderProfile ? { user_id: leaderProfile.user_id, display_name: leaderProfile.display_name, cbr: Number(leader.cbr) } : null, updated_at: new Date().toISOString() });
+      if (live.error || matches.error || gps.error || liveRows.error) fail(500, live.error?.message ?? matches.error?.message ?? gps.error?.message ?? liveRows.error?.message ?? 'Unable to load activity totals.');
+      const onlineProfiles = [...(await playerMap(client, (liveRows.data ?? []).map((row: any) => row.user_id))).values()].sort((a: any, b: any) => Number(b.cbr ?? 88) - Number(a.cbr ?? 88));
+      const leaderProfile = onlineProfiles[0] ?? null;
+      return res.status(200).json({ online_users: live.count ?? 0, registered_users: registered, active_matches: matches.count ?? 0, gps_online: gps.count ?? 0, highest_online: leaderProfile ? { user_id: leaderProfile.user_id, display_name: leaderProfile.display_name, cbr: Number(leaderProfile.cbr ?? 88) } : null, updated_at: new Date().toISOString() });
     }
     if (action === 'social-presence') return res.status(200).json({ ok: true });
     if (action === 'social-counts') {
