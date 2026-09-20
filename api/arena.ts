@@ -335,7 +335,16 @@ async function playerMap(client: Db, ids: string[]) {
   let r = await client.from('cb_profiles').select('user_id,username,display_name,avatar_url,country_code,cbr,gold_points,wins,losses,win_streak,active_feed_banner').in('user_id', unique);
   if (r.error && /active_feed_banner|schema cache/i.test(r.error.message)) r = await client.from('cb_profiles').select('user_id,username,display_name,avatar_url,country_code,cbr,gold_points,wins,losses,win_streak').in('user_id', unique);
   if (r.error) fail(500, r.error.message);
-  return new Map((r.data ?? []).map((p: any) => [p.user_id, p]));
+  const players = r.data ?? [];
+  const activeIds = players.filter((p:any)=>p.active_feed_banner).map((p:any)=>p.user_id);
+  if(activeIds.length){
+    const rentals=await client.from('cb_user_items').select('user_id,product_id,expires_at').in('user_id',activeIds).gt('expires_at',new Date().toISOString());
+    if(!rentals.error){
+      const valid=new Set((rentals.data??[]).map((item:any)=>`${item.user_id}:${item.product_id}`));
+      for(const player of players)if(player.active_feed_banner&&!valid.has(`${player.user_id}:${player.active_feed_banner}`))player.active_feed_banner='';
+    }
+  }
+  return new Map(players.map((p: any) => [p.user_id, p]));
 }
 async function matchView(client: Db, row: any) {
   const players = await playerMap(client, [row.white_id, row.black_id]);
@@ -614,21 +623,22 @@ export default async function handler(req: Req, res: Res) {
     // a 404 on every page load.
     if (action === 'me') return res.status(200).json({ profile: { ...account.profile, ocbr: Number(account.profile.ocbr ?? 88) }, rank: await playerRank(client, account.profile) });
     if(action==='shop-banners'){
-      const items=await client.from('cb_user_items').select('product_id').eq('user_id',account.id);
-      if(items.error)fail(503,'Run supabase/0021_feed_banner_shop.sql in Supabase, then try again.');
-      return res.status(200).json({owned:(items.data??[]).map((item:any)=>item.product_id),active:account.profile.active_feed_banner??'',gold:Number(account.profile.gold_points??0)});
+      const items=await client.from('cb_user_items').select('product_id,expires_at').eq('user_id',account.id).gt('expires_at',new Date().toISOString()).order('expires_at',{ascending:true});
+      if(items.error)fail(503,'Run supabase/0022_feed_banner_rentals.sql in Supabase, then try again.');
+      const owned=items.data??[],active=owned.some((item:any)=>item.product_id===account.profile.active_feed_banner)?account.profile.active_feed_banner??'':'';
+      return res.status(200).json({owned,active,gold:Number(account.profile.gold_points??0),server_now:new Date().toISOString()});
     }
     if(action==='buy-feed-banner'){
-      const productId=String(body.product_id??''),requestId=String(body.request_id??'');
-      if(!/^(pastel|metal)-[a-z-]{2,30}$/.test(productId)||!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(requestId))fail(400,'Choose a valid Feed Banner.');
-      const bought=await client.rpc('cb_buy_feed_banner',{p_user_id:account.id,p_product_id:productId,p_request_id:requestId});
-      if(bought.error){const message=String(bought.error.message??'Purchase failed.');if(/cb_buy_feed_banner|cb_user_items|schema cache|function/i.test(message))fail(503,'Run supabase/0021_feed_banner_shop.sql in Supabase, then try again.');if(/not enough gold/i.test(message))fail(409,'You do not have enough Gold for this banner.');fail(409,message);}
+      const productId=String(body.product_id??''),requestId=String(body.request_id??''),days=Number(body.days??0);
+      if(!/^(pastel|metal)-[a-z-]{2,30}$/.test(productId)||![3,5,7].includes(days)||!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(requestId))fail(400,'Choose a valid Feed Banner rental.');
+      const bought=await client.rpc('cb_buy_feed_banner_timed',{p_user_id:account.id,p_product_id:productId,p_days:days,p_request_id:requestId});
+      if(bought.error){const message=String(bought.error.message??'Purchase failed.');if(/cb_buy_feed_banner_timed|cb_user_items|expires_at|schema cache|function/i.test(message))fail(503,'Run supabase/0022_feed_banner_rentals.sql in Supabase, then try again.');if(/not enough gold/i.test(message))fail(409,'You do not have enough Gold for this rental.');fail(409,message);}
       return res.status(200).json(bought.data);
     }
     if(action==='activate-feed-banner'){
       const productId=String(body.product_id??'');if(!/^(pastel|metal)-[a-z-]{2,30}$/.test(productId))fail(400,'Choose a valid Feed Banner.');
       const activated=await client.rpc('cb_activate_feed_banner',{p_user_id:account.id,p_product_id:productId});
-      if(activated.error){const message=String(activated.error.message??'Activation failed.');if(/cb_activate_feed_banner|schema cache|function/i.test(message))fail(503,'Run supabase/0021_feed_banner_shop.sql in Supabase, then try again.');if(/not owned/i.test(message))fail(403,'Purchase this banner before activating it.');fail(409,message);}
+      if(activated.error){const message=String(activated.error.message??'Activation failed.');if(/cb_activate_feed_banner|expires_at|schema cache|function/i.test(message))fail(503,'Run supabase/0022_feed_banner_rentals.sql in Supabase, then try again.');if(/expired|not owned/i.test(message))fail(403,'This banner rental has expired. Rent it again to activate it.');fail(409,message);}
       return res.status(200).json({active:activated.data,gold:Number(account.profile.gold_points??0)});
     }
     if(action==='grant-gold'){

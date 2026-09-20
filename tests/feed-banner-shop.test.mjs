@@ -5,6 +5,8 @@ import { readFileSync } from "node:fs";
 const catalog = readFileSync(new URL("../app/feed-banner-catalog.ts", import.meta.url), "utf8");
 const api = readFileSync(new URL("../api/arena.ts", import.meta.url), "utf8");
 const sql = readFileSync(new URL("../supabase/0021_feed_banner_shop.sql", import.meta.url), "utf8");
+const rentalSql = readFileSync(new URL("../supabase/0022_feed_banner_rentals.sql", import.meta.url), "utf8");
+const shop = readFileSync(new URL("../app/shop.tsx", import.meta.url), "utf8");
 const page = readFileSync(new URL("../app/page.tsx", import.meta.url), "utf8");
 
 test("feed banner catalog contains ten pastel and ten metallic products", () => {
@@ -20,6 +22,18 @@ test("banner purchases are atomic, idempotent, and activate ownership", () => {
   assert.match(sql, /active_feed_banner=p_product_id/i);
   assert.match(api, /action==='buy-feed-banner'/);
   assert.match(api, /action==='activate-feed-banner'/);
+});
+
+test("feed banners are timed rentals with three duration choices", () => {
+  assert.match(catalog, /FEED_BANNER_DURATIONS[^=]*= \[3, 5, 7\]/);
+  assert.match(catalog, /\{ 3: 12, 5: 18, 7: 24 \}/);
+  assert.match(catalog, /\{ 3: 24, 5: 36, 7: 48 \}/);
+  assert.match(shop, /Choose rental duration/);
+  assert.match(api, /cb_buy_feed_banner_timed/);
+  assert.match(api, /\.gt\('expires_at'/);
+  assert.match(rentalSql, /now\(\) \+ interval '7 days'/i);
+  assert.match(rentalSql, /greatest\(now\(\),public\.cb_user_items\.expires_at\)/i);
+  assert.match(rentalSql, /expires_at>now\(\)/i);
 });
 
 test("main navigation exposes Bag and Guild destinations", () => {

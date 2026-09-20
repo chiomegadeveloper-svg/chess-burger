@@ -7,6 +7,13 @@ export type FeedBanner = {
   ink: string;
 };
 
+export type FeedBannerDuration = 3 | 5 | 7;
+export const FEED_BANNER_DURATIONS: FeedBannerDuration[] = [3, 5, 7];
+export const feedBannerRentalPrice = (tier: FeedBanner["tier"], days: FeedBannerDuration) => {
+  const prices = tier === "metallic" ? { 3: 24, 5: 36, 7: 48 } : { 3: 12, 5: 18, 7: 24 };
+  return prices[days];
+};
+
 export const FEED_BANNERS: FeedBanner[] = [
   { id: "pastel-blush", name: "Blush", tier: "pastel", price: 38, background: "linear-gradient(135deg,#ffd8e5,#f2a9c1)", ink: "#34242b" },
   { id: "pastel-peach", name: "Peach", tier: "pastel", price: 40, background: "linear-gradient(135deg,#ffe0c2,#f7b98f)", ink: "#38271f" },
