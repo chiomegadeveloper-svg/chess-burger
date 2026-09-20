@@ -98,6 +98,7 @@ namespace MatchEngine {
     if (![found.data.white_id, found.data.black_id].includes(actor)) reject('Only the two players may access this match.', 403);
     let row: Row = found.data;
     if (action === 'match') {
+      if (row.status === 'finished') return { match: await matchView(client, row) };
       const match = view(row);
       if (!body.compact) {
         const people = await client.from('cb_profiles').select('user_id,username,display_name,avatar_url,country_code,cbr,gold_points,wins,losses,win_streak').in('user_id', [row.white_id, row.black_id].filter(Boolean));
@@ -118,7 +119,7 @@ namespace MatchEngine {
         const fairPlay = action === 'abort' ? await recordAbort(client, row.id, actor) : null;
         if (row.status === 'finished') { await settleMatch(client, row); const rated = await client.from('cb_matches').select('*').eq('id', id).single(); check(rated.error); row = rated.data; }
         console.info('arena.match-action', { action, id, elapsed_ms: Date.now() - started });
-        return { match: view(row), ...(fairPlay ? { fair_play: fairPlay } : {}) };
+        return { match: row.status === 'finished' ? await matchView(client, row) : view(row), ...(fairPlay ? { fair_play: fairPlay } : {}) };
       }
       const latest = await client.from('cb_matches').select('*').eq('id', id).single();
       check(latest.error);
@@ -301,7 +302,7 @@ async function playerMap(client: Db, ids: string[]) {
 async function matchView(client: Db, row: any) {
   const players = await playerMap(client, [row.white_id, row.black_id]);
   let gold_changes:Record<string,number>|undefined,gold_payouts:Record<string,number>|undefined;
-  if(row.status==='finished'&&['queue','wager'].includes(String(row.play_mode??'normal'))){
+  if(row.status==='finished'){
     const ledger=await client.from('cb_gold_ledger').select('user_id,delta,kind').eq('reference_id',row.id);
     if(ledger.error)fail(500,ledger.error.message);
     gold_changes={};gold_payouts={};
@@ -341,10 +342,34 @@ async function settle(client: Db, match: any) {
     const won = match.result === side, lost = match.result !== 'draw' && !won;
     const delta = won ? 8 + (p.win_streak + 1 >= 4 ? 2 : 0) + (Math.abs(p.cbr - rival.cbr) > 10 ? Math.floor(rival.cbr * .1) : 0) : lost ? -Math.min(10, p.cbr) : 0;
     const goldMatch = ['queue', 'wager'].includes(String(match.play_mode ?? 'normal'));
-    const gold = goldMatch ? 0 : won ? 5 + (p.win_streak >= 5 ? 2 : 0) : lost ? 1 : 0;
+    const normalGold = won ? 5 + (p.win_streak >= 5 ? 2 : 0) : lost ? 1 : 0;
+    // Queue payouts already include the normal win reward. Wagers only return
+    // the two-player pot, so retain the regular per-game bonus as a separate,
+    // idempotent ledger entry that the result screen and feed can both show.
+    let gold = goldMatch ? 0 : normalGold;
+    if (!goldMatch && normalGold > 0) {
+      const reward = await client.from('cb_gold_ledger').insert({ id: `match-gold:${match.id}:${p.user_id}`, user_id: p.user_id, delta: normalGold, kind: 'match_reward', reference_id: match.id }).select('id').maybeSingle();
+      if (reward.error && reward.error.code !== '23505') fail(500, reward.error.message);
+      gold = reward.data ? normalGold : 0;
+    }
+    if (match.play_mode === 'wager' && won) {
+      const bonus = await client.from('cb_gold_ledger').insert({ id: `match-bonus:${match.id}:${p.user_id}`, user_id: p.user_id, delta: normalGold, kind: 'match_bonus', reference_id: match.id }).select('id').maybeSingle();
+      if (bonus.error && bonus.error.code !== '23505') fail(500, bonus.error.message);
+      gold = bonus.data ? normalGold : 0;
+    }
     const updated = await client.from('cb_profiles').update({ cbr: Math.max(0, p.cbr + delta), gold_points: p.gold_points + gold, wins: p.wins + (won ? 1 : 0), losses: p.losses + (lost ? 1 : 0), win_streak: won ? p.win_streak + 1 : 0 }).eq('user_id', p.user_id);
     if (updated.error) fail(500, updated.error.message);
-    if (won) { const event = await client.from('cb_feed').insert({ user_id: p.user_id, kind: 'win', display_name: p.display_name, content: `won a ${tc(match.control).group.toLowerCase()} match.`, cbr_delta: delta, gold_delta: gold }); if (event.error) fail(500, event.error.message); }
+    if (won) {
+      let feedGold = gold;
+      if (goldMatch) {
+        const ledger = await client.from('cb_gold_ledger').select('delta').eq('reference_id', match.id).eq('user_id', p.user_id);
+        if (ledger.error) fail(500, ledger.error.message);
+        feedGold = (ledger.data ?? []).reduce((sum: number, entry: any) => sum + Number(entry.delta ?? 0), 0);
+      }
+      const mode = match.play_mode === 'wager' ? `wagered ${Number(match.wager_gold ?? 0)} Gold and won a` : 'won a';
+      const event = await client.from('cb_feed').insert({ user_id: p.user_id, kind: 'win', display_name: p.display_name, content: `${mode} ${tc(match.control).group.toLowerCase()} match.`, cbr_delta: delta, gold_delta: feedGold });
+      if (event.error) fail(500, event.error.message);
+    }
   }
   const rated = await client.from('cb_matches').update({ rating_applied: true }).eq('id', match.id).eq('rating_applied', false);
   if (rated.error) fail(500, rated.error.message);

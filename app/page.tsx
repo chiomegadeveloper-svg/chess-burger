@@ -151,6 +151,9 @@ function AppPage() {
           m.rating_changes?.[ownId] ??
           player.cbr - (side === "white" ? m.white_cbr : m.black_cbr),
         goldDelta: m.gold_changes?.[ownId] ?? 0,
+        goldPayout: m.gold_payouts?.[ownId] ?? 0,
+        playMode: m.play_mode ?? "normal",
+        wagerGold: Number(m.wager_gold ?? 0),
         opponent,
       });
     },

@@ -735,7 +735,7 @@ export function MatchResult({
           <p className="result-gold">
             {result.playMode === "wager"
               ? result.outcome === "win"
-                ? `+${result.goldPayout ?? result.wagerGold! * 2} Gold wager winnings`
+                ? `+${result.goldDelta ?? 0} Gold total · ${result.goldPayout ?? result.wagerGold! * 2} payout + ${Math.max(0, (result.goldDelta ?? 0) - (result.wagerGold ?? 0))} win bonus`
                 : result.outcome === "draw"
                   ? `${result.wagerGold ?? 0} Gold wager refunded`
                   : `−${result.wagerGold ?? 0} Gold wager lost`
