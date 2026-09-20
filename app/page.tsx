@@ -90,6 +90,7 @@ function AppPage() {
     [profile, setProfile] = useState<PlayerProfile | null>(null),
     [replayGame, setReplayGame] = useState<SavedGame | null>(null),
     [showSplash, setShowSplash] = useState(true),
+    [showWelcome, setShowWelcome] = useState(false),
     [member, setMember] = useState<boolean | null>(null);
   const [matchId, setMatchId] = useState(""),
     [target, setTarget] = useState<ArenaPlayer | null>(null),
@@ -149,9 +150,6 @@ function AppPage() {
           m.rating_changes?.[ownId] ??
           player.cbr - (side === "white" ? m.white_cbr : m.black_cbr),
         goldDelta: m.gold_changes?.[ownId] ?? 0,
-        goldPayout: m.gold_payouts?.[ownId] ?? 0,
-        playMode: m.play_mode ?? "normal",
-        wagerGold: Number(m.wager_gold ?? 0),
         opponent,
       });
     },
@@ -290,7 +288,10 @@ function AppPage() {
     });
   }
   useEffect(() => {
-    const splash = setTimeout(() => setShowSplash(false), 5000);
+    const splash = setTimeout(() => {
+      setShowSplash(false);
+      setShowWelcome(true);
+    }, 5000);
     if ("serviceWorker" in navigator) {
       const updating = !!navigator.serviceWorker.controller;
       let reloaded = false;
@@ -729,6 +730,54 @@ function AppPage() {
           </strong>
         </div>
       )}
+      {showWelcome && !showSplash && (
+        <div className="welcome-menu-backdrop">
+          <section
+            className="welcome-menu"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="welcome-menu-title"
+          >
+            <header className="welcome-menu-brand">
+              <img src="/cburger_logo.png" alt="" />
+              <h1 id="welcome-menu-title">
+                CHESS <b>BURGER</b>
+              </h1>
+            </header>
+            <div className="welcome-menu-options">
+              <button
+                className="welcome-card invasion"
+                onClick={() => {
+                  setShowWelcome(false);
+                  setTab("map");
+                }}
+              >
+                <img src="/welcome/invasion.webp" alt="Chess pieces invading a territory map" />
+                <strong>INVASION</strong>
+              </button>
+              <button
+                className="welcome-card online"
+                onClick={() => {
+                  setShowWelcome(false);
+                  setTab("play");
+                }}
+              >
+                <img src="/welcome/play-online.webp" alt="Chess characters playing online" />
+                <strong>PLAY ONLINE</strong>
+              </button>
+              <button
+                className="welcome-card classroom"
+                onClick={() =>
+                  toast.info("Class Room feature coming very soon")
+                }
+              >
+                <img src="/welcome/classroom.webp" alt="Chess classroom" />
+                <strong>CLASS ROOM</strong>
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
       <header className="app-header">
         <div className="brand">
           <img src="/cburger_logo.png" alt="Chess Burger" />
@@ -794,8 +843,8 @@ function AppPage() {
               <div key={i.id}>
                 <strong>{i.host_name} invited you</strong>
                 <span>
-                  {i.match_kind === "invasion" ? "KING defense · " : ""}{timeControl(i.control).group} ·{" "}
-                  {timeControl(i.control).label}{i.match_kind === "invasion" ? " · No Gold cost to defend" : i.play_mode === "wager" ? ` · Wager ${i.wager_gold} Gold` : " · Normal game"}
+                  {timeControl(i.control).group} ·{" "}
+                  {timeControl(i.control).label}
                 </span>
                 <button
                   className="gold-button"
@@ -805,7 +854,7 @@ function AppPage() {
                       .catch((e) => toast.error(e.message))
                   }
                 >
-                  {i.play_mode === "wager" ? `Match ${i.wager_gold} Gold` : "Accept"}
+                  Accept
                 </button>
                 <button
                   onClick={() =>
