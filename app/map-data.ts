@@ -7,6 +7,7 @@ export type Zone = {
   id: string; user_id: string; barangay_key: string; barangay: string; kingdom_name: string; locality: string;
   boundary: Polygon | MultiPolygon; centroid_lat: number; centroid_lng: number;
   defense_points: number | null; online: boolean; is_owner: boolean;
+  abandoned: boolean; in_range: boolean;
   display_name: string; username: string; avatar_url: string; cbr: number | null; country_code: string;
 };
 type Row = Record<string, unknown>;
@@ -49,7 +50,7 @@ export function kingdomBoundary(lat: number, lng: number): Polygon {
   return {type: 'Polygon', coordinates: [[[west, south], [east, south], [east, north], [west, north], [west, south]]]};
 }
 
-export function normalizeNearby(value: unknown): {players: NearbyPlayer[]; territories: Zone[]; territoriesComplete: boolean} {
+export function normalizeNearby(value: unknown): {players: NearbyPlayer[]; territories: Zone[]; territoriesComplete: boolean; ownedCount: number; slotLimit: number} {
   if (!record(value)) throw new Error('The nearby service returned an invalid response. Please try again.');
   const players: NearbyPlayer[] = [], territories: Zone[] = [];
   for (const row of Array.isArray(value.players) ? value.players : []) {
@@ -65,7 +66,7 @@ export function normalizeNearby(value: unknown): {players: NearbyPlayer[]; terri
     });
   }
   for (const row of Array.isArray(value.territories) ? value.territories : []) {
-    if (!record(row) || !text(row.id) || !text(row.user_id)) continue;
+    if (!record(row) || !text(row.id) || (!text(row.user_id) && row.abandoned !== true)) continue;
     const center = mapCoordinates(row.centroid_lat, row.centroid_lng) ?? mapCoordinates(row.lat, row.lng);
     if (!center) continue;
     const kingdomName = text(row.kingdom_name).trim();
@@ -75,9 +76,10 @@ export function normalizeNearby(value: unknown): {players: NearbyPlayer[]; terri
       boundary: validBoundary(row.boundary) ? row.boundary : kingdomBoundary(center.lat, center.lng),
       centroid_lat: center.lat, centroid_lng: center.lng, defense_points: numeric(row.defense_points),
       online: row.online === true, is_owner: row.is_owner === true,
+      abandoned: row.abandoned === true, in_range: row.in_range === true,
       display_name: text(row.display_name, 'Player'), username: text(row.username), avatar_url: text(row.avatar_url),
       cbr: numeric(row.cbr), country_code: text(row.country_code),
     });
   }
-  return {players, territories, territoriesComplete: Array.isArray(value.territories) && territories.length === value.territories.length};
+  return {players, territories, territoriesComplete: Array.isArray(value.territories) && territories.length === value.territories.length, ownedCount: Math.max(0,numeric(value.owned_count)??territories.filter(zone=>zone.is_owner).length), slotLimit: Math.max(0,numeric(value.slot_limit)??3)};
 }

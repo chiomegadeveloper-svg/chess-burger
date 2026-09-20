@@ -20,6 +20,11 @@ test('an unnamed legacy territory is labelled clearly without pre-filling a fake
  assert.equal(zone.kingdom_name,'');
  assert.equal(zone.barangay,'Unnamed kingdom');
 });
+test('zero-defense kingdoms remain visible as abandoned and expose slot totals',()=>{
+ const data=normalizeNearby({owned_count:2,slot_limit:3,territories:[{...legacy,user_id:null,abandoned:true,defense_points:0,in_range:true}]});
+ assert.equal(data.territories.length,1);assert.equal(data.territories[0].abandoned,true);
+ assert.equal(data.territories[0].in_range,true);assert.equal(data.ownedCount,2);assert.equal(data.slotLimit,3);
+});
 test('existing valid polygons and territory metadata are preserved',()=>{
  const boundary=kingdomBoundary(11.244,125.003);
  const row={...legacy,lat:undefined,lng:undefined,centroid_lat:11.244,centroid_lng:125.003,boundary,defense_points:15,online:true,cbr:157};
