@@ -103,6 +103,7 @@ function AppPage() {
     [offlineControl, setOfflineControl] = useState("10+0");
   const [summary, setSummary] = useState<MatchSummary | null>(null);
   const shownResults = useRef(new Set<string>());
+  const welcomeDecision = useRef(false);
   const showOnlineResult = useCallback(
     (m: ArenaMatch) => {
       const ownId = profile?.user_id;
@@ -294,7 +295,6 @@ function AppPage() {
     void clockTap.play().catch(() => {});
     const splash = setTimeout(() => {
       setShowSplash(false);
-      setShowWelcome(true);
     }, 6000);
     if ("serviceWorker" in navigator) {
       const updating = !!navigator.serviceWorker.controller;
@@ -389,6 +389,16 @@ function AppPage() {
       window.removeEventListener("hashchange", hash);
     };
   }, [refreshProfile]);
+  useEffect(() => {
+    if (showSplash || member === null || welcomeDecision.current) return;
+    welcomeDecision.current = true;
+    if (member) {
+      setShowWelcome(true);
+      return;
+    }
+    setShowWelcome(false);
+    setTab("profile");
+  }, [showSplash, member]);
   useEffect(() => {
     if (!profile || profile.user_id === "guest-device") return;
     const userId = profile.user_id;
