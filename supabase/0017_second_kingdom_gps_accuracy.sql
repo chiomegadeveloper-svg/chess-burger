@@ -2,6 +2,12 @@
 -- Desktop browsers commonly report 100-250 m accuracy even when stationary.
 begin;
 
+alter table public.cb_territories
+  drop constraint if exists cb_territories_radius_m_check;
+alter table public.cb_territories
+  add constraint cb_territories_radius_m_check
+  check (radius_m between 1000 and 2000);
+
 create or replace function public.cb_claim_territory_v2(
   p_user_id uuid,
   p_lat double precision,

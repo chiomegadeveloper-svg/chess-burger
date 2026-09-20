@@ -11,6 +11,13 @@ alter table public.cb_profiles
   check (territory_slots between 0 and 100);
 
 alter table public.cb_territories alter column user_id drop not null;
+-- Older installs only allowed the original 2,000 m legacy value. Responsive
+-- kingdoms store their one-kilometre rule radius while preserving old rows.
+alter table public.cb_territories
+  drop constraint if exists cb_territories_radius_m_check;
+alter table public.cb_territories
+  add constraint cb_territories_radius_m_check
+  check (radius_m between 1000 and 2000);
 alter table public.cb_territories
   add column if not exists defense_points integer not null default 10;
 alter table public.cb_territories
