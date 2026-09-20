@@ -17,7 +17,7 @@ namespace MatchEngine {
   export const actions = new Set(['match', 'move', 'resign', 'abort', 'timeout', 'offer', 'respond-offer']);
   type Row = Record<string, any>;
   type Meta = { requests?: Record<string, { takeback: number; draw: number }>; pending?: any; last?: any; request_ids?: string[]; move_ids?: string[] };
-  const LIMIT = 3, OFFER_MS = 30_000;
+  const LIMIT = 3, OFFER_MS = 30_000, FIRST_MOVE_MS = 40_000;
   const increments: Record<string, number> = { '1+0': 0, '1+1': 1, '2+1': 1, '3+0': 0, '3+2': 2, '5+0': 0, '10+0': 0, '10+5': 5, '15+10': 10 };
   const reject = (message: string, status = 409): never => { throw new Failure(message, status); };
   function check(error: { message: string } | null) { if (error) reject(/game_meta/.test(error.message) ? 'Run supabase/0014_gameplay_v46.sql, then redeploy.' : error.message, 500); }
@@ -26,12 +26,22 @@ namespace MatchEngine {
   function game(row: Row) { const value = new Chess(); if (row.pgn) value.loadPgn(row.pgn); return value; }
   function clear(meta: Meta, outcome: 'expired' | 'position-changed'): Meta { if (!meta.pending) return meta; const { id, kind, by } = meta.pending; return { ...meta, pending: null, last: { id, kind, by, outcome } }; }
   function clock(row: Row, at: number) { const chess = game(row), white = chess.turn() === 'w', elapsed = Math.max(0, at - row.last_tick), white_ms = Math.max(0, row.white_ms - (white ? elapsed : 0)), black_ms = Math.max(0, row.black_ms - (white ? 0 : elapsed)); return { chess, white, white_ms, black_ms, expired: (white ? white_ms : black_ms) <= 0 }; }
+  function firstMoveExpired(row: Row, at: number) {
+    if (row.status !== 'active') return null;
+    const chess = game(row), plies = chess.history().length;
+    if (plies >= 2 || at - row.last_tick < FIRST_MOVE_MS) return null;
+    const inactivePlayer = plies === 0 ? row.white_id : row.black_id;
+    return { ...row, status: 'cancelled', result: null, version: Number(row.version) + 1, last_tick: at,
+      game_meta: { ...(row.game_meta ?? {}), pending: null, last: { kind: 'first-move-timeout', by: inactivePlayer, outcome: 'cancelled', at } } };
+  }
   function apply(row: Row, actor: string, action: string, input: Record<string, unknown>, at: number): Row {
     if (![row.white_id, row.black_id].includes(actor)) reject('Only the two players may update this match.', 403);
     const meta: Meta = row.game_meta ?? {};
     if (action === 'move' && typeof input.request_id === 'string' && meta.move_ids?.includes(input.request_id)) return row;
     if (action === 'offer' && typeof input.request_id === 'string' && meta.request_ids?.includes(input.request_id)) return row;
     if (row.status !== 'active') reject('This match is no longer active.');
+    const openingTimeout = firstMoveExpired(row, at);
+    if (openingTimeout) return openingTimeout;
     const c = clock(row, at);
     if (c.expired) return { ...row, white_ms: c.white_ms, black_ms: c.black_ms, last_tick: at, status: 'finished', result: c.white ? 'black' : 'white', version: row.version + 1, game_meta: clear(meta, 'expired') };
     const next = { ...row, version: row.version + 1, server_now: at };
@@ -98,6 +108,15 @@ namespace MatchEngine {
     if (![found.data.white_id, found.data.black_id].includes(actor)) reject('Only the two players may access this match.', 403);
     let row: Row = found.data;
     if (action === 'match') {
+      const expired = firstMoveExpired(view(row), Date.now());
+      if (expired) {
+        const patch = { status: expired.status, result: expired.result, version: expired.version,
+          last_tick: new Date(expired.last_tick).toISOString(), game_meta: expired.game_meta };
+        const changed = await client.from('cb_matches').update(patch).eq('id', id).eq('version', row.version).eq('status', 'active').select('*').maybeSingle();
+        check(changed.error);
+        row = changed.data ?? one<Row>(await client.from('cb_matches').select('*').eq('id', id).single());
+        if (changed.data) await broadcastMatch(view(row));
+      }
       if (row.status === 'finished') return { match: await matchView(client, row) };
       const match = view(row);
       if (!body.compact) {

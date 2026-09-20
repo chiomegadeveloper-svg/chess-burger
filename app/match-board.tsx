@@ -194,7 +194,9 @@ export default function MatchBoard({
   const tc = timeControl(match.control),
     result =
       match.status === "cancelled"
-        ? match.game_meta?.last?.kind === 'abort' && match.game_meta.last.by === ownId ? "You aborted the match · no rewards awarded" : "Match aborted by opponent · no rewards awarded"
+        ? match.game_meta?.last?.kind === 'first-move-timeout'
+          ? `${match.game_meta.last.by === ownId ? "You did not make" : "Opponent did not make"} the first move in 40 seconds · match auto-aborted`
+          : match.game_meta?.last?.kind === 'abort' && match.game_meta.last.by === ownId ? "You aborted the match · no rewards awarded" : "Match aborted by opponent · no rewards awarded"
         : match.result === "draw"
         ? "Draw"
         : match.result

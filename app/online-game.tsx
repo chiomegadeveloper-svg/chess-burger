@@ -118,11 +118,14 @@ function LiveGame({ id, profile, onFinished, watch = false }: Props) {
     setPremove(null);
     void move(premove);
   }, [confirmed, premove, pending, actionBusy, watch, profile?.user_id, move]);
-  useEffect(()=>{if(confirmed?.status!=='cancelled')return;const by=confirmed.game_meta?.last?.kind==='abort'?confirmed.game_meta.last.by:'';setAbortNotice(current=>current||(by===profile?.user_id?'You ended this match. No CBR, Gold, or EXP was awarded.':'Your opponent ended the match. No CBR, Gold, or EXP was awarded.'));},[confirmed?.status,confirmed?.version,profile?.user_id]);
+  useEffect(()=>{if(confirmed?.status!=='cancelled')return;const last=confirmed.game_meta?.last;const timedOut=last?.kind==='first-move-timeout';setAbortNotice(current=>current||(timedOut?(last.by===profile?.user_id?'The match was auto-aborted because you did not make your first move within 40 seconds.':'The match was auto-aborted because your opponent did not make their first move within 40 seconds.'):(last?.by===profile?.user_id?'You ended this match. No CBR, Gold, or EXP was awarded.':'Your opponent ended the match. No CBR, Gold, or EXP was awarded.')));},[confirmed?.status,confirmed?.version,profile?.user_id]);
   useEffect(() => {
     if (!confirmed || confirmed.status !== 'active' || pending || actionBusy || watch) return;
     const game = gameFromPgn(confirmed.pgn), white = game.turn() === 'w';
-    const remaining = (white ? confirmed.white_ms : confirmed.black_ms) - Math.max(0, Number(confirmed.server_now ?? Date.now()) - confirmed.last_tick);
+    const elapsed = Math.max(0, Number(confirmed.server_now ?? Date.now()) - confirmed.last_tick);
+    const clockRemaining = (white ? confirmed.white_ms : confirmed.black_ms) - elapsed;
+    const firstMoveRemaining = game.history().length < 2 ? 40_000 - elapsed : Number.POSITIVE_INFINITY;
+    const remaining = Math.min(clockRemaining, firstMoveRemaining);
     const timer = setTimeout(() => void action('timeout'), Math.max(50, remaining + 80));
     return () => clearTimeout(timer);
   }, [confirmed, pending, actionBusy, watch, action]);
