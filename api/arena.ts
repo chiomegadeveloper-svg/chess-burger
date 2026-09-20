@@ -12,7 +12,7 @@ const TIME: Record<string, { seconds: number; increment: number; group: string; 
   '3+0': { seconds: 180, increment: 0, group: 'Blitz', label: '3 min' }, '3+2': { seconds: 180, increment: 2, group: 'Blitz', label: '3 + 2' }, '5+0': { seconds: 300, increment: 0, group: 'Blitz', label: '5 min' },
   '10+0': { seconds: 600, increment: 0, group: 'Rapid', label: '10 min' }, '10+5': { seconds: 600, increment: 5, group: 'Rapid', label: '10 + 5' }, '15+10': { seconds: 900, increment: 10, group: 'Rapid', label: '15 + 10' },
 };
-class ApiError extends Error { constructor(public status: number, message: string) { super(message); } }
+class ApiError extends Error { status: number; constructor(status: number, message: string) { super(message); this.status = status; } }
 const fail = (status: number, message: string): never => { throw new ApiError(status, message); };
 const now = () => Date.now();
 const gpsCutoff = () => new Date(now() - 45_000).toISOString();
@@ -241,6 +241,98 @@ async function publicOnlineUsers(client: Db) {
   return { users, count: users.length };
 }
 
+async function activeMatchFor(client: Db, userId: string) {
+  const found = await client.from('cb_matches').select('*').eq('status', 'active').or(`white_id.eq.${userId},black_id.eq.${userId}`).order('created_at', { ascending: false }).limit(1).maybeSingle();
+  if (found.error) fail(500, found.error.message);
+  return found.data ?? null;
+}
+
+export function pickQueueCandidate(rows: any[], ownId: string, ownSeenAt: string, ownCbr: number, ratings: Map<string, any>) {
+  const ownSeen = Date.parse(ownSeenAt);
+  return rows
+    .filter((row: any) => {
+      const seen = Date.parse(String(row.seen_at ?? ''));
+      return row.user_id !== ownId && Number.isFinite(seen) && (seen < ownSeen || (seen === ownSeen && String(row.user_id) < ownId));
+    })
+    .sort((a: any, b: any) => {
+      const aGap = Math.abs(Number(ratings.get(a.user_id)?.cbr ?? 88) - ownCbr);
+      const bGap = Math.abs(Number(ratings.get(b.user_id)?.cbr ?? 88) - ownCbr);
+      return aGap - bGap || Date.parse(a.seen_at) - Date.parse(b.seen_at) || String(a.user_id).localeCompare(String(b.user_id));
+    })[0] ?? null;
+}
+
+async function queuedMatch(client: Db, account: any, controlId: string) {
+  const clock = tc(controlId);
+  const compatible = Object.entries(TIME).filter(([, value]) => value.group === clock.group).map(([id]) => id);
+  const active = await activeMatchFor(client, account.id);
+  if (active) {
+    const current = await finishExpiredMatch(client, active);
+    if (current.status === 'active') return { match: await matchView(client, current), searching: false };
+  }
+
+  const existing = await client.from('cb_match_queue').select('user_id,control,match_id,seen_at').eq('user_id', account.id).maybeSingle();
+  if (existing.error) fail(500, existing.error.message);
+  if (existing.data?.match_id) {
+    const linked = await client.from('cb_matches').select('*').eq('id', existing.data.match_id).maybeSingle();
+    if (linked.error) fail(500, linked.error.message);
+    if (linked.data?.status === 'active' && participant(linked.data, account.id)) return { match: await matchView(client, linked.data), searching: false };
+    if (linked.data?.status === 'waiting' && participant(linked.data, account.id) && Date.parse(linked.data.created_at) > now() - 20_000) return { match: null, searching: true };
+    if (linked.data?.status === 'waiting') await client.from('cb_matches').delete().eq('id', linked.data.id).eq('status', 'waiting');
+    const cleared = await client.from('cb_match_queue').delete().eq('user_id', account.id).eq('match_id', existing.data.match_id);
+    if (cleared.error) fail(500, cleared.error.message);
+  }
+
+  const seenAt = new Date().toISOString();
+  const saved = await client.from('cb_match_queue').upsert({ user_id: account.id, control: controlId, seen_at: seenAt }, { onConflict: 'user_id' });
+  if (saved.error) fail(500, saved.error.message);
+
+  const waiting = await client.from('cb_match_queue').select('user_id,control,match_id,seen_at').neq('user_id', account.id).in('control', compatible).is('match_id', null).gt('seen_at', new Date(now() - 15_000).toISOString()).order('seen_at', { ascending: true }).limit(40);
+  if (waiting.error) fail(500, waiting.error.message);
+  const ratings = await playerMap(client, (waiting.data ?? []).map((row: any) => row.user_id));
+  const candidate = pickQueueCandidate(waiting.data ?? [], account.id, seenAt, Number(account.profile.cbr ?? 88), ratings);
+  if (!candidate) return { match: null, searching: true };
+
+  const opponent = ratings.get(candidate.user_id);
+  if (!opponent || await activeMatchFor(client, candidate.user_id) || await activeMatchFor(client, account.id)) return { match: null, searching: true };
+
+  const matchId = crypto.randomUUID();
+  const created = await client.from('cb_matches').insert({
+    id: matchId,
+    host_id: candidate.user_id,
+    white_id: candidate.user_id,
+    black_id: account.id,
+    invite_to: null,
+    code: code(),
+    control: controlId,
+    status: 'waiting',
+    white_ms: clock.seconds * 1000,
+    black_ms: clock.seconds * 1000,
+    last_tick: new Date().toISOString(),
+    white_cbr: Number(opponent.cbr ?? 88),
+    black_cbr: Number(account.profile.cbr ?? 88),
+  }).select('*').single();
+  if (created.error) fail(500, created.error.message);
+
+  const claimedOpponent = await client.from('cb_match_queue').update({ match_id: matchId }).eq('user_id', candidate.user_id).is('match_id', null).select('user_id').maybeSingle();
+  const claimedSelf = claimedOpponent.data ? await client.from('cb_match_queue').update({ match_id: matchId }).eq('user_id', account.id).is('match_id', null).select('user_id').maybeSingle() : { data: null, error: null };
+  if (claimedOpponent.error || claimedSelf.error || !claimedOpponent.data || !claimedSelf.data) {
+    const removed = await client.from('cb_matches').delete().eq('id', matchId).eq('status', 'waiting');
+    if (removed.error) console.warn('arena.queue-cleanup-failed', { matchId });
+    const current = await activeMatchFor(client, account.id);
+    return { match: current ? await matchView(client, current) : null, searching: !current };
+  }
+
+  const started = await client.from('cb_matches').update({ status: 'active', version: 1, last_tick: new Date().toISOString() }).eq('id', matchId).eq('status', 'waiting').select('*').maybeSingle();
+  if (started.error || !started.data) {
+    await client.from('cb_matches').delete().eq('id', matchId).eq('status', 'waiting');
+    fail(409, 'Another player matched first. Searching again…');
+  }
+  const view = await matchView(client, started.data);
+  await broadcastMatch(view);
+  console.info('arena.queue-matched', { matchId, control: controlId });
+  return { match: view, searching: false };
+}
+
 export default async function handler(req: Req, res: Res) {
   res.setHeader('Cache-Control', 'no-store');
   let action = '';
@@ -252,6 +344,12 @@ export default async function handler(req: Req, res: Res) {
       if (action === 'feed') return res.status(200).json(await publicFeed(client));
       if (action === 'online-users') return res.status(200).json(await publicOnlineUsers(client));
       if (action === 'ranks') return res.status(200).json(await publicRanks(client));
+      if (action === 'live') {
+        const found = await client.from('cb_matches').select('*').eq('status', 'active').order('created_at', { ascending: false }).limit(20);
+        if (found.error) fail(500, found.error.message);
+        const matches = (await Promise.all((found.data ?? []).map(async (row: any) => finishExpiredMatch(client, row)))).filter((row: any) => row?.status === 'active');
+        return res.status(200).json({ matches: await Promise.all(matches.map((row: any) => matchView(client, row))) });
+      }
       if (action === 'watch') {
         const match = await readMatch(client, String(req.query?.id ?? ''));
         if (match.status === 'waiting') fail(404, 'This match has not started.');
@@ -363,6 +461,12 @@ export default async function handler(req: Req, res: Res) {
       const r = await client.from('cb_profiles').select('user_id,username,display_name,avatar_url,country_code,cbr,gold_points,wins,losses,win_streak').neq('user_id', account.id).or(`username.ilike.%${query}%,display_name.ilike.%${query}%`).limit(10);
       if (r.error) fail(500, r.error.message); return res.status(200).json({ players: r.data ?? [] });
     }
+    if (action === 'queue') return res.status(200).json(await queuedMatch(client, account, String(body.control ?? '')));
+    if (action === 'cancel-queue') {
+      const removed = await client.from('cb_match_queue').delete().eq('user_id', account.id).is('match_id', null);
+      if (removed.error) fail(500, removed.error.message);
+      return res.status(200).json({ ok: true });
+    }
     if (action === 'room') {
       const control = String(body.control ?? ''), clock = tc(control), target = typeof body.target === 'string' ? body.target : null, publicChallenge = body.publicChallenge === true;
       if (publicChallenge && target) fail(400, 'Choose one challenge audience.');
@@ -382,6 +486,8 @@ export default async function handler(req: Req, res: Res) {
         const expired = await client.from('cb_feed').update({ expires_at: new Date().toISOString() }).in('challenge_match_id', oldIds).eq('kind', 'challenge');
         if (expired.error) fail(500, expired.error.message);
       }
+      const unqueued = await client.from('cb_match_queue').delete().eq('user_id', account.id).is('match_id', null);
+      if (unqueued.error) fail(500, unqueued.error.message);
       const match = one<any>(await client.from('cb_matches').insert({ host_id: account.id, white_id: account.id, invite_to: target, status: 'waiting', code: code(), control, white_ms: clock.seconds * 1000, black_ms: clock.seconds * 1000, last_tick: new Date().toISOString(), white_cbr: account.profile.cbr }).select('*').single());
       if (publicChallenge) { const event = await client.from('cb_feed').insert({ user_id: account.id, kind: 'challenge', display_name: account.profile.display_name, content: `is looking for a ${clock.group.toLowerCase()} challenge · ${clock.label}.`, challenge_match_id: match.id, expires_at: new Date(now() + 120000).toISOString() }); if (event.error) { await client.from('cb_matches').delete().eq('id', match.id); fail(500, event.error.message); } }
       console.info('arena.room-created', { matchId: match.id, publicChallenge });
@@ -394,6 +500,7 @@ export default async function handler(req: Req, res: Res) {
       const changed = await client.from('cb_matches').update({ black_id: account.id, black_cbr: account.profile.cbr, status: 'active', version: 1, last_tick: new Date().toISOString() }).eq('id', id).eq('status', 'waiting').is('black_id', null).select('*').maybeSingle(); if (changed.error) fail(500, changed.error.message); if (!changed.data) fail(409, 'This challenge was already accepted.');
       await client.from('cb_feed').update({ expires_at: new Date().toISOString() }).eq('id', event.data.id);
       const view = await matchView(client, changed.data);
+      await client.from('cb_match_queue').delete().in('user_id', [match.white_id, account.id]);
       await broadcastMatch(view);
       return res.status(200).json({ match: view });
     }
@@ -407,6 +514,7 @@ export default async function handler(req: Req, res: Res) {
       if (changed.error) fail(500, changed.error.message);
       if (!changed.data) fail(409, 'This room was already joined.');
       const view = await matchView(client, changed.data);
+      await client.from('cb_match_queue').delete().in('user_id', [match.white_id, account.id]);
       await broadcastMatch(view);
       return res.status(200).json({ match: view });
     }
