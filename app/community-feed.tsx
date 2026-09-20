@@ -1,6 +1,7 @@
 "use client";
 
-import {useCallback,useEffect,useState,useRef} from "react";
+import {useCallback,useEffect,useState,useRef,type CSSProperties} from "react";
+import {createPortal} from "react-dom";
 import {Heart,ChevronLeft,ChevronRight,Swords,Search,X} from "lucide-react";
 import {toast} from "sonner";
 import {FeedEvent,getSupabase} from "./supabase";
@@ -14,13 +15,34 @@ type OnlinePlayer=ArenaPlayer&{available:boolean};
 type FeedTab="recent"|"popular"|"first_blood"|"announcement"|"online";
 const PAGE_SIZE=10,ONLINE_PAGE_SIZE=60;
 const labels:Record<string,string>={profile_created:"New player",profile_updated:"Profile",win:"Win",first_blood:"First blood",new_reward:"Reward",top10:"Top 10",announcement:"Announcement"};
+const cardStyles:Record<string,CSSProperties>={
+ shell:{position:"fixed",zIndex:2147483000,top:"50%",left:"50%",width:"min(390px,calc(100vw - 24px))",maxHeight:"calc(100dvh - 32px)",padding:"clamp(13px,3vw,18px)",transform:"translate(-50%,-50%)",overflowY:"auto",boxSizing:"border-box",border:"2px solid #c8a842",borderRadius:18,background:"linear-gradient(115deg,#293238,#0e171b 56%,#243138)",boxShadow:"inset 0 0 0 2px #11181c,inset 0 0 0 3px #786b35,0 18px 48px #000e",color:"#f4f7f8",fontFamily:"Poppins,sans-serif",isolation:"isolate"},
+ logo:{display:"block",width:34,height:34,maxWidth:34,maxHeight:34,margin:"0 auto 12px",border:"1px solid #d9b84e",borderRadius:"50%",objectFit:"cover"},
+ identity:{display:"grid",gridTemplateColumns:"clamp(62px,18vw,78px) minmax(0,1fr) clamp(44px,13vw,56px)",gap:"clamp(8px,2.5vw,13px)",alignItems:"center",minWidth:0},
+ portrait:{display:"grid",placeItems:"center",width:"clamp(62px,18vw,78px)",height:"clamp(62px,18vw,78px)",minWidth:0,padding:0,overflow:"hidden",boxSizing:"border-box",border:"3px solid #5ee4ee",outline:"2px solid #d7b44d",borderRadius:"50%",background:"#244e59",color:"#fff",fontSize:24,boxShadow:"0 0 16px #43dce955",cursor:"pointer"},
+ portraitImage:{display:"block",width:"100%",height:"100%",maxWidth:"100%",maxHeight:"100%",objectFit:"cover",objectPosition:"center",borderRadius:"50%"},
+ copy:{minWidth:0,textAlign:"left"},
+ handle:{display:"block",overflow:"hidden",color:"#55dce9",fontSize:"clamp(8px,2.4vw,10px)",lineHeight:1.4,textOverflow:"ellipsis",textTransform:"uppercase",whiteSpace:"nowrap"},
+ name:{display:"block",margin:"3px 0",overflow:"hidden",fontSize:"clamp(15px,4.4vw,20px)",lineHeight:1.16,textOverflow:"ellipsis",whiteSpace:"nowrap"},
+ status:{display:"block",color:"#42e98a",fontSize:10,fontWeight:700},
+ levelName:{display:"block",marginTop:2,color:"#b5c9cf",fontSize:9,lineHeight:1.4},
+ emblem:{display:"block",width:"clamp(44px,13vw,56px)",height:"clamp(52px,16vw,68px)",maxWidth:56,maxHeight:68,objectFit:"contain",filter:"drop-shadow(0 4px 6px #000c)"},
+ stats:{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",marginTop:15,paddingTop:11,borderTop:"1px solid #56c7d2",textAlign:"center"},
+ stat:{minWidth:0,padding:"0 4px"},
+ statValue:{display:"block",overflow:"hidden",fontSize:"clamp(14px,4vw,18px)",lineHeight:1.15,textOverflow:"ellipsis"},
+ statLabel:{display:"block",marginTop:3,color:"#aebfc5",fontSize:"clamp(7px,2vw,8px)",textTransform:"uppercase"},
+ actions:{display:"flex",alignItems:"stretch",justifyContent:"center",gap:8,marginTop:13},
+ action:{display:"inline-flex",flex:"1 1 0",alignItems:"center",justifyContent:"center",gap:5,minHeight:34,padding:"7px 10px",boxSizing:"border-box",border:"1px solid #4d5b63",borderRadius:9,background:"#202c32",color:"#dbe7ea",fontSize:10,fontWeight:600,cursor:"pointer"},
+ challenge:{border:"1px solid #b89035",background:"linear-gradient(145deg,#e8c66c,#9e7022)",color:"#171107",fontWeight:800},
+ state:{display:"inline-flex",flex:"1 1 0",alignItems:"center",justifyContent:"center",minHeight:34,padding:"7px 10px",boxSizing:"border-box",border:"1px solid #4d5b63",borderRadius:9,background:"#202c32",color:"#dbe7ea",fontSize:10},
+};
 
 export default function CommunityFeed({onOpenProfile,onMatch,onChallenge}:{onOpenProfile:(userId:string)=>void;onMatch:(id:string)=>void;onChallenge:(player:ArenaPlayer)=>void}){
  const[tab,setTab]=useState<FeedTab>("recent"),[page,setPage]=useState(1),[events,setEvents]=useState<CommunityEvent[]>([]);
  const[challenges,setChallenges]=useState<CommunityEvent[]>([]),[accepting,setAccepting]=useState<string|null>(null);
  const[expandedImage,setExpandedImage]=useState<string|null>(null);
  const[onlineUsers,setOnlineUsers]=useState<OnlinePlayer[]>([]),[onlineSearch,setOnlineSearch]=useState(''),[onlineCard,setOnlineCard]=useState<string|null>(null),[onlinePage,setOnlinePage]=useState(1);
- const request=useRef(0);
+ const request=useRef(0),onlineCloseTimer=useRef<ReturnType<typeof setTimeout>|null>(null);
  const[total,setTotal]=useState(0),[status,setStatus]=useState("Loading activity…"),[userId,setUserId]=useState<string|null>(null),[reacted,setReacted]=useState<Set<string>>(new Set());
  const refresh=useCallback(async()=>{
   const seq=++request.current;
@@ -66,6 +88,10 @@ export default function CommunityFeed({onOpenProfile,onMatch,onChallenge}:{onOpe
   catch(e){toast.error((e as Error).message);void refresh();}
   finally{setAccepting(null);}
  }
+ function keepOnlineCard(id:string){if(onlineCloseTimer.current)clearTimeout(onlineCloseTimer.current);onlineCloseTimer.current=null;setOnlineCard(id);}
+ function closeOnlineCard(delay=700){if(onlineCloseTimer.current)clearTimeout(onlineCloseTimer.current);onlineCloseTimer.current=setTimeout(()=>setOnlineCard(null),delay);}
+ useEffect(()=>()=>{if(onlineCloseTimer.current)clearTimeout(onlineCloseTimer.current);},[]);
+ useEffect(()=>{if(!onlineCard)return;const dismiss=(event:PointerEvent)=>{const target=event.target;if(target instanceof Element&&!target.closest('.cb-online-player-card')&&!target.closest(`[data-online-player="${onlineCard}"]`))setOnlineCard(null);};document.addEventListener('pointerdown',dismiss);return()=>document.removeEventListener('pointerdown',dismiss);},[onlineCard]);
  function selectTab(next:FeedTab){request.current++;setEvents([]);setExpandedImage(null);setOnlineCard(null);setStatus("Loading activity…");setTab(next);setPage(1);setOnlinePage(1);}
  const pages=Math.max(1,Math.min(5,Math.ceil(total/PAGE_SIZE)));
  const search=onlineSearch.trim().toLowerCase();
@@ -88,18 +114,18 @@ export default function CommunityFeed({onOpenProfile,onMatch,onChallenge}:{onOpe
   {status&&<p className="account-note" role="status">{status}</p>}
   {tab==='online'&&<section className="online-directory" aria-label="Online players">
    <p className="online-description" style={{maxWidth:"560px",margin:"0 auto 14px",textAlign:"center"}}>See who is active now. Hover or tap an avatar to view the player and send a match challenge.</p><label className="online-search" style={{display:"flex",alignItems:"center",justifyContent:"center",gap:"8px",width:"min(100%,420px)",margin:"0 auto 22px",padding:"0 12px",boxSizing:"border-box"}}><Search size={16}/><input style={{display:"block",flex:"1 1 auto",width:"100%",minWidth:0,textAlign:"left"}} value={onlineSearch} onChange={event=>{setOnlineSearch(event.target.value);setOnlinePage(1);}} placeholder="Search online players" aria-label="Search online players"/><button type="button" aria-label="Clear online player search" disabled={!onlineSearch} onClick={()=>setOnlineSearch('')}><X size={14}/></button></label>
-   {visibleOnline.length>0&&<div className="online-avatars" style={{display:"grid",gridTemplateColumns:"repeat(6,minmax(0,1fr))",alignItems:"start",justifyItems:"center",gap:"18px 10px",width:"100%",maxWidth:"720px",margin:"0 auto"}}>{visibleOnline.map(player=>{const open=onlineCard===player.user_id,own=player.user_id===userId,level=levelFor(player.cbr),games=player.wins+player.losses,winRate=games?Math.round(player.wins/games*100):0;return <div className="online-player" style={{position:"relative",display:"grid",placeItems:"center",width:"100%",minWidth:0}} key={player.user_id} onMouseEnter={()=>setOnlineCard(player.user_id)} onMouseLeave={()=>setOnlineCard(null)}>
-    <button className="online-avatar-button" style={{display:"grid",placeItems:"center",width:"clamp(44px,6vw,60px)",height:"clamp(44px,6vw,60px)",padding:0,border:0,borderRadius:"50%",background:"transparent",boxShadow:"none",cursor:"pointer"}} type="button" onClick={()=>setOnlineCard(current=>current===player.user_id?null:player.user_id)} aria-expanded={open} aria-label={`Open ${player.display_name}'s player card`}><span className="online-avatar" style={{display:"grid",placeItems:"center",width:"clamp(42px,5.5vw,56px)",height:"clamp(42px,5.5vw,56px)",aspectRatio:"1",border:"2px solid #e7bd62",borderRadius:"50%",overflow:"hidden",flex:"0 0 auto",background:"#24323a",boxShadow:"0 0 0 3px #20262d,0 5px 14px #0008"}}>{player.avatar_url?<img src={player.avatar_url} alt="" style={{display:"block",width:"100%",height:"100%",maxWidth:"100%",objectFit:"cover",objectPosition:"center",borderRadius:"50%"}}/>:player.display_name.charAt(0)}</span><i className="online-presence-dot" aria-hidden="true"/></button>
-    {open&&<article className="online-user-card online-profile-preview" role="dialog" aria-label={`${player.display_name} player card`}>
-     <img className="online-preview-logo" src="/cburger_logo.png" alt="Chess Burger"/>
-     <div className="online-preview-identity">
-      <button type="button" className="online-preview-portrait" onClick={()=>onOpenProfile(player.user_id)} aria-label={`View ${player.display_name}'s profile`}>{player.avatar_url?<img src={player.avatar_url} alt="" style={{display:"block",width:"100%",height:"100%",maxWidth:"72px",maxHeight:"72px",objectFit:"cover",objectPosition:"center",borderRadius:"50%"}}/>:player.display_name.charAt(0)}</button>
-      <div className="online-preview-copy"><small>@{player.username} · {player.country_code}</small><strong>{player.display_name}</strong><span>● Online</span><small>Level {level.level} · {level.name}</small></div>
-      <img className="online-preview-level" src={`/levels/level-${String(level.level-1).padStart(2,"0")}.png`} alt={level.name}/>
+   {visibleOnline.length>0&&<div className="online-avatars" style={{display:"grid",gridTemplateColumns:"repeat(6,minmax(0,1fr))",alignItems:"start",justifyItems:"center",gap:"18px 10px",width:"100%",maxWidth:"720px",margin:"0 auto"}}>{visibleOnline.map(player=>{const open=onlineCard===player.user_id,own=player.user_id===userId,level=levelFor(player.cbr),games=player.wins+player.losses,winRate=games?Math.round(player.wins/games*100):0;return <div className="online-player" style={{position:"relative",display:"grid",placeItems:"center",width:"100%",minWidth:0}} key={player.user_id} onMouseEnter={()=>keepOnlineCard(player.user_id)} onMouseLeave={()=>closeOnlineCard()}>
+    <button className="online-avatar-button" data-online-player={player.user_id} style={{display:"grid",placeItems:"center",width:"clamp(44px,6vw,60px)",height:"clamp(44px,6vw,60px)",padding:0,border:0,borderRadius:"50%",background:"transparent",boxShadow:"none",cursor:"pointer"}} type="button" onFocus={()=>keepOnlineCard(player.user_id)} onBlur={()=>closeOnlineCard()} onClick={()=>onlineCard===player.user_id?setOnlineCard(null):keepOnlineCard(player.user_id)} aria-expanded={open} aria-label={`Open ${player.display_name}'s player card`}><span className="online-avatar" style={{display:"grid",placeItems:"center",width:"clamp(42px,5.5vw,56px)",height:"clamp(42px,5.5vw,56px)",aspectRatio:"1",border:"2px solid #e7bd62",borderRadius:"50%",overflow:"hidden",flex:"0 0 auto",background:"#24323a",boxShadow:"0 0 0 3px #20262d,0 5px 14px #0008"}}>{player.avatar_url?<img src={player.avatar_url} alt="" style={{display:"block",width:"100%",height:"100%",maxWidth:"100%",objectFit:"cover",objectPosition:"center",borderRadius:"50%"}}/>:player.display_name.charAt(0)}</span><i className="online-presence-dot" aria-hidden="true"/></button>
+    {open&&typeof document!=="undefined"&&createPortal(<article className="cb-online-player-card" style={cardStyles.shell} role="dialog" aria-modal="false" aria-label={`${player.display_name} player card`} onMouseEnter={()=>keepOnlineCard(player.user_id)} onMouseLeave={()=>closeOnlineCard()}>
+     <img src="/cburger_logo.png" alt="Chess Burger" style={cardStyles.logo}/>
+     <div style={cardStyles.identity}>
+      <button type="button" style={cardStyles.portrait} onClick={()=>onOpenProfile(player.user_id)} aria-label={`View ${player.display_name}'s profile`}>{player.avatar_url?<img src={player.avatar_url} alt="" style={cardStyles.portraitImage}/>:player.display_name.charAt(0)}</button>
+      <div style={cardStyles.copy}><small style={cardStyles.handle}>@{player.username} · {player.country_code}</small><strong style={cardStyles.name}>{player.display_name}</strong><span style={cardStyles.status}>● Online</span><small style={cardStyles.levelName}>Level {level.level} · {level.name}</small></div>
+      <img src={`/levels/level-${String(level.level-1).padStart(2,"0")}.png`} alt={level.name} style={cardStyles.emblem}/>
      </div>
-     <div className="online-preview-stats"><div><b>{player.cbr}</b><small>CBR</small></div><div><b>{player.ocbr??88}</b><small>OCBR</small></div><div><b>{player.gold_points}</b><small>Gold</small></div><div><b>{winRate}%</b><small>Win rate</small></div></div>
-     <div className="online-preview-actions"><button type="button" onClick={()=>onOpenProfile(player.user_id)}>View profile</button>{own?<span>This is you</span>:player.available?<button className="challenge" type="button" onClick={()=>onChallenge(player)}><Swords size={14}/>Challenge</button>:<span>In a match</span>}</div>
-    </article>}
+     <div style={cardStyles.stats}>{[[player.cbr,"CBR"],[player.ocbr??88,"OCBR"],[player.gold_points,"Gold"],[`${winRate}%`,"Win rate"]].map(([value,label],index)=><div key={label} style={{...cardStyles.stat,...(index?{borderLeft:"1px solid #8e7b43"}:{})}}><b style={cardStyles.statValue}>{value}</b><small style={cardStyles.statLabel}>{label}</small></div>)}</div>
+     <div style={cardStyles.actions}><button type="button" style={cardStyles.action} onClick={()=>onOpenProfile(player.user_id)}>View profile</button>{own?<span style={cardStyles.state}>This is you</span>:player.available?<button type="button" style={{...cardStyles.action,...cardStyles.challenge}} onClick={()=>onChallenge(player)}><Swords size={14}/>Challenge</button>:<span style={cardStyles.state}>In a match</span>}</div>
+    </article>,document.body)}
    </div>})}</div>}
    {!status&&shownOnline.length===0&&<p className="account-note">No online player matches that search.</p>}
    {onlinePages>1&&<nav className="feed-pagination online-pagination" aria-label="Online player pages"><button disabled={onlinePage===1} onClick={()=>{setOnlineCard(null);setOnlinePage(value=>value-1);}}><ChevronLeft size={15}/>Previous</button><span>Page {onlinePage} of {onlinePages}</span><button disabled={onlinePage>=onlinePages} onClick={()=>{setOnlineCard(null);setOnlinePage(value=>value+1);}}>Next<ChevronRight size={15}/></button></nav>}
