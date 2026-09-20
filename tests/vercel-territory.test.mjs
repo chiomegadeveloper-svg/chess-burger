@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {barangayKey,polygonContains} from '../api/arena.ts';
+import {barangayKey,kingdomRangePolygon,polygonContains} from '../api/arena.ts';
 
 test('barangay keys are stable across case, spacing, and accents',()=>{
  assert.equal(barangayKey('Brgy. San José','Tacloban City'),'tacloban-city:brgy-san-jose');
@@ -29,4 +29,14 @@ test('multipolygon containment supports separated barangay islands',()=>{
  ]};
  assert.equal(polygonContains(boundary,12.1,126.1),true);
  assert.equal(polygonContains(boundary,11.6,125.6),false);
+});
+
+
+test('kingdom ranges are closed 2 km GPS polygons',()=>{
+ const range=kingdomRangePolygon(11.244,125.003);
+ assert.equal(range.type,'Polygon');
+ assert.equal(range.coordinates[0].length,33);
+ assert.equal(polygonContains(range,11.244,125.003),true);
+ // Roughly 2.8 km north: outside a 2 km claim range.
+ assert.equal(polygonContains(range,11.269,125.003),false);
 });
