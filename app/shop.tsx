@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { arena } from "./arena-client";
 import { FEED_BANNERS, feedBanner, type FeedBanner } from "./feed-banner-catalog";
 import type { PlayerProfile } from "./supabase";
+import "./feed-banner-shop.css";
 
 type ShopState = { owned: string[]; active: string; gold: number };
 
@@ -14,7 +15,7 @@ function BannerTile({ banner, owned, active, busy, onAction }: { banner: FeedBan
     <div className="banner-product-preview"><span className="banner-swatch" style={{ background: banner.background }} aria-hidden="true" /></div>
     <div className="banner-product-copy"><h3>{banner.name}</h3><span className={`banner-tier-tag ${banner.tier}`}>{banner.tier === "metallic" && <Crown size={10}/>} {banner.tier === "metallic" ? "Premium" : "Pastel"}</span></div>
     <button type="button" disabled={busy || active} onClick={onAction}>
-      {active ? <><Check size={13}/> Active</> : owned ? "Activate" : <><span className="gold-coin">●</span>{banner.price} Gold</>}
+      {active ? <><Check size={13}/> Active</> : owned ? "Use banner" : <><span className="gold-coin">●</span>Buy · {banner.price} Gold</>}
     </button>
   </article>;
 }
@@ -41,9 +42,9 @@ export function ShopPage({ profile, onChanged }: { profile: PlayerProfile | null
   };
   if (open) return <section className="shop-page banner-store">
     <button className="back-button" type="button" onClick={() => setOpen(false)}><ArrowLeft size={16}/> Shop</button>
-    <div className="page-heading banner-heading"><div><span className="shop-eyebrow">Personalize your feed</span><h1>Feed Banner Colors</h1><p>Choose a signature color for every post you share.</p></div><span className="sample-label">{state.gold || profile?.gold_points || 0} Gold</span></div>
+    <div className="page-heading banner-heading"><div><span className="shop-eyebrow">Personalize your feed</span><h1>Feed Banner Colors</h1><p>Choose a signature color for every community post you share.</p></div><span className="banner-wallet"><span className="gold-coin">●</span><strong>{state.gold || profile?.gold_points || 0}</strong><small>Gold balance</small></span></div>
     {loading ? <p className="account-note">Loading banner collection…</p> : <>
-      {(["pastel", "metallic"] as const).map((tier) => <section className={`banner-tier ${tier}`} key={tier}><div className="banner-tier-heading"><span>{tier === "pastel" ? "Basic collection" : "Premium collection"}</span><h2>{tier === "pastel" ? "Pastel Colors" : "Metallic Colors"}</h2><p>{tier === "pastel" ? "Soft, clean colors for a friendly feed." : "Reflective finishes for a distinctive profile."}</p></div><div className="banner-products">{FEED_BANNERS.filter((banner) => banner.tier === tier).map((banner) => <BannerTile key={banner.id} banner={banner} owned={state.owned.includes(banner.id)} active={state.active === banner.id} busy={busy === banner.id} onAction={() => void act(banner)}/>)}</div></section>)}
+      {(["pastel", "metallic"] as const).map((tier) => <section className={`banner-tier ${tier}`} key={tier}><div className="banner-tier-heading"><div><span>{tier === "pastel" ? "Basic collection" : "Premium collection"}</span><h2>{tier === "pastel" ? "Pastel Colors" : "Metallic Colors"}</h2><p>{tier === "pastel" ? "Soft, clean colors for a friendly feed." : "Reflective finishes for a distinctive profile."}</p></div><b>10 colors</b></div><div className="banner-products">{FEED_BANNERS.filter((banner) => banner.tier === tier).map((banner) => <BannerTile key={banner.id} banner={banner} owned={state.owned.includes(banner.id)} active={state.active === banner.id} busy={busy === banner.id} onAction={() => void act(banner)}/>)}</div></section>)}
     </>}
   </section>;
   return <section className="shop-page">
