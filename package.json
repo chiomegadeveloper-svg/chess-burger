@@ -14,7 +14,7 @@
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
     "test:tournament": "node --test tests/tournament.test.mjs",
-    "test:arena": "node --test tests/arena.test.mjs tests/auth-storage.test.mjs tests/local-pairing.test.mjs tests/takeback-rules.test.mjs tests/vercel-cms.test.mjs tests/vercel-queue.test.mjs tests/vercel-territory.test.mjs"
+    "test:arena": "node --test tests/arena.test.mjs tests/auth-storage.test.mjs tests/local-pairing.test.mjs tests/takeback-rules.test.mjs tests/vercel-challenge.test.mjs tests/vercel-cms.test.mjs tests/vercel-queue.test.mjs tests/vercel-territory.test.mjs tests/vercel-wager-migration.test.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

@@ -791,8 +791,8 @@ function AppPage() {
               <div key={i.id}>
                 <strong>{i.host_name} invited you</strong>
                 <span>
-                  {timeControl(i.control).group} ·{" "}
-                  {timeControl(i.control).label}
+                  {i.match_kind === "invasion" ? "KING defense · " : ""}{timeControl(i.control).group} ·{" "}
+                  {timeControl(i.control).label}{i.match_kind === "invasion" ? " · No Gold cost to defend" : i.play_mode === "wager" ? ` · Wager ${i.wager_gold} Gold` : " · Normal game"}
                 </span>
                 <button
                   className="gold-button"
@@ -802,7 +802,7 @@ function AppPage() {
                       .catch((e) => toast.error(e.message))
                   }
                 >
-                  Accept
+                  {i.play_mode === "wager" ? `Match ${i.wager_gold} Gold` : "Accept"}
                 </button>
                 <button
                   onClick={() =>

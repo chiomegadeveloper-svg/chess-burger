@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { Search, Copy, X } from "lucide-react";
+import { Search, Copy, Coins, Swords, X } from "lucide-react";
 import { arena } from "./arena-client";
 import { TIME_CONTROLS, type ArenaMatch, type ArenaPlayer, timeControl } from "./game-rules";
 import type { PlayerProfile } from "./supabase";
@@ -30,7 +30,10 @@ export default function OnlinePlay({
     [selected, setSelected] = useState<ArenaPlayer | null>(target ?? null),
     [audience, setAudience] = useState<"username" | "anyone" | null>(target ? "username" : null),
     [error, setError] = useState(""),
-    [busy, setBusy] = useState(false);
+    [busy, setBusy] = useState(false),
+    [modeOpen, setModeOpen] = useState(false),
+    [playMode, setPlayMode] = useState<"normal"|"wager">("normal"),
+    [wagerGold, setWagerGold] = useState(1);
   const cancelled = useRef(false),
     callback = useRef(onMatch);
   callback.current = onMatch;
@@ -124,11 +127,14 @@ export default function OnlinePlay({
         control,
         target: challenge ? selected?.user_id : target?.user_id,
         publicChallenge: challenge && audience === "anyone",
+        play_mode: playMode,
+        wager_gold: playMode === "wager" ? wagerGold : 0,
       });
       if (challenge && audience === "anyone" && r.challengePublished !== true) {
         throw Error("The server did not confirm your public challenge. Please retry.");
       }
       setRoom(r.match);
+      setModeOpen(false);
       if (challenge && audience === "anyone") {
         window.dispatchEvent(new Event("cb-profile-saved"));
       }
@@ -167,6 +173,7 @@ export default function OnlinePlay({
     );
   return (
     <section className="match-setup">
+      {modeOpen&&<div className="wager-overlay" role="presentation"><section className="wager-dialog" role="dialog" aria-modal="true" aria-labelledby="match-mode-title"><button className="wager-close" aria-label="Close match mode" onClick={()=>setModeOpen(false)}><X size={18}/></button><h2 id="match-mode-title">Choose invitation mode</h2><p>Select how this invitation will be played before it is sent.</p><div className="wager-mode-options"><button className={playMode==='normal'?'chosen':''} onClick={()=>setPlayMode('normal')}><Swords size={22}/><strong>Normal game</strong><small>Standard online match rewards</small></button><button className={playMode==='wager'?'chosen':''} onClick={()=>setPlayMode('wager')}><Coins size={22}/><strong>Wager mode</strong><small>Both players stake equal Gold</small></button></div>{playMode==='wager'&&<label className="wager-amount">Your Gold bet<input type="number" inputMode="numeric" min={1} max={Math.min(10000,profile.gold_points)} value={wagerGold} onChange={e=>setWagerGold(Math.max(0,Math.floor(Number(e.target.value)||0)))}/><small>You have {profile.gold_points} Gold. The opponent must match {wagerGold||0} Gold.</small></label>}<button className="gold-button wide" disabled={busy||(playMode==='wager'&&(wagerGold<1||wagerGold>profile.gold_points||wagerGold>10000))} onClick={()=>void create()}>{busy?'Sending…':playMode==='wager'?`Send ${wagerGold} Gold wager`:'Send normal invitation'}</button></section></div>}
       <div className="page-heading">
         <h1>{challenge ? "Challenge a Player" : target ? "Invite to a match" : "Play Online"}</h1>
         <span className="sample-label">{profile.cbr} CBR</span>
@@ -229,7 +236,7 @@ export default function OnlinePlay({
               className="gold-button wide"
               onClick={() => {
                 setError("");
-                target || challenge ? void create() : setSearching(true);
+                target || challenge ? setModeOpen(true) : setSearching(true);
               }}
             >
               {challenge ? audience === "anyone" ? "Post challenge to feed" : "Send challenge" : target ? "Send match invitation" : "Find opponent"}
@@ -237,7 +244,7 @@ export default function OnlinePlay({
           )
         )}
         <p className="rules-caption">
-          Win +8 CBR · loss −10 · 4+ win streak +2. If the rating gap exceeds
+          Automatic pairing costs 3 Gold each. Winner receives the 6-Gold pot plus a 5-Gold bonus; draws refund both players. Win +8 CBR · loss −10 · 4+ win streak +2. If the rating gap exceeds
           10, the winner also earns 10% of the opponent’s starting CBR, rounded
           down.
         </p>
