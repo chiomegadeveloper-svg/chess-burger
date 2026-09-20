@@ -295,7 +295,7 @@ function AppPage() {
     const splash = setTimeout(() => {
       setShowSplash(false);
       setShowWelcome(true);
-    }, 4000);
+    }, 6000);
     if ("serviceWorker" in navigator) {
       const updating = !!navigator.serviceWorker.controller;
       let reloaded = false;
