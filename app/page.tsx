@@ -949,7 +949,7 @@ function AppPage() {
           setTab("public-profile");
         }}
       />
-      <FloatingChatButton visible={tab === "home" && !!member} />
+      <FloatingChatButton visible={tab === "home"} />
       <InstallPrompt active={!showSplash} />
       <Toaster theme="light" position="top-center" richColors closeButton />
     </main>

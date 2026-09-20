@@ -196,6 +196,34 @@ export function FloatingChatButton({ visible }: { visible: boolean }) {
     drag = useRef<{ dx: number; dy: number; moved: boolean } | null>(null),
     suppressClick = useRef(false),
     [unread,setUnread]=useState(0);
+  useEffect(() => {
+    if (!visible) return;
+    const keepOnScreen = () => {
+      const current = positionRef.current;
+      if (!current) return;
+      const next = {
+        x: Math.max(8, Math.min(window.innerWidth - 70, current.x)),
+        y: Math.max(72, Math.min(window.innerHeight - 150, current.y)),
+      };
+      if (next.x !== current.x || next.y !== current.y) {
+        positionRef.current = next;
+        setPosition(next);
+        try {
+          localStorage.setItem(
+            "cb-chat-button-position:v1",
+            JSON.stringify(next),
+          );
+        } catch {}
+      }
+    };
+    keepOnScreen();
+    window.addEventListener("resize", keepOnScreen);
+    window.addEventListener("orientationchange", keepOnScreen);
+    return () => {
+      window.removeEventListener("resize", keepOnScreen);
+      window.removeEventListener("orientationchange", keepOnScreen);
+    };
+  }, [visible]);
   useEffect(()=>{if(!visible)return;let active=true;const load=()=>void arena<ChatSummary>("chat-summary").then(data=>{if(active)setUnread(data.unread);}).catch(()=>{});load();const timer=setInterval(load,15000);window.addEventListener("cb-chat-changed",load);return()=>{active=false;clearInterval(timer);window.removeEventListener("cb-chat-changed",load);};},[visible]);
   if (!visible) return null;
   const style = position
@@ -535,7 +563,7 @@ export function SocialHub({
       }}
     >
       <section
-        className="social-dialog"
+        className={`social-dialog${view === "chat" ? " chat-dialog" : ""}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby="social-dialog-title"
