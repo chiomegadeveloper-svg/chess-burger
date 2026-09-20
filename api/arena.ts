@@ -184,11 +184,19 @@ async function nearbyPlayers(client: Db, account: any) {
   const zoneRows = await client.from('cb_territories').select(fields).order('updated_at', { ascending: false }).limit(250);
   if (zoneRows.error) return { players, territories: [] };
   const allZones = zoneRows.data ?? [];
-  const staleKingdoms = allZones.filter((row: any) => String(row.barangay_key ?? '').startsWith('kingdom:') && usableBoundary(row.boundary) && row.boundary.coordinates?.[0]?.length !== 5 && Number.isFinite(Number(row.centroid_lat)) && Number.isFinite(Number(row.centroid_lng)));
+  // Normalize every legacy territory, including irregular barangay polygons, to
+  // an exact 2 km² square. The signed-in owner's territory follows their
+  // current verified GPS location; other territories keep their saved centre.
+  const staleKingdoms = allZones.filter((row: any) => usableBoundary(row.boundary) && row.boundary.coordinates?.[0]?.length !== 5);
   if (staleKingdoms.length) await Promise.all(staleKingdoms.map(async (row: any) => {
-    const boundary = kingdomRangePolygon(Number(row.centroid_lat), Number(row.centroid_lng));
-    row.boundary = boundary;
-    await client.from('cb_territories').update({ boundary, radius_m: Math.sqrt(2_000_000) / 2, updated_at: new Date().toISOString() }).eq('id', row.id);
+    const ownTerritory = row.user_id === account.id;
+    const centerLat = ownTerritory ? Number(own.data.latitude) : Number(row.centroid_lat);
+    const centerLng = ownTerritory ? Number(own.data.longitude) : Number(row.centroid_lng);
+    if (!Number.isFinite(centerLat) || !Number.isFinite(centerLng)) return;
+    const boundary = kingdomRangePolygon(centerLat, centerLng);
+    Object.assign(row, { boundary, centroid_lat: centerLat, centroid_lng: centerLng });
+    const normalized = await client.from('cb_territories').update({ boundary, centroid_lat: centerLat, centroid_lng: centerLng, radius_m: 707, updated_at: new Date().toISOString() }).eq('id', row.id);
+    if (normalized.error) console.warn('arena.territory-normalize-failed', { territoryId: row.id, message: normalized.error.message });
   }));
   const rows = allZones.filter((row: any) => usableBoundary(row.boundary) && polygonContains(row.boundary, Number(own.data.latitude), Number(own.data.longitude))).slice(0, 1);
   const owners = await playerMap(client, rows.map((z: any) => z.user_id));
