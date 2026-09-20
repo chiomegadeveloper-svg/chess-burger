@@ -17,10 +17,7 @@ export function useLivePresence(userId?:string, gpsEnabled=false, activeMatchId=
         if(!session || session.user.id!==userId || !alive)return;
         const {error}=await client.from('cb_live_presence').upsert({
           user_id:userId,
-          seen_at:new Date().toISOString(),
-          gps_enabled:gpsEnabled,
-          cbr:Math.max(0,Math.floor(cbr)),
-          match_id:activeMatchId || null
+          seen_at:new Date().toISOString()
         },{onConflict:'user_id'});
         if(error)console.warn('Live presence unavailable:',error.message);
       }catch(e){console.warn('Live presence unavailable:',e);}
