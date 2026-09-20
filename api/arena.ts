@@ -97,6 +97,16 @@ export function kingdomRangePolygon(lat: number, lng: number, areaM2 = 2_000_000
   ].map(([x,y])=>[Number(x.toFixed(7)),Number(y.toFixed(7))]);
   return { type: 'Polygon' as const, coordinates: [coordinates] };
 }
+export function isTwoSquareKilometreSquare(boundary: any, latitude: number) {
+  const ring = boundary?.type === 'Polygon' ? boundary.coordinates?.[0] : null;
+  if (!Array.isArray(ring) || ring.length !== 5 || !ring.every((point: any) => Array.isArray(point) && point.length >= 2 && point.slice(0, 2).every(Number.isFinite))) return false;
+  const latitudes = ring.map((point: number[]) => point[1]);
+  const longitudes = ring.map((point: number[]) => point[0]);
+  const heightM = (Math.max(...latitudes) - Math.min(...latitudes)) * 111_320;
+  const widthM = (Math.max(...longitudes) - Math.min(...longitudes)) * 111_320 * Math.cos(latitude * Math.PI / 180);
+  const targetSideM = Math.sqrt(2_000_000);
+  return Math.abs(heightM - targetSideM) < 10 && Math.abs(widthM - targetSideM) < 10;
+}
 function usableBoundary(value: any) {
   if (!value || !['Polygon', 'MultiPolygon'].includes(value.type) || !Array.isArray(value.coordinates)) return false;
   try { return JSON.stringify(value).length <= 750_000; } catch { return false; }
@@ -187,7 +197,7 @@ async function nearbyPlayers(client: Db, account: any) {
   // Normalize every legacy territory, including irregular barangay polygons, to
   // an exact 2 km² square. The signed-in owner's territory follows their
   // current verified GPS location; other territories keep their saved centre.
-  const staleKingdoms = allZones.filter((row: any) => usableBoundary(row.boundary) && row.boundary.coordinates?.[0]?.length !== 5);
+  const staleKingdoms = allZones.filter((row: any) => usableBoundary(row.boundary) && Number.isFinite(Number(row.centroid_lat)) && Number.isFinite(Number(row.centroid_lng)) && !isTwoSquareKilometreSquare(row.boundary, Number(row.centroid_lat)));
   if (staleKingdoms.length) await Promise.all(staleKingdoms.map(async (row: any) => {
     const ownTerritory = row.user_id === account.id;
     const centerLat = ownTerritory ? Number(own.data.latitude) : Number(row.centroid_lat);
@@ -195,7 +205,9 @@ async function nearbyPlayers(client: Db, account: any) {
     if (!Number.isFinite(centerLat) || !Number.isFinite(centerLng)) return;
     const boundary = kingdomRangePolygon(centerLat, centerLng);
     Object.assign(row, { boundary, centroid_lat: centerLat, centroid_lng: centerLng });
-    const normalized = await client.from('cb_territories').update({ boundary, centroid_lat: centerLat, centroid_lng: centerLng, radius_m: 707, updated_at: new Date().toISOString() }).eq('id', row.id);
+    // radius_m is a legacy schema marker constrained to 2000. The boundary is
+    // authoritative and is exactly 2,000,000 m² (not a 2 km radius).
+    const normalized = await client.from('cb_territories').update({ boundary, centroid_lat: centerLat, centroid_lng: centerLng, radius_m: 2000, updated_at: new Date().toISOString() }).eq('id', row.id);
     if (normalized.error) console.warn('arena.territory-normalize-failed', { territoryId: row.id, message: normalized.error.message });
   }));
   const rows = allZones.filter((row: any) => usableBoundary(row.boundary) && polygonContains(row.boundary, Number(own.data.latitude), Number(own.data.longitude))).slice(0, 1);
