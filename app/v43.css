@@ -1,0 +1,83 @@
+/* Professional online-player tile and compact hover card */
+.online-directory{
+  position:relative;
+  width:100%;
+  padding:22px!important;
+  border:1px solid #323a44;
+  border-radius:18px;
+  background:linear-gradient(145deg,#20262d,#171c22);
+  box-shadow:inset 0 1px #ffffff08,0 10px 26px #0003;
+}
+.online-directory .online-player{isolation:isolate}
+.online-directory .online-avatar-button{position:relative!important;overflow:visible!important}
+.online-directory .online-presence-dot{
+  position:absolute;
+  right:2px;
+  bottom:3px;
+  width:12px;
+  height:12px;
+  border:2px solid #1b2127;
+  border-radius:50%;
+  background:#42ce72;
+  box-shadow:0 0 0 2px #42ce7222,0 0 8px #42ce7288;
+}
+.online-directory .online-user-card{
+  z-index:60;
+  top:calc(100% + 9px);
+  width:220px;
+  padding:12px;
+  border:1px solid #596470;
+  border-radius:13px;
+  background:linear-gradient(150deg,#2b333d,#171d23);
+  box-shadow:0 16px 36px #000c, inset 0 1px #ffffff0d;
+}
+.online-directory .online-user-card:before{
+  content:"";
+  position:absolute;
+  top:-6px;
+  left:calc(50% - 6px);
+  width:12px;
+  height:12px;
+  transform:rotate(45deg);
+  border-left:1px solid #596470;
+  border-top:1px solid #596470;
+  background:#29313a;
+}
+.online-directory .online-card-identity{border-radius:9px}
+.online-directory .online-card-identity:hover{background:#ffffff08}
+.online-directory .online-card-identity>span{
+  width:36px;
+  height:36px;
+  border-radius:50%;
+}
+.online-directory .online-card-identity>span img{
+  display:block;
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  border-radius:50%;
+}
+.online-directory .online-user-card .gold-button,
+.online-directory .online-cancel{min-height:32px;border-radius:9px}
+@media(max-width:650px){
+  .online-directory{padding:16px 10px!important}
+  .online-directory .online-user-card{
+    position:fixed;
+    z-index:100;
+    top:auto;
+    right:12px;
+    bottom:82px;
+    left:12px;
+    width:auto;
+    max-width:340px;
+    margin:auto;
+    transform:none;
+  }
+  .online-directory .online-user-card:before{display:none}
+  .online-directory .online-presence-dot{
+    right:0;
+    bottom:1px;
+    width:10px;
+    height:10px;
+  }
+}
