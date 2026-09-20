@@ -12,21 +12,24 @@ type CommunityEvent=FeedEvent&{origin?:"arena"};
 type OnlinePlayer=ArenaPlayer&{available:boolean};
 
 type FeedTab="recent"|"popular"|"first_blood"|"announcement"|"online";
-const PAGE_SIZE=10;
+const PAGE_SIZE=10,ONLINE_PAGE_SIZE=60;
 const labels:Record<string,string>={profile_created:"New player",profile_updated:"Profile",win:"Win",first_blood:"First blood",new_reward:"Reward",top10:"Top 10",announcement:"Announcement"};
 
 export default function CommunityFeed({onOpenProfile,onMatch,onChallenge}:{onOpenProfile:(userId:string)=>void;onMatch:(id:string)=>void;onChallenge:(player:ArenaPlayer)=>void}){
  const[tab,setTab]=useState<FeedTab>("recent"),[page,setPage]=useState(1),[events,setEvents]=useState<CommunityEvent[]>([]);
  const[challenges,setChallenges]=useState<CommunityEvent[]>([]),[accepting,setAccepting]=useState<string|null>(null);
  const[expandedImage,setExpandedImage]=useState<string|null>(null);
- const[onlineUsers,setOnlineUsers]=useState<OnlinePlayer[]>([]),[onlineSearch,setOnlineSearch]=useState(''),[onlineCard,setOnlineCard]=useState<string|null>(null);
+ const[onlineUsers,setOnlineUsers]=useState<OnlinePlayer[]>([]),[onlineSearch,setOnlineSearch]=useState(''),[onlineCard,setOnlineCard]=useState<string|null>(null),[onlinePage,setOnlinePage]=useState(1);
  const request=useRef(0);
  const[total,setTotal]=useState(0),[status,setStatus]=useState("Loading activity…"),[userId,setUserId]=useState<string|null>(null),[reacted,setReacted]=useState<Set<string>>(new Set());
  const refresh=useCallback(async()=>{
   const seq=++request.current;
-  const [localFeed,online]=await Promise.allSettled([arena<{events:CommunityEvent[]}>('feed',{},true),arena<{users:OnlinePlayer[],count:number}>('online-users',{},true)]);
+  const [localFeed,online,me]=await Promise.allSettled([arena<{events:CommunityEvent[]}>('feed',{},true),arena<{users:OnlinePlayer[],count:number}>('online-users',{},true),arena<{profile:ArenaPlayer}>('me')]);
   if(seq!==request.current)return;
-  const users=online.status==='fulfilled'?online.value.users:[];
+  const users:OnlinePlayer[]=online.status==='fulfilled'?[...online.value.users]:[];
+  if(me.status==='fulfilled'&&me.value.profile?.user_id&&!users.some(player=>player.user_id===me.value.profile.user_id)){
+   users.unshift({...me.value.profile,available:true});
+  }
   setOnlineUsers(users);
   const all=[...(localFeed.status==='fulfilled'?localFeed.value.events:[])].filter(e=>!e.expires_at||Date.parse(e.expires_at)>Date.now());
   setChallenges(all.filter(e=>e.kind==='challenge').sort((a,b)=>Date.parse(b.created_at)-Date.parse(a.created_at)));
@@ -63,15 +66,17 @@ export default function CommunityFeed({onOpenProfile,onMatch,onChallenge}:{onOpe
   catch(e){toast.error((e as Error).message);void refresh();}
   finally{setAccepting(null);}
  }
- function selectTab(next:FeedTab){request.current++;setEvents([]);setExpandedImage(null);setOnlineCard(null);setStatus("Loading activity…");setTab(next);setPage(1);}
+ function selectTab(next:FeedTab){request.current++;setEvents([]);setExpandedImage(null);setOnlineCard(null);setStatus("Loading activity…");setTab(next);setPage(1);setOnlinePage(1);}
  const pages=Math.max(1,Math.min(5,Math.ceil(total/PAGE_SIZE)));
  const search=onlineSearch.trim().toLowerCase();
  const shownOnline=onlineUsers.filter(player=>!search||player.display_name.toLowerCase().includes(search)||player.username.toLowerCase().includes(search));
+ const onlinePages=Math.max(1,Math.ceil(shownOnline.length/ONLINE_PAGE_SIZE));
+ const visibleOnline=shownOnline.slice((onlinePage-1)*ONLINE_PAGE_SIZE,onlinePage*ONLINE_PAGE_SIZE);
  return <section className="feed-page">
   <div className="page-heading"><h1>{tab==="announcement"?"Announcements":tab==="online"?"Online players":"Community feed"}</h1><span className="sample-label">{tab==="announcement"?"Official updates":tab==="online"?`${onlineUsers.length} online`:"Latest 50"}</span></div>
   <div className="feed-tabs" role="tablist" aria-label="Community feed views" style={{display:"grid",gridTemplateColumns:"repeat(5,minmax(0,1fr))",width:"100%"}}>
    <button role="tab" aria-selected={tab==="recent"} onClick={()=>selectTab("recent")}>Recent feed</button>
-   <button className="online-feed-tab" role="tab" aria-selected={tab==="online"} style={{background:"linear-gradient(145deg,#ffbd4e,#e98218)",color:"#241506",fontWeight:800}} onClick={()=>selectTab("online")}>Online <span aria-label={`${onlineUsers.length} users online`}>{onlineUsers.length}</span></button>
+   <button className="online-feed-tab" role="tab" aria-selected={tab==="online"} style={{background:"linear-gradient(145deg,#ffbd4e,#e98218)",color:"#241506",fontWeight:800}} onClick={()=>selectTab("online")}>Online <span className="online-count-badge" aria-label={`${onlineUsers.length} users online`}>{onlineUsers.length}</span></button>
    <button role="tab" aria-selected={tab==="popular"} onClick={()=>selectTab("popular")}>Popular</button>
    <button role="tab" aria-selected={tab==="first_blood"} onClick={()=>selectTab("first_blood")}>First blood</button>
    <button role="tab" aria-selected={tab==="announcement"} onClick={()=>selectTab("announcement")}>Announcements</button>
@@ -82,12 +87,13 @@ export default function CommunityFeed({onOpenProfile,onMatch,onChallenge}:{onOpe
   </article>)}</section>}
   {status&&<p className="account-note" role="status">{status}</p>}
   {tab==='online'&&<section className="online-directory" aria-label="Online players">
-   <label className="online-search"><Search size={16}/><input value={onlineSearch} onChange={event=>setOnlineSearch(event.target.value)} placeholder="Search online players" aria-label="Search online players"/><button type="button" aria-label="Clear online player search" disabled={!onlineSearch} onClick={()=>setOnlineSearch('')}><X size={14}/></button></label>
-   {shownOnline.length>0&&<div className="online-avatars">{shownOnline.map(player=>{const level=levelFor(player.cbr),open=onlineCard===player.user_id,own=player.user_id===userId;return <div className="online-player" key={player.user_id} onMouseEnter={()=>setOnlineCard(player.user_id)} onMouseLeave={()=>setOnlineCard(null)}>
-    <button className="online-avatar-button" type="button" onClick={()=>setOnlineCard(current=>current===player.user_id?null:player.user_id)} aria-expanded={open} aria-label={`Open ${player.display_name}'s player card`}><span className="online-avatar">{player.avatar_url?<img src={player.avatar_url} alt=""/>:player.display_name.charAt(0)}</span><img className="online-level" src={`/levels/level-${String(level.level-1).padStart(2,"0")}.png`} alt={`Level ${level.level}`}/><i aria-label={player.available?'Available':'In a match'} className={player.available?'available':'busy'}/></button>
+   <p className="online-description">See who is active now. Tap an avatar to view the player or send a match challenge.</p><label className="online-search"><Search size={16}/><input value={onlineSearch} onChange={event=>setOnlineSearch(event.target.value)} placeholder="Search online players" aria-label="Search online players"/><button type="button" aria-label="Clear online player search" disabled={!onlineSearch} onClick={()=>setOnlineSearch('')}><X size={14}/></button></label>
+   {visibleOnline.length>0&&<div className="online-avatars">{visibleOnline.map(player=>{const level=levelFor(player.cbr),open=onlineCard===player.user_id,own=player.user_id===userId;return <div className="online-player" key={player.user_id} onMouseEnter={()=>setOnlineCard(player.user_id)} onMouseLeave={()=>setOnlineCard(null)}>
+    <button className="online-avatar-button" type="button" onClick={()=>setOnlineCard(current=>current===player.user_id?null:player.user_id)} aria-expanded={open} aria-label={`Open ${player.display_name}'s player card`}><span className="online-avatar">{player.avatar_url?<img src={player.avatar_url} alt=""/>:player.display_name.charAt(0)}</span></button>
     {open&&<article className="online-user-card"><button className="online-card-close" type="button" onClick={()=>setOnlineCard(null)} aria-label="Close player card"><X size={15}/></button><button type="button" className="online-card-identity" onClick={()=>onOpenProfile(player.user_id)}><span>{player.avatar_url?<img src={player.avatar_url} alt=""/>:player.display_name.charAt(0)}</span><strong>{player.display_name}</strong><small>@{player.username} · {player.cbr} CBR</small></button>{own?<p>This is you.</p>:player.available?<button className="gold-button" type="button" onClick={()=>onChallenge(player)}><Swords size={15}/> Challenge</button>:<p>This player is in a match.</p>}<button className="online-cancel" type="button" onClick={()=>setOnlineCard(null)}>Cancel</button></article>}
    </div>})}</div>}
    {!status&&shownOnline.length===0&&<p className="account-note">No online player matches that search.</p>}
+   {onlinePages>1&&<nav className="feed-pagination online-pagination" aria-label="Online player pages"><button disabled={onlinePage===1} onClick={()=>{setOnlineCard(null);setOnlinePage(value=>value-1);}}><ChevronLeft size={15}/>Previous</button><span>Page {onlinePage} of {onlinePages}</span><button disabled={onlinePage>=onlinePages} onClick={()=>{setOnlineCard(null);setOnlinePage(value=>value+1);}}>Next<ChevronRight size={15}/></button></nav>}
   </section>}
   <ol className="community-list">{events.map(event=>{const date=new Date(event.created_at),level=levelFor(event.cbr),announcement=event.kind==='announcement',avatarUrl=announcement?'/cburger_logo.png':event.avatar_url;return <li key={event.id} className={`feed-cloud kind-${event.kind}`}>
    <button className="feed-player" disabled={announcement} onClick={()=>!announcement&&onOpenProfile(event.user_id)} aria-label={announcement?'Chess Burger announcement':`Open ${event.display_name}'s profile`}><span className="feed-avatar">{avatarUrl?<img src={avatarUrl} alt=""/>:event.display_name.charAt(0)}</span>{!announcement&&<img className="feed-level" src={`/levels/level-${String(level.level-1).padStart(2,"0")}.png`} alt={`Level ${level.level}`}/>}</button>
