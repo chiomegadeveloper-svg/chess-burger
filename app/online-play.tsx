@@ -5,6 +5,7 @@ import { Search, Copy, X } from "lucide-react";
 import { arena } from "./arena-client";
 import {
   TIME_CONTROLS,
+  boardResult,
   gameFromPgn,
   type ArenaMatch,
   type ArenaPlayer,
@@ -16,6 +17,54 @@ import TimePicker from "./time-picker";
 import MatchBoard, { Avatar } from "./match-board";
 import QrInput from "./qr-input";
 import { saveGame } from "./game-history";
+
+type BoardMove = { from: string; to: string; promotion?: string };
+
+/** Render a legal move immediately while the authoritative API confirms it. */
+function previewMove(
+  match: ArenaMatch,
+  move: BoardMove,
+  receivedAt: number,
+): ArenaMatch | null {
+  const game = gameFromPgn(match.pgn);
+  const side = game.turn();
+  try {
+    game.move({
+      from: move.from,
+      to: move.to,
+      promotion: move.promotion ?? "q",
+    });
+  } catch {
+    return null;
+  }
+
+  const now = Date.now();
+  const estimatedServerNow =
+    Number(match.server_now ?? now) + Math.max(0, now - receivedAt);
+  const elapsed = Math.max(0, estimatedServerNow - Number(match.last_tick));
+  const increment = timeControl(match.control).increment * 1000;
+  const result = boardResult(game);
+  const whiteMs =
+    side === "w"
+      ? Math.max(0, Number(match.white_ms) - elapsed) + increment
+      : Number(match.white_ms);
+  const blackMs =
+    side === "b"
+      ? Math.max(0, Number(match.black_ms) - elapsed) + increment
+      : Number(match.black_ms);
+
+  return {
+    ...match,
+    pgn: game.pgn(),
+    white_ms: whiteMs,
+    black_ms: blackMs,
+    last_tick: estimatedServerNow,
+    server_now: estimatedServerNow,
+    version: match.version + 1,
+    result,
+    status: result ? "finished" : "active",
+  };
+}
 export function OnlineGame({
   id,
   profile,
@@ -40,11 +89,13 @@ export function OnlineGame({
   const finished = useRef(false),
     alive = useRef(true),
     latest = useRef(0),
+    receivedAt = useRef(Date.now()),
     channel = useRef<any>(null),
     refresh = useRef<() => void>(() => {});
   function accept(m: ArenaMatch) {
     if (!alive.current || m.version < latest.current) return;
     latest.current = m.version;
+    receivedAt.current = Date.now();
     setMatch(m);
     setError("");
     if (m.status === "finished" && !finished.current) {
@@ -145,10 +196,20 @@ export function OnlineGame({
   }
   async function move(
     action: "move" | "resign" | "abort",
-    move?: { from: string; to: string; promotion?: string },
+    move?: BoardMove,
   ) {
     if (!match || busy) return;
     const confirmed = match;
+    const optimistic =
+      action === "move" && move
+        ? previewMove(confirmed, move, receivedAt.current)
+        : null;
+    if (optimistic) {
+      // Advance the local version so an older realtime event cannot briefly
+      // pull the piece back while this request is in flight.
+      latest.current = optimistic.version;
+      setMatch(optimistic);
+    }
     setBusy(true);
     try {
       const r = await arena<{
@@ -178,6 +239,7 @@ export function OnlineGame({
       latest.current = confirmed.version;
       setMatch(confirmed);
       setError((e as Error).message);
+      refresh.current();
     } finally {
       setBusy(false);
     }
@@ -188,7 +250,7 @@ export function OnlineGame({
     announce(response.match);
   }
   useEffect(() => {
-    if (!match || match.status !== "active" || watch || !profile?.user_id) return;
+    if (!match || match.status !== "active" || watch || busy || !profile?.user_id) return;
     const game = gameFromPgn(match.pgn);
     const whiteTurn = game.turn() === "w";
     const stored = Number(whiteTurn ? match.white_ms : match.black_ms);
@@ -204,7 +266,7 @@ export function OnlineGame({
       }
     }, remaining + 50);
     return () => window.clearTimeout(timer);
-  }, [match?.id, match?.version, match?.status, watch, profile?.user_id]);
+  }, [match?.id, match?.version, match?.status, watch, busy, profile?.user_id]);
 
   useEffect(() => {
     if (!match || !premove || busy || watch || !profile?.user_id) return;

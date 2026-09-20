@@ -1,0 +1,15 @@
+.offline-mode-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:18px 0}
+.offline-mode-options>button{display:flex;align-items:center;gap:13px;min-height:104px;padding:17px;text-align:left;border:1px solid #3a4650;border-radius:16px;background:linear-gradient(145deg,#252c33,#191f25);color:#eef3f5;box-shadow:inset 0 1px #ffffff0a,0 7px 18px #0003;transition:border-color .18s ease,transform .18s ease,background .18s ease}
+.offline-mode-options>button:hover{transform:translateY(-2px);border-color:#00e5ff;background:linear-gradient(145deg,#25343b,#18252b)}
+.offline-mode-options>button:focus-visible{outline:2px solid #00e5ff;outline-offset:3px}
+.offline-mode-options svg{width:29px;height:29px;flex:0 0 auto;color:#00e5ff}
+.offline-mode-options span,.offline-mode-options strong,.offline-mode-options small{display:block}
+.offline-mode-options strong{font-size:14px}
+.offline-mode-options small{margin-top:5px;color:#94a7b2;font-size:10px;line-height:1.45}
+.offline-change-mode{display:inline-flex;align-items:center;gap:5px;margin:8px 0 12px;padding:6px 0;border:0;background:transparent;color:#63e9f7;font-size:11px;box-shadow:none}
+.offline-change-mode:hover{color:#fff;background:transparent}
+.offline-time-step{margin-bottom:16px}
+.offline-step-label{display:block;margin-bottom:10px;color:#00e5ff;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+.offline-time-step .time-picker{margin-bottom:0}
+.offline-time-step .time-picker legend{display:none}
+@media(max-width:760px){.offline-mode-options{grid-template-columns:1fr}.offline-mode-options>button{min-height:82px;padding:14px}.offline-mode-options small{font-size:9px}}
