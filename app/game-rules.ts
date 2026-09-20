@@ -110,8 +110,4 @@ export type ArenaMatch = {
   server_now?: number;
   rating_changes?: Record<string, number>;
   gold_changes?: Record<string, number>;
-  match_kind?: "standard" | "invasion";
-  territory_id?: string | null;
-  invasion_challenger_id?: string | null;
-  invasion_fee_paid?: boolean;
 };

@@ -789,10 +789,10 @@ function AppPage() {
           <div className="invite-inbox cloud-panel">
             {invites.map((i) => (
               <div key={i.id}>
-                <strong>{i.match_kind === "invasion" ? `${i.host_name} challenges your territory` : `${i.host_name} invited you`}</strong>
+                <strong>{i.host_name} invited you</strong>
                 <span>
-                  {i.match_kind === "invasion" ? "KING defense · " : ""}{timeControl(i.control).group} ·{" "}
-                  {timeControl(i.control).label}{i.match_kind === "invasion" ? " · No Gold cost to defend" : ""}
+                  {timeControl(i.control).group} ·{" "}
+                  {timeControl(i.control).label}
                 </span>
                 <button
                   className="gold-button"
