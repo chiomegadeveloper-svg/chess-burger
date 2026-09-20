@@ -74,10 +74,10 @@ const navigation = [
   { key: "home", label: "Home", Icon: Home },
   { key: "map", label: "Map", Icon: MapPin },
   { key: "card", label: "Card", Icon: CreditCard },
-  { key: "bag", label: "Bag", Icon: PackageOpen },
+  { key: "guild", label: "Guild", Icon: Castle },
   { key: "play", label: "Play", Icon: Swords },
   { key: "shop", label: "Shop", Icon: ShoppingBag },
-  { key: "guild", label: "Guild", Icon: Castle },
+  { key: "bag", label: "Bag", Icon: PackageOpen },
   { key: "rank", label: "Rank", Icon: Trophy },
   { key: "profile", label: "Profile", Icon: UserRound },
 ];

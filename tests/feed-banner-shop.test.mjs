@@ -32,12 +32,13 @@ test("feed banners are timed rentals with three duration choices", () => {
   assert.match(api, /cb_buy_feed_banner_timed/);
   assert.match(api, /\.gt\('expires_at'/);
   assert.match(rentalSql, /now\(\) \+ interval '7 days'/i);
-  assert.match(rentalSql, /greatest\(now\(\),public\.cb_user_items\.expires_at\)/i);
+  assert.match(rentalSql, /greatest\(now\(\),(?:public\.)?cb_user_items\.expires_at\)/i);
   assert.match(rentalSql, /expires_at>now\(\)/i);
 });
 
-test("main navigation exposes Bag and Guild destinations", () => {
-  assert.match(page, /key: "bag", label: "Bag"/);
-  assert.match(page, /key: "guild", label: "Guild"/);
+test("main navigation uses the requested nine-item order", () => {
+  const block = page.slice(page.indexOf("const navigation = ["), page.indexOf("type Invite"));
+  const labels = [...block.matchAll(/label: "([^"]+)"/g)].map((match) => match[1]);
+  assert.deepEqual(labels, ["Home", "Map", "Card", "Guild", "Play", "Shop", "Bag", "Rank", "Profile"]);
   assert.match(page, /Coming soon/);
 });

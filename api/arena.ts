@@ -603,6 +603,11 @@ export default async function handler(req: Req, res: Res) {
       if (action === 'feed') return res.status(200).json(await publicFeed(client));
       if (action === 'online-users') return res.status(200).json(await publicOnlineUsers(client));
       if (action === 'ranks') return res.status(200).json(await publicRanks(client));
+      if (action === 'app-feature') {
+        const setting = await client.from('cb_app_settings').select('value').eq('key', 'app_feature').maybeSingle();
+        if (setting.error) fail(500, setting.error.message);
+        return res.status(200).json({ image_url: String(setting.data?.value?.image_url ?? '') });
+      }
       if (action === 'live') {
         const found = await client.from('cb_matches').select('*').eq('status', 'active').order('created_at', { ascending: false }).limit(20);
         if (found.error) fail(500, found.error.message);
@@ -622,6 +627,79 @@ export default async function handler(req: Req, res: Res) {
     // Keep it as a first-class migration action rather than falling through to
     // a 404 on every page load.
     if (action === 'me') return res.status(200).json({ profile: { ...account.profile, ocbr: Number(account.profile.ocbr ?? 88) }, rank: await playerRank(client, account.profile) });
+    const isStaff = account.profile.role === 'owner' || account.profile.role === 'admin';
+    const requireStaff = () => { if (!isStaff) fail(403, 'Owner or GM access is required.'); };
+    const audit = async (auditAction: string, details: Record<string, unknown> = {}) => {
+      const saved = await client.from('cb_admin_logs').insert({ actor_user_id: account.id, action: auditAction, details });
+      if (saved.error) console.warn('arena.cms-audit-failed', { action: auditAction, message: saved.error.message });
+    };
+    if (action === 'cms-announcements') {
+      requireStaff();
+      const posts = await client.from('cb_feed').select('id,content,image_url,expires_at').eq('kind', 'announcement').gt('expires_at', new Date().toISOString()).order('created_at', { ascending: false });
+      if (posts.error) fail(500, posts.error.message);
+      return res.status(200).json({ posts: posts.data ?? [] });
+    }
+    if (action === 'save-announcement') {
+      requireStaff();
+      const content = String(body.content ?? '').trim().slice(0, 500);
+      const imageUrl = String(body.image_url ?? '').trim().slice(0, 2048);
+      const expiresAt = String(body.expires_at ?? '');
+      const id = String(body.id ?? '');
+      if (!content && !imageUrl) fail(400, 'Add text or an image.');
+      if (!Number.isFinite(Date.parse(expiresAt)) || Date.parse(expiresAt) <= now()) fail(400, 'Choose a future end date.');
+      if (imageUrl && !/^https:\/\//i.test(imageUrl)) fail(400, 'Use a secure HTTPS image.');
+      const scoped = userScopedDb(req);
+      const query = id
+        ? scoped.from('cb_feed').update({ content, image_url: imageUrl, expires_at: expiresAt }).eq('id', id).eq('kind', 'announcement').select('id,content,image_url,expires_at').maybeSingle()
+        : scoped.from('cb_feed').insert({ user_id: account.id, kind: 'announcement', display_name: 'Chess Burger', content, image_url: imageUrl, expires_at: expiresAt }).select('id,content,image_url,expires_at').single();
+      const saved = await query;
+      if (saved.error) fail(500, saved.error.message);
+      if (!saved.data) fail(404, 'Announcement not found.');
+      return res.status(200).json({ ok: true, post: saved.data });
+    }
+    if (action === 'delete-announcement') {
+      requireStaff();
+      const id = String(body.id ?? '');
+      if (!/^[a-f0-9-]{36}$/i.test(id)) fail(400, 'Choose a valid announcement.');
+      const removed = await userScopedDb(req).from('cb_feed').delete().eq('id', id).eq('kind', 'announcement').select('id').maybeSingle();
+      if (removed.error) fail(500, removed.error.message);
+      if (!removed.data) fail(404, 'Announcement not found.');
+      return res.status(200).json({ ok: true });
+    }
+    if (action === 'set-app-feature') {
+      requireStaff();
+      const imageUrl = String(body.url ?? '').trim();
+      if (imageUrl && (!/^https:\/\//i.test(imageUrl) || imageUrl.length > 2048)) fail(400, 'Use a secure HTTPS photo URL.');
+      const saved = await client.from('cb_app_settings').upsert({ key: 'app_feature', value: { image_url: imageUrl }, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+      if (saved.error) fail(500, saved.error.message);
+      await audit('set_app_feature', { image_url: imageUrl });
+      return res.status(200).json({ ok: true, image_url: imageUrl });
+    }
+    if (action === 'logs') {
+      requireStaff();
+      const page = Math.max(0, Math.floor(Number(body.page) || 0));
+      const start = page * 20;
+      const found = await client.from('cb_admin_logs').select('id,actor_user_id,action,details,created_at').order('created_at', { ascending: false }).range(start, start + 19);
+      if (found.error) fail(500, found.error.message);
+      const actorIds = [...new Set((found.data ?? []).map((row: any) => row.actor_user_id).filter(Boolean))];
+      const actors = actorIds.length ? await client.from('cb_profiles').select('user_id,display_name,username').in('user_id', actorIds) : { data: [], error: null };
+      if (actors.error) fail(500, actors.error.message);
+      const names = new Map((actors.data ?? []).map((actor: any) => [actor.user_id, actor.display_name || `@${actor.username}`]));
+      return res.status(200).json({ logs: (found.data ?? []).map((row: any) => ({ ...row, actor_name: names.get(row.actor_user_id) ?? undefined })) });
+    }
+    if (action === 'delete-user') {
+      if (account.profile.role !== 'owner') fail(403, 'Only an Owner can delete a user.');
+      const username = cmsUsername(body.username), confirmation = cmsUsername(body.confirmation);
+      if (!/^[a-z0-9_]{3,24}$/.test(username) || confirmation !== username) fail(400, 'Type the username again to confirm deletion.');
+      const target = await client.from('cb_profiles').select('user_id,username,role').eq('username', username).maybeSingle();
+      if (target.error) fail(500, target.error.message);
+      if (!target.data) fail(404, 'Player not found.');
+      if (target.data.role === 'owner') fail(403, 'Owner accounts are protected.');
+      await audit('delete_user', { username });
+      const removed = await client.auth.admin.deleteUser(target.data.user_id);
+      if (removed.error) fail(409, removed.error.message);
+      return res.status(200).json({ ok: true });
+    }
     if(action==='shop-banners'){
       const items=await client.from('cb_user_items').select('product_id,expires_at').eq('user_id',account.id).gt('expires_at',new Date().toISOString()).order('expires_at',{ascending:true});
       if(items.error)fail(503,'Run supabase/0022_feed_banner_rentals.sql in Supabase, then try again.');
