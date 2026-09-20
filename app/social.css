@@ -66,3 +66,26 @@
   .chat-dialog>.personal-chat-layout:not(.group-chat-layout){grid-template-columns:52px minmax(0,1fr)}
   .chat-dialog .chat-history article{max-width:94%}
 }
+
+/* Compact message rows with avatars and metadata outside the bubble. */
+.chat-dialog .chat-history article,.chat-dialog .chat-history article.mine{display:flex;align-items:flex-end;gap:8px;width:min(86%,660px);max-width:min(86%,660px);padding:0;border:0;border-radius:0;background:transparent;box-shadow:none}
+.chat-dialog .chat-history article.mine{flex-direction:row-reverse}
+.message-avatar{width:34px!important;height:34px!important;min-width:34px!important;min-height:34px!important;padding:0!important;overflow:hidden;border:1px solid #3cd7e6!important;border-radius:50%!important;background:#263b45!important;display:grid!important;place-items:center!important;flex:0 0 34px}
+.message-avatar img,.message-avatar span{width:100%;height:100%;display:grid;place-items:center;object-fit:cover;font-size:13px;font-weight:750;color:#fff}
+.message-stack{display:flex;min-width:0;flex-direction:column;align-items:flex-start;gap:3px}
+.mine .message-stack{align-items:flex-end}
+.chat-dialog .message-bubble{display:block;min-width:76px;max-width:100%;min-height:0;padding:7px 10px;border:1px solid #3b4b56;border-radius:12px 12px 12px 4px;background:#2b3740;box-shadow:0 4px 12px #0002;text-align:left;color:#edf4f7}
+.mine .message-bubble{border-color:#247281;border-radius:12px 12px 4px 12px;background:linear-gradient(135deg,#15505d,#1c414b)}
+.chat-dialog .message-bubble .message-author{display:block;min-height:0;padding:0;margin:0 0 2px;color:#65e6f2;font-size:12px;font-weight:650;line-height:1.25;text-align:left}
+.chat-dialog .message-bubble p{margin:0;font-size:14px;line-height:1.35}
+.message-meta{display:flex;align-items:center;gap:7px;min-height:18px;padding:0 3px;color:#8fa2ae}
+.mine .message-meta{justify-content:flex-end}
+.chat-dialog .message-meta time{font-size:11px;line-height:1.3;color:#8fa2ae}
+.chat-dialog .message-delete{position:static;min-height:18px!important;padding:0!important;font-size:10px!important}
+
+@media(max-width:700px){
+  .chat-dialog .chat-history article,.chat-dialog .chat-history article.mine{width:94%;max-width:94%;gap:6px;padding:0}
+  .message-avatar{width:30px!important;height:30px!important;min-width:30px!important;min-height:30px!important;flex-basis:30px}
+  .message-bubble{padding:6px 9px}
+  .chat-dialog .message-bubble p{font-size:13px}
+}

@@ -46,6 +46,7 @@ type Message = {
   sender_id: string;
   recipient_id: string | null;
   display_name: string;
+  avatar_url?: string;
   body: string;
   created_at: number;
   deleted_at?: string | null;
@@ -314,6 +315,7 @@ export function SocialHub({
     [hasMore, setHasMore] = useState(false),
     [before, setBefore] = useState<number | undefined>(),
     [draft, setDraft] = useState(""),
+    [openMessageMeta, setOpenMessageMeta] = useState(""),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [loading, setLoading] = useState(false);
@@ -754,7 +756,8 @@ export function SocialHub({
                         key={m.id}
                       >
                         <button
-                          className="message-author"
+                          className="message-avatar"
+                          aria-label={`Open ${m.display_name}'s profile`}
                           onClick={() => {
                             if (m.sender_id !== profile?.user_id) {
                               setTarget(m.sender_id);
@@ -763,18 +766,37 @@ export function SocialHub({
                             }
                           }}
                         >
-                          {m.display_name}
+                          {m.avatar_url ? (
+                            <img src={m.avatar_url} alt="" />
+                          ) : (
+                            <span>{m.display_name.charAt(0).toUpperCase()}</span>
+                          )}
                         </button>
-                        <p>{m.body}</p>
-                        <time>
-                          {new Date(m.created_at).toLocaleString([], {
-                            month: "short",
-                            day: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </time>
-                        {m.sender_id===profile?.user_id&&!m.deleted_at&&<button className="message-delete" aria-label="Delete your message" onClick={()=>void deleteMessage(m.id)}><Trash2 size={12}/> Delete</button>}
+                        <div className="message-stack">
+                          <button
+                            type="button"
+                            className="message-bubble"
+                            aria-expanded={openMessageMeta === m.id}
+                            aria-label={`${m.display_name}: ${m.body}. Tap to ${openMessageMeta === m.id ? "hide" : "show"} date and time.`}
+                            onClick={() => setOpenMessageMeta(current => current === m.id ? "" : m.id)}
+                          >
+                            <span className="message-author">
+                              {m.display_name}
+                            </span>
+                            <p>{m.body}</p>
+                          </button>
+                          {openMessageMeta === m.id && <div className="message-meta">
+                            <time>
+                              {new Date(m.created_at).toLocaleString([], {
+                                month: "short",
+                                day: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </time>
+                            {m.sender_id===profile?.user_id&&!m.deleted_at&&<button className="message-delete" aria-label="Delete your message" onClick={()=>void deleteMessage(m.id)}><Trash2 size={12}/> Delete</button>}
+                          </div>}
+                        </div>
                       </article>
                     ))}
                   </div>
