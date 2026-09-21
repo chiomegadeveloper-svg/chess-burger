@@ -545,21 +545,24 @@ export function pickQueueCandidate(rows: any[], ownId: string, ownSeenAt: string
     })[0] ?? null;
 }
 
-async function queuedMatch(client: Db, account: any, controlId: string) {
+export function queueTicket(controlId: string, playMode: 'normal' | 'wager', wagerGold: number) {
+  return playMode === 'wager' ? `wager:${wagerGold}:${controlId}` : `normal:${controlId}`;
+}
+
+async function queuedMatch(client: Db, account: any, controlId: string, requestedMode: unknown, requestedWager: unknown) {
   await requireFairPlayReady(client,account.id);
   const clock = tc(controlId);
-  if (Number(account.profile.gold_points ?? 0) < 3) fail(409, 'You need at least 3 Gold to enter online pairing.');
-  const compatible = Object.entries(TIME).filter(([, value]) => value.group === clock.group).map(([id]) => id);
+  const playMode: 'normal' | 'wager' = requestedMode === 'wager' ? 'wager' : 'normal';
+  const wagerGold = playMode === 'wager' ? Number(requestedWager) : 0;
+  if (playMode === 'wager' && (!Number.isInteger(wagerGold) || wagerGold < 1 || wagerGold > 10000)) fail(400, 'Choose a whole Gold wager from 1 to 10,000.');
+  if (playMode === 'wager' && Number(account.profile.gold_points ?? 0) < wagerGold) fail(409, `You need ${wagerGold} Gold to search for this wager.`);
+  const compatible = Object.entries(TIME).filter(([, value]) => value.group === clock.group).map(([id]) => queueTicket(id, playMode, wagerGold));
+  const ownTicket = queueTicket(controlId, playMode, wagerGold);
   const active = await activeMatchFor(client, account.id);
   if (active) {
     const current = await finishExpiredMatch(client, active);
     if (current.status === 'active') return { match: await matchView(client, current), searching: false };
   }
-
-  // Entering automatic pairing means the player has left every unanswered
-  // direct/KING invitation. Clear both the match and any linked queue rows so
-  // a declined or timed-out challenge cannot block Play Online.
-  await cancelWaitingForUser(client, account.id);
 
   const existing = await client.from('cb_match_queue').select('user_id,control,match_id,seen_at').eq('user_id', account.id).maybeSingle();
   if (existing.error) fail(500, existing.error.message);
@@ -567,14 +570,18 @@ async function queuedMatch(client: Db, account: any, controlId: string) {
     const linked = await client.from('cb_matches').select('*').eq('id', existing.data.match_id).maybeSingle();
     if (linked.error) fail(500, linked.error.message);
     if (linked.data?.status === 'active' && participant(linked.data, account.id)) return { match: await matchView(client, linked.data), searching: false };
-    if (linked.data?.status === 'waiting' && participant(linked.data, account.id) && Date.parse(linked.data.created_at) > now() - 20_000) return { match: null, searching: true };
+    if (linked.data?.status === 'waiting' && participant(linked.data, account.id) && Date.parse(linked.data.created_at) > now() - 120_000) return { match: await matchView(client, linked.data), searching: false };
     if (linked.data?.status === 'waiting') await client.from('cb_matches').delete().eq('id', linked.data.id).eq('status', 'waiting');
     const cleared = await client.from('cb_match_queue').delete().eq('user_id', account.id).eq('match_id', existing.data.match_id);
     if (cleared.error) fail(500, cleared.error.message);
   }
 
+  // Starting a fresh search replaces unanswered direct invitations, but never
+  // cancels the pending wager recovered above.
+  await cancelWaitingForUser(client, account.id);
+
   const seenAt = new Date().toISOString();
-  const saved = await client.from('cb_match_queue').upsert({ user_id: account.id, control: controlId, seen_at: seenAt }, { onConflict: 'user_id' });
+  const saved = await client.from('cb_match_queue').upsert({ user_id: account.id, control: ownTicket, match_id: null, seen_at: seenAt }, { onConflict: 'user_id' });
   if (saved.error) fail(500, saved.error.message);
 
   const waiting = await client.from('cb_match_queue').select('user_id,control,match_id,seen_at').neq('user_id', account.id).in('control', compatible).is('match_id', null).gt('seen_at', new Date(now() - 15_000).toISOString()).order('seen_at', { ascending: true }).limit(40);
@@ -584,15 +591,15 @@ async function queuedMatch(client: Db, account: any, controlId: string) {
   if (!candidate) return { match: null, searching: true };
 
   const opponent = ratings.get(candidate.user_id);
-  if (!opponent || Number(opponent.gold_points ?? 0) < 3 || await activeMatchFor(client, candidate.user_id) || await activeMatchFor(client, account.id)) return { match: null, searching: true };
+  if (!opponent || (playMode === 'wager' && Number(opponent.gold_points ?? 0) < wagerGold) || await activeMatchFor(client, candidate.user_id) || await activeMatchFor(client, account.id)) return { match: null, searching: true };
 
   const matchId = crypto.randomUUID();
   const created = await client.from('cb_matches').insert({
     id: matchId,
     host_id: candidate.user_id,
     white_id: candidate.user_id,
-    black_id: account.id,
-    invite_to: null,
+    black_id: playMode === 'normal' ? account.id : null,
+    invite_to: playMode === 'wager' ? account.id : null,
     code: code(),
     control: controlId,
     status: 'waiting',
@@ -601,8 +608,8 @@ async function queuedMatch(client: Db, account: any, controlId: string) {
     last_tick: new Date().toISOString(),
     white_cbr: Number(opponent.cbr ?? 88),
     black_cbr: Number(account.profile.cbr ?? 88),
-    play_mode: 'queue',
-    wager_gold: 3,
+    play_mode: playMode,
+    wager_gold: wagerGold,
   }).select('*').single();
   if (created.error) fail(500, created.error.message);
 
@@ -615,6 +622,12 @@ async function queuedMatch(client: Db, account: any, controlId: string) {
     return { match: current ? await matchView(client, current) : null, searching: !current };
   }
 
+  if (playMode === 'wager') {
+    const pendingWager = await matchView(client, created.data);
+    console.info('arena.queue-wager-pending', { matchId, control: controlId, wagerGold, acceptorId: account.id });
+    return { match: pendingWager, searching: false, pending_wager: true };
+  }
+
   const started = await client.rpc('cb_activate_gold_match', { p_match_id: matchId, p_acceptor_id: account.id });
   if (started.error || !started.data) {
     await client.from('cb_matches').delete().eq('id', matchId).eq('status', 'waiting');
@@ -624,7 +637,7 @@ async function queuedMatch(client: Db, account: any, controlId: string) {
   if (!startedMatch) fail(409, 'Another player matched first. Searching again…');
   const view = await matchView(client, startedMatch);
   await broadcastMatch(view);
-  console.info('arena.queue-matched', { matchId, control: controlId });
+  console.info('arena.queue-matched', { matchId, control: controlId, playMode });
   return { match: view, searching: false };
 }
 
@@ -1044,7 +1057,7 @@ export default async function handler(req: Req, res: Res) {
       const r = await client.from('cb_profiles').select('user_id,username,display_name,avatar_url,country_code,cbr,gold_points,wins,losses,win_streak').neq('user_id', account.id).or(`username.ilike.%${query}%,display_name.ilike.%${query}%`).limit(10);
       if (r.error) fail(500, r.error.message); return res.status(200).json({ players: r.data ?? [] });
     }
-    if (action === 'queue') return res.status(200).json(await queuedMatch(client, account, String(body.control ?? '')));
+    if (action === 'queue') return res.status(200).json(await queuedMatch(client, account, String(body.control ?? ''), body.play_mode, body.wager_gold));
     if (action === 'cancel-queue') {
       const removed = await client.from('cb_match_queue').delete().eq('user_id', account.id).is('match_id', null);
       if (removed.error) fail(500, removed.error.message);

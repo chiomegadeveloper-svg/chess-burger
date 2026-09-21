@@ -68,6 +68,8 @@ export default function OnlinePlay({
         for (const candidateControl of queueControls) {
           const r = await arena<{ match: ArenaMatch | null }>("queue", {
             control: candidateControl,
+            play_mode: playMode,
+            wager_gold: playMode === "wager" ? wagerGold : 0,
           });
           if (cancelled.current) {
             await arena("cancel-queue");
@@ -75,7 +77,8 @@ export default function OnlinePlay({
           }
           if (r.match) {
             setSearching(false);
-            callback.current(r.match.id);
+            if (r.match.status === "active") callback.current(r.match.id);
+            else setRoom(r.match);
             return;
           }
         }
@@ -93,7 +96,7 @@ export default function OnlinePlay({
       clearInterval(timer);
       void arena("cancel-queue").catch(() => {});
     };
-  }, [searching, control]);
+  }, [searching, control, playMode, wagerGold]);
   useEffect(() => {
     if (!room) return;
     let active = true;
@@ -107,7 +110,7 @@ export default function OnlinePlay({
             Date.now() - r.match.created_at > 120000)
         ) {
           setRoom(null);
-            setError("Invitation expired. Create another room.");
+            setError(r.match.play_mode === "wager" ? "The wager was rejected or expired. No Gold was deducted." : "Invitation expired. Create another room.");
         }
       } catch (e) {
         if (active) setError((e as Error).message);
@@ -120,7 +123,7 @@ export default function OnlinePlay({
       clearInterval(timer);
     };
   }, [room?.id]);
-  async function create() {
+  async function create(requestedMode: "normal" | "wager" = playMode) {
     setBusy(true);
     setError("");
     try {
@@ -128,8 +131,8 @@ export default function OnlinePlay({
         control,
         target: challenge ? selected?.user_id : target?.user_id,
         publicChallenge: challenge && audience === "anyone",
-        play_mode: playMode,
-        wager_gold: playMode === "wager" ? wagerGold : 0,
+        play_mode: requestedMode,
+        wager_gold: requestedMode === "wager" ? wagerGold : 0,
       });
       if (challenge && audience === "anyone" && r.challengePublished !== true) {
         throw Error("The server did not confirm your public challenge. Please retry.");
@@ -138,6 +141,35 @@ export default function OnlinePlay({
       setModeOpen(false);
       if (challenge && audience === "anyone") {
         window.dispatchEvent(new Event("cb-profile-saved"));
+      }
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  function confirmPlayMode() {
+    setError("");
+    if (target || challenge) {
+      void create(playMode);
+      return;
+    }
+    setModeOpen(false);
+    setRoom(null);
+    setSearching(true);
+  }
+  async function answerFoundWager(accept: boolean) {
+    if (!room) return;
+    setBusy(true);
+    setError("");
+    try {
+      if (accept) {
+        const r = await arena<{ match: ArenaMatch }>("join", { code: room.code });
+        onMatch(r.match.id);
+      } else {
+        await arena("decline-room", { id: room.id });
+        setRoom(null);
+        setError("Bet rejected. No Gold was deducted.");
       }
     } catch (e) {
       setError((e as Error).message);
@@ -174,7 +206,7 @@ export default function OnlinePlay({
     );
   return (
     <section className="match-setup">
-      {modeOpen&&<div className="wager-overlay" role="presentation"><section className="wager-dialog" role="dialog" aria-modal="true" aria-labelledby="match-mode-title"><button className="wager-close" aria-label="Close match mode" onClick={()=>setModeOpen(false)}><X size={18}/></button><h2 id="match-mode-title">Choose invitation mode</h2><p>Select how this invitation will be played before it is sent.</p><div className="wager-mode-options"><button className={playMode==='normal'?'chosen':''} onClick={()=>setPlayMode('normal')}><Swords size={22}/><strong>Normal game</strong><small>Standard online match rewards</small></button><button className={playMode==='wager'?'chosen':''} onClick={()=>setPlayMode('wager')}><Coins size={22}/><strong>Wager mode</strong><small>Both players stake equal Gold</small></button></div>{playMode==='wager'&&<label className="wager-amount">Your Gold bet<input type="number" inputMode="numeric" min={1} max={Math.min(10000,profile.gold_points)} value={wagerGold} onChange={e=>setWagerGold(Math.max(0,Math.floor(Number(e.target.value)||0)))}/><small>You have {profile.gold_points} Gold. The opponent must match {wagerGold||0} Gold.</small></label>}<button className="gold-button wide" disabled={busy||(playMode==='wager'&&(wagerGold<1||wagerGold>profile.gold_points||wagerGold>10000))} onClick={()=>void create()}>{busy?'Sending…':playMode==='wager'?`Send ${wagerGold} Gold wager`:'Send normal invitation'}</button></section></div>}
+      {modeOpen&&<div className="wager-overlay" role="presentation"><section className="wager-dialog" role="dialog" aria-modal="true" aria-labelledby="match-mode-title"><button className="wager-close" aria-label="Close match mode" onClick={()=>setModeOpen(false)}><X size={18}/></button><h2 id="match-mode-title">{target||challenge?"Choose invitation mode":"Choose Play Online mode"}</h2><p>{target||challenge?"Select how this invitation will be played before it is sent.":"Choose a regular match or find a player willing to match your Gold bet."}</p><div className="wager-mode-options"><button className={playMode==='normal'?'chosen':''} onClick={()=>setPlayMode('normal')}><Swords size={22}/><strong>Regular play</strong><small>No Gold stake · standard rewards</small></button><button className={playMode==='wager'?'chosen':''} onClick={()=>setPlayMode('wager')}><Coins size={22}/><strong>Wager play</strong><small>Both players stake equal Gold</small></button></div>{playMode==='wager'&&<label className="wager-amount">Your Gold bet<input type="number" inputMode="numeric" min={1} max={Math.min(10000,profile.gold_points)} value={wagerGold} onChange={e=>setWagerGold(Math.max(0,Math.floor(Number(e.target.value)||0)))}/><small>You have {profile.gold_points} Gold. The found opponent must accept or reject the {wagerGold||0}-Gold bet.</small></label>}<button className="gold-button wide" disabled={busy||(playMode==='wager'&&(wagerGold<1||wagerGold>profile.gold_points||wagerGold>10000))} onClick={confirmPlayMode}>{busy?'Please wait…':target||challenge?(playMode==='wager'?`Send ${wagerGold} Gold wager`:'Send regular invitation'):(playMode==='wager'?`Find ${wagerGold} Gold wager`:'Find regular opponent')}</button></section></div>}
       <div className="page-heading">
         <h1>{challenge ? "Challenge a Player" : target ? "Invite to a match" : "Play Online"}</h1>
         <span className="sample-label">{profile.cbr} CBR</span>
@@ -223,7 +255,7 @@ export default function OnlinePlay({
             </strong>
             <p>
               Preferred: {Math.max(0, profile.cbr - 20)}–{profile.cbr + 20} CBR
-              · checks every {timeControl(control).group} time control
+              · {playMode === "wager" ? `${wagerGold} Gold wager · approval required` : "regular play · no stake"}
             </p>
             <button onClick={() => setSearching(false)}>
               <X size={15} />
@@ -237,7 +269,7 @@ export default function OnlinePlay({
               className="gold-button wide"
               onClick={() => {
                 setError("");
-                target || challenge ? setModeOpen(true) : setSearching(true);
+                setModeOpen(true);
               }}
             >
               {challenge ? audience === "anyone" ? "Post challenge to feed" : "Send challenge" : target ? "Send match invitation" : "Find opponent"}
@@ -245,7 +277,7 @@ export default function OnlinePlay({
           )
         )}
         <p className="rules-caption">
-          Automatic pairing costs 3 Gold each. Winner receives the 6-Gold pot plus a 5-Gold bonus; draws refund both players. Win +8 CBR · loss −10 · 4+ win streak +2. If the rating gap exceeds
+          Regular pairing has no stake. In Wager play, the found opponent must accept before both equal stakes are deducted; rejecting costs nothing. Draws refund both players. Win +8 CBR · loss −10 · 4+ win streak +2. If the rating gap exceeds
           10, the winner also earns 10% of the opponent’s starting CBR, rounded
           down.
         </p>
@@ -255,7 +287,7 @@ export default function OnlinePlay({
           <div className="cloud-panel">
             <h2>Host with QR</h2>
             <p>Invite a friend with a QR or short code.</p>
-            <button disabled={busy} onClick={() => void create()}>
+            <button disabled={busy} onClick={() => void create("normal")}>
               Create room
             </button>
           </div>
@@ -288,12 +320,16 @@ export default function OnlinePlay({
             Copy code
           </button>
           <p>
-            {challenge && audience === "anyone" ? "Your challenge is pinned in the feed" : selected || target
+            {room.play_mode === "wager" && room.invite_to === profile.user_id
+              ? `Opponent found · ${room.wager_gold} Gold wager. Accept the bet to start or reject it with no charge.`
+              : room.play_mode === "wager"
+                ? `Opponent found · waiting for them to accept your ${room.wager_gold} Gold wager`
+                : challenge && audience === "anyone" ? "Your challenge is pinned in the feed" : selected || target
               ? "Invitation sent to " + (selected ?? target)?.display_name
               : "Waiting for your opponent"}{" "}
             · {timeControl(room.control).label}
           </p>
-          <button
+          {room.play_mode === "wager" && room.invite_to === profile.user_id ? <div className="wager-answer-actions"><button className="gold-button" disabled={busy} onClick={() => void answerFoundWager(true)}>{busy ? "Processing…" : `Accept ${room.wager_gold} Gold Bet`}</button><button disabled={busy} onClick={() => void answerFoundWager(false)}>Reject Bet</button></div> : <button
             disabled={busy}
             onClick={() => {
               setBusy(true);
@@ -304,8 +340,8 @@ export default function OnlinePlay({
                 .finally(() => setBusy(false));
             }}
           >
-            {busy ? "Cancelling…" : "Cancel invitation"}
-          </button>
+            {busy ? "Cancelling…" : room.play_mode === "wager" ? "Cancel wager" : "Cancel invitation"}
+          </button>}
         </div>
       )}
       {error && (

@@ -107,6 +107,7 @@ function AppPage() {
     [target, setTarget] = useState<ArenaPlayer | null>(null),
     [viewedUserId, setViewedUserId] = useState(""),
     [invites, setInvites] = useState<Invite[]>([]),
+    [respondingInvite, setRespondingInvite] = useState(""),
     [activeId, setActiveId] = useState(""),
     [sharedId, setSharedId] = useState(""),
     [pairingOpened, setPairingOpened] = useState(false),
@@ -904,29 +905,36 @@ function AppPage() {
           <div className="invite-inbox cloud-panel">
             {invites.map((i) => (
               <div key={i.id}>
-                <strong>{i.host_name} invited you</strong>
+                <strong>{i.play_mode === "wager" ? `${i.host_name} offered a ${i.wager_gold} Gold bet` : `${i.host_name} invited you`}</strong>
                 <span>
                   {timeControl(i.control).group} ·{" "}
                   {timeControl(i.control).label}
+                  {i.play_mode === "wager" ? ` · Match ${i.wager_gold} Gold to play` : ""}
                 </span>
                 <button
                   className="gold-button"
-                  onClick={() =>
+                  disabled={respondingInvite === i.id || (i.play_mode === "wager" && Number(profile?.gold_points ?? 0) < Number(i.wager_gold ?? 0))}
+                  onClick={() => {
+                    setRespondingInvite(i.id);
                     void arena<{ match: ArenaMatch }>("join", { code: i.code })
                       .then((r) => openMatch(r.match.id))
                       .catch((e) => toast.error(e.message))
-                  }
+                      .finally(() => setRespondingInvite(""));
+                  }}
                 >
-                  Accept
+                  {respondingInvite === i.id ? "Processing…" : i.play_mode === "wager" && Number(profile?.gold_points ?? 0) < Number(i.wager_gold ?? 0) ? `Need ${i.wager_gold} Gold` : i.play_mode === "wager" ? "Accept Bet" : "Accept"}
                 </button>
                 <button
-                  onClick={() =>
+                  disabled={respondingInvite === i.id}
+                  onClick={() => {
+                    setRespondingInvite(i.id);
                     void arena("decline-room", { id: i.id })
                       .then(() => setInvites((v) => v.filter((m) => m.id !== i.id)))
                       .catch((e) => toast.error(e.message))
-                  }
+                      .finally(() => setRespondingInvite(""));
+                  }}
                 >
-                  Decline
+                  {i.play_mode === "wager" ? "Reject Bet" : "Decline"}
                 </button>
               </div>
             ))}
