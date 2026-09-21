@@ -19,7 +19,6 @@ import {
   ShieldCheck,
   PackageOpen,
   Castle,
-  Bot,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
@@ -49,7 +48,7 @@ import InstallPrompt from "./install-prompt";
 import { BagPage, ShopPage } from "./shop";
 import { isProfileComplete } from "./profile-completion";
 import Testimonials from "./testimonials";
-import CpuGame from "./cpu-game";
+import DailyRewards from "./daily-rewards";
 
 const modes = [
   {
@@ -100,6 +99,7 @@ function AppPage() {
     [replayGame, setReplayGame] = useState<SavedGame | null>(null),
     [showSplash, setShowSplash] = useState(true),
     [showWelcome, setShowWelcome] = useState(false),
+    [showDailyRewards, setShowDailyRewards] = useState(false),
     [member, setMember] = useState<boolean | null>(null);
   const [matchId, setMatchId] = useState(""),
     [target, setTarget] = useState<ArenaPlayer | null>(null),
@@ -113,6 +113,8 @@ function AppPage() {
   const [summary, setSummary] = useState<MatchSummary | null>(null);
   const shownResults = useRef(new Set<string>());
   const welcomeDecision = useRef(false);
+  const finishWelcome = (nextTab?:string) => { setShowWelcome(false); if(nextTab)setTab(nextTab); setShowDailyRewards(true); };
+  const closeDailyRewards = useCallback(() => setShowDailyRewards(false), []);
   const showOnlineResult = useCallback(
     (m: ArenaMatch) => {
       const ownId = profile?.user_id;
@@ -477,7 +479,6 @@ function AppPage() {
     "channel",
     "replay",
     "tournaments",
-    "cpu",
   ].includes(tab)
     ? "play"
     : tab === "cms"
@@ -537,11 +538,6 @@ function AppPage() {
           <span className="mode-symbol"><Swords size={21}/></span>
           <span className="mode-copy"><strong>Challenge a Player</strong><small>Search by username or challenge anyone in the feed</small></span>
           <span className="mode-meta">Invite</span><ChevronRight size={15}/>
-        </button>
-        <button className="match-row available cpu-lobby-link" onClick={() => setTab("cpu")}>
-          <span className="mode-symbol"><Bot size={21}/></span>
-          <span className="mode-copy"><strong>Play with CPU</strong><small>Practice against Stockfish with 10 strength levels</small></span>
-          <span className="mode-meta">Levels 1–10</span><ChevronRight size={15}/>
         </button>
         <div className="mode-list">
           {modes.map(({ name, sub, meta, Icon, key }) => (
@@ -691,7 +687,6 @@ function AppPage() {
         />
       </section>
     );
-  else if (tab === "cpu" && profile) content = <CpuGame player={profile} onClose={() => setTab("play")} onReward={() => void refreshProfile()}/>;
   else if (tab === "shop") content = <ShopPage profile={profile} onChanged={() => void refreshProfile()} />;
   else if (tab === "bag") content = <BagPage onChanged={() => void refreshProfile()} />;
   else if (tab === "guild") content = <section className="guild-page"><div className="coming-soon-panel"><Castle size={46}/><span>Guild</span><h1>Coming soon</h1><p>Build your guild, gather teammates, and compete together in a future update.</p></div></section>;
@@ -786,8 +781,7 @@ function AppPage() {
               <button
                 className="welcome-card invasion"
                 onClick={() => {
-                  setShowWelcome(false);
-                  setTab("map");
+                  finishWelcome("map");
                 }}
               >
                 <img src="/welcome/invasion.webp" alt="Chess pieces invading a territory map" />
@@ -796,8 +790,7 @@ function AppPage() {
               <button
                 className="welcome-card online"
                 onClick={() => {
-                  setShowWelcome(false);
-                  setTab("play");
+                  finishWelcome("play");
                 }}
               >
                 <img src="/welcome/play-online.webp" alt="Chess characters playing online" />
@@ -805,9 +798,7 @@ function AppPage() {
               </button>
               <button
                 className="welcome-card classroom"
-                onClick={() =>
-                  toast.info("Class Room feature coming very soon")
-                }
+                onClick={() => { toast.info("Class Room feature coming very soon"); finishWelcome("home"); }}
               >
                 <img src="/welcome/classroom.webp" alt="Chess classroom" />
                 <strong>CLASS ROOM</strong>
@@ -816,6 +807,7 @@ function AppPage() {
           </section>
         </div>
       )}
+      <DailyRewards open={showDailyRewards&&member===true&&!showSplash} onClose={closeDailyRewards} onClaimed={refreshProfile}/>
       <header className="app-header">
         <div className="brand">
           <img src="/cburger_logo.png" alt="Chess Burger" />
@@ -882,30 +874,27 @@ function AppPage() {
                 <strong>{i.host_name} invited you</strong>
                 <span>
                   {timeControl(i.control).group} ·{" "}
-                  {timeControl(i.control).label}{i.play_mode === "wager" ? ` · Match ${Number(i.wager_gold ?? 0)} Gold` : ""}
+                  {timeControl(i.control).label}
                 </span>
                 <button
                   className="gold-button"
-                  disabled={i.play_mode === "wager" && Number(profile?.gold_points ?? 0) < Number(i.wager_gold ?? 0)}
                   onClick={() =>
                     void arena<{ match: ArenaMatch }>("join", { code: i.code })
                       .then((r) => openMatch(r.match.id))
                       .catch((e) => toast.error(e.message))
                   }
                 >
-                  {i.play_mode === "wager" ? `Match ${Number(i.wager_gold ?? 0)} Gold` : "Accept invitation"}
+                  Accept
                 </button>
                 <button
-                  onClick={() => {
-                    setInvites((v) => v.filter((m) => m.id !== i.id));
+                  onClick={() =>
                     void arena("decline-room", { id: i.id })
-                      .then(() => toast.success("Invitation rejected."))
+                      .then(() => setInvites((v) => v.filter((m) => m.id !== i.id)))
                       .catch((e) => toast.error(e.message))
-                  }}
+                  }
                 >
-                  Reject
+                  Decline
                 </button>
-                {i.play_mode === "wager" && Number(profile?.gold_points ?? 0) < Number(i.wager_gold ?? 0) && <small>You need {Number(i.wager_gold ?? 0)} Gold to match this wager.</small>}
               </div>
             ))}
           </div>

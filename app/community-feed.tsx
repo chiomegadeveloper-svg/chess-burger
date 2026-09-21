@@ -47,31 +47,27 @@ export default function CommunityFeed({onOpenProfile,onMatch,onChallenge}:{onOpe
  const[total,setTotal]=useState(0),[status,setStatus]=useState("Loading activity…"),[userId,setUserId]=useState<string|null>(null),[reacted,setReacted]=useState<Set<string>>(new Set());
  const refresh=useCallback(async()=>{
   const seq=++request.current;
-  const feedRequest=arena<{events:CommunityEvent[]}>('feed',{},true);
-  const supportRequest=Promise.allSettled([arena<{users:OnlinePlayer[],count:number}>('online-users',{},true),arena<{profile:ArenaPlayer}>('me')]);
-  const localFeed=await feedRequest.then(value=>({status:'fulfilled' as const,value}),reason=>({status:'rejected' as const,reason}));
-  if(seq!==request.current)return;
-  const all=[...(localFeed.status==='fulfilled'?localFeed.value.events:[])].filter(e=>!e.expires_at||Date.parse(e.expires_at)>Date.now());
-  setChallenges(all.filter(e=>e.kind==='challenge').sort((a,b)=>Date.parse(b.created_at)-Date.parse(a.created_at)));
-  let rows=all.filter(e=>e.kind!=='challenge').sort((a,b)=>Date.parse(b.created_at)-Date.parse(a.created_at)).slice(0,50);
-  if(tab==='first_blood')rows=rows.filter(e=>e.kind==='first_blood');
-  if(tab==='announcement')rows=rows.filter(e=>e.kind==='announcement');
-  if(tab==='popular')rows.sort((a,b)=>b.heart_count-a.heart_count||Date.parse(b.created_at)-Date.parse(a.created_at));
-  if(tab==='recent')rows.sort((a,b)=>Number(b.kind==='announcement')-Number(a.kind==='announcement')||Date.parse(b.created_at)-Date.parse(a.created_at));
-  if(tab!=='online'){
-   setTotal(rows.length);const pages=Math.max(1,Math.ceil(rows.length/PAGE_SIZE));if(page>pages){setPage(pages);return;}
-   setEvents(rows.slice((page-1)*PAGE_SIZE,page*PAGE_SIZE));
-   setStatus(rows.length||all.some(e=>e.kind==='challenge')?'':localFeed.status==='rejected'?'Community activity is temporarily unavailable.':'No activity in this view yet.');
-  }
-  const [online,me]=await supportRequest;
+  const [localFeed,online,me]=await Promise.allSettled([arena<{events:CommunityEvent[]}>('feed',{},true),arena<{users:OnlinePlayer[],count:number}>('online-users',{},true),arena<{profile:ArenaPlayer}>('me')]);
   if(seq!==request.current)return;
   const users:OnlinePlayer[]=online.status==='fulfilled'?[...online.value.users]:[];
   if(me.status==='fulfilled'&&me.value.profile?.user_id&&!users.some(player=>player.user_id===me.value.profile.user_id)){
    users.unshift({...me.value.profile,available:true});
   }
   setOnlineUsers(users);
+  const ownProfile=me.status==='fulfilled'?me.value.profile as ArenaPlayer&{active_feed_banner?:string}:null;
+  const all=[...(localFeed.status==='fulfilled'?localFeed.value.events:[])].map(event=>event.feed_banner||!ownProfile||event.user_id!==ownProfile.user_id?event:{...event,feed_banner:ownProfile.active_feed_banner??''}).filter(e=>!e.expires_at||Date.parse(e.expires_at)>Date.now());
+  setChallenges(all.filter(e=>e.kind==='challenge').sort((a,b)=>Date.parse(b.created_at)-Date.parse(a.created_at)));
+  let rows=all.filter(e=>e.kind!=='challenge').sort((a,b)=>Date.parse(b.created_at)-Date.parse(a.created_at)).slice(0,50);
+  if(tab==='first_blood')rows=rows.filter(e=>e.kind==='first_blood');
+  if(tab==='announcement')rows=rows.filter(e=>e.kind==='announcement');
+  if(tab==='popular')rows.sort((a,b)=>b.heart_count-a.heart_count||Date.parse(b.created_at)-Date.parse(a.created_at));
+  if(tab==='recent')rows.sort((a,b)=>Number(b.kind==='announcement')-Number(a.kind==='announcement')||Date.parse(b.created_at)-Date.parse(a.created_at));
   if(tab==='online'){
    setTotal(users.length);setEvents([]);setStatus(users.length?'':online.status==='rejected'?'Online players are temporarily unavailable.':'No players are online right now.');
+  }else{
+   setTotal(rows.length);const pages=Math.max(1,Math.ceil(rows.length/PAGE_SIZE));if(page>pages){setPage(pages);return;}
+   setEvents(rows.slice((page-1)*PAGE_SIZE,page*PAGE_SIZE));
+   setStatus(rows.length||all.some(e=>e.kind==='challenge')?'':localFeed.status==='rejected'?'Community activity is temporarily unavailable.':'No activity in this view yet.');
   }
   try{const c=await getSupabase(),session=c?(await c.auth.getSession()).data.session:null;if(seq!==request.current)return;setUserId(session?.user.id??null);
    if(c&&session){const [supHearts,gameHearts]=await Promise.allSettled([c.from('cb_feed_reactions').select('feed_id').eq('user_id',session.user.id),arena<{ids:string[]}>('hearts')]);if(seq===request.current)setReacted(new Set([...(supHearts.status==='fulfilled'?supHearts.value.data??[]:[]).map(r=>r.feed_id as string),...(gameHearts.status==='fulfilled'?gameHearts.value.ids:[])]));}else setReacted(new Set());
