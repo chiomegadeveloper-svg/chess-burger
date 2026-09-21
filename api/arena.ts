@@ -676,6 +676,7 @@ export default async function handler(req: Req, res: Res) {
     // Keep it as a first-class migration action rather than falling through to
     // a 404 on every page load.
     if (action === 'me') return res.status(200).json({ profile: { ...account.profile, ocbr: Number(account.profile.ocbr ?? 88) }, rank: await playerRank(client, account.profile) });
+    if(!String(account.profile.avatar_url??'').trim())fail(403,'Complete registration and save a profile picture to unlock Chess Burger.');
     if(action==='puzzle-state'){
       const puzzleDay='2000-01-01'; // Stable key: chapter progress is permanent, not reset daily.
       const claims=await client.from('cb_daily_puzzle_claims').select('puzzle_id').eq('user_id',account.id).eq('puzzle_day',puzzleDay);
@@ -788,6 +789,22 @@ export default async function handler(req: Req, res: Res) {
       if(items.error)fail(503,'Run supabase/0022_feed_banner_rentals.sql in Supabase, then try again.');
       const owned=items.data??[],active=owned.some((item:any)=>item.product_id===account.profile.active_feed_banner)?account.profile.active_feed_banner??'':'';
       return res.status(200).json({owned,active,gold:Number(account.profile.gold_points??0),server_now:new Date().toISOString()});
+    }
+    if(action==='bag-items'){
+      const now=new Date().toISOString(),[banners,tickets,items]=await Promise.all([
+        client.from('cb_user_items').select('product_id,expires_at').eq('user_id',account.id).gt('expires_at',now).order('expires_at',{ascending:true}),
+        client.from('cb_arena_tickets').select('quantity').eq('user_id',account.id).maybeSingle(),
+        client.from('cb_inventory_items').select('item_kind,item_id,quantity,metadata,updated_at').eq('user_id',account.id).gt('quantity',0).order('updated_at',{ascending:false})
+      ]);
+      const error=banners.error??tickets.error??items.error;if(error)fail(503,'Run Supabase migrations through 0032, then reopen your Bag.');
+      return res.status(200).json({banners:banners.data??[],tickets:Number(tickets.data?.quantity??0),items:items.data??[],active:account.profile.active_feed_banner??'',gold:Number(account.profile.gold_points??0),server_now:now});
+    }
+    if(action==='gift-bag-item'){
+      const username=String(body.username??'').trim(),kind=String(body.item_kind??''),itemId=String(body.item_id??''),quantity=Number(body.quantity??1),requestId=String(body.request_id??'');
+      if(!/^@?[a-z0-9_]{2,40}$/i.test(username)||!/^[a-z][a-z0-9_-]{1,40}$/i.test(kind)||!/^[a-z0-9][a-z0-9_-]{1,80}$/i.test(itemId)||!Number.isInteger(quantity)||quantity<1||!/^[a-f0-9-]{36}$/i.test(requestId))fail(400,'Choose a valid item, quantity, and recipient username.');
+      const gifted=await client.rpc('cb_gift_bag_item',{p_sender_id:account.id,p_username:username,p_item_kind:kind,p_item_id:itemId,p_quantity:quantity,p_request_id:requestId});
+      if(gifted.error){const message=String(gifted.error.message??'Gift failed.');if(/cb_gift_bag_item|cb_inventory_items|schema cache|function/i.test(message))fail(503,'Run supabase/0032_arena_inventory_gifts_time_control.sql, then try again.');fail(409,message);}
+      return res.status(200).json(gifted.data);
     }
     if(action==='daily-reward-status'||action==='claim-daily-reward'){
       const fn=action==='daily-reward-status'?'cb_daily_reward_status':'cb_claim_daily_reward';

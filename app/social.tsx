@@ -947,7 +947,7 @@ export type MatchSummary = {
   ratingValue?: number;
   goldDelta?: number;
   goldPayout?: number;
-  playMode?: "normal" | "wager" | "queue";
+  playMode?: "normal" | "wager" | "queue" | "arena";
   wagerGold?: number;
   control?: string;
   opponent?: ArenaPlayer;
@@ -1007,7 +1007,7 @@ export function MatchResult({
   if (!result) return null;
   const ratingLabel = result.ratingLabel ?? "CBR",
     ratingValue = result.ratingValue ?? result.player.cbr;
-  const canRematch = !result.aborted && !result.local && !!result.opponent && result.opponent.user_id !== "guest-device" && !result.opponent.user_id.startsWith("local-") && result.opponent.user_id !== "shared-black";
+  const canRematch = result.playMode !== "arena" && !result.aborted && !result.local && !!result.opponent && result.opponent.user_id !== "guest-device" && !result.opponent.user_id.startsWith("local-") && result.opponent.user_id !== "shared-black";
   async function offerRematch() {
     if (!result?.opponent || !result.control) return;
     setRematchBusy(true);
@@ -1183,7 +1183,7 @@ export function MatchResult({
             autoFocus={!onReplay}
             onClick={onLobby}
           >
-            Back to Match Lobby
+            {result.playMode === "arena" ? "Return to Grand Arena" : "Back to Match Lobby"}
           </button>
         </div>
       </section>

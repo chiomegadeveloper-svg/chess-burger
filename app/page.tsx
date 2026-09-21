@@ -989,10 +989,11 @@ function AppPage() {
             : undefined
         }
         onLobby={() => {
+          const arenaMatch = summary?.playMode === "arena";
           setSummary(null);
           setMatchId("");
           setActiveId("");
-          setTab("play");
+          setTab(arenaMatch ? "grand-arena" : "play");
         }}
       />
       <SocialHub
