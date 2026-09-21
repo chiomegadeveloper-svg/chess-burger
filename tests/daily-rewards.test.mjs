@@ -29,3 +29,6 @@ test('reward details are available by hover, keyboard focus, and tap',()=>{
   assert.match(ui,/role="tooltip"/);assert.match(ui,/tabIndex=\{0\}/);assert.match(ui,/onClick=\{\(\)=>setDetailsDay/);assert.match(ui,/alt=\{details\}/);
   assert.match(css,/\.daily-reward-card:hover \.daily-reward-tooltip/);assert.match(css,/\.daily-reward-card\.details-open \.daily-reward-tooltip/);
 });
+test('Rewards tab avoids Vinext image crashes and tolerates incomplete API data',()=>{
+  assert.doesNotMatch(ui,/from "next\/image"/);assert.match(ui,/Array\.isArray\(status\?\.rewards\)/);assert.match(ui,/status\.rewards\.length===7\?status\.rewards:PREVIEW/);
+});
