@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Bot, ChevronLeft, RotateCcw, Shield, Trophy, X } from "lucide-react";
 import { arena } from "./arena-client";
-import { gameFromPgn, boardResult, TIME_CONTROLS, timeControl, type ArenaMatch, type ArenaPlayer } from "./game-rules";
+import { gameFromPgn, boardResult, finishClockTurn, remainingClock, TIME_CONTROLS, timeControl, type ArenaMatch, type ArenaPlayer } from "./game-rules";
 import MatchBoard from "./match-board";
 
 const levels = [
@@ -56,14 +56,14 @@ export default function CpuGame({ player, onClose, onReward }: { player: ArenaPl
         if(aiWatchdogRef.current!==null){window.clearTimeout(aiWatchdogRef.current);aiWatchdogRef.current=null;}
         const uci = line.split(/\s+/)[1], current = matchRef.current;
         if (!current || current.status !== "active" || !uci || uci === "(none)") { setThinking(false); return; }
-        const movedAt=Date.now(),blackRemaining=Math.max(0,current.black_ms-Math.max(0,movedAt-current.last_tick));
+        const movedAt=Date.now(),blackRemaining=remainingClock(current.black_ms,current.last_tick,movedAt);
         if(blackRemaining<=0){setThinking(false);return;}
         const chess = gameFromPgn(current.pgn);
         try {
           chess.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci.slice(4, 5) || "q" });
           const result = boardResult(chess);
           const increment=timeControl(current.control).increment*1000;
-          setMatch((value) => { if (!value||value.id!==current.id) return value; const next = { ...value, pgn: chess.pgn(), black_ms:blackRemaining+increment, version: value.version + 1, status: result ? "finished" as const : "active" as const, result, last_tick:movedAt, server_now:movedAt }; if(result){setEndReason("checkmate");setShowStats(true);} matchRef.current = next; return next; });
+          setMatch((value) => { if (!value||value.id!==current.id) return value; const next = { ...value, pgn: chess.pgn(), black_ms:finishClockTurn(current.black_ms,current.last_tick,movedAt,increment), version: value.version + 1, status: result ? "finished" as const : "active" as const, result, last_tick:movedAt, server_now:movedAt }; if(result){setEndReason("checkmate");setShowStats(true);} matchRef.current = next; return next; });
         } catch { setEngineError("The AI returned an invalid move. Start a new CPU game."); }
         setThinking(false);
       }
@@ -72,7 +72,7 @@ export default function CpuGame({ player, onClose, onReward }: { player: ArenaPl
     return () => { if(aiWatchdogRef.current!==null){window.clearTimeout(aiWatchdogRef.current);aiWatchdogRef.current=null;}worker.postMessage("quit"); worker.terminate(); workerRef.current = null; };
   }, [selectedLevel]);
 
-  useEffect(()=>{const timer=window.setInterval(()=>{const current=matchRef.current;if(!current||current.status!=="active")return;const chess=gameFromPgn(current.pgn),whiteTurn=chess.turn()==="w",remaining=(whiteTurn?current.white_ms:current.black_ms)-Math.max(0,Date.now()-current.last_tick);if(remaining>0)return;workerRef.current?.postMessage("stop");setThinking(false);const endedAt=Date.now(),next={...current,status:"finished" as const,result:whiteTurn?"black" as const:"white" as const,white_ms:whiteTurn?0:current.white_ms,black_ms:whiteTurn?current.black_ms:0,last_tick:endedAt,server_now:endedAt,version:current.version+1};matchRef.current=next;setMatch(next);setEndReason("timeout");setShowStats(true);},250);return()=>window.clearInterval(timer);},[]);
+  useEffect(()=>{const timer=window.setInterval(()=>{const current=matchRef.current;if(!current||current.status!=="active")return;const chess=gameFromPgn(current.pgn),whiteTurn=chess.turn()==="w",checkedAt=Date.now(),remaining=remainingClock(whiteTurn?current.white_ms:current.black_ms,current.last_tick,checkedAt);if(remaining>0)return;workerRef.current?.postMessage("stop");setThinking(false);const next={...current,status:"finished" as const,result:whiteTurn?"black" as const:"white" as const,white_ms:whiteTurn?0:current.white_ms,black_ms:whiteTurn?current.black_ms:0,last_tick:checkedAt,server_now:checkedAt,version:current.version+1};matchRef.current=next;setMatch(next);setEndReason("timeout");setShowStats(true);},100);return()=>window.clearInterval(timer);},[]);
 
   useEffect(() => {
     if (!match || match.status !== "finished" || match.result === "draw" || !match.result || !selectedLevel || claimedRef.current.has(match.id)) return;
@@ -88,11 +88,11 @@ export default function CpuGame({ player, onClose, onReward }: { player: ArenaPl
     if (!match || thinking || !engineReady) return;
     const chess = gameFromPgn(match.pgn);
     try { chess.move({ from: move.from, to: move.to, promotion: move.promotion || "q" }); } catch { return; }
-    const movedAt=Date.now(),remaining=Math.max(0,match.white_ms-Math.max(0,movedAt-match.last_tick));
+    const movedAt=Date.now(),remaining=remainingClock(match.white_ms,match.last_tick,movedAt);
     if(remaining<=0)return;
-    const result = boardResult(chess),increment=timeControl(match.control).increment*1000,next = { ...match, pgn: chess.pgn(),white_ms:remaining+increment, version: match.version + 1, status: result ? "finished" as const : "active" as const, result, last_tick:movedAt, server_now:movedAt };
+    const result = boardResult(chess),increment=timeControl(match.control).increment*1000,next = { ...match, pgn: chess.pgn(),white_ms:finishClockTurn(match.white_ms,match.last_tick,movedAt,increment), version: match.version + 1, status: result ? "finished" as const : "active" as const, result, last_tick:movedAt, server_now:movedAt };
     setMatch(next); matchRef.current = next;if(result){setEndReason("checkmate");setShowStats(true);}
-    if (!result) { const expectedVersion=next.version,thinkTime=selectedLevel?.think??300;setThinking(true); workerRef.current?.postMessage(`position fen ${chess.fen()}`); workerRef.current?.postMessage(`go movetime ${thinkTime}`);if(aiWatchdogRef.current!==null)window.clearTimeout(aiWatchdogRef.current);aiWatchdogRef.current=window.setTimeout(()=>{const current=matchRef.current;if(!current||current.status!=="active"||current.version!==expectedVersion||gameFromPgn(current.pgn).turn()!=="b")return;const fallbackGame=gameFromPgn(current.pgn),legal=fallbackGame.moves({verbose:true});if(!legal.length)return;const choice=legal[(current.version+(selectedLevel?.level??1))%legal.length],playedAt=Date.now(),remaining=Math.max(0,current.black_ms-Math.max(0,playedAt-current.last_tick));if(remaining<=0)return;fallbackGame.move({from:choice.from,to:choice.to,promotion:choice.promotion||"q"});const fallbackResult=boardResult(fallbackGame),increment=timeControl(current.control).increment*1000,fallback={...current,pgn:fallbackGame.pgn(),black_ms:remaining+increment,version:current.version+1,status:fallbackResult?"finished" as const:"active" as const,result:fallbackResult,last_tick:playedAt,server_now:playedAt};matchRef.current=fallback;setMatch(fallback);setThinking(false);aiWatchdogRef.current=null;if(fallbackResult){setEndReason("checkmate");setShowStats(true);}},Math.max(3200,thinkTime+1800)); }
+    if (!result) { const expectedVersion=next.version,thinkTime=selectedLevel?.think??300;setThinking(true); workerRef.current?.postMessage(`position fen ${chess.fen()}`); workerRef.current?.postMessage(`go movetime ${thinkTime}`);if(aiWatchdogRef.current!==null)window.clearTimeout(aiWatchdogRef.current);aiWatchdogRef.current=window.setTimeout(()=>{const current=matchRef.current;if(!current||current.status!=="active"||current.version!==expectedVersion||gameFromPgn(current.pgn).turn()!=="b")return;const fallbackGame=gameFromPgn(current.pgn),legal=fallbackGame.moves({verbose:true});if(!legal.length)return;const choice=legal[(current.version+(selectedLevel?.level??1))%legal.length],playedAt=Date.now(),remaining=remainingClock(current.black_ms,current.last_tick,playedAt);if(remaining<=0)return;fallbackGame.move({from:choice.from,to:choice.to,promotion:choice.promotion||"q"});const fallbackResult=boardResult(fallbackGame),increment=timeControl(current.control).increment*1000,fallback={...current,pgn:fallbackGame.pgn(),black_ms:finishClockTurn(current.black_ms,current.last_tick,playedAt,increment),version:current.version+1,status:fallbackResult?"finished" as const:"active" as const,result:fallbackResult,last_tick:playedAt,server_now:playedAt};matchRef.current=fallback;setMatch(fallback);setThinking(false);aiWatchdogRef.current=null;if(fallbackResult){setEndReason("checkmate");setShowStats(true);}},Math.max(3200,thinkTime+1800)); }
   }
   function resign(){if(aiWatchdogRef.current!==null)window.clearTimeout(aiWatchdogRef.current);workerRef.current?.postMessage("stop");setThinking(false);setEndReason("resigned");setShowStats(true);setMatch(value=>value?{...value,status:"finished",result:"black",version:value.version+1}:value);}
   function abort(){if(aiWatchdogRef.current!==null)window.clearTimeout(aiWatchdogRef.current);workerRef.current?.postMessage("stop");setThinking(false);setEndReason("aborted");setRewardStatus("Aborted CPU game · no CBR or Gold change");setSettledStats({cbr:player.cbr,gold:player.gold_points,cbrDelta:0,goldDelta:0});setShowStats(true);setMatch(value=>value?{...value,status:"cancelled",result:null,version:value.version+1}:value);}

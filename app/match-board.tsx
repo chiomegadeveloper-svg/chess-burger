@@ -11,6 +11,8 @@ import {
 } from "lucide-react";
 import {
   gameFromPgn,
+  formatClock,
+  remainingClock,
   timeControl,
   type ArenaMatch,
   type ArenaPlayer,
@@ -68,11 +70,6 @@ export function Avatar({
     </span>
   );
 }
-function clock(ms: number) {
-  const seconds = Math.max(0, Math.ceil(ms / 1000));
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
-}
-
 export default function MatchBoard({
   match,
   ownId,
@@ -289,11 +286,10 @@ export default function MatchBoard({
   function strip(side: "white" | "black") {
     const player = match[side],
       turn = chess.turn() === (side === "white" ? "w" : "b"),
-      left =
-        match[side === "white" ? "white_ms" : "black_ms"] -
-        (match.status === "active" && turn
-          ? Math.max(0, tick + offset - match.last_tick)
-          : 0);
+      base = match[side === "white" ? "white_ms" : "black_ms"],
+      left = match.status === "active" && turn
+        ? remainingClock(base, match.last_tick, tick + offset)
+        : Math.max(0, base);
     return (
       <div
         className={
@@ -310,7 +306,7 @@ export default function MatchBoard({
             @{player?.username ?? "local"} · {player?.cbr ?? 88} CBR
           </small>
         </span>
-        <time className={left < 30000 ? "clock-low" : ""}>{clock(left)}</time>
+        <time className={left < 30000 ? "clock-low" : ""}>{formatClock(left)}</time>
       </div>
     );
   }

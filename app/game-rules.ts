@@ -23,6 +23,23 @@ export function timeControl(id: string) {
   if (!control) throw Error("Choose a valid time control.");
   return control;
 }
+export function remainingClock(baseMs: number, lastTick: number, at: number) {
+  return Math.max(0, Number(baseMs) - Math.max(0, Number(at) - Number(lastTick)));
+}
+export function finishClockTurn(baseMs: number, lastTick: number, movedAt: number, incrementMs: number) {
+  const remaining = remainingClock(baseMs, lastTick, movedAt);
+  return remaining <= 0 ? 0 : remaining + Math.max(0, Number(incrementMs));
+}
+export function formatClock(ms: number) {
+  const safe = Math.max(0, Number(ms));
+  if (safe > 0 && safe < 10_000) {
+    const wholeSeconds = Math.floor(safe / 1000);
+    const tenths = Math.floor((safe % 1000) / 100);
+    return `0:${String(wholeSeconds).padStart(2, "0")}.${tenths}`;
+  }
+  const seconds = Math.floor(safe / 1000);
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+}
 export function winDelta(
   winnerCbr: number,
   loserCbr: number,
