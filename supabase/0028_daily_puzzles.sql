@@ -20,8 +20,8 @@ begin
     v_delta:=2;
     insert into public.cb_gold_ledger(id,user_id,delta,kind) values('daily-puzzle:'||p_day::text||':'||p_user_id::text||':'||p_puzzle_id,p_user_id,2,'daily_puzzle') on conflict do nothing;
     select count(*) into v_count from public.cb_daily_puzzle_claims where user_id=p_user_id and puzzle_day=p_day;
-    if p_is_final and v_count=10 then
-      insert into public.cb_gold_ledger(id,user_id,delta,kind) values('daily-puzzle-bonus:'||p_day::text||':'||p_user_id::text,p_user_id,5,'daily_puzzle_bonus') on conflict do nothing returning true into v_bonus;
+    if p_is_final and mod(v_count,10)=0 then
+      insert into public.cb_gold_ledger(id,user_id,delta,kind) values('daily-puzzle-bonus:'||p_day::text||':'||p_user_id::text||':'||p_puzzle_id,p_user_id,5,'daily_puzzle_bonus') on conflict do nothing returning true into v_bonus;
       if coalesce(v_bonus,false) then v_delta:=v_delta+5;end if;
     end if;
     update public.cb_profiles set gold_points=gold_points+v_delta where user_id=p_user_id returning gold_points into v_gold;

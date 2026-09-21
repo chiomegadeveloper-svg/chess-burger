@@ -1,23 +1,13 @@
-export type DailyPuzzle = {
-  id: string;
-  title: string;
-  theme: string;
-  fen: string;
-  solution: string;
-  hint: string;
-};
-
-// A small, deterministic daily pack keeps the mode available offline from paid
-// services. The server owns this same catalogue and validates every claim.
-export const DAILY_PUZZLES: DailyPuzzle[] = [
-  { id: "back-rank-1", title: "Close the back rank", theme: "Mate in one", fen: "7k/6pp/8/8/8/8/6PP/5RK1 w - - 0 1", solution: "f1f8", hint: "The rook can reach the eighth rank. The pawns block every escape." },
-  { id: "queen-net-1", title: "Build the queen net", theme: "Mate in one", fen: "8/8/8/8/8/8/8/k1KQ4 w - - 0 1", solution: "d1a4", hint: "Use the queen on the long diagonal. Your king covers b1 and b2." },
-  { id: "queen-net-2", title: "Diagonal delivery", theme: "Mate in one", fen: "8/8/8/8/8/8/8/k1K1Q3 w - - 0 1", solution: "e1a5", hint: "Look for a checking move to the a-file." },
-  { id: "rook-wall-1", title: "Rook wall", theme: "Mate in one", fen: "8/8/8/8/8/1R6/8/k1K5 w - - 0 1", solution: "b3a3", hint: "Move the rook beside the king. Your king guards the escape squares." },
-  { id: "queen-net-3", title: "Long range queen", theme: "Mate in one", fen: "8/8/8/8/8/6Q1/8/k1K5 w - - 0 1", solution: "g3a3", hint: "The third rank is open all the way to a3." },
-  { id: "rook-wall-2", title: "Seal the third rank", theme: "Mate in one", fen: "8/8/8/8/8/3R4/8/k1K5 w - - 0 1", solution: "d3a3", hint: "A horizontal rook check leaves no flight square." },
-  { id: "queen-net-4", title: "Queen sweep", theme: "Mate in one", fen: "8/8/8/8/5Q2/8/8/k1K5 w - - 0 1", solution: "f4a4", hint: "Sweep across the fourth rank." },
-  { id: "rook-wall-3", title: "Fourth-rank finish", theme: "Mate in one", fen: "8/8/8/8/2R5/8/8/k1K5 w - - 0 1", solution: "c4a4", hint: "The rook belongs on a4." },
-  { id: "queen-net-5", title: "Corner lockdown", theme: "Mate in one", fen: "8/8/7Q/8/8/8/8/k1K5 w - - 0 1", solution: "h6a6", hint: "Deliver the check from a6." },
-  { id: "rook-wall-4", title: "Final file", theme: "Mate in one", fen: "8/8/8/8/8/7R/8/k1K5 w - - 0 1", solution: "h3a3", hint: "Travel along the open third rank." },
-];
+export type PuzzleDifficulty="Easy"|"Average"|"Hard";
+export type DailyPuzzle={id:string;chapter:number;number:number;difficulty:PuzzleDifficulty;title:string;theme:string;fen:string;solution:string;hint:string};
+export type PuzzleChapter={number:number;difficulty:PuzzleDifficulty;title:string;description:string};
+export const PUZZLE_CHAPTERS:PuzzleChapter[]=[
+{number:1,difficulty:"Easy",title:"Queen Steps",description:"Learn direct queen checkmates."},{number:2,difficulty:"Easy",title:"Rook Roads",description:"Control ranks and files."},{number:3,difficulty:"Easy",title:"Corner Guard",description:"Use your king to seal escapes."},{number:4,difficulty:"Average",title:"Long Range",description:"Scan the full board before moving."},{number:5,difficulty:"Average",title:"Closing Walls",description:"Build mating walls with heavy pieces."},{number:6,difficulty:"Average",title:"Royal Net",description:"Coordinate king and queen."},{number:7,difficulty:"Average",title:"Silent Squares",description:"Find the only precise finish."},{number:8,difficulty:"Hard",title:"Mirror Tactics",description:"Recognize patterns from any side."},{number:9,difficulty:"Hard",title:"Edge Mastery",description:"Calculate long-distance mates."},{number:10,difficulty:"Hard",title:"Patty’s Trial",description:"Complete the final mixed challenge."}];
+const BASE:Array<[string,string]>=[
+["8/8/8/8/8/8/8/k1KQ4 w - - 0 1","d1a4"],["8/8/8/8/8/8/8/k1K1Q3 w - - 0 1","e1a5"],["8/8/8/8/8/8/8/k1K2Q2 w - - 0 1","f1a6"],["8/8/8/8/8/8/8/k1K3Q1 w - - 0 1","g1a7"],["8/8/8/8/8/8/8/k1K4Q w - - 0 1","h1a8"],["8/8/8/8/8/8/7Q/k1K5 w - - 0 1","h2b2"],["8/8/8/8/8/6Q1/8/k1K5 w - - 0 1","g3a3"],["8/8/8/8/8/7Q/8/k1K5 w - - 0 1","h3a3"],["8/8/8/8/5Q2/8/8/k1K5 w - - 0 1","f4a4"],["8/8/8/8/6Q1/8/8/k1K5 w - - 0 1","g4a4"],
+["8/8/8/8/8/1R6/8/k1K5 w - - 0 1","b3a3"],["8/8/8/8/8/2R5/8/k1K5 w - - 0 1","c3a3"],["8/8/8/8/8/3R4/8/k1K5 w - - 0 1","d3a3"],["8/8/8/8/8/4R3/8/k1K5 w - - 0 1","e3a3"],["8/8/8/8/8/5R2/8/k1K5 w - - 0 1","f3a3"],["8/8/8/8/1R6/8/8/k1K5 w - - 0 1","b4a4"],["8/8/8/8/2R5/8/8/k1K5 w - - 0 1","c4a4"],["8/8/8/8/3R4/8/8/k1K5 w - - 0 1","d4a4"],["8/8/8/8/4R3/8/8/k1K5 w - - 0 1","e4a4"],["8/8/8/8/5R2/8/8/k1K5 w - - 0 1","f4a4"],["8/8/8/1R6/8/8/8/k1K5 w - - 0 1","b5a5"],["8/8/8/2R5/8/8/8/k1K5 w - - 0 1","c5a5"],["8/8/8/3R4/8/8/8/k1K5 w - - 0 1","d5a5"],["8/8/8/4R3/8/8/8/k1K5 w - - 0 1","e5a5"],["8/8/8/5R2/8/8/8/k1K5 w - - 0 1","f5a5"]];
+type Transform="same"|"horizontal"|"vertical"|"rotate";const TRANSFORMS:Transform[]=["same","horizontal","vertical","rotate"],files="abcdefgh";
+function transformSquare(square:string,type:Transform){const file=files.indexOf(square[0]),rank=Number(square[1])-1,x=type==="horizontal"||type==="rotate"?7-file:file,y=type==="vertical"||type==="rotate"?7-rank:rank;return `${files[x]}${y+1}`;}
+function transformFen(fen:string,type:Transform){const board:string[][]=[];for(const row of fen.split(" ")[0].split("/")){const cells:string[]=[];for(const token of row){const count=Number(token);if(count)cells.push(...Array(count).fill(""));else cells.push(token)}board.push(cells)}const next=Array.from({length:8},()=>Array(8).fill(""));for(let row=0;row<8;row++)for(let column=0;column<8;column++){const x=type==="horizontal"||type==="rotate"?7-column:column,y=type==="vertical"||type==="rotate"?7-row:row;next[y][x]=board[row][column]}const placement=next.map(row=>{let text="",empty=0;for(const piece of row){if(!piece)empty++;else{if(empty){text+=empty;empty=0}text+=piece}}return text+(empty||"")}).join("/");return `${placement} w - - 0 1`;}
+const getDifficulty=(chapter:number):PuzzleDifficulty=>chapter<=3?"Easy":chapter<=7?"Average":"Hard";
+export const DAILY_PUZZLES:DailyPuzzle[]=BASE.flatMap(([fen,solution],baseIndex)=>TRANSFORMS.map((transform,variant)=>{const index=baseIndex*4+variant,chapter=Math.floor(index/10)+1,number=index%10+1,difficulty=getDifficulty(chapter),piece=/Q/.test(fen)?"queen":"rook",titles={Easy:["First Finish","Open Line","Corner Check","Royal Guard"],Average:["Precise Route","Hidden Finish","Mating Wall","Quiet Control"],Hard:["Master Line","Final Calculation","Mirror Finish","Champion Move"]}[difficulty];return{id:`chapter-${chapter}-puzzle-${number}`,chapter,number,difficulty,title:titles[variant],theme:`${piece==="queen"?"Queen":"Rook"} mate in one`,fen:transformFen(fen,transform),solution:transformSquare(solution.slice(0,2),transform)+transformSquare(solution.slice(2,4),transform),hint:`Use your ${piece} with the king. Look for a checking move that covers every escape square.`}}));

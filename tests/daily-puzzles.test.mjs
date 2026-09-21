@@ -14,9 +14,11 @@ test("Match Lobby exposes a Gold-earning Puzzle Quest", () => {
   assert.match(page, /<Puzzles/);
 });
 
-test("daily pack contains ten legal checkmate solutions", () => {
-  assert.equal(DAILY_PUZZLES.length, 10);
-  assert.equal(new Set(DAILY_PUZZLES.map(puzzle => puzzle.id)).size, 10);
+test("campaign contains 10 chapters and 100 unique legal solutions", () => {
+  assert.equal(DAILY_PUZZLES.length, 100);
+  assert.equal(new Set(DAILY_PUZZLES.map(puzzle => puzzle.id)).size, 100);
+  assert.equal(new Set(DAILY_PUZZLES.map(puzzle => puzzle.fen)).size, 100);
+  assert.deepEqual([...new Set(DAILY_PUZZLES.map(puzzle => puzzle.chapter))], [1,2,3,4,5,6,7,8,9,10]);
   for (const puzzle of DAILY_PUZZLES) {
     const game = new Chess(puzzle.fen);
     const move = game.move({ from: puzzle.solution.slice(0, 2), to: puzzle.solution.slice(2, 4), promotion: puzzle.solution.slice(4) || "q" });

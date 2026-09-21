@@ -3,18 +3,10 @@ import { Chess } from 'chess.js';
 
 // Keep server validation data inside this serverless entrypoint. Vercel has
 // previously failed to bundle cross-directory imports used by this function.
-const DAILY_PUZZLES = [
-  { id: 'back-rank-1', solution: 'f1f8' },
-  { id: 'queen-net-1', solution: 'd1a4' },
-  { id: 'queen-net-2', solution: 'e1a5' },
-  { id: 'rook-wall-1', solution: 'b3a3' },
-  { id: 'queen-net-3', solution: 'g3a3' },
-  { id: 'rook-wall-2', solution: 'd3a3' },
-  { id: 'queen-net-4', solution: 'f4a4' },
-  { id: 'rook-wall-3', solution: 'c4a4' },
-  { id: 'queen-net-5', solution: 'h6a6' },
-  { id: 'rook-wall-4', solution: 'h3a3' },
-] as const;
+const PUZZLE_BASE_SOLUTIONS=['d1a4','e1a5','f1a6','g1a7','h1a8','h2b2','g3a3','h3a3','f4a4','g4a4','b3a3','c3a3','d3a3','e3a3','f3a3','b4a4','c4a4','d4a4','e4a4','f4a4','b5a5','c5a5','d5a5','e5a5','f5a5'] as const;
+const PUZZLE_TRANSFORMS=['same','horizontal','vertical','rotate'] as const,PUZZLE_FILES='abcdefgh';
+function transformPuzzleSquare(square:string,type:typeof PUZZLE_TRANSFORMS[number]){const file=PUZZLE_FILES.indexOf(square[0]),rank=Number(square[1])-1,x=type==='horizontal'||type==='rotate'?7-file:file,y=type==='vertical'||type==='rotate'?7-rank:rank;return `${PUZZLE_FILES[x]}${y+1}`;}
+const DAILY_PUZZLES=PUZZLE_BASE_SOLUTIONS.flatMap((solution,baseIndex)=>PUZZLE_TRANSFORMS.map((transform,variant)=>{const index=baseIndex*4+variant,chapter=Math.floor(index/10)+1,number=index%10+1;return{id:`chapter-${chapter}-puzzle-${number}`,solution:transformPuzzleSquare(solution.slice(0,2),transform)+transformPuzzleSquare(solution.slice(2,4),transform)}}));
 
 type Req = { method?: string; query?: Record<string, string | string[] | undefined>; body?: unknown; headers: Record<string, string | string[] | undefined> };
 type Res = { status: (code: number) => Res; json: (body: unknown) => void; setHeader: (name: string, value: string) => void };
@@ -663,7 +655,7 @@ export default async function handler(req: Req, res: Res) {
     // a 404 on every page load.
     if (action === 'me') return res.status(200).json({ profile: { ...account.profile, ocbr: Number(account.profile.ocbr ?? 88) }, rank: await playerRank(client, account.profile) });
     if(action==='puzzle-state'){
-      const puzzleDay=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+      const puzzleDay='2000-01-01'; // Stable key: chapter progress is permanent, not reset daily.
       const claims=await client.from('cb_daily_puzzle_claims').select('puzzle_id').eq('user_id',account.id).eq('puzzle_day',puzzleDay);
       if(claims.error)fail(/cb_daily_puzzle_claims|schema cache|relation/i.test(claims.error.message)?503:500,/cb_daily_puzzle_claims|schema cache|relation/i.test(claims.error.message)?'Run supabase/0028_daily_puzzles.sql in Supabase, then try again.':claims.error.message);
       const completed=(claims.data??[]).map((row:any)=>String(row.puzzle_id)).filter((id:string)=>DAILY_PUZZLES.some(puzzle=>puzzle.id===id));
@@ -672,13 +664,13 @@ export default async function handler(req: Req, res: Res) {
     if(action==='claim-puzzle'){
       const puzzleId=String(body.puzzle_id??''),move=String(body.move??'').toLowerCase(),puzzle=DAILY_PUZZLES.find(item=>item.id===puzzleId);
       if(!puzzle||move!==puzzle.solution)fail(400,'That is not the winning move. Try again.');
-      const puzzleDay=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+      const puzzleDay='2000-01-01';
       const existing=await client.from('cb_daily_puzzle_claims').select('puzzle_id').eq('user_id',account.id).eq('puzzle_day',puzzleDay);
       if(existing.error)fail(/cb_daily_puzzle_claims|schema cache|relation/i.test(existing.error.message)?503:500,/cb_daily_puzzle_claims|schema cache|relation/i.test(existing.error.message)?'Run supabase/0028_daily_puzzles.sql in Supabase, then try again.':existing.error.message);
       const completed=(existing.data??[]).map((row:any)=>String(row.puzzle_id));
       const puzzleIndex=DAILY_PUZZLES.findIndex(item=>item.id===puzzleId);
       if(puzzleIndex>0&&!completed.includes(DAILY_PUZZLES[puzzleIndex-1].id))fail(409,'Complete the previous puzzle first.');
-      const claimed=await client.rpc('cb_claim_daily_puzzle',{p_user_id:account.id,p_day:puzzleDay,p_puzzle_id:puzzleId,p_is_final:puzzleIndex===DAILY_PUZZLES.length-1});
+      const claimed=await client.rpc('cb_claim_daily_puzzle',{p_user_id:account.id,p_day:puzzleDay,p_puzzle_id:puzzleId,p_is_final:(puzzleIndex+1)%10===0});
       if(claimed.error)fail(/cb_claim_daily_puzzle|schema cache|function/i.test(claimed.error.message)?503:500,/cb_claim_daily_puzzle|schema cache|function/i.test(claimed.error.message)?'Run supabase/0028_daily_puzzles.sql in Supabase, then try again.':claimed.error.message);
       const result=claimed.data??{},allCompleted=Array.from(new Set([...completed,puzzleId]));
       return res.status(200).json({...result,completed:allCompleted,bonus_claimed:allCompleted.length===DAILY_PUZZLES.length,day:puzzleDay});
