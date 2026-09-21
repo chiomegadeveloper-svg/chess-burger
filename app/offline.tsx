@@ -2,7 +2,7 @@
 import {useEffect,useState} from 'react';
 import {Chess, Square} from 'chess.js';
 import {loadCurrent,newRecord,saveGame,scoreOf,SavedGame} from './game-history';
-const symbols:Record<string,string>={wk:'♔',wq:'♕',wr:'♖',wb:'♗',wn:'♘',wp:'♙',bk:'♚',bq:'♛',br:'♜',bb:'♝',bn:'♞',bp:'♟'};
+const symbols:Record<string,string>={wk:'♚',wq:'♛',wr:'♜',wb:'♝',wn:'♞',wp:'♟',bk:'♚',bq:'♛',br:'♜',bb:'♝',bn:'♞',bp:'♟'};
 export default function Offline({replayGame,playerName,onClose,onRated}:{replayGame?:SavedGame|null;playerName?:string;onClose?:()=>void;onRated?:(result:"win"|"loss"|"draw",gameId:string)=>number}){
  const [game,setGame]=useState(()=>new Chess()),[record,setRecord]=useState<SavedGame|null>(null);
  const[selected,select]=useState<Square|null>(null),[replay,setReplay]=useState<number|null>(replayGame?0:null);

@@ -18,12 +18,14 @@ import {
 } from "./game-rules";
 
 const symbols: Record<string, string> = {
-  wk: "♔",
-  wq: "♕",
-  wr: "♖",
-  wb: "♗",
-  wn: "♘",
-  wp: "♙",
+  // Use solid silhouettes for both colors. The board theme supplies the
+  // white fill, avoiding the transparent centers in the outline glyph set.
+  wk: "♚",
+  wq: "♛",
+  wr: "♜",
+  wb: "♝",
+  wn: "♞",
+  wp: "♟",
   bk: "♚",
   bq: "♛",
   br: "♜",
