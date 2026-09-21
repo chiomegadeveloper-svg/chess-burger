@@ -113,7 +113,12 @@ function AppPage() {
   const [summary, setSummary] = useState<MatchSummary | null>(null);
   const shownResults = useRef(new Set<string>());
   const welcomeDecision = useRef(false);
-  const finishWelcome = (nextTab?:string) => { setShowWelcome(false); if(nextTab)setTab(nextTab); setShowDailyRewards(true); };
+  const finishWelcome = (nextTab?:string) => {
+    setShowWelcome(false);
+    if(nextTab)setTab(nextTab);
+    // Let the shortcut dialog fully unmount before mounting the viewport portal.
+    window.setTimeout(() => setShowDailyRewards(true), 220);
+  };
   const closeDailyRewards = useCallback(() => setShowDailyRewards(false), []);
   const showOnlineResult = useCallback(
     (m: ArenaMatch) => {
@@ -807,7 +812,7 @@ function AppPage() {
           </section>
         </div>
       )}
-      <DailyRewards open={showDailyRewards&&member===true&&!showSplash} onClose={closeDailyRewards} onClaimed={refreshProfile}/>
+      <DailyRewards open={showDailyRewards&&!showSplash} onClose={closeDailyRewards} onClaimed={refreshProfile}/>
       <header className="app-header">
         <div className="brand">
           <img src="/cburger_logo.png" alt="Chess Burger" />
