@@ -30,7 +30,6 @@ import "./gameplay.css";
 import "./v46.css";
 import "./feed-banner-shop.css";
 import "./v47.css";
-import "./daily-rewards.css";
 
 export const metadata: Metadata = {
   title: "Chess Burger",

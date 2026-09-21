@@ -1,9 +1,9 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { Check, Coins, Gift, RefreshCw } from "lucide-react";
+import { Check, Gift, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { arena } from "./arena-client";
-import { feedBanner } from "./feed-banner-catalog";
+import "./daily-rewards.css";
 
 type Reward = { day:number; kind:"gold"|"banner"; amount?:number; days?:number; product_id?:string; name?:string };
 type Status = { day:number; claimed_today:boolean; rewards:Reward[] };
@@ -20,9 +20,9 @@ export default function DailyRewards(){
   const shown=status??{day:1,claimed_today:false,rewards:PREVIEW},today=shown.rewards[shown.day-1];
   const claim=async()=>{if(!status){void load();return;}setBusy(true);setError("");try{const result=await arena<Status&{reward:Reward}>("claim-daily-reward");setStatus(result);window.dispatchEvent(new Event("cb-profile-saved"));toast.success(result.reward.kind==="gold"?`${result.reward.amount} Gold claimed`:`${result.reward.name} banner added to your Bag`);}catch(e){setError((e as Error).message);}finally{setBusy(false);}};
   return <section className="daily-reward-page" aria-labelledby="daily-reward-title"><div className="daily-reward-modal">
-    <div className="daily-reward-heading"><span>7-DAY LOGIN STREAK</span><h2 id="daily-reward-title">Daily Rewards</h2><p>Claim one reward each day. A new reward day begins at 12:01 AM Philippine time.</p></div>
-    <div className="daily-reward-grid">{shown.rewards.map(reward=>{const banner=reward.product_id?feedBanner(reward.product_id):null,current=reward.day===shown.day,done=reward.day<shown.day||shown.claimed_today&&current;return <article key={reward.day} className={`daily-reward-card day-${reward.day}${current?" current":""}${done?" claimed":""}`}>
-      <div className="daily-reward-day">DAY {reward.day}</div><div className="daily-reward-art">{reward.kind==="gold"?<><span className="daily-coin"><Coins/></span><strong>{reward.amount}</strong><small>GOLD</small></>:<><i style={{background:banner?.background}}/><strong>{reward.days} DAYS</strong><small>{reward.name??"PASTEL BANNER"}</small></>}</div>
+    <div className="daily-reward-heading"><div className="daily-reward-title"><span className="daily-reward-gift"><Gift/></span><span><small>DAILY LOGIN</small><h2 id="daily-reward-title">Reward Streak</h2></span></div><span className="daily-streak-badge">Day {shown.day} of 7</span><p>Open Chess Burger daily and claim your prize. A new reward becomes available at 12:01 AM Philippine time.</p></div>
+    <div className="daily-reward-grid">{shown.rewards.map(reward=>{const current=reward.day===shown.day,done=reward.day<shown.day||shown.claimed_today&&current;return <article key={reward.day} className={`daily-reward-card ${reward.kind} day-${reward.day}${current?" current":""}${done?" claimed":""}`}>
+      <div className="daily-reward-day">DAY {reward.day}</div><div className="daily-reward-art"><img className="daily-reward-icon" src={`/daily-rewards/day-${reward.day}.webp`} alt=""/><strong>{reward.kind==="gold"?reward.amount:`${reward.days} DAYS`}</strong><small>{reward.kind==="gold"?"GOLD":reward.name??"PASTEL BANNER"}</small></div>
       <footer>{done?<><Check size={14}/> Claimed</>:current?"TODAY":"LOCKED"}</footer>
     </article>})}</div>
     {error&&<div className="daily-reward-error" role="alert"><span>{error}</span><button onClick={()=>void load()}><RefreshCw size={14}/>Retry</button></div>}

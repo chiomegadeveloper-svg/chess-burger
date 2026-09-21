@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 
 const page=readFileSync('app/page.tsx','utf8'),feed=readFileSync('app/community-feed.tsx','utf8'),ui=readFileSync('app/daily-rewards.tsx','utf8'),css=readFileSync('app/daily-rewards.css','utf8'),sql=readFileSync('supabase/0025_daily_login_rewards.sql','utf8'),api=readFileSync('api/arena.ts','utf8');
 test('daily rewards are a Community Feed tab and never a startup popup',()=>{
@@ -20,4 +20,8 @@ test('embedded rewards panel is responsive and accessible',()=>{
 test('all six Community Feed tabs stay on one row at every viewport',()=>{
   assert.match(css,/\.feed-page \.feed-tabs\.community-feed-tabs\{[^}]*grid-template-columns:repeat\(6,minmax\(0,1fr\)\)!important/);
   assert.doesNotMatch(css,/community-feed-tabs\{[^}]*grid-template-columns:repeat\(3/);
+});
+test('every reward day has an optimized professional WebP icon',()=>{
+  for(let day=1;day<=7;day+=1){const file=`public/daily-rewards/day-${day}.webp`;assert.equal(existsSync(file),true);assert.ok(statSync(file).size<600_000);}
+  assert.match(ui,/daily-rewards\/day-\$\{reward\.day\}\.webp/);
 });

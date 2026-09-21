@@ -105,11 +105,11 @@ export default function CommunityFeed({onOpenProfile,onMatch,onChallenge}:{onOpe
  return <section className="feed-page">
   <div className="page-heading"><h1>{tab==="announcement"?"Announcements":tab==="online"?"Online players":tab==="rewards"?"Daily Rewards":"Community feed"}</h1><span className="sample-label">{tab==="announcement"?"Official updates":tab==="online"?`${onlineUsers.length} online`:tab==="rewards"?"7-day login streak":"Latest 50"}</span></div>
   <div className="feed-tabs community-feed-tabs" role="tablist" aria-label="Community feed views">
-   <button role="tab" aria-selected={tab==="recent"} onClick={()=>selectTab("recent")}>Recent feed</button>
+   <button role="tab" aria-label="Recent feed" aria-selected={tab==="recent"} onClick={()=>selectTab("recent")}><span className="tab-label-full">Recent feed</span><span className="tab-label-short">Feed</span></button>
    <button className="online-feed-tab" role="tab" aria-selected={tab==="online"} onClick={()=>selectTab("online")}>Online <span className="online-count-badge" aria-label={`${onlineUsers.length} users online`}>{onlineUsers.length}</span></button>
    <button role="tab" aria-selected={tab==="popular"} onClick={()=>selectTab("popular")}>Popular</button>
-   <button role="tab" aria-selected={tab==="first_blood"} onClick={()=>selectTab("first_blood")}>First blood</button>
-   <button role="tab" aria-selected={tab==="announcement"} onClick={()=>selectTab("announcement")}>Announcements</button>
+   <button role="tab" aria-label="First blood" aria-selected={tab==="first_blood"} onClick={()=>selectTab("first_blood")}><span className="tab-label-full">First blood</span><span className="tab-label-short">First</span></button>
+   <button role="tab" aria-label="Announcements" aria-selected={tab==="announcement"} onClick={()=>selectTab("announcement")}><span className="tab-label-full">Announcements</span><span className="tab-label-short">News</span></button>
    <button className="rewards-feed-tab" role="tab" aria-selected={tab==="rewards"} onClick={()=>selectTab("rewards")}>Rewards</button>
   </div>
   {tab==='rewards'&&<DailyRewards/>}
