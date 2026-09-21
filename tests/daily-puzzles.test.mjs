@@ -15,26 +15,38 @@ test("Match Lobby exposes a Gold-earning Puzzle Quest", () => {
   assert.match(page, /<Puzzles/);
 });
 
-test("campaign contains 10 chapters and 100 unique legal solutions", () => {
+test("campaign contains 100 distinct real-game Lichess positions", () => {
   assert.equal(DAILY_PUZZLES.length, 100);
   assert.equal(new Set(DAILY_PUZZLES.map(puzzle => puzzle.id)).size, 100);
+  assert.equal(new Set(DAILY_PUZZLES.map(puzzle => puzzle.sourceId)).size, 100);
   assert.equal(new Set(DAILY_PUZZLES.map(puzzle => puzzle.fen)).size, 100);
+  assert.equal(new Set(DAILY_PUZZLES.map(puzzle => puzzle.moves.join(" "))).size, 100);
   assert.deepEqual([...new Set(DAILY_PUZZLES.map(puzzle => puzzle.chapter))], [1,2,3,4,5,6,7,8,9,10]);
   for (const puzzle of DAILY_PUZZLES) {
     const game = new Chess(puzzle.fen);
-    const move = game.move({ from: puzzle.solution.slice(0, 2), to: puzzle.solution.slice(2, 4), promotion: puzzle.solution.slice(4) || "q" });
-    assert.ok(move, `${puzzle.id} must have a legal solution`);
-    assert.ok(game.isCheckmate(), `${puzzle.id} must end in checkmate`);
+    assert.ok(puzzle.sourceUrl.startsWith("https://lichess.org/"));
+    assert.ok(puzzle.moves.length >= 3, `${puzzle.id} must contain a full tactical line`);
+    for (const uci of puzzle.moves) {
+      const move = game.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci.slice(4) || undefined });
+      assert.ok(move, `${puzzle.id} contains illegal move ${uci}`);
+    }
   }
 });
 
 test("puzzle Gold is server validated and idempotent", () => {
-  assert.match(api, /move!==puzzle\.solution/);
+  assert.match(api, /proof!==puzzle\.moves\.join\(' '\)/);
   assert.match(api, /Complete the previous puzzle first/);
   assert.match(sql, /primary key\(user_id,puzzle_day,puzzle_id\)/);
   assert.match(sql, /v_delta:=2/);
   assert.match(sql, /v_delta:=v_delta\+5/);
   assert.match(sql, /on conflict do nothing/);
+});
+
+test("puzzle UI plays forced replies and requires the complete line",()=>{
+  assert.match(puzzleUi,/Coach Patty is playing the forced reply/);
+  assert.match(puzzleUi,/setStep\(opponentStep\+1\)/);
+  assert.match(puzzleUi,/proof: puzzle\.moves\.join\(" "\)/);
+  assert.match(puzzleUi,/Lichess CC0 source/);
 });
 
 test("Coach Patty prefers a friendly female English device voice", () => {

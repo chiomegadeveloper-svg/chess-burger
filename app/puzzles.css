@@ -34,3 +34,4 @@
  .puzzle-page{padding-inline:5px}.puzzle-hero{grid-template-columns:minmax(0,1fr);padding:13px}.puzzle-gold{grid-row:1;grid-column:1;justify-self:end;margin-bottom:-33px;position:relative;z-index:2}.puzzle-hero>div:first-child{grid-row:1;grid-column:1;padding-top:2px}.puzzle-hero>div:first-child>span{display:block;max-width:55%}.puzzle-hero h1{max-width:65%;font-size:21px}.puzzle-hero p{padding-top:4px}
  .puzzle-chapters{gap:6px}.puzzle-chapters button{min-height:55px;padding:7px 6px}.puzzle-chapters button>b{flex-basis:27px;width:27px;height:27px}.chapter-heading{gap:7px}.chapter-heading>strong{max-width:62px;text-align:center}
 }
+.puzzle-detail a{display:inline-block;margin-top:7px;color:#63dbe5;font-size:7px;text-decoration:none}.puzzle-detail a:hover{text-decoration:underline}.puzzle-piece{font-variant-emoji:text;-webkit-text-fill-color:currentColor}

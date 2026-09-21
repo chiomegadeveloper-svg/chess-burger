@@ -1,12 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { Chess } from 'chess.js';
-
-// Keep server validation data inside this serverless entrypoint. Vercel has
-// previously failed to bundle cross-directory imports used by this function.
-const PUZZLE_BASE_SOLUTIONS=['d1a4','e1a5','f1a6','g1a7','h1a8','h2b2','g3a3','h3a3','f4a4','g4a4','b3a3','c3a3','d3a3','e3a3','f3a3','b4a4','c4a4','d4a4','e4a4','f4a4','b5a5','c5a5','d5a5','e5a5','f5a5'] as const;
-const PUZZLE_TRANSFORMS=['same','horizontal','vertical','rotate'] as const,PUZZLE_FILES='abcdefgh';
-function transformPuzzleSquare(square:string,type:typeof PUZZLE_TRANSFORMS[number]){const file=PUZZLE_FILES.indexOf(square[0]),rank=Number(square[1])-1,x=type==='horizontal'||type==='rotate'?7-file:file,y=type==='vertical'||type==='rotate'?7-rank:rank;return `${PUZZLE_FILES[x]}${y+1}`;}
-const DAILY_PUZZLES=PUZZLE_BASE_SOLUTIONS.flatMap((solution,baseIndex)=>PUZZLE_TRANSFORMS.map((transform,variant)=>{const index=baseIndex*4+variant,chapter=Math.floor(index/10)+1,number=index%10+1;return{id:`chapter-${chapter}-puzzle-${number}`,solution:transformPuzzleSquare(solution.slice(0,2),transform)+transformPuzzleSquare(solution.slice(2,4),transform)}}));
+import { DAILY_PUZZLES } from '../app/puzzle-data';
 
 type Req = { method?: string; query?: Record<string, string | string[] | undefined>; body?: unknown; headers: Record<string, string | string[] | undefined> };
 type Res = { status: (code: number) => Res; json: (body: unknown) => void; setHeader: (name: string, value: string) => void };
@@ -668,8 +662,8 @@ export default async function handler(req: Req, res: Res) {
       return res.status(200).json({completed,gold:Number(account.profile.gold_points??0),bonus_claimed:completed.length===DAILY_PUZZLES.length,day:puzzleDay});
     }
     if(action==='claim-puzzle'){
-      const puzzleId=String(body.puzzle_id??''),move=String(body.move??'').toLowerCase(),puzzle=DAILY_PUZZLES.find(item=>item.id===puzzleId);
-      if(!puzzle||move!==puzzle.solution)fail(400,'That is not the winning move. Try again.');
+      const puzzleId=String(body.puzzle_id??''),proof=String(body.proof??'').toLowerCase().trim(),puzzle=DAILY_PUZZLES.find(item=>item.id===puzzleId);
+      if(!puzzle||proof!==puzzle.moves.join(' '))fail(400,'Complete the verified puzzle line before claiming the reward.');
       const puzzleDay='2000-01-01';
       const existing=await client.from('cb_daily_puzzle_claims').select('puzzle_id').eq('user_id',account.id).eq('puzzle_day',puzzleDay);
       if(existing.error)fail(/cb_daily_puzzle_claims|schema cache|relation/i.test(existing.error.message)?503:500,/cb_daily_puzzle_claims|schema cache|relation/i.test(existing.error.message)?'Run supabase/0028_daily_puzzles.sql in Supabase, then try again.':existing.error.message);
