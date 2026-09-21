@@ -29,11 +29,14 @@ test("featured photos use direct uploads and a tap-to-close responsive viewer", 
   assert.match(bucket, /aria-label="Return to thumbnails"/);
 });
 
-test("testimonials support authoring, hearts, and profile-owner deletion", () => {
+test("testimonials enforce one entry with paging, hearts, and authorized deletion", () => {
   assert.match(testimonials, /testimonial-add/);
   assert.match(testimonials, /testimonial-heart/);
   assert.match(testimonials, /testimonial-delete/);
-  assert.match(api, /Only the profile owner can delete this testimonial/);
-  assert.match(migration, /profile_id=auth\.uid\(\)/);
+  assert.match(testimonials, /Page \{page\} of \{pages\}/);
+  assert.match(api, /pageSize=10/);
+  assert.match(api, /Only the author or profile owner can delete this testimonial/);
+  assert.match(migration, /profile_id=auth\.uid\(\) or author_id=auth\.uid\(\)/);
+  assert.match(migration, /cb_profile_testimonials_one_per_author_idx/);
   assert.match(migration, /primary key \(testimonial_id, user_id\)/);
 });

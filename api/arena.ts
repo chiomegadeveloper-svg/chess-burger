@@ -757,12 +757,13 @@ export default async function handler(req: Req, res: Res) {
     }
     if (action === 'social-presence') return res.status(200).json({ ok: true });
     if (action === 'social-counts') {
-      const [friends, followers] = await Promise.all([
+      const [friends, followers, following] = await Promise.all([
         client.from('cb_social_links').select('user_id', { count: 'exact', head: true }).eq('kind', 'friend').eq('status', 'accepted').or(`user_id.eq.${account.id},target_id.eq.${account.id}`),
         client.from('cb_social_links').select('user_id', { count: 'exact', head: true }).eq('kind', 'follow').eq('target_id', account.id),
+        client.from('cb_social_links').select('user_id', { count: 'exact', head: true }).eq('kind', 'follow').eq('user_id', account.id),
       ]);
-      if (friends.error || followers.error) fail(500, friends.error?.message ?? followers.error?.message ?? 'Unable to load social totals.');
-      return res.status(200).json({ friends: friends.count ?? 0, followers: followers.count ?? 0 });
+      if (friends.error || followers.error || following.error) fail(500, friends.error?.message ?? followers.error?.message ?? following.error?.message ?? 'Unable to load social totals.');
+      return res.status(200).json({ friends: friends.count ?? 0, followers: followers.count ?? 0, following: following.count ?? 0 });
     }
     if (action === 'social-list') {
       const mode=String(body.mode??'friends'),query=String(body.q??'').trim().replace(/^@/,'').toLowerCase(),page=Math.max(1,Math.floor(Number(body.page)||1));
@@ -844,14 +845,19 @@ export default async function handler(req: Req, res: Res) {
     }
     const testimonialUuid=/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i;
     if (action === 'profile-testimonials') {
-      const target=String(body.user_id??'');
+      const target=String(body.user_id??''),requestedPage=Math.max(1,Math.floor(Number(body.page)||1)),pageSize=10;
       if(!testimonialUuid.test(target))fail(400,'Choose a registered player.');
-      const rows=await client.from('cb_profile_testimonials').select('id,profile_id,author_id,body,created_at').eq('profile_id',target).order('created_at',{ascending:false}).limit(20);
+      const count=await client.from('cb_profile_testimonials').select('id',{count:'exact',head:true}).eq('profile_id',target);
+      if(count.error)fail(/cb_profile_testimonials|schema cache|relation/i.test(count.error.message)?503:500,/cb_profile_testimonials|schema cache|relation/i.test(count.error.message)?'Run supabase/0023_profile_testimonials.sql in Supabase, then try again.':count.error.message);
+      const total=count.count??0,pages=Math.max(1,Math.ceil(total/pageSize)),page=Math.min(requestedPage,pages),from=(page-1)*pageSize;
+      const rows=await client.from('cb_profile_testimonials').select('id,profile_id,author_id,body,created_at').eq('profile_id',target).order('created_at',{ascending:false}).range(from,from+pageSize-1);
       if(rows.error)fail(/cb_profile_testimonials|schema cache|relation/i.test(rows.error.message)?503:500,/cb_profile_testimonials|schema cache|relation/i.test(rows.error.message)?'Run supabase/0023_profile_testimonials.sql in Supabase, then try again.':rows.error.message);
       const ids=(rows.data??[]).map((row:any)=>row.id),authors=await playerMap(client,(rows.data??[]).map((row:any)=>row.author_id));
       const hearts=ids.length?await client.from('cb_testimonial_hearts').select('testimonial_id,user_id').in('testimonial_id',ids):{data:[],error:null};
       if(hearts.error)fail(500,hearts.error.message);
-      return res.status(200).json({testimonials:(rows.data??[]).map((row:any)=>{const author=authors.get(row.author_id);const reactions=(hearts.data??[]).filter((heart:any)=>heart.testimonial_id===row.id);return {...row,display_name:author?.display_name??'Player',username:author?.username??'player',avatar_url:author?.avatar_url??'',heart_count:reactions.length,hearted:reactions.some((heart:any)=>heart.user_id===account.id)};})});
+      const own=await client.from('cb_profile_testimonials').select('id').eq('profile_id',target).eq('author_id',account.id).limit(1);
+      if(own.error)fail(500,own.error.message);
+      return res.status(200).json({total,page,pages,authored:Boolean(own.data?.length),authoredId:own.data?.[0]?.id??null,testimonials:(rows.data??[]).map((row:any)=>{const author=authors.get(row.author_id);const reactions=(hearts.data??[]).filter((heart:any)=>heart.testimonial_id===row.id);return {...row,display_name:author?.display_name??'Player',username:author?.username??'player',avatar_url:author?.avatar_url??'',heart_count:reactions.length,hearted:reactions.some((heart:any)=>heart.user_id===account.id)};})});
     }
     if(action==='testimonial-add'){
       const target=String(body.user_id??''),message=String(body.body??'').trim().replace(/\s+/g,' ');
@@ -870,8 +876,10 @@ export default async function handler(req: Req, res: Res) {
     }
     if(action==='testimonial-delete'){
       const id=String(body.id??'');if(!testimonialUuid.test(id))fail(400,'Choose a testimonial.');
-      const removed=await client.from('cb_profile_testimonials').delete().eq('id',id).eq('profile_id',account.id).select('id').maybeSingle();
-      if(removed.error)fail(500,removed.error.message);if(!removed.data)fail(403,'Only the profile owner can delete this testimonial.');return res.status(200).json({ok:true});
+      const found=await client.from('cb_profile_testimonials').select('id,profile_id,author_id').eq('id',id).maybeSingle();
+      if(found.error)fail(500,found.error.message);if(!found.data||![found.data.profile_id,found.data.author_id].includes(account.id))fail(403,'Only the author or profile owner can delete this testimonial.');
+      const removed=await client.from('cb_profile_testimonials').delete().eq('id',id).select('id').maybeSingle();
+      if(removed.error)fail(500,removed.error.message);return res.status(200).json({ok:true});
     }
     if (action === 'public-profile') {
       const target = String(body.user_id ?? '');
@@ -882,7 +890,14 @@ export default async function handler(req: Req, res: Res) {
         if (blocked.data?.length) fail(403, 'This profile is unavailable.');
       }
       const profile = one<any>(await client.from('cb_profiles').select('*').eq('user_id', target).maybeSingle());
-      return res.status(200).json({ profile: { ...profile, ocbr: Number(profile.ocbr ?? 88) }, rank: await playerRank(client, profile) });
+      const [friends,followers,following,rank]=await Promise.all([
+        client.from('cb_social_links').select('user_id',{count:'exact',head:true}).eq('kind','friend').eq('status','accepted').or(`user_id.eq.${target},target_id.eq.${target}`),
+        client.from('cb_social_links').select('user_id',{count:'exact',head:true}).eq('kind','follow').eq('target_id',target),
+        client.from('cb_social_links').select('user_id',{count:'exact',head:true}).eq('kind','follow').eq('user_id',target),
+        playerRank(client,profile),
+      ]);
+      if(friends.error||followers.error||following.error)fail(500,friends.error?.message??followers.error?.message??following.error?.message??'Unable to load social totals.');
+      return res.status(200).json({ profile: { ...profile, ocbr: Number(profile.ocbr ?? 88) }, rank, social:{friends:friends.count??0,followers:followers.count??0,following:following.count??0} });
     }
     if (action === 'presence') return res.status(200).json(await savePresence(client, account, body));
     if (action === 'nearby') return res.status(200).json(await nearbyPlayers(client, account));

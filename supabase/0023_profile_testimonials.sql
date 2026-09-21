@@ -19,6 +19,16 @@ create table if not exists public.cb_testimonial_hearts (
 create index if not exists cb_profile_testimonials_profile_created_idx
   on public.cb_profile_testimonials(profile_id, created_at desc);
 
+-- Keep the newest entry if this migration is reapplied after duplicate posts.
+delete from public.cb_profile_testimonials older
+using public.cb_profile_testimonials newer
+where older.profile_id = newer.profile_id
+  and older.author_id = newer.author_id
+  and (older.created_at < newer.created_at or (older.created_at = newer.created_at and older.id < newer.id));
+
+create unique index if not exists cb_profile_testimonials_one_per_author_idx
+  on public.cb_profile_testimonials(profile_id, author_id);
+
 alter table public.cb_profile_testimonials enable row level security;
 alter table public.cb_testimonial_hearts enable row level security;
 
@@ -27,7 +37,7 @@ create policy "testimonials read" on public.cb_profile_testimonials for select t
 drop policy if exists "testimonials create" on public.cb_profile_testimonials;
 create policy "testimonials create" on public.cb_profile_testimonials for insert to authenticated with check (author_id=auth.uid() and profile_id<>auth.uid());
 drop policy if exists "profile owner deletes testimonials" on public.cb_profile_testimonials;
-create policy "profile owner deletes testimonials" on public.cb_profile_testimonials for delete to authenticated using (profile_id=auth.uid());
+create policy "profile owner deletes testimonials" on public.cb_profile_testimonials for delete to authenticated using (profile_id=auth.uid() or author_id=auth.uid());
 
 drop policy if exists "testimonial hearts read" on public.cb_testimonial_hearts;
 create policy "testimonial hearts read" on public.cb_testimonial_hearts for select to authenticated using (true);

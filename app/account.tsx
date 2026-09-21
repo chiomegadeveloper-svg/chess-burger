@@ -119,6 +119,7 @@ export default function Account({
   const [socialCounts, setSocialCounts] = useState({
     friends: 0,
     followers: 0,
+    following: 0,
   });
   const [loading, setLoading] = useState(true),
     [busy, setBusy] = useState(false),
@@ -263,7 +264,7 @@ export default function Account({
     if (!profile || profile.user_id === "guest-device") return;
     let live = true;
     const refresh = () =>
-      void arena<{ friends: number; followers: number }>("social-counts")
+      void arena<{ friends: number; followers: number; following: number }>("social-counts")
         .then((counts) => {
           if (live) setSocialCounts(counts);
         })
@@ -996,6 +997,9 @@ export default function Account({
               </button>
               <button type="button" onClick={() => openSocial("followers")}>
                 {socialCounts.followers} Followers
+              </button>
+              <button type="button" onClick={() => openSocial("followers")}>
+                {socialCounts.following} Following
               </button>
             </div>
           </div>
