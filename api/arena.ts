@@ -158,6 +158,12 @@ const TIME: Record<string, { seconds: number; increment: number; group: string; 
   '3+0': { seconds: 180, increment: 0, group: 'Blitz', label: '3 min' }, '3+2': { seconds: 180, increment: 2, group: 'Blitz', label: '3 + 2' }, '5+0': { seconds: 300, increment: 0, group: 'Blitz', label: '5 min' },
   '10+0': { seconds: 600, increment: 0, group: 'Rapid', label: '10 min' }, '10+5': { seconds: 600, increment: 5, group: 'Rapid', label: '10 + 5' }, '15+10': { seconds: 900, increment: 10, group: 'Rapid', label: '15 + 10' },
 };
+const CPU_ROBOT_NAMES = ['Nova Knight', 'Byte Bishop', 'Rook-9', 'Pixel Pawn', 'Quantum Queen', 'Neon Castle', 'Astro Gambit', 'Circuit Sage', 'Mecha Mate', 'Orbit King'] as const;
+const cpuRobotName = (value: unknown, level: number) => {
+  const requested = String(value ?? '').trim();
+  return CPU_ROBOT_NAMES.includes(requested as (typeof CPU_ROBOT_NAMES)[number]) ? requested : CPU_ROBOT_NAMES[(level - 1) % CPU_ROBOT_NAMES.length];
+};
+const modernCpuFeedContent = (value: unknown) => String(value ?? '').replace(/Stockfish Level (\d+)/gi, (_match, rawLevel) => cpuRobotName('', Number(rawLevel)));
 class ApiError extends Error { status: number; constructor(status: number, message: string) { super(message); this.status = status; } }
 const fail = (status: number, message: string): never => { throw new ApiError(status, message); };
 const now = () => Date.now();
@@ -465,7 +471,7 @@ async function publicFeed(client: Db) {
     for (const m of waiting.data ?? []) activeChallenges.set(m.id, m);
   }
   const people = await playerMap(client, visible.map((e: any) => e.user_id));
-  return { events: visible.filter((e: any) => e.kind !== 'challenge' || activeChallenges.has(e.challenge_match_id)).map((e: any) => { const match = activeChallenges.get(e.challenge_match_id); return { id: e.kind === 'challenge' && e.challenge_match_id ? `challenge:${e.challenge_match_id}` : e.id, user_id: e.user_id, kind: e.kind, display_name: e.kind === 'announcement' ? 'Chess Burger' : e.display_name, content: e.content, image_url: e.image_url ?? '', expires_at: e.expires_at, cbr_delta: e.cbr_delta ?? 0, gold_delta: e.gold_delta ?? 0, heart_count: e.heart_count ?? 0, created_at: e.created_at, avatar_url: e.kind === 'announcement' ? '/cburger_logo.png' : people.get(e.user_id)?.avatar_url ?? '', cbr: people.get(e.user_id)?.cbr ?? 88, feed_banner: e.kind === 'announcement' ? '' : people.get(e.user_id)?.active_feed_banner ?? '', play_mode: match?.play_mode ?? 'normal', wager_gold: Number(match?.wager_gold ?? 0) }; }) };
+  return { events: visible.filter((e: any) => e.kind !== 'challenge' || activeChallenges.has(e.challenge_match_id)).map((e: any) => { const match = activeChallenges.get(e.challenge_match_id); return { id: e.kind === 'challenge' && e.challenge_match_id ? `challenge:${e.challenge_match_id}` : e.id, user_id: e.user_id, kind: e.kind, display_name: e.kind === 'announcement' ? 'Chess Burger' : e.display_name, content: modernCpuFeedContent(e.content), image_url: e.image_url ?? '', expires_at: e.expires_at, cbr_delta: e.cbr_delta ?? 0, gold_delta: e.gold_delta ?? 0, heart_count: e.heart_count ?? 0, created_at: e.created_at, avatar_url: e.kind === 'announcement' ? '/cburger_logo.png' : people.get(e.user_id)?.avatar_url ?? '', cbr: people.get(e.user_id)?.cbr ?? 88, feed_banner: e.kind === 'announcement' ? '' : people.get(e.user_id)?.active_feed_banner ?? '', play_mode: match?.play_mode ?? 'normal', wager_gold: Number(match?.wager_gold ?? 0) }; }) };
 }
 async function saveLiveHeartbeat(client: Db, userId: string) {
   const stamp = new Date().toISOString();
@@ -688,7 +694,7 @@ export default async function handler(req: Req, res: Res) {
       const claimed=await client.rpc('cb_claim_cpu_reward',{p_user_id:account.id,p_game_id:gameId,p_cbr:cbrDelta,p_gold:goldDelta});
       if(claimed.error)fail(/cb_claim_cpu_reward|schema cache|function/i.test(claimed.error.message)?503:500,/cb_claim_cpu_reward|schema cache|function/i.test(claimed.error.message)?'Run supabase/0026_cpu_match_rewards.sql in Supabase, then try again.':claimed.error.message);
       const result=claimed.data??{};
-      if(result.awarded){const event=await client.from('cb_feed').insert({user_id:account.id,kind:outcome==='win'?'win':'loss',display_name:account.profile.display_name,content:`${outcome==='win'?'defeated':'lost to'} Stockfish Level ${level} in a ${group.toLowerCase()} CPU match.`,cbr_delta:cbrDelta,gold_delta:goldDelta});if(event.error)console.warn('arena.cpu-feed-failed',{gameId});}
+      if(result.awarded){const aiName=cpuRobotName(body.ai_name,level),event=await client.from('cb_feed').insert({user_id:account.id,kind:outcome==='win'?'win':'loss',display_name:account.profile.display_name,content:`${outcome==='win'?'defeated':'lost to'} ${aiName} in a ${group.toLowerCase()} CPU match.`,cbr_delta:cbrDelta,gold_delta:goldDelta});if(event.error)console.warn('arena.cpu-feed-failed',{gameId});}
       return res.status(200).json(result);
     }
     const isStaff = account.profile.role === 'owner' || account.profile.role === 'admin';

@@ -78,7 +78,7 @@ export default function CpuGame({ player, onClose, onReward }: { player: ArenaPl
     if (!match || match.status !== "finished" || match.result === "draw" || !match.result || !selectedLevel || claimedRef.current.has(match.id)) return;
     const won = match.result === "white";
     claimedRef.current.add(match.id); setRewardStatus(won ? "Awarding your victory…" : "Updating your CBR…");
-    arena<{ awarded: boolean; cbr:number;gold:number;cbr_delta: number; gold_delta: number }>("claim-cpu-reward", { game_id: match.id, control: match.control, level: selectedLevel.level, pgn: match.pgn, outcome: won ? "win" : "loss" })
+    arena<{ awarded: boolean; cbr:number;gold:number;cbr_delta: number; gold_delta: number }>("claim-cpu-reward", { game_id: match.id, control: match.control, level: selectedLevel.level, ai_name: match.black?.display_name, pgn: match.pgn, outcome: won ? "win" : "loss" })
       .then((result) => { setSettledStats({cbr:Number(result.cbr),gold:Number(result.gold),cbrDelta:Number(result.cbr_delta),goldDelta:Number(result.gold_delta)});setRewardStatus(result.awarded ? (won ? `Victory reward: +${result.gold_delta} Gold · +${result.cbr_delta} CBR` : `CPU loss: ${result.cbr_delta} CBR · no Gold deducted`) : "This CPU result was already recorded."); onReward(); })
       .catch((error) => { claimedRef.current.delete(match.id); setRewardStatus(error instanceof Error ? error.message : "Reward could not be awarded. Try again."); });
   }, [match, onReward, selectedLevel]);

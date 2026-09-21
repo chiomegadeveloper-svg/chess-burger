@@ -567,7 +567,7 @@ function AppPage() {
         </button>
         <button className="match-row available cpu-lobby-link" onClick={() => setTab("cpu")}>
           <span className="mode-symbol"><Bot size={21}/></span>
-          <span className="mode-copy"><strong>Play with CPU</strong><small>Practice against Stockfish with 10 strength levels</small></span>
+          <span className="mode-copy"><strong>Play with CPU</strong><small>Challenge 10 Chess Burger AI strength levels</small></span>
           <span className="mode-meta">Levels 1–10</span><ChevronRight size={15}/>
         </button>
         <div className="mode-list">
