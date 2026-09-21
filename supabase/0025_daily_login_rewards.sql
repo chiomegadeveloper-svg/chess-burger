@@ -15,20 +15,24 @@ alter table public.cb_daily_login_claims enable row level security;
 
 create or replace function public.cb_daily_reward_status(p_user_id uuid)
 returns jsonb language plpgsql security definer set search_path=public as $$
-declare v_today date := (now() at time zone 'Asia/Manila')::date; v_last record; v_day int; v_week int; v_ids text[] := array['pastel-blush','pastel-peach','pastel-lemon','pastel-mint','pastel-sage','pastel-sky','pastel-ice','pastel-lilac','pastel-violet','pastel-coral'];
+declare v_today date := (now() at time zone 'Asia/Manila')::date; v_last record; v_day int; v_week int; v_seed int; v_day2 int; v_day5 int; v_day7 int; v_ids text[] := array['pastel-blush','pastel-peach','pastel-lemon','pastel-mint','pastel-sage','pastel-sky','pastel-ice','pastel-lilac','pastel-violet','pastel-coral'];
 begin
   select claim_date,cycle_day into v_last from public.cb_daily_login_claims where user_id=p_user_id order by claim_date desc limit 1;
   if v_last.claim_date=v_today then v_day:=v_last.cycle_day;
   elsif v_last.claim_date=v_today-1 then v_day:=(v_last.cycle_day%7)+1;
   else v_day:=1; end if;
   v_week:=floor(extract(epoch from date_trunc('week',now() at time zone 'Asia/Manila'))/604800)::int;
+  v_seed:=mod(hashtext(p_user_id::text)::bigint+2147483648,10)::int;
+  v_day2:=1+mod(v_week+v_seed,10);
+  v_day5:=1+mod(v_week+v_seed+3,10);
+  v_day7:=1+mod(v_week+v_seed+6,10);
   return jsonb_build_object('day',v_day,'claimed_today',coalesce(v_last.claim_date=v_today,false),'rewards',jsonb_build_array(
     jsonb_build_object('day',1,'kind','gold','amount',10),
-    jsonb_build_object('day',2,'kind','banner','days',3,'product_id',v_ids[1+mod(v_week+(hashtext(p_user_id::text)::bigint+2147483648),10)],'name',(select name from public.cb_shop_products where id=v_ids[1+mod(v_week+(hashtext(p_user_id::text)::bigint+2147483648),10)])),
+    jsonb_build_object('day',2,'kind','banner','days',3,'product_id',v_ids[v_day2],'name',(select name from public.cb_shop_products where id=v_ids[v_day2])),
     jsonb_build_object('day',3,'kind','gold','amount',18),jsonb_build_object('day',4,'kind','gold','amount',18),
-    jsonb_build_object('day',5,'kind','banner','days',3,'product_id',v_ids[1+mod(v_week+3+(hashtext(p_user_id::text)::bigint+2147483648),10)],'name',(select name from public.cb_shop_products where id=v_ids[1+mod(v_week+3+(hashtext(p_user_id::text)::bigint+2147483648),10)])),
+    jsonb_build_object('day',5,'kind','banner','days',3,'product_id',v_ids[v_day5],'name',(select name from public.cb_shop_products where id=v_ids[v_day5])),
     jsonb_build_object('day',6,'kind','gold','amount',18),
-    jsonb_build_object('day',7,'kind','banner','days',5,'product_id',v_ids[1+mod(v_week+6+(hashtext(p_user_id::text)::bigint+2147483648),10)],'name',(select name from public.cb_shop_products where id=v_ids[1+mod(v_week+6+(hashtext(p_user_id::text)::bigint+2147483648),10)]))));
+    jsonb_build_object('day',7,'kind','banner','days',5,'product_id',v_ids[v_day7],'name',(select name from public.cb_shop_products where id=v_ids[v_day7]))));
 end $$;
 
 create or replace function public.cb_claim_daily_reward(p_user_id uuid)
