@@ -115,11 +115,10 @@ function AppPage() {
   const [summary, setSummary] = useState<MatchSummary | null>(null);
   const shownResults = useRef(new Set<string>());
   const welcomeDecision = useRef(false);
+  const dailyRewardDecision = useRef(false);
   const finishWelcome = (nextTab?:string) => {
     setShowWelcome(false);
     if(nextTab)setTab(nextTab);
-    // Let the shortcut dialog fully unmount before mounting the viewport portal.
-    window.setTimeout(() => setShowDailyRewards(true), 220);
   };
   const closeDailyRewards = useCallback(() => setShowDailyRewards(false), []);
   const showOnlineResult = useCallback(
@@ -427,6 +426,12 @@ function AppPage() {
     setShowWelcome(false);
     setTab("profile");
   }, [showSplash, member]);
+  useEffect(() => {
+    if (showSplash || !showWelcome || member !== true || dailyRewardDecision.current) return;
+    dailyRewardDecision.current = true;
+    const timer = window.setTimeout(() => setShowDailyRewards(true), 650);
+    return () => window.clearTimeout(timer);
+  }, [showSplash, showWelcome, member]);
   useEffect(() => {
     if (!profile || profile.user_id === "guest-device") return;
     const userId = profile.user_id;
