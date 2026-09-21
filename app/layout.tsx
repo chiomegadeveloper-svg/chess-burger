@@ -8,6 +8,7 @@ import "./board-account.css";
 import "./refinements.css";
 import "leaflet/dist/leaflet.css";
 import "./arena.css";
+import "./puzzles.css";
 import "./feed-polish.css";
 import "./charcoal-theme.css";
 import "./social.css";

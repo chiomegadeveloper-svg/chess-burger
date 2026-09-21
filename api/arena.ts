@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { Chess } from 'chess.js';
+import { DAILY_PUZZLES } from '../app/puzzle-data';
 
 type Req = { method?: string; query?: Record<string, string | string[] | undefined>; body?: unknown; headers: Record<string, string | string[] | undefined> };
 type Res = { status: (code: number) => Res; json: (body: unknown) => void; setHeader: (name: string, value: string) => void };
@@ -647,6 +648,27 @@ export default async function handler(req: Req, res: Res) {
     // Keep it as a first-class migration action rather than falling through to
     // a 404 on every page load.
     if (action === 'me') return res.status(200).json({ profile: { ...account.profile, ocbr: Number(account.profile.ocbr ?? 88) }, rank: await playerRank(client, account.profile) });
+    if(action==='puzzle-state'){
+      const puzzleDay=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+      const claims=await client.from('cb_daily_puzzle_claims').select('puzzle_id').eq('user_id',account.id).eq('puzzle_day',puzzleDay);
+      if(claims.error)fail(/cb_daily_puzzle_claims|schema cache|relation/i.test(claims.error.message)?503:500,/cb_daily_puzzle_claims|schema cache|relation/i.test(claims.error.message)?'Run supabase/0028_daily_puzzles.sql in Supabase, then try again.':claims.error.message);
+      const completed=(claims.data??[]).map((row:any)=>String(row.puzzle_id)).filter((id:string)=>DAILY_PUZZLES.some(puzzle=>puzzle.id===id));
+      return res.status(200).json({completed,gold:Number(account.profile.gold_points??0),bonus_claimed:completed.length===DAILY_PUZZLES.length,day:puzzleDay});
+    }
+    if(action==='claim-puzzle'){
+      const puzzleId=String(body.puzzle_id??''),move=String(body.move??'').toLowerCase(),puzzle=DAILY_PUZZLES.find(item=>item.id===puzzleId);
+      if(!puzzle||move!==puzzle.solution)fail(400,'That is not the winning move. Try again.');
+      const puzzleDay=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Manila',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+      const existing=await client.from('cb_daily_puzzle_claims').select('puzzle_id').eq('user_id',account.id).eq('puzzle_day',puzzleDay);
+      if(existing.error)fail(/cb_daily_puzzle_claims|schema cache|relation/i.test(existing.error.message)?503:500,/cb_daily_puzzle_claims|schema cache|relation/i.test(existing.error.message)?'Run supabase/0028_daily_puzzles.sql in Supabase, then try again.':existing.error.message);
+      const completed=(existing.data??[]).map((row:any)=>String(row.puzzle_id));
+      const puzzleIndex=DAILY_PUZZLES.findIndex(item=>item.id===puzzleId);
+      if(puzzleIndex>0&&!completed.includes(DAILY_PUZZLES[puzzleIndex-1].id))fail(409,'Complete the previous puzzle first.');
+      const claimed=await client.rpc('cb_claim_daily_puzzle',{p_user_id:account.id,p_day:puzzleDay,p_puzzle_id:puzzleId,p_is_final:puzzleIndex===DAILY_PUZZLES.length-1});
+      if(claimed.error)fail(/cb_claim_daily_puzzle|schema cache|function/i.test(claimed.error.message)?503:500,/cb_claim_daily_puzzle|schema cache|function/i.test(claimed.error.message)?'Run supabase/0028_daily_puzzles.sql in Supabase, then try again.':claimed.error.message);
+      const result=claimed.data??{},allCompleted=Array.from(new Set([...completed,puzzleId]));
+      return res.status(200).json({...result,completed:allCompleted,bonus_claimed:allCompleted.length===DAILY_PUZZLES.length,day:puzzleDay});
+    }
     if(action==='claim-cpu-reward'){
       const gameId=String(body.game_id??''),control=String(body.control??''),level=Number(body.level),pgn=String(body.pgn??''),outcome=String(body.outcome??'');
       if(!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(gameId)||!Number.isInteger(level)||level<1||level>10||!['win','loss'].includes(outcome))fail(400,'Invalid CPU game result.');

@@ -20,6 +20,7 @@ import {
   PackageOpen,
   Castle,
   Bot,
+  Puzzle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
@@ -50,6 +51,7 @@ import { BagPage, ShopPage } from "./shop";
 import { isProfileComplete } from "./profile-completion";
 import Testimonials from "./testimonials";
 import CpuGame from "./cpu-game";
+import Puzzles from "./puzzles";
 
 const modes = [
   {
@@ -488,6 +490,7 @@ function AppPage() {
     "replay",
     "tournaments",
     "cpu",
+    "puzzles",
   ].includes(tab)
     ? "play"
     : tab === "cms"
@@ -563,6 +566,11 @@ function AppPage() {
           <span className="mode-symbol"><Bot size={21}/></span>
           <span className="mode-copy"><strong>Play with CPU</strong><small>Practice against Stockfish with 10 strength levels</small></span>
           <span className="mode-meta">Levels 1–10</span><ChevronRight size={15}/>
+        </button>
+        <button className="match-row available puzzle-lobby-link" onClick={() => setTab("puzzles")}>
+          <span className="mode-symbol"><Puzzle size={21}/></span>
+          <span className="mode-copy"><strong>Puzzle Quest</strong><small>Daily chess tactics with a free local coach</small></span>
+          <span className="mode-meta">Earn Gold</span><ChevronRight size={15}/>
         </button>
         <div className="mode-list">
           {modes.map(({ name, sub, meta, Icon, key }) => (
@@ -698,6 +706,7 @@ function AppPage() {
     );
   else if (tab === "tournaments") content = <Tournaments profile={profile} />;
   else if (tab === "cpu" && profile) content = <CpuGame player={profile} onClose={() => setTab("play")} onReward={() => void refreshProfile()}/>;
+  else if (tab === "puzzles" && profile) content = <Puzzles onClose={() => setTab("play")} onReward={() => void refreshProfile()}/>;
   else if (tab === "card")
     content = (
       <section className="profile-page card-only-view">
