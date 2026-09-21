@@ -15,7 +15,7 @@ alter table public.cb_daily_login_claims enable row level security;
 
 create or replace function public.cb_daily_reward_status(p_user_id uuid)
 returns jsonb language plpgsql security definer set search_path=public as $$
-declare v_today date := (now() at time zone 'Asia/Manila')::date; v_last record; v_day int; v_week int; v_seed int; v_day2 int; v_day5 int; v_day7 int; v_ids text[] := array['pastel-blush','pastel-peach','pastel-lemon','pastel-mint','pastel-sage','pastel-sky','pastel-ice','pastel-lilac','pastel-violet','pastel-coral'];
+declare v_today date := ((now() at time zone 'Asia/Manila') - interval '1 minute')::date; v_last record; v_day int; v_week int; v_seed int; v_day2 int; v_day5 int; v_day7 int; v_ids text[] := array['pastel-blush','pastel-peach','pastel-lemon','pastel-mint','pastel-sage','pastel-sky','pastel-ice','pastel-lilac','pastel-violet','pastel-coral'];
 begin
   select claim_date,cycle_day into v_last from public.cb_daily_login_claims where user_id=p_user_id order by claim_date desc limit 1;
   if v_last.claim_date=v_today then v_day:=v_last.cycle_day;
@@ -37,7 +37,7 @@ end $$;
 
 create or replace function public.cb_claim_daily_reward(p_user_id uuid)
 returns jsonb language plpgsql security definer set search_path=public as $$
-declare v_status jsonb; v_day int; v_today date := (now() at time zone 'Asia/Manila')::date; v_reward jsonb; v_kind text; v_gold int; v_product text; v_days int;
+declare v_status jsonb; v_day int; v_today date := ((now() at time zone 'Asia/Manila') - interval '1 minute')::date; v_reward jsonb; v_kind text; v_gold int; v_product text; v_days int;
 begin
   perform pg_advisory_xact_lock(hashtext(p_user_id::text));
   v_status:=public.cb_daily_reward_status(p_user_id);

@@ -115,7 +115,7 @@ function AppPage() {
   const [summary, setSummary] = useState<MatchSummary | null>(null);
   const shownResults = useRef(new Set<string>());
   const welcomeDecision = useRef(false);
-  const dailyRewardDecision = useRef(false);
+  const dailyRewardPrompted = useRef("");
   const finishWelcome = (nextTab?:string) => {
     setShowWelcome(false);
     if(nextTab)setTab(nextTab);
@@ -427,11 +427,27 @@ function AppPage() {
     setTab("profile");
   }, [showSplash, member]);
   useEffect(() => {
-    if (showSplash || !showWelcome || member !== true || dailyRewardDecision.current) return;
-    dailyRewardDecision.current = true;
-    const timer = window.setTimeout(() => setShowDailyRewards(true), 650);
-    return () => window.clearTimeout(timer);
-  }, [showSplash, showWelcome, member]);
+    if (showSplash || showWelcome || member !== true || tab !== "home" || showDailyRewards) return;
+    let live = true;
+    const manilaRewardDay = () => new Date(Date.now() + 8 * 60 * 60 * 1000 - 60 * 1000).toISOString().slice(0, 10);
+    const check = async () => {
+      const day = manilaRewardDay();
+      if (dailyRewardPrompted.current === day) return;
+      dailyRewardPrompted.current = day;
+      try {
+        const reward = await arena<{ claimed_today:boolean }>("daily-reward-status");
+        if (live && !reward.claimed_today && tab === "home") setShowDailyRewards(true);
+      } catch {
+        if (live) dailyRewardPrompted.current = "";
+      }
+    };
+    void check();
+    const manilaNow = new Date(Date.now() + 8 * 60 * 60 * 1000);
+    let nextReset = Date.UTC(manilaNow.getUTCFullYear(), manilaNow.getUTCMonth(), manilaNow.getUTCDate(), 0, 1) - 8 * 60 * 60 * 1000;
+    if (nextReset <= Date.now()) nextReset += 24 * 60 * 60 * 1000;
+    const timer = window.setTimeout(() => { dailyRewardPrompted.current = ""; void check(); }, nextReset - Date.now());
+    return () => { live = false; window.clearTimeout(timer); };
+  }, [showSplash, showWelcome, member, tab, showDailyRewards]);
   useEffect(() => {
     if (!profile || profile.user_id === "guest-device") return;
     const userId = profile.user_id;

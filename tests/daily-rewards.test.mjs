@@ -3,11 +3,16 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const page=readFileSync('app/page.tsx','utf8'),ui=readFileSync('app/daily-rewards.tsx','utf8'),css=readFileSync('app/daily-rewards.css','utf8'),sql=readFileSync('supabase/0025_daily_login_rewards.sql','utf8'),api=readFileSync('api/arena.ts','utf8');
-test('daily rewards follow the shortcut menu and use the seven requested rewards',()=>{
+test('daily rewards open only over Community Feed and use the seven requested rewards',()=>{
   assert.match(page,/finishWelcome\("map"\)/);assert.match(page,/finishWelcome\("play"\)/);assert.match(page,/<DailyRewards/);
-  assert.match(page,/dailyRewardDecision/);
-  assert.match(page,/setTimeout\(\(\) => setShowDailyRewards\(true\), 650\)/);
+  assert.match(page,/tab !== "home"/);
+  assert.match(page,/!reward\.claimed_today && tab === "home"/);
+  assert.match(page,/const finishWelcome = \(nextTab\?:string\) => \{\s*setShowWelcome\(false\);\s*if\(nextTab\)setTab\(nextTab\);\s*\}/);
   assert.match(sql,/jsonb_build_object\('day',1,'kind','gold','amount',10\)/);assert.equal((sql.match(/'amount',18/g)||[]).length,3);assert.match(sql,/'day',7,'kind','banner','days',5/);
+});
+test('daily reward eligibility resets at 12:01 AM in Manila',()=>{
+  assert.match(sql,/interval '1 minute'/);
+  assert.match(page,/Date\.UTC\([\s\S]*?, 0, 1\)/);
 });
 test('daily claim is server-idempotent and banner prizes are timed Bag rentals',()=>{
   assert.match(sql,/primary key\(user_id,claim_date\)/);assert.match(sql,/pg_advisory_xact_lock/);assert.match(sql,/cb_user_items/);assert.match(api,/claim-daily-reward/);
