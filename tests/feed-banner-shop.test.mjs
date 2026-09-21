@@ -51,6 +51,14 @@ test("active rental extensions receive a 30 percent discount", () => {
   assert.match(extensionSql, /discount_percent/);
 });
 
+test("shop requires confirmation before charging a rental", () => {
+  assert.match(shop, /role="dialog"/);
+  assert.match(shop, /Confirm purchase/);
+  assert.match(shop, /Confirm extension/);
+  assert.match(shop, /Please confirm before Gold is deducted/);
+  assert.match(shop, /onAction=\{\(\) => setPending\(banner\)\}/);
+});
+
 test("main navigation uses the requested nine-item order", () => {
   const block = page.slice(page.indexOf("const navigation = ["), page.indexOf("type Invite"));
   const labels = [...block.matchAll(/label: "([^"]+)"/g)].map((match) => match[1]);
