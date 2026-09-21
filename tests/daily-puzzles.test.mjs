@@ -42,3 +42,9 @@ test("Coach Patty prefers a friendly female English device voice", () => {
   assert.match(puzzleUi, /en-PH/);
   assert.match(puzzleUi, /utterance\.pitch=1\.12/);
 });
+
+test("every correct puzzle solve displays a popup notification", () => {
+  assert.match(puzzleUi, /toast\.success\(`Puzzle \$\{puzzle\.number\} solved/);
+  assert.match(puzzleUi, /\+5 Gold chapter bonus/);
+  assert.match(puzzleUi, /Practice replay/);
+});

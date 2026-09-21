@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Chess, type Square } from "chess.js";
 import { ArrowLeft, Check, Coins, Lightbulb, LockKeyhole, RotateCcw, Volume2 } from "lucide-react";
+import { toast } from "sonner";
 import { arena } from "./arena-client";
 import { DAILY_PUZZLES, PUZZLE_CHAPTERS } from "./puzzle-data";
 
@@ -47,12 +48,14 @@ export default function Puzzles({ onClose, onReward }: { onClose: () => void; on
     setSelected(null);
     if (uci !== puzzle.solution) { setMessage("That move works on the board, but it misses the fastest win. Try again."); return; }
     setGame(copy);
-    if (completed.has(puzzle.id)) { setMessage("Correct — excellent pattern recognition!"); return; }
+    if (completed.has(puzzle.id)) { setMessage("Correct — excellent pattern recognition!");toast.success(`Puzzle ${puzzle.number} solved again!`,{description:`Chapter ${puzzle.chapter}: ${chapter.title} · Practice replay`});return; }
     setBusy(true); setMessage("Correct! Securing your Gold…");
     try {
       const result = await arena<PuzzleState & { awarded: boolean; gold_delta: number }>("claim-puzzle", { puzzle_id: puzzle.id, move: uci });
       setState(result); onReward();
-      setMessage(result.awarded ? `Solved! +${result.gold_delta} Gold added.` : "This puzzle was already claimed today.");
+      setMessage(result.awarded ? `Solved! +${result.gold_delta} Gold added.` : "This puzzle was already claimed.");
+      if(result.awarded)toast.success(`Puzzle ${puzzle.number} solved!`,{description:result.gold_delta>2?`+2 Gold · +5 Gold chapter bonus`:`+${result.gold_delta} Gold added to your balance`});
+      else toast.success(`Puzzle ${puzzle.number} solved!`,{description:"Reward already claimed for this puzzle."});
     } catch (error) { setMessage(error instanceof Error ? error.message : "Reward could not be claimed."); }
     finally { setBusy(false); }
   }

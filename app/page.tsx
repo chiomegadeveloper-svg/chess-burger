@@ -20,7 +20,6 @@ import {
   PackageOpen,
   Castle,
   Bot,
-  Puzzle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
@@ -538,10 +537,11 @@ function AppPage() {
   else if (tab === "play-select")
     content = (
       <section className="play-select-page" aria-labelledby="play-select-title">
-        <div className="play-select-heading"><span>Choose your destination</span><h1 id="play-select-title">Play Chess Burger</h1><p>Enter the Match Lobby or Grand Arena.</p></div>
+        <div className="play-select-heading"><span>Choose your destination</span><h1 id="play-select-title">Play Chess Burger</h1><p>Choose matches, enter the Arena, or train with Coach Patty.</p></div>
         <div className="play-select-grid">
           <button className="play-destination lobby" type="button" onClick={() => setTab("play")}><img src="/play-selection/match-lobby.webp" alt="Colorful Chess Burger Match Lobby"/><span><strong>Match Lobby</strong><small>Online, CPU, nearby and offline matches</small><b>Enter Lobby <ChevronRight size={17}/></b></span></button>
           <button className="play-destination arena arena-live" type="button" onClick={() => setTab("tournaments")}><img src="/play-selection/grand-arena.webp" alt="Chess Burger Grand Arena entrance"/><span><strong>Grand Arena</strong><small>Epic ranked arena battles</small><b>Enter Arena <ChevronRight size={17}/></b></span></button>
+          <button className="play-destination puzzles" type="button" onClick={() => setTab("puzzles")}><img src="/play-selection/puzzle-quest.webp" alt="Chess Burger puzzle maze arena"/><span><strong>Puzzle Quest</strong><small>100 puzzles, Coach Patty and Gold rewards</small><b>Enter Puzzles <ChevronRight size={17}/></b></span></button>
         </div>
       </section>
     );
@@ -566,11 +566,6 @@ function AppPage() {
           <span className="mode-symbol"><Bot size={21}/></span>
           <span className="mode-copy"><strong>Play with CPU</strong><small>Practice against Stockfish with 10 strength levels</small></span>
           <span className="mode-meta">Levels 1–10</span><ChevronRight size={15}/>
-        </button>
-        <button className="match-row available puzzle-lobby-link" onClick={() => setTab("puzzles")}>
-          <span className="mode-symbol"><Puzzle size={21}/></span>
-          <span className="mode-copy"><strong>Puzzle Quest</strong><small>Daily chess tactics with a free local coach</small></span>
-          <span className="mode-meta">Earn Gold</span><ChevronRight size={15}/>
         </button>
         <div className="mode-list">
           {modes.map(({ name, sub, meta, Icon, key }) => (
