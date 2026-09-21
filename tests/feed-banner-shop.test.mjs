@@ -7,6 +7,7 @@ const api = readFileSync(new URL("../api/arena.ts", import.meta.url), "utf8");
 const sql = readFileSync(new URL("../supabase/0021_feed_banner_shop.sql", import.meta.url), "utf8");
 const rentalSql = readFileSync(new URL("../supabase/0022_feed_banner_rentals.sql", import.meta.url), "utf8");
 const priceSql = readFileSync(new URL("../supabase/0024_feed_banner_prices.sql", import.meta.url), "utf8");
+const extensionSql = readFileSync(new URL("../supabase/0025_feed_banner_extension_discount.sql", import.meta.url), "utf8");
 const shop = readFileSync(new URL("../app/shop.tsx", import.meta.url), "utf8");
 const page = readFileSync(new URL("../app/page.tsx", import.meta.url), "utf8");
 
@@ -40,6 +41,22 @@ test("feed banners are timed rentals with three duration choices", () => {
   assert.match(priceSql, /'metal-gold',218/);
   assert.match(priceSql, /'metal-ruby',268/);
   assert.match(priceSql, /select tier,price_gold into v_tier,v_price/i);
+});
+
+test("active rental extensions receive a 30 percent discount", () => {
+  assert.match(catalog, /Math\.round\(feedBannerRentalPrice\(banner, days\) \* 0\.7\)/);
+  assert.match(shop, /Extend · 30% off/);
+  assert.match(extensionSql, /expires_at>now\(\)/i);
+  assert.match(extensionSql, /if v_extending then v_price := round\(v_price \* 0\.70\)/i);
+  assert.match(extensionSql, /discount_percent/);
+});
+
+test("shop requires confirmation before charging a rental", () => {
+  assert.match(shop, /role="dialog"/);
+  assert.match(shop, /Confirm purchase/);
+  assert.match(shop, /Confirm extension/);
+  assert.match(shop, /Please confirm before Gold is deducted/);
+  assert.match(shop, /onAction=\{\(\) => setPending\(banner\)\}/);
 });
 
 test("main navigation uses the requested nine-item order", () => {

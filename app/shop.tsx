@@ -4,7 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { ArrowLeft, Check, Crown, PackageOpen, ShoppingBag } from "lucide-react";
 import { toast } from "sonner";
 import { arena } from "./arena-client";
-import { FEED_BANNERS, FEED_BANNER_DURATIONS, feedBanner, feedBannerPriceRange, feedBannerRentalPrice, type FeedBanner, type FeedBannerDuration } from "./feed-banner-catalog";
+import { FEED_BANNERS, FEED_BANNER_DURATIONS, feedBanner, feedBannerExtensionPrice, feedBannerPriceRange, feedBannerRentalPrice, type FeedBanner, type FeedBannerDuration } from "./feed-banner-catalog";
 import type { PlayerProfile } from "./supabase";
 import "./feed-banner-shop.css";
 
@@ -29,25 +29,41 @@ function useShopState() {
 }
 
 export function ShopPage({ profile, onChanged }: { profile: PlayerProfile | null; onChanged: () => void }) {
-  const [open, setOpen] = useState(false), [busy, setBusy] = useState(""), [days, setDays] = useState<FeedBannerDuration>(7);
+  const [open, setOpen] = useState(false), [busy, setBusy] = useState(""), [days, setDays] = useState<FeedBannerDuration>(7), [pending, setPending] = useState<FeedBanner | null>(null);
   const { state, setState, loading } = useShopState();
   const act = async (banner: FeedBanner) => {
     setBusy(banner.id);
     try {
       const data = await arena("buy-feed-banner", { product_id: banner.id, days, request_id: crypto.randomUUID() }) as { active: string; gold: number; expires_at: string };
       setState((current) => ({ ...current, active: data.active, gold: data.gold ?? current.gold, owned: [...current.owned.filter((item) => item.product_id !== banner.id), { product_id: banner.id, expires_at: data.expires_at }] }));
-      toast.success(`${banner.name} rented for ${days === 7 ? "1 week" : `${days} days`} and activated.`);
+      toast.success(`${rentalFor(state, banner.id) ? "Rental extended with 30% discount" : `${banner.name} rented`} for ${days === 7 ? "1 week" : `${days} days`} and activated.`);
+      setPending(null);
       onChanged();
     } catch (error) { toast.error(error instanceof Error ? error.message : "Unable to update banner."); }
     finally { setBusy(""); }
   };
+  const pendingRental = pending ? rentalFor(state, pending.id) : undefined;
+  const pendingPrice = pending ? (pendingRental ? feedBannerExtensionPrice(pending, days) : feedBannerRentalPrice(pending, days)) : 0;
   if (open) return <section className="shop-page banner-store">
     <button className="back-button" type="button" onClick={() => setOpen(false)}><ArrowLeft size={16}/> Shop</button>
     <div className="page-heading banner-heading"><div><span className="shop-eyebrow">Personalize your feed</span><h1>Feed Banner Colors</h1><p>Choose a signature color for every community post you share.</p></div><span className="banner-wallet"><span className="gold-coin">●</span><strong>{state.gold || profile?.gold_points || 0}</strong><small>Gold balance</small></span></div>
     <fieldset className="rental-duration"><legend>Choose rental duration</legend>{FEED_BANNER_DURATIONS.map((option) => <button type="button" className={days === option ? "selected" : ""} aria-pressed={days === option} key={option} onClick={() => setDays(option)}><strong>{option === 7 ? "1 Week" : `${option} Days`}</strong><span>Pastel {feedBannerPriceRange("pastel", option)} · Premium {feedBannerPriceRange("metallic", option)} Gold</span></button>)}</fieldset>
     {loading ? <p className="account-note">Loading banner collection…</p> : <>
-      {(["pastel", "metallic"] as const).map((tier) => <section className={`banner-tier ${tier}`} key={tier}><div className="banner-tier-heading"><div><span>{tier === "pastel" ? "Basic collection" : "Premium collection"}</span><h2>{tier === "pastel" ? "Pastel Colors" : "Metallic Colors"}</h2><p>{tier === "pastel" ? "Soft, clean colors for a friendly feed." : "Reflective finishes for a distinctive profile."}</p></div><b>10 colors</b></div><div className="banner-products">{FEED_BANNERS.filter((banner) => banner.tier === tier).map((banner) => { const rental = rentalFor(state, banner.id); return <BannerTile key={banner.id} banner={banner} expiresAt={rental?.expires_at} active={state.active === banner.id} busy={busy === banner.id} actionLabel={<><span className="gold-coin">●</span>{rental ? "Extend" : "Rent"} {days === 7 ? "1 week" : `${days} days`} · {feedBannerRentalPrice(banner, days)} Gold</>} onAction={() => void act(banner)}/>; })}</div></section>)}
+      {(["pastel", "metallic"] as const).map((tier) => <section className={`banner-tier ${tier}`} key={tier}><div className="banner-tier-heading"><div><span>{tier === "pastel" ? "Basic collection" : "Premium collection"}</span><h2>{tier === "pastel" ? "Pastel Colors" : "Metallic Colors"}</h2><p>{tier === "pastel" ? "Soft, clean colors for a friendly feed." : "Reflective finishes for a distinctive profile."}</p></div><b>10 colors</b></div><div className="banner-products">{FEED_BANNERS.filter((banner) => banner.tier === tier).map((banner) => { const rental = rentalFor(state, banner.id), price = rental ? feedBannerExtensionPrice(banner, days) : feedBannerRentalPrice(banner, days); return <BannerTile key={banner.id} banner={banner} expiresAt={rental?.expires_at} active={state.active === banner.id} busy={busy === banner.id} actionLabel={<><span className="gold-coin">●</span>{rental ? "Extend · 30% off" : "Rent"} {days === 7 ? "1 week" : `${days} days`} · {price} Gold</>} onAction={() => setPending(banner)}/>; })}</div></section>)}
     </>}
+    {pending && <div className="shop-confirm-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !busy) setPending(null); }}>
+      <section className="shop-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="shop-confirm-title">
+        <span className="shop-confirm-swatch" style={{ background: pending.background }} aria-hidden="true"/>
+        <span className="shop-confirm-eyebrow">Confirm {pendingRental ? "extension" : "rental"}</span>
+        <h2 id="shop-confirm-title">{pending.name} Feed Banner</h2>
+        <p>{pendingRental ? "Your active rental will be extended with a 30% discount." : "Please confirm before Gold is deducted from your balance."}</p>
+        <div className="shop-confirm-summary"><span>{days === 7 ? "1 week" : `${days} days`}</span><strong><span className="gold-coin">●</span>{pendingPrice} Gold</strong></div>
+        <div className="shop-confirm-actions">
+          <button type="button" disabled={!!busy} onClick={() => setPending(null)}>Cancel</button>
+          <button className="gold-button" type="button" disabled={!!busy} onClick={() => void act(pending)}>{busy ? "Processing…" : pendingRental ? "Confirm extension" : "Confirm purchase"}</button>
+        </div>
+      </section>
+    </div>}
   </section>;
   return <section className="shop-page">
     <div className="page-heading"><h1>Chess Burger shop</h1><span className="sample-label">{state.gold || profile?.gold_points || 0} Gold</span></div>

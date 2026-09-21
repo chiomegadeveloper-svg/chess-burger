@@ -12,6 +12,9 @@ export const FEED_BANNER_DURATIONS: FeedBannerDuration[] = [3, 5, 7];
 export const feedBannerRentalPrice = (banner: Pick<FeedBanner, "price" | "tier">, days: FeedBannerDuration) =>
   banner.price + (banner.tier === "metallic" ? { 3: 0, 5: 60, 7: 120 }[days] : { 3: 0, 5: 20, 7: 40 }[days]);
 
+export const feedBannerExtensionPrice = (banner: Pick<FeedBanner, "price" | "tier">, days: FeedBannerDuration) =>
+  Math.round(feedBannerRentalPrice(banner, days) * 0.7);
+
 export const FEED_BANNERS: FeedBanner[] = [
   { id: "pastel-blush", name: "Blush", tier: "pastel", price: 128, background: "linear-gradient(135deg,#ffd8e5,#f2a9c1)", ink: "#34242b" },
   { id: "pastel-peach", name: "Peach", tier: "pastel", price: 130, background: "linear-gradient(135deg,#ffe0c2,#f7b98f)", ink: "#38271f" },

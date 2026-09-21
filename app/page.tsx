@@ -19,6 +19,7 @@ import {
   ShieldCheck,
   PackageOpen,
   Castle,
+  Bot,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
@@ -48,6 +49,7 @@ import InstallPrompt from "./install-prompt";
 import { BagPage, ShopPage } from "./shop";
 import { isProfileComplete } from "./profile-completion";
 import Testimonials from "./testimonials";
+import CpuGame from "./cpu-game";
 
 const modes = [
   {
@@ -475,6 +477,7 @@ function AppPage() {
     "channel",
     "replay",
     "tournaments",
+    "cpu",
   ].includes(tab)
     ? "play"
     : tab === "cms"
@@ -534,6 +537,11 @@ function AppPage() {
           <span className="mode-symbol"><Swords size={21}/></span>
           <span className="mode-copy"><strong>Challenge a Player</strong><small>Search by username or challenge anyone in the feed</small></span>
           <span className="mode-meta">Invite</span><ChevronRight size={15}/>
+        </button>
+        <button className="match-row available cpu-lobby-link" onClick={() => setTab("cpu")}>
+          <span className="mode-symbol"><Bot size={21}/></span>
+          <span className="mode-copy"><strong>Play with CPU</strong><small>Practice against Stockfish with 10 strength levels</small></span>
+          <span className="mode-meta">Levels 1–10</span><ChevronRight size={15}/>
         </button>
         <div className="mode-list">
           {modes.map(({ name, sub, meta, Icon, key }) => (
@@ -683,6 +691,7 @@ function AppPage() {
         />
       </section>
     );
+  else if (tab === "cpu" && profile) content = <CpuGame player={profile} onClose={() => setTab("play")} onReward={() => void refreshProfile()}/>;
   else if (tab === "shop") content = <ShopPage profile={profile} onChanged={() => void refreshProfile()} />;
   else if (tab === "bag") content = <BagPage onChanged={() => void refreshProfile()} />;
   else if (tab === "guild") content = <section className="guild-page"><div className="coming-soon-panel"><Castle size={46}/><span>Guild</span><h1>Coming soon</h1><p>Build your guild, gather teammates, and compete together in a future update.</p></div></section>;

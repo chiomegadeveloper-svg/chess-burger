@@ -448,13 +448,16 @@ async function publicFeed(client: Db) {
   if (list.error) fail(500, list.error.message);
   const visible = (list.data ?? []).filter((event: any) => !event.expires_at || Date.parse(event.expires_at) > now());
   const challengeIds = visible.filter((e: any) => e.kind === 'challenge' && e.challenge_match_id).map((e: any) => e.challenge_match_id);
+  const waitingRequest = challengeIds.length
+    ? client.from('cb_matches').select('id,play_mode,wager_gold').in('id', challengeIds).eq('status', 'waiting').is('invite_to', null).gt('created_at', new Date(now() - 120000).toISOString())
+    : Promise.resolve({ data: [], error: null });
+  const [waiting, people] = await Promise.all([
+    waitingRequest,
+    playerMap(client, visible.map((e: any) => e.user_id)),
+  ]);
+  if (waiting.error) fail(500, waiting.error.message);
   const activeChallenges = new Map<string, any>();
-  if (challengeIds.length) {
-    const waiting = await client.from('cb_matches').select('id,play_mode,wager_gold').in('id', challengeIds).eq('status', 'waiting').is('invite_to', null).gt('created_at', new Date(now() - 120000).toISOString());
-    if (waiting.error) fail(500, waiting.error.message);
-    for (const m of waiting.data ?? []) activeChallenges.set(m.id, m);
-  }
-  const people = await playerMap(client, visible.map((e: any) => e.user_id));
+  for (const m of waiting.data ?? []) activeChallenges.set(m.id, m);
   return { events: visible.filter((e: any) => e.kind !== 'challenge' || activeChallenges.has(e.challenge_match_id)).map((e: any) => { const match = activeChallenges.get(e.challenge_match_id); return { id: e.kind === 'challenge' && e.challenge_match_id ? `challenge:${e.challenge_match_id}` : e.id, user_id: e.user_id, kind: e.kind, display_name: e.kind === 'announcement' ? 'Chess Burger' : e.display_name, content: e.content, image_url: e.image_url ?? '', expires_at: e.expires_at, cbr_delta: e.cbr_delta ?? 0, gold_delta: e.gold_delta ?? 0, heart_count: e.heart_count ?? 0, created_at: e.created_at, avatar_url: e.kind === 'announcement' ? '/cburger_logo.png' : people.get(e.user_id)?.avatar_url ?? '', cbr: people.get(e.user_id)?.cbr ?? 88, feed_banner: e.kind === 'announcement' ? '' : people.get(e.user_id)?.active_feed_banner ?? '', play_mode: match?.play_mode ?? 'normal', wager_gold: Number(match?.wager_gold ?? 0) }; }) };
 }
 async function saveLiveHeartbeat(client: Db, userId: string) {
@@ -600,7 +603,10 @@ export default async function handler(req: Req, res: Res) {
     action = String(req.method === 'GET' ? req.query?.action ?? '' : body.action ?? '');
     console.info('arena.request', { action, method: req.method });
     if (req.method === 'GET') {
-      if (action === 'feed') return res.status(200).json(await publicFeed(client));
+      if (action === 'feed') {
+        res.setHeader('Cache-Control', 'public, s-maxage=5, stale-while-revalidate=30');
+        return res.status(200).json(await publicFeed(client));
+      }
       if (action === 'online-users') return res.status(200).json(await publicOnlineUsers(client));
       if (action === 'ranks') return res.status(200).json(await publicRanks(client));
       if (action === 'app-feature') {
@@ -629,6 +635,19 @@ export default async function handler(req: Req, res: Res) {
     if (action === 'me') return res.status(200).json({ profile: { ...account.profile, ocbr: Number(account.profile.ocbr ?? 88) }, rank: await playerRank(client, account.profile) });
     if (!account.profile.username?.trim() || !account.profile.display_name?.trim() || !account.profile.avatar_url?.trim())
       fail(403, 'Complete registration and save a profile picture to unlock Chess Burger.');
+    if(action==='claim-cpu-reward'){
+      const gameId=String(body.game_id??''),control=String(body.control??''),level=Number(body.level),pgn=String(body.pgn??''),outcome=String(body.outcome??'');
+      if(!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(gameId)||!Number.isInteger(level)||level<1||level>10||!['win','loss'].includes(outcome))fail(400,'Invalid CPU game result.');
+      const group=tc(control).group,reward=group==='Bullet'?2:group==='Blitz'?3:5,loss=group==='Bullet'?3:group==='Blitz'?4:6;
+      const game=new Chess();try{if(pgn)game.loadPgn(pgn);}catch{fail(400,'Invalid CPU game record.');}
+      if(outcome==='win'&&(!game.isCheckmate()||game.turn()!=='b'))fail(400,'Only a completed checkmate victory earns a CPU reward.');
+      const cbrDelta=outcome==='win'?reward:-loss,goldDelta=outcome==='win'?reward:0;
+      const claimed=await client.rpc('cb_claim_cpu_reward',{p_user_id:account.id,p_game_id:gameId,p_cbr:cbrDelta,p_gold:goldDelta});
+      if(claimed.error)fail(/cb_claim_cpu_reward|schema cache|function/i.test(claimed.error.message)?503:500,/cb_claim_cpu_reward|schema cache|function/i.test(claimed.error.message)?'Run supabase/0026_cpu_match_rewards.sql in Supabase, then try again.':claimed.error.message);
+      const result=claimed.data??{};
+      if(result.awarded){const event=await client.from('cb_feed').insert({user_id:account.id,kind:outcome==='win'?'win':'loss',display_name:account.profile.display_name,content:`${outcome==='win'?'defeated':'lost to'} Stockfish Level ${level} in a ${group.toLowerCase()} CPU match.`,cbr_delta:cbrDelta,gold_delta:goldDelta});if(event.error)console.warn('arena.cpu-feed-failed',{gameId});}
+      return res.status(200).json(result);
+    }
     const isStaff = account.profile.role === 'owner' || account.profile.role === 'admin';
     const requireStaff = () => { if (!isStaff) fail(403, 'Owner or GM access is required.'); };
     const audit = async (auditAction: string, details: Record<string, unknown> = {}) => {
