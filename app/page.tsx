@@ -708,7 +708,7 @@ function AppPage() {
         )}
       </section>
     );
-  if (member !== true)
+  if (member !== true && !showSplash)
     return (
       <main className="app-shell registration-locked-shell">
         <header className="app-header">
