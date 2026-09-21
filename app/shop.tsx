@@ -4,7 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { ArrowLeft, Check, Crown, PackageOpen, ShoppingBag } from "lucide-react";
 import { toast } from "sonner";
 import { arena } from "./arena-client";
-import { FEED_BANNERS, FEED_BANNER_DURATIONS, feedBanner, feedBannerPriceRange, feedBannerRentalPrice, type FeedBanner, type FeedBannerDuration } from "./feed-banner-catalog";
+import { FEED_BANNERS, FEED_BANNER_DURATIONS, feedBanner, feedBannerExtensionPrice, feedBannerPriceRange, feedBannerRentalPrice, type FeedBanner, type FeedBannerDuration } from "./feed-banner-catalog";
 import type { PlayerProfile } from "./supabase";
 import "./feed-banner-shop.css";
 
@@ -36,7 +36,7 @@ export function ShopPage({ profile, onChanged }: { profile: PlayerProfile | null
     try {
       const data = await arena("buy-feed-banner", { product_id: banner.id, days, request_id: crypto.randomUUID() }) as { active: string; gold: number; expires_at: string };
       setState((current) => ({ ...current, active: data.active, gold: data.gold ?? current.gold, owned: [...current.owned.filter((item) => item.product_id !== banner.id), { product_id: banner.id, expires_at: data.expires_at }] }));
-      toast.success(`${banner.name} rented for ${days === 7 ? "1 week" : `${days} days`} and activated.`);
+      toast.success(`${rentalFor(state, banner.id) ? "Rental extended with 30% discount" : `${banner.name} rented`} for ${days === 7 ? "1 week" : `${days} days`} and activated.`);
       onChanged();
     } catch (error) { toast.error(error instanceof Error ? error.message : "Unable to update banner."); }
     finally { setBusy(""); }
@@ -46,7 +46,7 @@ export function ShopPage({ profile, onChanged }: { profile: PlayerProfile | null
     <div className="page-heading banner-heading"><div><span className="shop-eyebrow">Personalize your feed</span><h1>Feed Banner Colors</h1><p>Choose a signature color for every community post you share.</p></div><span className="banner-wallet"><span className="gold-coin">●</span><strong>{state.gold || profile?.gold_points || 0}</strong><small>Gold balance</small></span></div>
     <fieldset className="rental-duration"><legend>Choose rental duration</legend>{FEED_BANNER_DURATIONS.map((option) => <button type="button" className={days === option ? "selected" : ""} aria-pressed={days === option} key={option} onClick={() => setDays(option)}><strong>{option === 7 ? "1 Week" : `${option} Days`}</strong><span>Pastel {feedBannerPriceRange("pastel", option)} · Premium {feedBannerPriceRange("metallic", option)} Gold</span></button>)}</fieldset>
     {loading ? <p className="account-note">Loading banner collection…</p> : <>
-      {(["pastel", "metallic"] as const).map((tier) => <section className={`banner-tier ${tier}`} key={tier}><div className="banner-tier-heading"><div><span>{tier === "pastel" ? "Basic collection" : "Premium collection"}</span><h2>{tier === "pastel" ? "Pastel Colors" : "Metallic Colors"}</h2><p>{tier === "pastel" ? "Soft, clean colors for a friendly feed." : "Reflective finishes for a distinctive profile."}</p></div><b>10 colors</b></div><div className="banner-products">{FEED_BANNERS.filter((banner) => banner.tier === tier).map((banner) => { const rental = rentalFor(state, banner.id); return <BannerTile key={banner.id} banner={banner} expiresAt={rental?.expires_at} active={state.active === banner.id} busy={busy === banner.id} actionLabel={<><span className="gold-coin">●</span>{rental ? "Extend" : "Rent"} {days === 7 ? "1 week" : `${days} days`} · {feedBannerRentalPrice(banner, days)} Gold</>} onAction={() => void act(banner)}/>; })}</div></section>)}
+      {(["pastel", "metallic"] as const).map((tier) => <section className={`banner-tier ${tier}`} key={tier}><div className="banner-tier-heading"><div><span>{tier === "pastel" ? "Basic collection" : "Premium collection"}</span><h2>{tier === "pastel" ? "Pastel Colors" : "Metallic Colors"}</h2><p>{tier === "pastel" ? "Soft, clean colors for a friendly feed." : "Reflective finishes for a distinctive profile."}</p></div><b>10 colors</b></div><div className="banner-products">{FEED_BANNERS.filter((banner) => banner.tier === tier).map((banner) => { const rental = rentalFor(state, banner.id), price = rental ? feedBannerExtensionPrice(banner, days) : feedBannerRentalPrice(banner, days); return <BannerTile key={banner.id} banner={banner} expiresAt={rental?.expires_at} active={state.active === banner.id} busy={busy === banner.id} actionLabel={<><span className="gold-coin">●</span>{rental ? "Extend · 30% off" : "Rent"} {days === 7 ? "1 week" : `${days} days`} · {price} Gold</>} onAction={() => void act(banner)}/>; })}</div></section>)}
     </>}
   </section>;
   return <section className="shop-page">
