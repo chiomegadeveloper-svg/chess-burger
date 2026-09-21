@@ -33,7 +33,7 @@ function createMatch(player: ArenaPlayer, level: (typeof levels)[number], contro
 }
 
 export default function CpuGame({ player, onClose, onReward }: { player: ArenaPlayer; onClose: () => void; onReward: () => void }) {
-  const [selectedLevel, setSelectedLevel] = useState<(typeof levels)[number] | null>(null), [control, setControl] = useState("10+0"), [match, setMatch] = useState<ArenaMatch | null>(null), [engineReady, setEngineReady] = useState(false), [thinking, setThinking] = useState(false), [engineError, setEngineError] = useState(""), [rewardStatus, setRewardStatus] = useState(""), [endReason,setEndReason]=useState<"checkmate"|"resigned"|"aborted"|"">(""),[showStats,setShowStats]=useState(false),[settledStats,setSettledStats]=useState<{cbr:number;gold:number;cbrDelta:number;goldDelta:number}|null>(null);
+  const [selectedLevel, setSelectedLevel] = useState<(typeof levels)[number] | null>(null), [control, setControl] = useState("10+0"), [match, setMatch] = useState<ArenaMatch | null>(null), [engineReady, setEngineReady] = useState(false), [thinking, setThinking] = useState(false), [engineError, setEngineError] = useState(""), [rewardStatus, setRewardStatus] = useState(""), [endReason,setEndReason]=useState<"checkmate"|"timeout"|"resigned"|"aborted"|"">(""),[showStats,setShowStats]=useState(false),[settledStats,setSettledStats]=useState<{cbr:number;gold:number;cbrDelta:number;goldDelta:number}|null>(null);
   const workerRef = useRef<Worker | null>(null), matchRef = useRef<ArenaMatch | null>(null), levelRef = useRef<(typeof levels)[number] | null>(null), claimedRef = useRef(new Set<string>());
   useEffect(() => { matchRef.current = match; }, [match]);
   useEffect(() => { levelRef.current = selectedLevel; }, [selectedLevel]);
@@ -55,11 +55,14 @@ export default function CpuGame({ player, onClose, onReward }: { player: ArenaPl
       else if (line.startsWith("bestmove ")) {
         const uci = line.split(/\s+/)[1], current = matchRef.current;
         if (!current || current.status !== "active" || !uci || uci === "(none)") { setThinking(false); return; }
+        const movedAt=Date.now(),blackRemaining=Math.max(0,current.black_ms-Math.max(0,movedAt-current.last_tick));
+        if(blackRemaining<=0){setThinking(false);return;}
         const chess = gameFromPgn(current.pgn);
         try {
           chess.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci.slice(4, 5) || "q" });
           const result = boardResult(chess);
-          setMatch((value) => { if (!value) return value; const next = { ...value, pgn: chess.pgn(), version: value.version + 1, status: result ? "finished" as const : "active" as const, result, last_tick: Date.now(), server_now: Date.now() }; if(result){setEndReason("checkmate");setShowStats(true);} matchRef.current = next; return next; });
+          const increment=timeControl(current.control).increment*1000;
+          setMatch((value) => { if (!value||value.id!==current.id) return value; const next = { ...value, pgn: chess.pgn(), black_ms:blackRemaining+increment, version: value.version + 1, status: result ? "finished" as const : "active" as const, result, last_tick:movedAt, server_now:movedAt }; if(result){setEndReason("checkmate");setShowStats(true);} matchRef.current = next; return next; });
         } catch { setEngineError("The AI returned an invalid move. Start a new CPU game."); }
         setThinking(false);
       }
@@ -67,6 +70,8 @@ export default function CpuGame({ player, onClose, onReward }: { player: ArenaPl
     worker.postMessage("uci");
     return () => { worker.postMessage("quit"); worker.terminate(); workerRef.current = null; };
   }, [selectedLevel]);
+
+  useEffect(()=>{const timer=window.setInterval(()=>{const current=matchRef.current;if(!current||current.status!=="active")return;const chess=gameFromPgn(current.pgn),whiteTurn=chess.turn()==="w",remaining=(whiteTurn?current.white_ms:current.black_ms)-Math.max(0,Date.now()-current.last_tick);if(remaining>0)return;workerRef.current?.postMessage("stop");setThinking(false);const endedAt=Date.now(),next={...current,status:"finished" as const,result:whiteTurn?"black" as const:"white" as const,white_ms:whiteTurn?0:current.white_ms,black_ms:whiteTurn?current.black_ms:0,last_tick:endedAt,server_now:endedAt,version:current.version+1};matchRef.current=next;setMatch(next);setEndReason("timeout");setShowStats(true);},250);return()=>window.clearInterval(timer);},[]);
 
   useEffect(() => {
     if (!match || match.status !== "finished" || match.result === "draw" || !match.result || !selectedLevel || claimedRef.current.has(match.id)) return;
@@ -82,7 +87,9 @@ export default function CpuGame({ player, onClose, onReward }: { player: ArenaPl
     if (!match || thinking || !engineReady) return;
     const chess = gameFromPgn(match.pgn);
     try { chess.move({ from: move.from, to: move.to, promotion: move.promotion || "q" }); } catch { return; }
-    const result = boardResult(chess), next = { ...match, pgn: chess.pgn(), version: match.version + 1, status: result ? "finished" as const : "active" as const, result, last_tick: Date.now(), server_now: Date.now() };
+    const movedAt=Date.now(),remaining=Math.max(0,match.white_ms-Math.max(0,movedAt-match.last_tick));
+    if(remaining<=0)return;
+    const result = boardResult(chess),increment=timeControl(match.control).increment*1000,next = { ...match, pgn: chess.pgn(),white_ms:remaining+increment, version: match.version + 1, status: result ? "finished" as const : "active" as const, result, last_tick:movedAt, server_now:movedAt };
     setMatch(next); matchRef.current = next;if(result){setEndReason("checkmate");setShowStats(true);}
     if (!result) { setThinking(true); workerRef.current?.postMessage(`position fen ${chess.fen()}`); workerRef.current?.postMessage(`go movetime ${selectedLevel?.think ?? 300}`); }
   }

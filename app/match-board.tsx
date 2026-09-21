@@ -20,18 +20,18 @@ import {
 const symbols: Record<string, string> = {
   // Use solid silhouettes for both colors. The board theme supplies the
   // white fill, avoiding the transparent centers in the outline glyph set.
-  wk: "♚",
-  wq: "♛",
-  wr: "♜",
-  wb: "♝",
-  wn: "♞",
-  wp: "♟",
-  bk: "♚",
-  bq: "♛",
-  br: "♜",
-  bb: "♝",
-  bn: "♞",
-  bp: "♟",
+  wk: "♚︎",
+  wq: "♛︎",
+  wr: "♜︎",
+  wb: "♝︎",
+  wn: "♞︎",
+  wp: "♟︎",
+  bk: "♚︎",
+  bq: "♛︎",
+  br: "♜︎",
+  bb: "♝︎",
+  bn: "♞︎",
+  bp: "♟︎",
 };
 const promotionNames = {
   q: "Queen",
