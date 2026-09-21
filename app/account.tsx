@@ -153,7 +153,10 @@ export default function Account({
           setProfile(cached);
           setGuest(false);
           onLoaded?.(cached);
-          onMembershipChange?.(isProfileComplete(cached));
+          const complete = cached.user_id !== "guest-device" && isProfileComplete(cached);
+          setRegistered(complete);
+          setEditing(!complete);
+          onMembershipChange?.(complete);
         }
       } catch {}
       setLoading(false);
@@ -249,7 +252,10 @@ export default function Account({
             setProfile(cached);
             setGuest(true);
             onLoaded?.(cached);
-            onMembershipChange?.(false);
+            const complete = cached.user_id !== "guest-device" && !!cached.username?.trim() && !!cached.display_name?.trim() && !!cached.avatar_url?.trim();
+            setRegistered(complete);
+            setEditing(!complete);
+            onMembershipChange?.(complete);
           }
         } catch {}
         setLoading(false);

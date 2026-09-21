@@ -873,27 +873,30 @@ function AppPage() {
                 <strong>{i.host_name} invited you</strong>
                 <span>
                   {timeControl(i.control).group} ·{" "}
-                  {timeControl(i.control).label}
+                  {timeControl(i.control).label}{i.play_mode === "wager" ? ` · Match ${Number(i.wager_gold ?? 0)} Gold` : ""}
                 </span>
                 <button
                   className="gold-button"
+                  disabled={i.play_mode === "wager" && Number(profile?.gold_points ?? 0) < Number(i.wager_gold ?? 0)}
                   onClick={() =>
                     void arena<{ match: ArenaMatch }>("join", { code: i.code })
                       .then((r) => openMatch(r.match.id))
                       .catch((e) => toast.error(e.message))
                   }
                 >
-                  Accept
+                  {i.play_mode === "wager" ? `Match ${Number(i.wager_gold ?? 0)} Gold` : "Accept invitation"}
                 </button>
                 <button
-                  onClick={() =>
+                  onClick={() => {
+                    setInvites((v) => v.filter((m) => m.id !== i.id));
                     void arena("decline-room", { id: i.id })
-                      .then(() => setInvites((v) => v.filter((m) => m.id !== i.id)))
+                      .then(() => toast.success("Invitation rejected."))
                       .catch((e) => toast.error(e.message))
-                  }
+                  }}
                 >
-                  Decline
+                  Reject
                 </button>
+                {i.play_mode === "wager" && Number(profile?.gold_points ?? 0) < Number(i.wager_gold ?? 0) && <small>You need {Number(i.wager_gold ?? 0)} Gold to match this wager.</small>}
               </div>
             ))}
           </div>
