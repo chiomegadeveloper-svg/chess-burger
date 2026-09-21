@@ -6,13 +6,14 @@ const catalog = readFileSync(new URL("../app/feed-banner-catalog.ts", import.met
 const api = readFileSync(new URL("../api/arena.ts", import.meta.url), "utf8");
 const sql = readFileSync(new URL("../supabase/0021_feed_banner_shop.sql", import.meta.url), "utf8");
 const rentalSql = readFileSync(new URL("../supabase/0022_feed_banner_rentals.sql", import.meta.url), "utf8");
+const priceSql = readFileSync(new URL("../supabase/0024_feed_banner_prices.sql", import.meta.url), "utf8");
 const shop = readFileSync(new URL("../app/shop.tsx", import.meta.url), "utf8");
 const page = readFileSync(new URL("../app/page.tsx", import.meta.url), "utf8");
 
 test("feed banner catalog contains ten pastel and ten metallic products", () => {
   assert.equal((catalog.match(/\{ id: "pastel-[^"]+"/g) ?? []).length, 10);
   assert.equal((catalog.match(/\{ id: "metal-[^"]+"/g) ?? []).length, 10);
-  for (const price of [38, 58, 68, 78]) assert.match(catalog, new RegExp(`price: ${price}\\b`));
+  for (const price of [128, 148, 218, 268]) assert.match(catalog, new RegExp(`price: ${price}\\b`));
 });
 
 test("banner purchases are atomic, idempotent, and activate ownership", () => {
@@ -26,14 +27,19 @@ test("banner purchases are atomic, idempotent, and activate ownership", () => {
 
 test("feed banners are timed rentals with three duration choices", () => {
   assert.match(catalog, /FEED_BANNER_DURATIONS[^=]*= \[3, 5, 7\]/);
-  assert.match(catalog, /\{ 3: 12, 5: 18, 7: 24 \}/);
-  assert.match(catalog, /\{ 3: 24, 5: 36, 7: 48 \}/);
+  assert.match(catalog, /\{ 3: 0, 5: 20, 7: 40 \}/);
+  assert.match(catalog, /\{ 3: 0, 5: 60, 7: 120 \}/);
   assert.match(shop, /Choose rental duration/);
   assert.match(api, /cb_buy_feed_banner_timed/);
   assert.match(api, /\.gt\('expires_at'/);
   assert.match(rentalSql, /now\(\) \+ interval '7 days'/i);
   assert.match(rentalSql, /greatest\(now\(\),(?:public\.)?cb_user_items\.expires_at\)/i);
   assert.match(rentalSql, /expires_at>now\(\)/i);
+  assert.match(priceSql, /'pastel-blush',128/);
+  assert.match(priceSql, /'pastel-coral',148/);
+  assert.match(priceSql, /'metal-gold',218/);
+  assert.match(priceSql, /'metal-ruby',268/);
+  assert.match(priceSql, /select tier,price_gold into v_tier,v_price/i);
 });
 
 test("main navigation uses the requested nine-item order", () => {
