@@ -17,3 +17,7 @@ test('daily claim is server-idempotent and banner prizes are timed Bag rentals',
 test('embedded rewards panel is responsive and accessible',()=>{
   assert.match(ui,/className="daily-reward-page"/);assert.match(ui,/aria-labelledby="daily-reward-title"/);assert.match(css,/\.daily-reward-page/);assert.match(css,/@media\(max-width:600px\)/);
 });
+test('all six Community Feed tabs stay on one row at every viewport',()=>{
+  assert.match(css,/\.feed-page \.feed-tabs\.community-feed-tabs\{[^}]*grid-template-columns:repeat\(6,minmax\(0,1fr\)\)!important/);
+  assert.doesNotMatch(css,/community-feed-tabs\{[^}]*grid-template-columns:repeat\(3/);
+});
