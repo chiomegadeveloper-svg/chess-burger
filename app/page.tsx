@@ -472,6 +472,7 @@ function AppPage() {
     scroller.current?.scrollTo(0, 0);
   }, [tab]);
   const active = [
+    "play-select",
     "offline",
     "pairing",
     "online",
@@ -526,9 +527,20 @@ function AppPage() {
         onChallenge={(player) => { setTarget(player); setTab("challenge"); }}
       />
     );
+  else if (tab === "play-select")
+    content = (
+      <section className="play-select-page" aria-labelledby="play-select-title">
+        <div className="play-select-heading"><span>Choose your destination</span><h1 id="play-select-title">Play Chess Burger</h1><p>Enter the Match Lobby or preview the upcoming Grand Arena.</p></div>
+        <div className="play-select-grid">
+          <button className="play-destination lobby" type="button" onClick={() => setTab("play")}><img src="/play-selection/match-lobby.jpg" alt="Colorful Chess Burger Match Lobby"/><span><strong>Match Lobby</strong><small>Online, CPU, nearby and offline matches</small><b>Enter Lobby <ChevronRight size={17}/></b></span></button>
+          <button className="play-destination arena" type="button" onClick={() => toast.info("Grand Arena is coming soon.")}><img src="/play-selection/grand-arena.jpg" alt="Chess Burger Grand Arena entrance"/><span><strong>Grand Arena</strong><small>Epic ranked arena battles are being prepared</small><b>Coming Soon</b></span></button>
+        </div>
+      </section>
+    );
   else if (tab === "play")
     content = (
       <section className="play-page">
+        <button className="back-button" type="button" onClick={() => setTab("play-select")}><ArrowLeft size={15}/>Play selection</button>
         <div className="page-heading">
           <h1>Match Lobby</h1>
           <button className="text-button" onClick={() => setTab("channel")}>
@@ -928,7 +940,7 @@ function AppPage() {
               (active === key ? "active " : "") +
               (key === "play" ? "play-nav" : "")
             }
-            onClick={() => (key === "profile" ? setTab(key) : navigate(key))}
+            onClick={() => (key === "profile" ? setTab(key) : navigate(key === "play" ? "play-select" : key))}
           >
             <span className="nav-icon-shell">
               <Icon size={20} strokeWidth={1.7} />
