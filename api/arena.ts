@@ -448,13 +448,16 @@ async function publicFeed(client: Db) {
   if (list.error) fail(500, list.error.message);
   const visible = (list.data ?? []).filter((event: any) => !event.expires_at || Date.parse(event.expires_at) > now());
   const challengeIds = visible.filter((e: any) => e.kind === 'challenge' && e.challenge_match_id).map((e: any) => e.challenge_match_id);
+  const waitingRequest = challengeIds.length
+    ? client.from('cb_matches').select('id,play_mode,wager_gold').in('id', challengeIds).eq('status', 'waiting').is('invite_to', null).gt('created_at', new Date(now() - 120000).toISOString())
+    : Promise.resolve({ data: [], error: null });
+  const [waiting, people] = await Promise.all([
+    waitingRequest,
+    playerMap(client, visible.map((e: any) => e.user_id)),
+  ]);
+  if (waiting.error) fail(500, waiting.error.message);
   const activeChallenges = new Map<string, any>();
-  if (challengeIds.length) {
-    const waiting = await client.from('cb_matches').select('id,play_mode,wager_gold').in('id', challengeIds).eq('status', 'waiting').is('invite_to', null).gt('created_at', new Date(now() - 120000).toISOString());
-    if (waiting.error) fail(500, waiting.error.message);
-    for (const m of waiting.data ?? []) activeChallenges.set(m.id, m);
-  }
-  const people = await playerMap(client, visible.map((e: any) => e.user_id));
+  for (const m of waiting.data ?? []) activeChallenges.set(m.id, m);
   return { events: visible.filter((e: any) => e.kind !== 'challenge' || activeChallenges.has(e.challenge_match_id)).map((e: any) => { const match = activeChallenges.get(e.challenge_match_id); return { id: e.kind === 'challenge' && e.challenge_match_id ? `challenge:${e.challenge_match_id}` : e.id, user_id: e.user_id, kind: e.kind, display_name: e.kind === 'announcement' ? 'Chess Burger' : e.display_name, content: e.content, image_url: e.image_url ?? '', expires_at: e.expires_at, cbr_delta: e.cbr_delta ?? 0, gold_delta: e.gold_delta ?? 0, heart_count: e.heart_count ?? 0, created_at: e.created_at, avatar_url: e.kind === 'announcement' ? '/cburger_logo.png' : people.get(e.user_id)?.avatar_url ?? '', cbr: people.get(e.user_id)?.cbr ?? 88, feed_banner: e.kind === 'announcement' ? '' : people.get(e.user_id)?.active_feed_banner ?? '', play_mode: match?.play_mode ?? 'normal', wager_gold: Number(match?.wager_gold ?? 0) }; }) };
 }
 async function saveLiveHeartbeat(client: Db, userId: string) {
@@ -600,7 +603,10 @@ export default async function handler(req: Req, res: Res) {
     action = String(req.method === 'GET' ? req.query?.action ?? '' : body.action ?? '');
     console.info('arena.request', { action, method: req.method });
     if (req.method === 'GET') {
-      if (action === 'feed') return res.status(200).json(await publicFeed(client));
+      if (action === 'feed') {
+        res.setHeader('Cache-Control', 'public, s-maxage=5, stale-while-revalidate=30');
+        return res.status(200).json(await publicFeed(client));
+      }
       if (action === 'online-users') return res.status(200).json(await publicOnlineUsers(client));
       if (action === 'ranks') return res.status(200).json(await publicRanks(client));
       if (action === 'app-feature') {
