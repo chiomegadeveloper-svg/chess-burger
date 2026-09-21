@@ -115,10 +115,11 @@ function AppPage() {
       const ownId = profile?.user_id;
       if (
         !ownId ||
-        m.status !== "finished" ||
+        !["finished", "cancelled"].includes(m.status) ||
         ![m.white_id, m.black_id].includes(ownId)
       )
         return;
+      const aborted = m.status === "cancelled";
       const key = ownId + ":" + m.id,
         storageKey = "cb-shown-match-results:" + ownId;
       let saved: string[] = [];
@@ -151,8 +152,11 @@ function AppPage() {
       } catch {}
       setSummary({
         id: m.id,
-        outcome:
+        outcome: aborted
+          ? "aborted"
+          :
           m.result === "draw" ? "draw" : m.result === side ? "win" : "loss",
+        aborted,
         player,
         delta:
           m.rating_changes?.[ownId] ??
@@ -932,7 +936,7 @@ function AppPage() {
           setTab("game");
         }}
         onReplay={
-          summary && !summary.local
+          summary && !summary.local && !summary.aborted
             ? () => {
                 setSummary(null);
                 setActiveId("");

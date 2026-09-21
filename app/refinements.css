@@ -842,7 +842,7 @@ textarea:focus-visible {
 @media(max-height:720px){.welcome-menu{gap:12px;padding-top:16px;padding-bottom:16px}.welcome-menu-brand img{width:50px;height:50px}.welcome-card{height:145px}.welcome-menu-options{gap:10px}}
 @media(prefers-reduced-motion:reduce){.welcome-card,.welcome-card img{transition:none}}
 .abort-confirm button:first-of-type{border-color:#ff7777 !important;background:#c52222 !important;color:#fff !important;}
-.abort-notice{display:flex;align-items:center;gap:.65rem;margin:0 0 .75rem;padding:.75rem 1rem;border:1px solid #ff7474;border-radius:12px;background:#6f1717;color:#fff;box-shadow:0 6px 18px rgba(72,0,0,.28);}
+.abort-notice{display:flex;width:100%;align-items:center;gap:.65rem;margin:0 0 .75rem;padding:.75rem 1rem;border:1px solid #ff7474;border-radius:12px;background:#6f1717;color:#fff;text-align:left;box-shadow:0 6px 18px rgba(72,0,0,.28);}
 .abort-notice strong{font-size:.86rem;white-space:nowrap}.abort-notice span{font-size:.76rem;line-height:1.4;}
 .abort-confirm small { display: block; color: #ffd8d0; line-height: 1.45; margin-bottom: .7rem; }
 .fair-play-popup {

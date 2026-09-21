@@ -137,10 +137,15 @@ function LiveGame({ id, profile, onFinished, watch = false }: Props) {
       startedAt: new Date(confirmed.created_at).toISOString(), updatedAt: new Date().toISOString(), ratedAt: new Date().toISOString() }); } catch {}
     onFinished(confirmed);
   }, [confirmed, onFinished, watch]);
+  const showCancelledSummary = () => {
+    if (!confirmed || confirmed.status !== 'cancelled' || finished.current || watch) return;
+    finished.current = true;
+    onFinished(confirmed);
+  };
   if (!match) return <p className="cloud-panel" role="status">{error || 'Opening your board…'}</p>;
   return <>
     {error && <p className="inline-error" role="alert">{error}</p>}
-    {abortNotice&&<div className="abort-notice" role="alert"><strong>Match aborted</strong><span>{abortNotice}</span></div>}
+    {abortNotice&&<button type="button" className="abort-notice" onClick={showCancelledSummary}><strong>Match aborted</strong><span>{abortNotice} Tap to view the match summary.</span></button>}
     <MatchBoard match={match} ownId={profile?.user_id} onMove={watch ? undefined : value => void move(value)}
       premove={premove} onPremove={watch ? undefined : setPremove}
       onResign={watch ? undefined : () => void action('resign')} onAbort={watch ? undefined : () => void action('abort')}

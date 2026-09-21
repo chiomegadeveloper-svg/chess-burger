@@ -897,7 +897,8 @@ export function SocialHub({
 }
 export type MatchSummary = {
   id: string;
-  outcome: "win" | "loss" | "draw";
+  outcome: "win" | "loss" | "draw" | "aborted";
+  aborted?: boolean;
   player: Pick<ArenaPlayer, "cbr" | "gold_points" | "wins" | "losses" | "win_streak">;
   delta: number;
   ratingLabel?: "CBR" | "OCBR";
@@ -964,7 +965,7 @@ export function MatchResult({
   if (!result) return null;
   const ratingLabel = result.ratingLabel ?? "CBR",
     ratingValue = result.ratingValue ?? result.player.cbr;
-  const canRematch = !result.local && !!result.opponent && result.opponent.user_id !== "guest-device" && !result.opponent.user_id.startsWith("local-") && result.opponent.user_id !== "shared-black";
+  const canRematch = !result.aborted && !result.local && !!result.opponent && result.opponent.user_id !== "guest-device" && !result.opponent.user_id.startsWith("local-") && result.opponent.user_id !== "shared-black";
   async function offerRematch() {
     if (!result?.opponent || !result.control) return;
     setRematchBusy(true);
@@ -994,7 +995,9 @@ export function MatchResult({
         aria-labelledby="match-result-title"
       >
         <h1 id="match-result-title">
-          {result.outcome === "win"
+          {result.outcome === "aborted"
+            ? "Match aborted"
+            : result.outcome === "win"
             ? "You won!"
             : result.outcome === "loss"
               ? "You lost"
@@ -1006,28 +1009,24 @@ export function MatchResult({
             : "Match complete"}
           {result.local ? " · Offline match" : ""}
         </p>
-        <img
+        {!result.aborted && <img
           className="result-emblem"
           src={`/levels/level-${String(level.level - 1).padStart(2, "0")}.png`}
           alt=""
-        />
-        <h2>
-          {result.local
-            ? "Offline Chess Burger Rating"
-            : `Level ${level.level} · ${level.name}`}
-        </h2>
+        />}
+        <h2>{result.aborted ? "No rating or Gold was awarded" : result.local ? "Offline Chess Burger Rating" : `Level ${level.level} · ${level.name}`}</h2>
         <div className="result-stats">
-          <div>
+          {!result.aborted && <div>
             <strong>{ratingValue}</strong>
             <span>{ratingLabel} standing</span>
-          </div>
-          <div>
+          </div>}
+          {!result.aborted && <div>
             <strong className={result.delta < 0 ? "negative" : "positive"}>
               {result.delta >= 0 ? "+" : ""}
               {result.delta}
             </strong>
             <span>{ratingLabel} change</span>
-          </div>
+          </div>}
           {result.local ? (
             <>
               <div>
@@ -1054,7 +1053,7 @@ export function MatchResult({
             </>
           )}
         </div>
-        {!result.local && (result.goldDelta !== undefined || result.goldPayout !== undefined) && (
+        {!result.aborted && !result.local && (result.goldDelta !== undefined || result.goldPayout !== undefined) && (
           <p className="result-gold">
             {result.playMode === "wager"
               ? result.outcome === "win"
@@ -1073,7 +1072,7 @@ export function MatchResult({
                   : "No Gold awarded"}
           </p>
         )}
-        {!result.local && (
+        {!result.aborted && !result.local && (
           <>
             <progress
               aria-label="Level progress"
