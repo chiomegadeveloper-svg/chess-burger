@@ -1,37 +1,413 @@
 "use client";
-import {useCallback,useEffect,useState} from "react";
-import {ArrowLeft,Clock,Crown,Radio,ShieldCheck,ShoppingBag,Sparkles,Trophy} from "lucide-react";
-import {toast} from "sonner";
-import {getSupabase} from "./supabase";
+import { useCallback, useEffect, useState } from "react";
+import {
+  ArrowLeft,
+  Clock,
+  Crown,
+  Radio,
+  ShieldCheck,
+  ShoppingBag,
+  Sparkles,
+  Trophy,
+} from "lucide-react";
+import { toast } from "sonner";
+import { getSupabase } from "./supabase";
 import "./grand-arena.css";
 import "./arena-enhancements.css";
+import "./arena-champion-history.css";
 
-type ArenaSlot={slot:number;starts_at:string;ends_at:string};
-type ArenaEntry={status:string;losses:number;arena_points:number};
-type ArenaMatch={id:string;status:string};
-type ArenaPlayer={display_name:string;avatar_url:string};
-type ArenaStanding={user_id:string;rank:number;status:string;wins:number;losses:number;arena_points:number;arena_cbr_gain:number;player?:ArenaPlayer};
-type ArenaChampion={slot:number;player?:ArenaPlayer};
-type WindowState={open:boolean;entry_open:boolean;current:ArenaSlot|null;next:ArenaSlot;server_now:string;settings:{prize_mode:'fixed'|'auto';fixed_prize_gold:number;match_control:string}};
-type ArenaState={window:WindowState;session:{prize_mode:'fixed'|'auto';prize_gold:number;ticket_gold_total:number;match_control:string};entry:ArenaEntry|null;match:ArenaMatch|null;leaderboard:ArenaStanding[];tickets:number;gold:number;champions:ArenaChampion[];server_now:string};
+type ArenaSlot = { slot: number; starts_at: string; ends_at: string };
+type ArenaEntry = { status: string; losses: number; arena_points: number };
+type ArenaMatch = { id: string; status: string };
+type ArenaPlayer = { display_name: string; avatar_url: string };
+type ArenaStanding = {
+  user_id: string;
+  rank: number;
+  status: string;
+  wins: number;
+  losses: number;
+  arena_points: number;
+  arena_cbr_gain: number;
+  player?: ArenaPlayer;
+};
+type ArenaChampion = {
+  id?: string;
+  slot: number;
+  session_date?: string;
+  ends_at?: string;
+  prize_gold?: number;
+  player?: ArenaPlayer;
+};
+type WindowState = {
+  open: boolean;
+  entry_open: boolean;
+  current: ArenaSlot | null;
+  next: ArenaSlot;
+  server_now: string;
+  settings: {
+    prize_mode: "fixed" | "auto";
+    fixed_prize_gold: number;
+    match_control: string;
+  };
+};
+type ArenaState = {
+  window: WindowState;
+  session: {
+    prize_mode: "fixed" | "auto";
+    prize_gold: number;
+    ticket_gold_total: number;
+    match_control: string;
+  };
+  entry: ArenaEntry | null;
+  match: ArenaMatch | null;
+  leaderboard: ArenaStanding[];
+  tickets: number;
+  gold: number;
+  champions: ArenaChampion[];
+  history: ArenaChampion[];
+  server_now: string;
+};
 
-async function request<T>(action:string,body:Record<string,unknown>={}){const client=await getSupabase(),session=client?(await client.auth.getSession()).data.session:null;if(!session)throw Error("Sign in to enter Grand Arena.");const response=await fetch('/api/grand-arena',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${session.access_token}`},body:JSON.stringify({action,...body}),cache:'no-store'}),data=await response.json() as T&{error?:string};if(!response.ok)throw Error(data.error??'Grand Arena is unavailable.');return data;}
-const sessionLabel=(slot:ArenaSlot)=>`${new Date(slot.starts_at).toLocaleTimeString([],{hour:'numeric',minute:'2-digit',timeZone:'Asia/Manila'})}–${new Date(slot.ends_at).toLocaleTimeString([],{hour:'numeric',minute:'2-digit',timeZone:'Asia/Manila'})}`;
-function Champions({champions}:{champions:ArenaChampion[]}){return <section className="arena-champions arena-champions-featured"><div className="arena-section-title"><div><span>CHAMPIONS OF THE DAY</span><h2>Grand Arena winners</h2></div><small>Eliminated players are never eligible</small></div><div>{[1,2].map(slot=>{const champion=champions.find(item=>Number(item.slot)===slot);return <article key={slot} className={!champion?'awaiting':''}><Crown/><img src={champion?.player?.avatar_url||'/cburger_logo.png'} alt=""/><span><strong>{champion?.player?.display_name||'Awaiting Champion'}</strong><small>Session {slot}</small></span></article>;})}</div></section>;}
+async function request<T>(action: string, body: Record<string, unknown> = {}) {
+  const client = await getSupabase(),
+    session = client ? (await client.auth.getSession()).data.session : null;
+  if (!session) throw Error("Sign in to enter Grand Arena.");
+  const response = await fetch("/api/grand-arena", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ action, ...body }),
+      cache: "no-store",
+    }),
+    data = (await response.json()) as T & { error?: string };
+  if (!response.ok) throw Error(data.error ?? "Grand Arena is unavailable.");
+  return data;
+}
+const sessionLabel = (slot: ArenaSlot) =>
+  `${new Date(slot.starts_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", timeZone: "Asia/Manila" })}–${new Date(slot.ends_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", timeZone: "Asia/Manila" })}`;
+function Champions({ champions }: { champions: ArenaChampion[] }) {
+  return (
+    <section className="arena-champions arena-champions-featured">
+      <div className="arena-section-title">
+        <div>
+          <span>CHAMPIONS OF THE DAY</span>
+          <h2>Grand Arena winners</h2>
+        </div>
+        <small>Eliminated players are never eligible</small>
+      </div>
+      <div>
+        {[1, 2].map((slot) => {
+          const champion = champions.find((item) => Number(item.slot) === slot);
+          return (
+            <article key={slot} className={!champion ? "awaiting" : ""}>
+              <Crown />
+              <img
+                src={champion?.player?.avatar_url || "/cburger_logo.png"}
+                alt=""
+              />
+              <span>
+                <strong>
+                  {champion?.player?.display_name || "Awaiting Champion"}
+                </strong>
+                <small>Session {slot}</small>
+              </span>
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
 
-export default function GrandArena({onBack,onMatch,onShop}:{onBack:()=>void;onMatch:(id:string)=>void;onShop:()=>void}){
- const[state,setState]=useState<ArenaState|null>(null),[busy,setBusy]=useState(false),[tick,setTick]=useState(()=>Date.now());
- const load=useCallback(async()=>{try{const data=await request<ArenaState>('state');setState(data);if(data.match?.id&&data.match.status==='active')onMatch(data.match.id);}catch(error){toast.error((error as Error).message);}},[onMatch]);
- useEffect(()=>{const initial=setTimeout(()=>void load(),0),poll=setInterval(()=>void load(),5000),clock=setInterval(()=>setTick(Date.now()),1000);return()=>{clearTimeout(initial);clearInterval(poll);clearInterval(clock);};},[load]);
- const slot=state?.window.current??state?.window.next,target=state?.window.current?.ends_at??state?.window.next?.starts_at,remaining=target?Math.max(0,Date.parse(target)-tick):0,h=Math.floor(remaining/3600000),m=Math.floor(remaining%3600000/60000),s=Math.floor(remaining%60000/1000),prize=state?.session.prize_mode==='auto'?`${Math.floor((state.session.ticket_gold_total||0)*.1)} Gold live pot`:`${state?.session.prize_gold??state?.window.settings.fixed_prize_gold??48} Gold`;
- async function enter(){if(busy)return;setBusy(true);try{const data=await request<ArenaState>('enter');setState(data);toast.success(data.entry?.status==='waiting'?'Arena Ticket accepted. You are now in standby.':'Grand Arena entry confirmed.');if(data.match?.id)onMatch(data.match.id);}catch(error){toast.error((error as Error).message);}finally{setBusy(false);}}
- return <section className="grand-arena-page">
-  <button className="back-button" onClick={onBack}><ArrowLeft size={15}/>Play selection</button>
-  <header className="grand-arena-hero"><img src="/play-selection/grand-arena.webp" alt="Grand Arena castle"/><div><span>LIVE COMPETITIVE ARENA</span><h1>Grand Arena</h1><p>Score Arena points, survive two losses, and finish inside the Arena as the points leader.</p></div></header>
-  <Champions champions={state?.champions??[]}/>
-  <section className={`arena-clock-card ${state?.window.open?'open':''}`}><div><Clock/><span><small>{state?.window.open?'ARENA OPEN':'NEXT SESSION'}</small><strong>{slot?sessionLabel(slot):'Loading schedule…'}</strong></span></div><b>{String(h).padStart(2,'0')}:{String(m).padStart(2,'0')}:{String(s).padStart(2,'0')}</b><small>Philippine time · {state?.session.match_control??state?.window.settings.match_control??'5+0'} games · Entry closes 10 minutes before session end</small></section>
-  <div className="arena-dashboard"><article className="arena-entry-card"><div className="arena-ticket-count"><img src="/grand-arena/arena-ticket.webp" alt="Arena Ticket"/><span><small>YOUR TICKETS</small><strong>{state?.tickets??0}</strong></span></div>{!state?<p>Opening the Arena gates…</p>:state.entry?.status==='playing'?<div className="arena-status live"><Radio/><strong>Match found</strong><small>Opening your board automatically…</small></div>:state.entry?.status==='waiting'?<div className="arena-status standby"><Radio/><strong>Fair-match standby</strong><small>{state.entry.arena_points} points · {state.entry.losses}/2 losses. Looking for the nearest points opponent.</small></div>:state.entry?.status==='eliminated'?<><div className="arena-status eliminated"><ShieldCheck/><strong>Two losses · eliminated</strong><small>Use another ticket to begin a new Arena run.</small></div><button className="gold-button wide" disabled={!state.window.entry_open||state.tickets<1||busy} onClick={()=>void enter()}>{busy?'Re-entering…':'Re-enter with 1 ticket'}</button></>:<button className="gold-button wide" disabled={!state.window.entry_open||state.tickets<1||busy} onClick={()=>void enter()}>{busy?'Entering…':state.window.entry_open?'Enter Grand Arena · 1 Ticket':'Arena entry closed'}</button>}<button className="arena-shop-link" onClick={onShop}><ShoppingBag size={14}/>Buy Arena Tickets</button></article><article className="arena-reward-card"><Trophy/><h2>Win and survive</h2><strong>+1 point · +4 CBR · +8 Gold</strong><p>Draw +0.5 point. Three consecutive wins earn a +2 point bonus.</p><div><span><Sparkles/><b>Champion pot</b>{prize}</span><span><Crown/><b>Elimination</b>After 2 losses</span></div></article></div>
-  <section className="arena-leaderboard"><div className="arena-section-title"><div><span>LIVE STANDINGS</span><h2>Session leaderboard</h2></div><small>Arena points, then wins</small></div>{!state?.leaderboard.length?<div className="arena-empty"><Trophy/><p>No competitors yet. Be the first through the gates.</p></div>:<ol>{state.leaderboard.map(row=><li key={row.user_id} className={`${row.rank<=3?`top-${row.rank} `:''}status-${row.status}`}><b>{row.rank}</b><img src={row.player?.avatar_url||'/cburger_logo.png'} alt=""/><span><strong>{row.player?.display_name||'Player'}</strong><small className="arena-player-status">{row.status==='eliminated'?'ELIMINATED':row.status==='playing'?'IN MATCH':'STANDING BY'}</small></span><em>{row.arena_points} pts</em><i>+{row.arena_cbr_gain} CBR</i></li>)}</ol>}</section>
-  <section className="arena-rules"><h2>How the Arena works</h2><div><p><b>1.</b> One ticket admits one double-elimination run.</p><p><b>2.</b> Equal or nearest Arena points are paired first.</p><p><b>3.</b> Large point gaps wait briefly for a fairer opponent.</p><p><b>4.</b> Only an active, non-eliminated points leader can become champion.</p></div></section>
- </section>;
+export default function GrandArena({
+  onBack,
+  onMatch,
+  onShop,
+}: {
+  onBack: () => void;
+  onMatch: (id: string) => void;
+  onShop: () => void;
+}) {
+  const [state, setState] = useState<ArenaState | null>(null),
+    [busy, setBusy] = useState(false),
+    [tick, setTick] = useState(() => Date.now());
+  const load = useCallback(async () => {
+    try {
+      const data = await request<ArenaState>("state");
+      setState(data);
+      if (data.match?.id && data.match.status === "active")
+        onMatch(data.match.id);
+    } catch (error) {
+      toast.error((error as Error).message);
+    }
+  }, [onMatch]);
+  useEffect(() => {
+    const initial = setTimeout(() => void load(), 0),
+      poll = setInterval(() => void load(), 5000),
+      clock = setInterval(() => setTick(Date.now()), 1000);
+    return () => {
+      clearTimeout(initial);
+      clearInterval(poll);
+      clearInterval(clock);
+    };
+  }, [load]);
+  const slot = state?.window.current ?? state?.window.next,
+    target = state?.window.current?.ends_at ?? state?.window.next?.starts_at,
+    remaining = target ? Math.max(0, Date.parse(target) - tick) : 0,
+    h = Math.floor(remaining / 3600000),
+    m = Math.floor((remaining % 3600000) / 60000),
+    s = Math.floor((remaining % 60000) / 1000),
+    prize =
+      state?.session.prize_mode === "auto"
+        ? `${Math.floor((state.session.ticket_gold_total || 0) * 0.1)} Gold live pot`
+        : `${state?.session.prize_gold ?? state?.window.settings.fixed_prize_gold ?? 48} Gold`;
+  async function enter() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const data = await request<ArenaState>("enter");
+      setState(data);
+      toast.success(
+        data.entry?.status === "waiting"
+          ? "Arena Ticket accepted. You are now in standby."
+          : "Grand Arena entry confirmed.",
+      );
+      if (data.match?.id) onMatch(data.match.id);
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <section className="grand-arena-page">
+      <button className="back-button" onClick={onBack}>
+        <ArrowLeft size={15} />
+        Play selection
+      </button>
+      <header className="grand-arena-hero">
+        <img src="/play-selection/grand-arena.webp" alt="Grand Arena castle" />
+        <div>
+          <span>LIVE COMPETITIVE ARENA</span>
+          <h1>Grand Arena</h1>
+          <p>
+            Score Arena points, survive two losses, and finish inside the Arena
+            as the points leader.
+          </p>
+        </div>
+      </header>
+      <Champions champions={state?.champions ?? []} />
+      <section
+        className={`arena-clock-card ${state?.window.open ? "open" : ""}`}
+      >
+        <div>
+          <Clock />
+          <span>
+            <small>{state?.window.open ? "ARENA OPEN" : "NEXT SESSION"}</small>
+            <strong>{slot ? sessionLabel(slot) : "Loading schedule…"}</strong>
+          </span>
+        </div>
+        <b>
+          {String(h).padStart(2, "0")}:{String(m).padStart(2, "0")}:
+          {String(s).padStart(2, "0")}
+        </b>
+        <small>
+          Philippine time ·{" "}
+          {state?.session.match_control ??
+            state?.window.settings.match_control ??
+            "5+0"}{" "}
+          games · Entry closes 10 minutes before session end
+        </small>
+      </section>
+      <div className="arena-dashboard">
+        <article className="arena-entry-card">
+          <div className="arena-ticket-count">
+            <img src="/grand-arena/arena-ticket.webp" alt="Arena Ticket" />
+            <span>
+              <small>YOUR TICKETS</small>
+              <strong>{state?.tickets ?? 0}</strong>
+            </span>
+          </div>
+          {!state ? (
+            <p>Opening the Arena gates…</p>
+          ) : state.entry?.status === "playing" ? (
+            <div className="arena-status live">
+              <Radio />
+              <strong>Match found</strong>
+              <small>Opening your board automatically…</small>
+            </div>
+          ) : state.entry?.status === "waiting" ? (
+            <div className="arena-status standby">
+              <Radio />
+              <strong>Fair-match standby</strong>
+              <small>
+                {state.entry.arena_points} points · {state.entry.losses}/2
+                losses. Looking for the nearest points opponent.
+              </small>
+            </div>
+          ) : state.entry?.status === "eliminated" ? (
+            <>
+              <div className="arena-status eliminated">
+                <ShieldCheck />
+                <strong>Two losses · eliminated</strong>
+                <small>Use another ticket to begin a new Arena run.</small>
+              </div>
+              <button
+                className="gold-button wide"
+                disabled={!state.window.entry_open || state.tickets < 1 || busy}
+                onClick={() => void enter()}
+              >
+                {busy ? "Re-entering…" : "Re-enter with 1 ticket"}
+              </button>
+            </>
+          ) : (
+            <button
+              className="gold-button wide"
+              disabled={!state.window.entry_open || state.tickets < 1 || busy}
+              onClick={() => void enter()}
+            >
+              {busy
+                ? "Entering…"
+                : state.window.entry_open
+                  ? "Enter Grand Arena · 1 Ticket"
+                  : "Arena entry closed"}
+            </button>
+          )}
+          <button className="arena-shop-link" onClick={onShop}>
+            <ShoppingBag size={14} />
+            Buy Arena Tickets
+          </button>
+        </article>
+        <article className="arena-reward-card">
+          <Trophy />
+          <h2>Win and survive</h2>
+          <strong>+1 point · +4 CBR · +8 Gold</strong>
+          <p>Draw +0.5 point. Three consecutive wins earn a +2 point bonus.</p>
+          <div>
+            <span>
+              <Sparkles />
+              <b>Champion pot</b>
+              {prize}
+            </span>
+            <span>
+              <Crown />
+              <b>Elimination</b>After 2 losses
+            </span>
+          </div>
+        </article>
+      </div>
+      <section className="arena-leaderboard">
+        <div className="arena-section-title">
+          <div>
+            <span>LIVE STANDINGS</span>
+            <h2>Session leaderboard</h2>
+          </div>
+          <small>Arena points, then wins</small>
+        </div>
+        {!state?.leaderboard.length ? (
+          <div className="arena-empty">
+            <Trophy />
+            <p>No competitors yet. Be the first through the gates.</p>
+          </div>
+        ) : (
+          <ol>
+            {state.leaderboard.map((row) => (
+              <li
+                key={row.user_id}
+                className={`${row.rank <= 3 ? `top-${row.rank} ` : ""}status-${row.status}`}
+              >
+                <b>{row.rank}</b>
+                <img
+                  src={row.player?.avatar_url || "/cburger_logo.png"}
+                  alt=""
+                />
+                <span>
+                  <strong>{row.player?.display_name || "Player"}</strong>
+                  <small className="arena-player-status">
+                    {row.status === "eliminated"
+                      ? "ELIMINATED"
+                      : row.status === "playing"
+                        ? "IN MATCH"
+                        : "STANDING BY"}
+                  </small>
+                </span>
+                <em>{row.arena_points} pts</em>
+                <i>+{row.arena_cbr_gain} CBR</i>
+              </li>
+            ))}
+          </ol>
+        )}
+      </section>
+      <section className="arena-champion-history">
+        <div className="arena-section-title">
+          <div>
+            <span>HALL OF CHAMPIONS</span>
+            <h2>This week’s Grand Arena winners</h2>
+          </div>
+          <small>Latest 20 sessions</small>
+        </div>
+        {!state?.history?.length ? (
+          <div className="arena-empty">
+            <Crown />
+            <p>
+              Champion history will appear after the first completed session.
+            </p>
+          </div>
+        ) : (
+          <ol>
+            {state.history.slice(0, 20).map((winner, index) => (
+              <li key={winner.id ?? `${winner.session_date}-${winner.slot}`}>
+                <b>{index + 1}</b>
+                <img
+                  src={winner.player?.avatar_url || "/cburger_logo.png"}
+                  alt=""
+                />
+                <span>
+                  <strong>
+                    {winner.player?.display_name || "Grand Champion"}
+                  </strong>
+                  <small>
+                    {winner.session_date
+                      ? new Date(
+                          `${winner.session_date}T12:00:00+08:00`,
+                        ).toLocaleDateString([], {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })
+                      : "Grand Arena"}{" "}
+                    · Session {winner.slot}
+                  </small>
+                </span>
+                <em>
+                  <Crown size={12} />
+                  {winner.prize_gold ?? 0} Gold
+                </em>
+              </li>
+            ))}
+          </ol>
+        )}
+      </section>
+      <section className="arena-rules">
+        <h2>How the Arena works</h2>
+        <div>
+          <p>
+            <b>1.</b> One ticket admits one double-elimination run.
+          </p>
+          <p>
+            <b>2.</b> Equal or nearest Arena points are paired first.
+          </p>
+          <p>
+            <b>3.</b> Large point gaps wait briefly for a fairer opponent.
+          </p>
+          <p>
+            <b>4.</b> Only an active, non-eliminated points leader can become
+            champion.
+          </p>
+        </div>
+      </section>
+    </section>
+  );
 }

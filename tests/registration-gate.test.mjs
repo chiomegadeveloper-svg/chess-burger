@@ -27,5 +27,5 @@ test("incomplete users remain inside registration without app navigation", () =>
 test("Bag displays only one Active status", () => {
   assert.doesNotMatch(shop, /active-rental/);
   assert.match(shop, /disableWhenActive/);
-  assert.match(shop, /active \? <><Check size=\{13\}\/\> Active<\/\>/);
+  assert.match(shop, /active \? "Active" : "Use"/);
 });
