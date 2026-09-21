@@ -5,6 +5,7 @@ import { Chess } from "chess.js";
 import { DAILY_PUZZLES } from "../app/puzzle-data.ts";
 
 const page = readFileSync(new URL("../app/page.tsx", import.meta.url), "utf8");
+const puzzleUi = readFileSync(new URL("../app/puzzles.tsx", import.meta.url), "utf8");
 const api = readFileSync(new URL("../api/arena.ts", import.meta.url), "utf8");
 const sql = readFileSync(new URL("../supabase/0028_daily_puzzles.sql", import.meta.url), "utf8");
 
@@ -34,4 +35,10 @@ test("puzzle Gold is server validated and idempotent", () => {
   assert.match(sql, /v_delta:=2/);
   assert.match(sql, /v_delta:=v_delta\+5/);
   assert.match(sql, /on conflict do nothing/);
+});
+
+test("Coach Patty prefers a friendly female English device voice", () => {
+  assert.match(puzzleUi, /female\|samantha\|zira\|aria\|jenny/);
+  assert.match(puzzleUi, /en-PH/);
+  assert.match(puzzleUi, /utterance\.pitch=1\.12/);
 });

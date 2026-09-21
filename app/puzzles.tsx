@@ -58,7 +58,19 @@ export default function Puzzles({ onClose, onReward }: { onClose: () => void; on
   }
   function coachSpeak() {
     const text = hintOpen ? puzzle.hint : `${puzzle.title}. ${puzzle.theme}. Find the winning move.`;
-    if ("speechSynthesis" in window) { window.speechSynthesis.cancel(); window.speechSynthesis.speak(new SpeechSynthesisUtterance(text)); }
+    if ("speechSynthesis" in window) {
+      const speech = window.speechSynthesis,utterance = new SpeechSynthesisUtterance(text),voices=speech.getVoices();
+      const femaleName=/(female|samantha|zira|aria|jenny|ava|susan|karen|moira|tessa|victoria|serena|siri)/i;
+      utterance.voice=voices.find(voice=>/^en-PH$/i.test(voice.lang)&&femaleName.test(voice.name))
+        ??voices.find(voice=>/^en-PH$/i.test(voice.lang))
+        ??voices.find(voice=>/^en-(US|GB|AU)$/i.test(voice.lang)&&femaleName.test(voice.name))
+        ??voices.find(voice=>/^en/i.test(voice.lang)&&femaleName.test(voice.name))
+        ??voices.find(voice=>/^en/i.test(voice.lang))
+        ??null;
+      utterance.lang=utterance.voice?.lang??"en-PH";
+      utterance.rate=.94;utterance.pitch=1.12;utterance.volume=1;
+      speech.cancel();speech.speak(utterance);
+    }
     setHintOpen(true);
   }
 
