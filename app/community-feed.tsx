@@ -946,6 +946,9 @@ export default function CommunityFeed({
             level = levelFor(event.cbr),
             announcement = event.kind === "announcement",
             arenaChampion = event.content.startsWith("won Grand Arena Session"),
+            arenaSession = arenaChampion
+              ? (event.content.match(/Session (\d+)/)?.[1] ?? "")
+              : "",
             avatarUrl = announcement ? "/cburger_logo.png" : event.avatar_url,
             banner = feedBanner(event.feed_banner),
             bannerStyle = banner
@@ -1062,8 +1065,8 @@ export default function CommunityFeed({
                   )}
                   {event.gold_delta !== 0 && (
                     <span className="feed-gold">
-                  {arenaChampion ? "Champion Pot · " : ""}
-                  {event.gold_delta > 0 ? "+" : ""}
+                      {arenaChampion ? "Champion Pot · " : ""}
+                      {event.gold_delta > 0 ? "+" : ""}
                       {event.gold_delta} Gold
                     </span>
                   )}
@@ -1076,6 +1079,27 @@ export default function CommunityFeed({
                   />
                 )}
               </div>
+              {arenaChampion && (
+                <button
+                  type="button"
+                  className="arena-feed-champion-card"
+                  onClick={() => onOpenProfile(event.user_id)}
+                  aria-label={`Open Grand Arena Champion ${event.display_name}'s profile`}
+                >
+                  <Crown size={20} />
+                  <span className="arena-feed-champion-avatar">
+                    {event.avatar_url ? (
+                      <img src={event.avatar_url} alt="" />
+                    ) : (
+                      event.display_name.charAt(0)
+                    )}
+                  </span>
+                  <span>
+                    <strong>{event.display_name}</strong>
+                    <small>Grand Champion · Session {arenaSession}</small>
+                  </span>
+                </button>
+              )}
               <button
                 className={
                   "heart-button " + (reacted.has(event.id) ? "reacted" : "")

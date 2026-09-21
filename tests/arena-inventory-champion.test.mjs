@@ -30,6 +30,7 @@ test("Arena publishes one champion card instead of per-match win cards", () => {
   assert.match(migration, /won Grand Arena Session/);
   assert.match(migration, /Champion Pot/);
   assert.match(feed, /grand-arena-champion-feed/);
+  assert.match(feed, /arena-feed-champion-card/);
   assert.match(feed, /Champion Pot/);
 });
 
