@@ -811,7 +811,7 @@ function AppPage() {
               <button
                 className="welcome-card online"
                 onClick={() => {
-                  finishWelcome("play");
+                  finishWelcome("play-select");
                 }}
               >
                 <img src="/welcome/play-online.webp" alt="Chess characters playing online" />
