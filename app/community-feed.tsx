@@ -15,7 +15,7 @@ type OnlinePlayer=ArenaPlayer&{available:boolean};
 
 type FeedTab="recent"|"popular"|"first_blood"|"announcement"|"online";
 const PAGE_SIZE=10,ONLINE_PAGE_SIZE=60;
-const labels:Record<string,string>={profile_created:"New player",profile_updated:"Profile",win:"Win",first_blood:"First blood",new_reward:"Reward",top10:"Top 10",announcement:"Announcement"};
+const labels:Record<string,string>={profile_created:"New player",profile_updated:"Profile",win:"Win",first_blood:"First blood",new_reward:"Reward",top10:"Top 10 reward",announcement:"Announcement"};
 const cardStyles:Record<string,CSSProperties>={
  shell:{position:"fixed",zIndex:2147483000,top:"50%",left:"50%",width:"min(390px,calc(100vw - 24px))",maxHeight:"calc(100dvh - 32px)",padding:"clamp(13px,3vw,18px)",transform:"translate(-50%,-50%)",overflowY:"auto",boxSizing:"border-box",border:"2px solid #c8a842",borderRadius:18,background:"linear-gradient(115deg,#293238,#0e171b 56%,#243138)",boxShadow:"inset 0 0 0 2px #11181c,inset 0 0 0 3px #786b35,0 18px 48px #000e",color:"#f4f7f8",fontFamily:"Poppins,sans-serif",isolation:"isolate"},
  logo:{display:"block",width:34,height:34,maxWidth:34,maxHeight:34,margin:"0 auto 12px",border:"1px solid #d9b84e",borderRadius:"50%",objectFit:"cover"},
