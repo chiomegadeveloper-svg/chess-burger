@@ -32,6 +32,16 @@ test("CPU results settle once without changing human match counts", () => {
   assert.doesNotMatch(sql, /losses\s*=/);
 });
 
+test("CPU arena uses robot identities and always provides a result popup", () => {
+  assert.match(cpu, /ROBOT_NAMES/);
+  assert.match(cpu, /robotAvatar/);
+  assert.match(cpu, /cpu-result-dialog/);
+  assert.match(cpu, /onAbort=\{abort\}/);
+  assert.match(cpu, /setShowStats\(true\)/);
+  assert.match(cpu, /Moves played/);
+  assert.doesNotMatch(cpu, /display_name: `Stockfish/);
+});
+
 test("Stockfish worker and WASM are bundled locally", () => {
   const worker = new URL("../public/stockfish/stockfish-19-lite-single.js", import.meta.url);
   const wasm = new URL("../public/stockfish/stockfish-19-lite-single.wasm", import.meta.url);
