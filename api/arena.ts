@@ -1,6 +1,20 @@
 import { createClient } from '@supabase/supabase-js';
 import { Chess } from 'chess.js';
-import { DAILY_PUZZLES } from '../app/puzzle-data';
+
+// Keep server validation data inside this serverless entrypoint. Vercel has
+// previously failed to bundle cross-directory imports used by this function.
+const DAILY_PUZZLES = [
+  { id: 'back-rank-1', solution: 'f1f8' },
+  { id: 'queen-net-1', solution: 'd1a4' },
+  { id: 'queen-net-2', solution: 'e1a5' },
+  { id: 'rook-wall-1', solution: 'b3a3' },
+  { id: 'queen-net-3', solution: 'g3a3' },
+  { id: 'rook-wall-2', solution: 'd3a3' },
+  { id: 'queen-net-4', solution: 'f4a4' },
+  { id: 'rook-wall-3', solution: 'c4a4' },
+  { id: 'queen-net-5', solution: 'h6a6' },
+  { id: 'rook-wall-4', solution: 'h3a3' },
+] as const;
 
 type Req = { method?: string; query?: Record<string, string | string[] | undefined>; body?: unknown; headers: Record<string, string | string[] | undefined> };
 type Res = { status: (code: number) => Res; json: (body: unknown) => void; setHeader: (name: string, value: string) => void };

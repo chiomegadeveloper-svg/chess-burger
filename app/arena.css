@@ -1,3 +1,5 @@
+@import "./puzzles.css";
+
 /* V9: neutral surfaces, compact controls, and shared game components. */
 :root{--background:#e9e9eb;--foreground:#292d32;--border:#c8cbd0;--popover:#f8f8f9;--cb-ink:#23272d;--cb-cyan:#61d9e5;--cb-gold:#dcc071}
 html,body{background:#17191e}.scroll-area{background:linear-gradient(145deg,#eeeeef,#e2e3e6);scrollbar-color:#afb3ba transparent;color:#292d32}.app-shell{background:#e9e9eb}
