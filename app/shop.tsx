@@ -1,17 +1,27 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { ArrowLeft, Check, Crown, PackageOpen, ShoppingBag } from "lucide-react";
+import { ArrowLeft, Check, Crown, PackageOpen, ShoppingBag, Ticket } from "lucide-react";
 import { toast } from "sonner";
 import { arena } from "./arena-client";
 import { FEED_BANNERS, FEED_BANNER_DURATIONS, feedBanner, feedBannerRentalPrice, type FeedBanner, type FeedBannerDuration } from "./feed-banner-catalog";
 import type { PlayerProfile } from "./supabase";
+import { getSupabase } from "./supabase";
 import "./feed-banner-shop.css";
 
 type BannerRental = { product_id: string; expires_at: string };
 type ShopState = { owned: BannerRental[]; active: string; gold: number; server_now?: string };
 const rentalFor = (state: ShopState, id: string) => state.owned.find((item) => item.product_id === id);
 const rentalLabel = (expiresAt?: string) => expiresAt ? `Until ${new Date(expiresAt).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}` : "";
+const ARENA_BUNDLES=[{quantity:1,name:"Solo Ticket",price:28},{quantity:3,name:"Trio Tickets",price:78},{quantity:5,name:"Arena Pack",price:128}] as const;
+
+function ArenaTicketStore({fallbackGold}:{fallbackGold:number}){
+  const[tickets,setTickets]=useState(0),[balance,setBalance]=useState(fallbackGold),[busy,setBusy]=useState<number|null>(null);
+  const call=async(action:string,body:Record<string,unknown>={})=>{const client=await getSupabase(),session=client?(await client.auth.getSession()).data.session:null;if(!session)throw Error("Sign in to buy Arena Tickets.");const response=await fetch('/api/grand-arena',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${session.access_token}`},body:JSON.stringify({action,...body}),cache:'no-store'}),data=await response.json();if(!response.ok)throw Error(data.error??'Unable to update Arena Tickets.');return data as {tickets:number;gold:number};};
+  useEffect(()=>{void call('state',{pair:false}).then(data=>{setTickets(data.tickets);setBalance(data.gold);}).catch(()=>{});},[]);
+  const buy=async(bundle:typeof ARENA_BUNDLES[number])=>{if(busy!==null)return;if(!window.confirm(`Buy ${bundle.quantity} Arena Ticket${bundle.quantity>1?'s':''} for ${bundle.price} Gold?`))return;setBusy(bundle.quantity);try{const data=await call('buy',{quantity:bundle.quantity,request_id:crypto.randomUUID()});setTickets(data.tickets);setBalance(data.gold);toast.success(`${bundle.quantity} Arena Ticket${bundle.quantity>1?'s':''} added to your account.`);}catch(error){toast.error((error as Error).message);}finally{setBusy(null);}};
+  return <section className="arena-ticket-store"><div className="arena-ticket-store-heading"><img src="/grand-arena/arena-ticket.webp" alt="Chess Burger Arena Ticket"/><div><span>GRAND ARENA ACCESS</span><h2>Arena Tickets</h2><p>One ticket admits one competitive Arena run.</p></div><b><Ticket size={14}/>{tickets} owned</b></div><div className="arena-ticket-bundles">{ARENA_BUNDLES.map(bundle=><article key={bundle.quantity}><strong>{bundle.name}</strong><span>{bundle.quantity} ticket{bundle.quantity>1?'s':''}</span><small>{bundle.quantity>1?`${Math.round((1-bundle.price/(bundle.quantity*28))*100)}% bundle savings`:'Standard admission'}</small><button type="button" disabled={busy!==null||balance<bundle.price} onClick={()=>void buy(bundle)}>{busy===bundle.quantity?'Purchasing…':`${bundle.price} Gold`}</button></article>)}</div></section>;
+}
 
 function BannerTile({ banner, expiresAt, active, busy, disableWhenActive = false, actionLabel, onAction }: { banner: FeedBanner; expiresAt?: string; active: boolean; busy: boolean; disableWhenActive?: boolean; actionLabel: ReactNode; onAction: () => void }) {
   return <article className={`banner-product ${active ? "is-active" : ""}`}>
@@ -51,6 +61,7 @@ export function ShopPage({ profile, onChanged }: { profile: PlayerProfile | null
   </section>;
   return <section className="shop-page">
     <div className="page-heading"><h1>Chess Burger shop</h1><span className="sample-label">{state.gold || profile?.gold_points || 0} Gold</span></div>
+    <ArenaTicketStore fallbackGold={state.gold || profile?.gold_points || 0}/>
     <div className="shop-grid">
       {[["♞","Avatar frames","Decorative player-card frames."],["♛","Board themes","Metallic boards and pieces."],["♟","Gold rewards","Reward items for your collection."]].map(([icon,name,desc]) => <article key={name}><span className="shop-icon">{icon}</span><div><h2>{name}</h2><p>{desc}</p></div><span className="shop-status">Coming soon</span></article>)}
       <article className="shop-category-ready">

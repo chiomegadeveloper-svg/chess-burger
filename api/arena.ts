@@ -144,6 +144,7 @@ namespace MatchEngine {
         row = changed.data;
         const fairPlay = action === 'abort' ? await recordAbort(client, row.id, actor) : null;
         if (row.status === 'finished') { await settleMatch(client, row); const rated = await client.from('cb_matches').select('*').eq('id', id).single(); check(rated.error); row = rated.data; }
+        if (row.status === 'cancelled' && row.play_mode === 'arena') { const resolved = await client.rpc('cb_resolve_arena_cancelled_match', { p_match_id: row.id }); check(resolved.error); }
         console.info('arena.match-action', { action, id, elapsed_ms: Date.now() - started });
         return { match: row.status === 'finished' ? await matchView(client, row) : view(row), ...(fairPlay ? { fair_play: fairPlay } : {}) };
       }
@@ -386,6 +387,11 @@ async function broadcastMatch(match: any) {
 
 async function settle(client: Db, match: any) {
   if (match.status !== 'finished' || match.rating_applied || !match.black_id || !match.result) return;
+  if (match.play_mode === 'arena') {
+    const settled = await client.rpc('cb_settle_arena_match', { p_match_id: match.id });
+    if (settled.error) fail(/cb_settle_arena_match|schema cache|function/i.test(settled.error.message) ? 503 : 500, /cb_settle_arena_match|schema cache|function/i.test(settled.error.message) ? 'Run supabase/0027_grand_arena.sql in Supabase, then try again.' : settled.error.message);
+    return;
+  }
   if (match.match_kind === 'invasion') {
     const invasion = await client.rpc('cb_settle_territory_invasion', { p_match_id: match.id });
     if (invasion.error) fail(/cb_settle_territory_invasion|schema cache|function/i.test(invasion.error.message) ? 503 : 500, /cb_settle_territory_invasion|schema cache|function/i.test(invasion.error.message) ? 'Run supabase/0014_barangay_territory_defense.sql in Supabase, then try again.' : invasion.error.message);

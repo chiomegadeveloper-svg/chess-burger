@@ -3,6 +3,10 @@
   "framework": null,
   "buildCommand": "npm run build:vercel",
   "outputDirectory": "vercel-dist",
+  "crons": [
+    { "path": "/api/arena-finalize", "schedule": "0 13 * * *" },
+    { "path": "/api/arena-finalize", "schedule": "1 16 * * *" }
+  ],
   "headers": [
     {
       "source": "/(.*)",

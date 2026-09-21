@@ -51,6 +51,7 @@ import { isProfileComplete } from "./profile-completion";
 import Testimonials from "./testimonials";
 import CpuGame from "./cpu-game";
 import Puzzles from "./puzzles";
+import GrandArena from "./grand-arena";
 
 const modes = [
   {
@@ -490,6 +491,7 @@ function AppPage() {
     "tournaments",
     "cpu",
     "puzzles",
+    "grand-arena",
   ].includes(tab)
     ? "play"
     : tab === "cms"
@@ -515,6 +517,7 @@ function AppPage() {
     content = (
       <CommunityFeed
         onMatch={openMatch}
+        onArena={() => setTab("grand-arena")}
         onChallenge={(player) => {
           setTarget(player);
           setTab("challenge");
@@ -540,7 +543,7 @@ function AppPage() {
         <div className="play-select-heading"><span>Choose your destination</span><h1 id="play-select-title">Play Chess Burger</h1><p>Choose matches, enter the Arena, or train with Coach Patty.</p></div>
         <div className="play-select-grid">
           <button className="play-destination lobby" type="button" onClick={() => setTab("play")}><img src="/play-selection/match-lobby.webp" alt="Colorful Chess Burger Match Lobby"/><span><strong>Match Lobby</strong><small>Online, CPU, nearby and offline matches</small><b>Enter Lobby <ChevronRight size={17}/></b></span></button>
-          <button className="play-destination arena arena-live" type="button" onClick={() => setTab("tournaments")}><img src="/play-selection/grand-arena.webp" alt="Chess Burger Grand Arena entrance"/><span><strong>Grand Arena</strong><small>Epic ranked arena battles</small><b>Enter Arena <ChevronRight size={17}/></b></span></button>
+          <button className="play-destination arena arena-live" type="button" onClick={() => setTab("grand-arena")}><img src="/play-selection/grand-arena.webp" alt="Chess Burger Grand Arena entrance"/><span><strong>Grand Arena</strong><small>Timed elimination battles with live standings</small><b>Enter Arena <ChevronRight size={17}/></b></span></button>
           <button className="play-destination puzzles" type="button" onClick={() => setTab("puzzles")}><img src="/play-selection/puzzle-quest.webp" alt="Chess Burger puzzle maze arena"/><span><strong>Puzzle Quest</strong><small>100 puzzles, Coach Patty and Gold rewards</small><b>Enter Puzzles <ChevronRight size={17}/></b></span></button>
         </div>
       </section>
@@ -700,6 +703,7 @@ function AppPage() {
       </>
     );
   else if (tab === "tournaments") content = <Tournaments profile={profile} />;
+  else if (tab === "grand-arena") content = <GrandArena onBack={() => setTab("play-select")} onMatch={openMatch} onShop={() => setTab("shop")}/>;
   else if (tab === "cpu" && profile) content = <CpuGame player={profile} onClose={() => setTab("play")} onReward={() => void refreshProfile()}/>;
   else if (tab === "puzzles" && profile) content = <Puzzles onClose={() => setTab("play")} onReward={() => void refreshProfile()}/>;
   else if (tab === "card")

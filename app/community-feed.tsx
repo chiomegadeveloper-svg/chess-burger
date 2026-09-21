@@ -2,7 +2,7 @@
 
 import {useCallback,useEffect,useState,useRef,type CSSProperties} from "react";
 import {createPortal} from "react-dom";
-import {Heart,ChevronLeft,ChevronRight,Swords,Search,X} from "lucide-react";
+import {Heart,ChevronLeft,ChevronRight,Swords,Search,X,Ticket} from "lucide-react";
 import {toast} from "sonner";
 import {FeedEvent,getSupabase} from "./supabase";
 import {arena} from "./arena-client";
@@ -39,9 +39,10 @@ const cardStyles:Record<string,CSSProperties>={
  state:{display:"inline-flex",flex:"1 1 0",alignItems:"center",justifyContent:"center",minHeight:34,padding:"7px 10px",boxSizing:"border-box",border:"1px solid #4d5b63",borderRadius:9,background:"#202c32",color:"#dbe7ea",fontSize:10},
 };
 
-export default function CommunityFeed({onOpenProfile,onMatch,onChallenge}:{onOpenProfile:(userId:string)=>void;onMatch:(id:string)=>void;onChallenge:(player:ArenaPlayer)=>void}){
+export default function CommunityFeed({onOpenProfile,onMatch,onChallenge,onArena}:{onOpenProfile:(userId:string)=>void;onMatch:(id:string)=>void;onChallenge:(player:ArenaPlayer)=>void;onArena:()=>void}){
  const[tab,setTab]=useState<FeedTab>("recent"),[page,setPage]=useState(1),[events,setEvents]=useState<CommunityEvent[]>([]);
  const[challenges,setChallenges]=useState<CommunityEvent[]>([]),[accepting,setAccepting]=useState<string|null>(null);
+ const[arenaOpen,setArenaOpen]=useState<{content:string}|null>(null);
  const[expandedImage,setExpandedImage]=useState<string|null>(null);
  const[onlineUsers,setOnlineUsers]=useState<OnlinePlayer[]>([]),[onlineSearch,setOnlineSearch]=useState(''),[onlineCard,setOnlineCard]=useState<string|null>(null),[onlinePage,setOnlinePage]=useState(1);
  const request=useRef(0),onlineCloseTimer=useRef<ReturnType<typeof setTimeout>|null>(null);
@@ -49,13 +50,14 @@ export default function CommunityFeed({onOpenProfile,onMatch,onChallenge}:{onOpe
  const refresh=useCallback(async()=>{
   const seq=++request.current;
   if(tab==='rewards'){setTotal(0);setEvents([]);setStatus('');return;}
-  const [localFeed,online,me]=await Promise.allSettled([arena<{events:CommunityEvent[]}>('feed',{},true),arena<{users:OnlinePlayer[],count:number}>('online-users',{},true),arena<{profile:ArenaPlayer}>('me')]);
+  const [localFeed,online,me,arenaWindow]=await Promise.allSettled([arena<{events:CommunityEvent[]}>('feed',{},true),arena<{users:OnlinePlayer[],count:number}>('online-users',{},true),arena<{profile:ArenaPlayer}>('me'),fetch('/api/grand-arena?action=window',{cache:'no-store'}).then(response=>response.json())]);
   if(seq!==request.current)return;
   const users:OnlinePlayer[]=online.status==='fulfilled'?[...online.value.users]:[];
   if(me.status==='fulfilled'&&me.value.profile?.user_id&&!users.some(player=>player.user_id===me.value.profile.user_id)){
    users.unshift({...me.value.profile,available:true});
   }
   setOnlineUsers(users);
+  setArenaOpen(arenaWindow.status==='fulfilled'&&arenaWindow.value?.open?{content:`The ${arenaWindow.value.current?.slot===1?'7–9 PM':'10 PM–12 MN'} Grand Arena is open. Use 1 Arena Ticket to enter.`}:null);
   const ownProfile=me.status==='fulfilled'?me.value.profile as ArenaPlayer&{active_feed_banner?:string}:null;
   const all=[...(localFeed.status==='fulfilled'?localFeed.value.events:[])].map(event=>event.feed_banner||!ownProfile||event.user_id!==ownProfile.user_id?event:{...event,feed_banner:ownProfile.active_feed_banner??''}).filter(e=>!e.expires_at||Date.parse(e.expires_at)>Date.now());
   setChallenges(all.filter(e=>e.kind==='challenge').sort((a,b)=>Date.parse(b.created_at)-Date.parse(a.created_at)));
@@ -113,6 +115,7 @@ export default function CommunityFeed({onOpenProfile,onMatch,onChallenge}:{onOpe
    <button className="rewards-feed-tab" role="tab" aria-selected={tab==="rewards"} onClick={()=>selectTab("rewards")}>Rewards</button>
   </div>
   {tab==='rewards'&&<DailyRewards/>}
+  {tab==='recent'&&arenaOpen&&<button type="button" className="arena-feed-invite" onClick={onArena}><span className="arena-feed-art"><img src="/play-selection/grand-arena.webp" alt="Grand Arena"/></span><span><small>GRAND ARENA IS OPEN</small><strong>Enter the live competition</strong><em>{arenaOpen.content}</em></span><b><Ticket size={14}/>Enter Arena</b></button>}
   {tab==='recent'&&challenges.length>0&&<section className="pinned-challenges" aria-label="Open challenges"><h2>Open challenges</h2>{challenges.map(event=><article className="pinned-challenge" key={event.id}>
     <span className="challenge-glow" aria-hidden="true"/><span className="challenge-info"><Swords size={19}/><span><strong>{event.display_name}</strong><small>{event.content.replace(/^is looking for a /,'').replace(/^is looking for /,'')}</small></span></span>
     <button className="gold-button" disabled={accepting!==null||event.user_id===userId} onClick={()=>void acceptChallenge(event)}>{event.user_id===userId?'Your challenge':accepting===event.id?'Joining…':'Accept challenge'}</button>
