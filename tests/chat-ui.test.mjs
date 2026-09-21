@@ -27,3 +27,11 @@ test("feed chat launcher keeps fixed viewport positioning", () => {
   assert.match(css, /\.floating-chat-button\{position:fixed/);
   assert.doesNotMatch(css, /\.floating-chat-button,\.social-tabs button\{position:relative/);
 });
+
+test("chat uses compact frameless avatar rails with tap-revealed names", () => {
+  assert.match(social, /className="chat-avatar-name"/);
+  assert.match(social, /className="group-friend-avatars"/);
+  assert.match(social, /setRevealedAvatar/);
+  assert.match(css, /personal-chat-layout:not\(\.group-chat-layout\) \.personal-chat-rail\{[^}]*border:0!important/);
+  assert.match(css, /\.chat-dialog\{width:min\(760px/);
+});

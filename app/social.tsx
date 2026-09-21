@@ -265,6 +265,7 @@ export function SocialHub({
     [before, setBefore] = useState<number | undefined>(),
     [draft, setDraft] = useState(""),
     [openMessageMeta, setOpenMessageMeta] = useState(""),
+    [revealedAvatar, setRevealedAvatar] = useState(""),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [loading, setLoading] = useState(false);
@@ -416,6 +417,7 @@ export function SocialHub({
     setGroupId("");
     setBefore(undefined);
     setError("");
+    setRevealedAvatar("");
   }
   async function act(p: Person, op: string) {
     setBusy(true);
@@ -611,6 +613,7 @@ export function SocialHub({
                       onClick={() => {
                         setTarget(person.user_id);
                         setBefore(undefined);
+                        setRevealedAvatar((current) => current === person.user_id ? "" : person.user_id);
                       }}
                     >
                       {person.avatar_url ? (
@@ -622,6 +625,9 @@ export function SocialHub({
                         <VolumeX className="chat-muted-mark" size={14} />
                       )}
                     </button>
+                    {revealedAvatar === person.user_id ? (
+                      <span className="chat-avatar-name" role="status">{person.display_name}</span>
+                    ) : null}
                     {!!person.unread&&<b className="chat-contact-unread">{Math.min(99,person.unread)}</b>}
                     <button
                       className="chat-contact-remove"
@@ -639,7 +645,43 @@ export function SocialHub({
                 )}
               </aside>
             )}
-            {mode==="group"&&<aside className="personal-chat-rail group-chat-rail" aria-label="Group conversations"><form className="group-create" onSubmit={e=>{e.preventDefault();void createGroup();}}><input aria-label="Group name" placeholder="Group name" maxLength={48} value={groupName} onChange={e=>setGroupName(e.target.value)}/><div>{chatSummary?.friends.map(friend=><label key={friend.user_id}><input type="checkbox" checked={groupMembers.includes(friend.user_id)} onChange={()=>setGroupMembers(current=>current.includes(friend.user_id)?current.filter(id=>id!==friend.user_id):[...current,friend.user_id])}/><span>{friend.display_name}</span></label>)}</div><button disabled={busy||groupName.trim().length<3||!groupMembers.length}>Create</button></form>{chatSummary?.groups.map(group=><button key={group.id} className={`group-conversation${groupId===group.id?' active':''}`} onClick={()=>{setGroupId(group.id);setBefore(undefined);}}><Users size={18}/><span><strong>{group.name}</strong><small>{group.preview}</small></span>{group.unread>0&&<b>{group.unread}</b>}</button>)}</aside>}
+            {mode === "group" ? (
+              <aside className="personal-chat-rail group-chat-rail" aria-label="Group conversations">
+                <form className="group-create" onSubmit={(event) => { event.preventDefault(); void createGroup(); }}>
+                  <input aria-label="Group name" placeholder="Group name" maxLength={48} value={groupName} onChange={(event) => setGroupName(event.target.value)} />
+                  <div className="group-friend-avatars" aria-label="Choose friends">
+                    {chatSummary?.friends.map((friend) => {
+                      const selected = groupMembers.includes(friend.user_id);
+                      return (
+                        <label className={selected ? "selected" : ""} key={friend.user_id} title={friend.display_name}>
+                          <input
+                            type="checkbox"
+                            checked={selected}
+                            aria-label={`Add ${friend.display_name} to group`}
+                            onChange={() => {
+                              setGroupMembers((current) => current.includes(friend.user_id) ? current.filter((id) => id !== friend.user_id) : [...current, friend.user_id]);
+                              setRevealedAvatar((current) => current === friend.user_id ? "" : friend.user_id);
+                            }}
+                          />
+                          {friend.avatar_url ? <img src={friend.avatar_url} alt="" /> : <span>{friend.display_name.charAt(0)}</span>}
+                          {revealedAvatar === friend.user_id ? <strong role="status">{friend.display_name}</strong> : null}
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <button disabled={busy || groupName.trim().length < 3 || !groupMembers.length}>Create</button>
+                </form>
+                <div className="group-room-list">
+                  {chatSummary?.groups.map((group) => (
+                    <button key={group.id} className={`group-conversation${groupId === group.id ? " active" : ""}`} onClick={() => { setGroupId(group.id); setBefore(undefined); }}>
+                      <Users size={18} />
+                      <span><strong>{group.name}</strong><small>{group.preview}</small></span>
+                      {group.unread > 0 ? <b>{group.unread}</b> : null}
+                    </button>
+                  ))}
+                </div>
+              </aside>
+            ) : null}
             <section className="chat-main">
               {mode === "personal" && target && selectedConversation && (
                 <div className="chat-person-toolbar">
