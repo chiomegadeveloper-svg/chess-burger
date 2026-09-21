@@ -25,3 +25,7 @@ test('every reward day has an optimized professional WebP icon',()=>{
   for(let day=1;day<=7;day+=1){const file=`public/daily-rewards/day-${day}.webp`;assert.equal(existsSync(file),true);assert.ok(statSync(file).size<600_000);}
   assert.match(ui,/daily-rewards\/day-\$\{reward\.day\}\.webp/);
 });
+test('reward details are available by hover, keyboard focus, and tap',()=>{
+  assert.match(ui,/role="tooltip"/);assert.match(ui,/tabIndex=\{0\}/);assert.match(ui,/onClick=\{\(\)=>setDetailsDay/);assert.match(ui,/alt=\{details\}/);
+  assert.match(css,/\.daily-reward-card:hover \.daily-reward-tooltip/);assert.match(css,/\.daily-reward-card\.details-open \.daily-reward-tooltip/);
+});
