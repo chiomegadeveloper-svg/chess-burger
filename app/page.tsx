@@ -532,8 +532,8 @@ function AppPage() {
       <section className="play-select-page" aria-labelledby="play-select-title">
         <div className="play-select-heading"><span>Choose your destination</span><h1 id="play-select-title">Play Chess Burger</h1><p>Enter the Match Lobby or preview the upcoming Grand Arena.</p></div>
         <div className="play-select-grid">
-          <button className="play-destination lobby" type="button" onClick={() => setTab("play")}><img src="/play-selection/match-lobby.jpg" alt="Colorful Chess Burger Match Lobby"/><span><strong>Match Lobby</strong><small>Online, CPU, nearby and offline matches</small><b>Enter Lobby <ChevronRight size={17}/></b></span></button>
-          <button className="play-destination arena" type="button" onClick={() => toast.info("Grand Arena is coming soon.")}><img src="/play-selection/grand-arena.jpg" alt="Chess Burger Grand Arena entrance"/><span><strong>Grand Arena</strong><small>Epic ranked arena battles are being prepared</small><b>Coming Soon</b></span></button>
+          <button className="play-destination lobby" type="button" onClick={() => setTab("play")}><img src="/play-selection/match-lobby.webp" alt="Colorful Chess Burger Match Lobby"/><span><strong>Match Lobby</strong><small>Online, CPU, nearby and offline matches</small><b>Enter Lobby <ChevronRight size={17}/></b></span></button>
+          <button className="play-destination arena" type="button" onClick={() => toast.info("Grand Arena is coming soon.")}><img src="/play-selection/grand-arena.webp" alt="Chess Burger Grand Arena entrance"/><span><strong>Grand Arena</strong><small>Epic ranked arena battles are being prepared</small><b>Coming Soon</b></span></button>
         </div>
       </section>
     );
