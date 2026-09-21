@@ -3,6 +3,7 @@ import {useCallback,useEffect,useState} from "react";
 import {ArrowLeft,Clock,Crown,Radio,ShieldCheck,ShoppingBag,Sparkles,Ticket,Trophy} from "lucide-react";
 import {toast} from "sonner";
 import {getSupabase} from "./supabase";
+import "./grand-arena.css";
 type ArenaSlot={slot:number;starts_at:string;ends_at:string};type ArenaEntry={status:string};type ArenaMatch={id:string;status:string};type ArenaPlayer={display_name:string;avatar_url:string};type ArenaStanding={user_id:string;rank:number;status:string;wins:number;arena_cbr_gain:number;player?:ArenaPlayer};type ArenaChampion={slot:number;player?:ArenaPlayer};type WindowState={open:boolean;entry_open:boolean;current:ArenaSlot|null;next:ArenaSlot;server_now:string};type ArenaState={window:WindowState;entry:ArenaEntry|null;match:ArenaMatch|null;leaderboard:ArenaStanding[];tickets:number;gold:number;champions:ArenaChampion[];server_now:string};
 async function request<T>(action:string,body:Record<string,unknown>={}){const client=await getSupabase(),session=client?(await client.auth.getSession()).data.session:null;if(!session)throw Error("Sign in to enter Grand Arena.");const response=await fetch('/api/grand-arena',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${session.access_token}`},body:JSON.stringify({action,...body}),cache:'no-store'}),data=await response.json() as T&{error?:string};if(!response.ok)throw Error(data.error??'Grand Arena is unavailable.');return data;}
 const sessionLabel=(slot:number)=>slot===1?'7:00–9:00 PM':'10:00 PM–12:00 MN';
