@@ -29,6 +29,7 @@ import { arena } from "./arena-client";
 import { profileRequest } from "./profile-client";
 import { toWebpUnder1Mb, validateImageFile } from "./media";
 import { isProfileComplete } from "./profile-completion";
+import ProfilePhotoBucket from "./profile-photo-bucket";
 
 const emptyPhotos = ["", "", "", ""],
   countries = [
@@ -502,14 +503,34 @@ export default function Account({
               ),
             };
       setProfile(next);
-      toast.success("Photo uploaded to Supabase.", {
-        description: "Save your profile to keep this photo.",
-      });
+      if (kind === "photo" && registered === true && !editing) {
+        const data = await profileRequest(client, "PUT", {
+          user_id: next.user_id,
+          username: next.username,
+          display_name: next.display_name,
+          bio: next.bio,
+          avatar_url: next.avatar_url,
+          country_code: next.country_code,
+          featured_photos: next.featured_photos,
+          featured_badges: next.featured_badges,
+        });
+        if (!data) throw new Error("Profile save returned no data.");
+        const saved = { ...blankProfile(data.user_id), ...data };
+        setProfile(saved);
+        authStorage.setItem("cb-staff-profile", JSON.stringify(saved));
+        onLoaded?.(saved);
+        window.dispatchEvent(new Event("cb-profile-saved"));
+        toast.success("Featured photo uploaded and saved.");
+      } else {
+        toast.success("Photo uploaded to Supabase.", {
+          description: "Save your profile to keep this photo.",
+        });
+      }
     } catch (e) {
       const code = e instanceof Error ? e.message : String(e);
       setError(
         code === "image-size"
-          ? "Photo could not be reduced below 1 MB. Choose a smaller image."
+          ? "Photo could not be reduced below 600 KB. Choose a smaller image."
           : code === "session"
             ? "Your login expired. Sign in again before uploading."
             : code === "bucket"
@@ -936,6 +957,8 @@ export default function Account({
                 CMS
               </button>
             )}
+            <button className="gold-button" type="button" onClick={() => setEditing(true)}>Edit profile</button>
+            {!guest && user && <button type="button" onClick={() => setShowPasswordSecurity((open) => !open)}>{showPasswordSecurity ? "Cancel password" : "Change password"}</button>}
             <button
               className="signout-button"
               disabled={busy}
@@ -1000,15 +1023,9 @@ export default function Account({
             <span>About</span>
             <p>{profile.bio || "No profile description yet."}</p>
           </article>
-          <button
-            className="gold-button edit-profile-button"
-            type="button"
-            onClick={() => setEditing(true)}
-          >
-            Edit profile
-          </button>
         </div>
-        {passwordSecurity}
+        <ProfilePhotoBucket photos={profile.featured_photos} name={profile.display_name} busy={busy} onUpload={(file,index)=>void upload(file,"photo",index)} />
+        {showPasswordSecurity && passwordSecurity}
       </section>
     );
   return (
@@ -1213,7 +1230,7 @@ export default function Account({
           )}
         </div>
         <p>
-          Photos are automatically converted to WebP below 1 MB. Portrait and
+          Photos are automatically converted to WebP below 600 KB. Portrait and
           landscape images fit inside each thumbnail.
         </p>
       </section>

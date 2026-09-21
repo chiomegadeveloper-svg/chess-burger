@@ -842,6 +842,37 @@ export default async function handler(req: Req, res: Res) {
       const visible=(result.data??[]).filter((m:any)=>target||(!blockedIds.has(m.sender_id)&&!mutedIds.has(m.sender_id))).reverse(),people=await playerMap(client,visible.map((m:any)=>m.sender_id));
       return res.status(200).json({messages:visible.map((m:any)=>({...m,body:m.deleted_at?'Message deleted':m.body,display_name:people.get(m.sender_id)?.display_name??'Player',username:people.get(m.sender_id)?.username??'',avatar_url:people.get(m.sender_id)?.avatar_url??'',created_at:Date.parse(m.created_at)})),hasMore:false});
     }
+    const testimonialUuid=/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i;
+    if (action === 'profile-testimonials') {
+      const target=String(body.user_id??'');
+      if(!testimonialUuid.test(target))fail(400,'Choose a registered player.');
+      const rows=await client.from('cb_profile_testimonials').select('id,profile_id,author_id,body,created_at').eq('profile_id',target).order('created_at',{ascending:false}).limit(20);
+      if(rows.error)fail(/cb_profile_testimonials|schema cache|relation/i.test(rows.error.message)?503:500,/cb_profile_testimonials|schema cache|relation/i.test(rows.error.message)?'Run supabase/0023_profile_testimonials.sql in Supabase, then try again.':rows.error.message);
+      const ids=(rows.data??[]).map((row:any)=>row.id),authors=await playerMap(client,(rows.data??[]).map((row:any)=>row.author_id));
+      const hearts=ids.length?await client.from('cb_testimonial_hearts').select('testimonial_id,user_id').in('testimonial_id',ids):{data:[],error:null};
+      if(hearts.error)fail(500,hearts.error.message);
+      return res.status(200).json({testimonials:(rows.data??[]).map((row:any)=>{const author=authors.get(row.author_id);const reactions=(hearts.data??[]).filter((heart:any)=>heart.testimonial_id===row.id);return {...row,display_name:author?.display_name??'Player',username:author?.username??'player',avatar_url:author?.avatar_url??'',heart_count:reactions.length,hearted:reactions.some((heart:any)=>heart.user_id===account.id)};})});
+    }
+    if(action==='testimonial-add'){
+      const target=String(body.user_id??''),message=String(body.body??'').trim().replace(/\s+/g,' ');
+      if(!testimonialUuid.test(target)||target===account.id)fail(400,'Choose another player.');
+      if(message.length<2||message.length>400)fail(400,'Write a testimonial of 2 to 400 characters.');
+      const saved=await client.from('cb_profile_testimonials').insert({profile_id:target,author_id:account.id,body:message});
+      if(saved.error)fail(/cb_profile_testimonials|schema cache|relation/i.test(saved.error.message)?503:409,/cb_profile_testimonials|schema cache|relation/i.test(saved.error.message)?'Run supabase/0023_profile_testimonials.sql in Supabase, then try again.':saved.error.message);
+      return res.status(200).json({ok:true});
+    }
+    if(action==='testimonial-heart'){
+      const id=String(body.id??'');if(!testimonialUuid.test(id))fail(400,'Choose a testimonial.');
+      const existing=await client.from('cb_testimonial_hearts').select('testimonial_id').eq('testimonial_id',id).eq('user_id',account.id).maybeSingle();
+      if(existing.error)fail(500,existing.error.message);
+      const changed=existing.data?await client.from('cb_testimonial_hearts').delete().eq('testimonial_id',id).eq('user_id',account.id):await client.from('cb_testimonial_hearts').insert({testimonial_id:id,user_id:account.id});
+      if(changed.error)fail(/cb_testimonial_hearts|schema cache|relation/i.test(changed.error.message)?503:500,changed.error.message);return res.status(200).json({hearted:!existing.data});
+    }
+    if(action==='testimonial-delete'){
+      const id=String(body.id??'');if(!testimonialUuid.test(id))fail(400,'Choose a testimonial.');
+      const removed=await client.from('cb_profile_testimonials').delete().eq('id',id).eq('profile_id',account.id).select('id').maybeSingle();
+      if(removed.error)fail(500,removed.error.message);if(!removed.data)fail(403,'Only the profile owner can delete this testimonial.');return res.status(200).json({ok:true});
+    }
     if (action === 'public-profile') {
       const target = String(body.user_id ?? '');
       if (!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(target)) fail(400, 'Choose a registered player.');

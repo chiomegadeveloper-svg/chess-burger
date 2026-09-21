@@ -1,6 +1,6 @@
 import { getSupabase } from "./supabase";
 
-export const MAX_IMAGE_BYTES = 999_999;
+export const MAX_IMAGE_BYTES = 600_000;
 export const MAX_SOURCE_IMAGE_BYTES = 15_000_000;
 const MAX_IMAGE_EDGE = 1600;
 const SUPPORTED_IMAGE_TYPES = new Set([
@@ -65,7 +65,7 @@ async function compressImageSource(
     canvas.width = 1;
     canvas.height = 1;
   }
-  throw Error("The photo could not be reduced below 1 MB.");
+  throw Error("The photo could not be reduced below 600 KB.");
 }
 
 export async function loadImageFile(file: File) {

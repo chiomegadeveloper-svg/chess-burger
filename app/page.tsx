@@ -47,6 +47,7 @@ import PublicProfile from "./public-profile";
 import InstallPrompt from "./install-prompt";
 import { BagPage, ShopPage } from "./shop";
 import { isProfileComplete } from "./profile-completion";
+import Testimonials from "./testimonials";
 
 const modes = [
   {
@@ -703,12 +704,12 @@ function AppPage() {
           }}
         />
         {member === true && (
-          <RecentPlays
+          <><RecentPlays
             onReplay={(g) => {
               setReplayGame(g);
               setTab("replay");
             }}
-          />
+          /><Testimonials profileId={profile?.user_id ?? ""} currentUserId={profile?.user_id}/></>
         )}
       </section>
     );
