@@ -34,6 +34,8 @@ test("campaign contains 100 distinct real-game Lichess positions", () => {
 });
 
 test("puzzle Gold is server validated and idempotent", () => {
+  assert.doesNotMatch(api, /from ['"]\.\.\/app\/puzzle-data/);
+  assert.match(api, /const PUZZLE_PROOFS:Record<string,string>/);
   assert.match(api, /proof!==puzzle\.moves\.join\(' '\)/);
   assert.match(api, /Complete the previous puzzle first/);
   assert.match(sql, /primary key\(user_id,puzzle_day,puzzle_id\)/);

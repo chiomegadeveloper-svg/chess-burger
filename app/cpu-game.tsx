@@ -34,7 +34,7 @@ function createMatch(player: ArenaPlayer, level: (typeof levels)[number], contro
 
 export default function CpuGame({ player, onClose, onReward }: { player: ArenaPlayer; onClose: () => void; onReward: () => void }) {
   const [selectedLevel, setSelectedLevel] = useState<(typeof levels)[number] | null>(null), [control, setControl] = useState("10+0"), [match, setMatch] = useState<ArenaMatch | null>(null), [engineReady, setEngineReady] = useState(false), [thinking, setThinking] = useState(false), [engineError, setEngineError] = useState(""), [rewardStatus, setRewardStatus] = useState(""), [endReason,setEndReason]=useState<"checkmate"|"timeout"|"resigned"|"aborted"|"">(""),[showStats,setShowStats]=useState(false),[settledStats,setSettledStats]=useState<{cbr:number;gold:number;cbrDelta:number;goldDelta:number}|null>(null);
-  const workerRef = useRef<Worker | null>(null), matchRef = useRef<ArenaMatch | null>(null), levelRef = useRef<(typeof levels)[number] | null>(null), claimedRef = useRef(new Set<string>());
+  const workerRef = useRef<Worker | null>(null), matchRef = useRef<ArenaMatch | null>(null), levelRef = useRef<(typeof levels)[number] | null>(null), claimedRef = useRef(new Set<string>()),aiWatchdogRef=useRef<number|null>(null);
   useEffect(() => { matchRef.current = match; }, [match]);
   useEffect(() => { levelRef.current = selectedLevel; }, [selectedLevel]);
   useEffect(() => {
@@ -53,6 +53,7 @@ export default function CpuGame({ player, onClose, onReward }: { player: ArenaPl
         worker.postMessage("isready");
       } else if (line === "readyok") setEngineReady(true);
       else if (line.startsWith("bestmove ")) {
+        if(aiWatchdogRef.current!==null){window.clearTimeout(aiWatchdogRef.current);aiWatchdogRef.current=null;}
         const uci = line.split(/\s+/)[1], current = matchRef.current;
         if (!current || current.status !== "active" || !uci || uci === "(none)") { setThinking(false); return; }
         const movedAt=Date.now(),blackRemaining=Math.max(0,current.black_ms-Math.max(0,movedAt-current.last_tick));
@@ -68,7 +69,7 @@ export default function CpuGame({ player, onClose, onReward }: { player: ArenaPl
       }
     };
     worker.postMessage("uci");
-    return () => { worker.postMessage("quit"); worker.terminate(); workerRef.current = null; };
+    return () => { if(aiWatchdogRef.current!==null){window.clearTimeout(aiWatchdogRef.current);aiWatchdogRef.current=null;}worker.postMessage("quit"); worker.terminate(); workerRef.current = null; };
   }, [selectedLevel]);
 
   useEffect(()=>{const timer=window.setInterval(()=>{const current=matchRef.current;if(!current||current.status!=="active")return;const chess=gameFromPgn(current.pgn),whiteTurn=chess.turn()==="w",remaining=(whiteTurn?current.white_ms:current.black_ms)-Math.max(0,Date.now()-current.last_tick);if(remaining>0)return;workerRef.current?.postMessage("stop");setThinking(false);const endedAt=Date.now(),next={...current,status:"finished" as const,result:whiteTurn?"black" as const:"white" as const,white_ms:whiteTurn?0:current.white_ms,black_ms:whiteTurn?current.black_ms:0,last_tick:endedAt,server_now:endedAt,version:current.version+1};matchRef.current=next;setMatch(next);setEndReason("timeout");setShowStats(true);},250);return()=>window.clearInterval(timer);},[]);
@@ -82,7 +83,7 @@ export default function CpuGame({ player, onClose, onReward }: { player: ArenaPl
       .catch((error) => { claimedRef.current.delete(match.id); setRewardStatus(error instanceof Error ? error.message : "Reward could not be awarded. Try again."); });
   }, [match, onReward, selectedLevel]);
 
-  function start(level: (typeof levels)[number]) { const next = createMatch(player, level, control); setSelectedLevel(level); setMatch(next); matchRef.current = next; setRewardStatus("");setSettledStats(null);setEndReason("");setShowStats(false);setThinking(false); }
+  function start(level: (typeof levels)[number]) { if(aiWatchdogRef.current!==null){window.clearTimeout(aiWatchdogRef.current);aiWatchdogRef.current=null;}const next = createMatch(player, level, control); setSelectedLevel(level); setMatch(next); matchRef.current = next; setRewardStatus("");setSettledStats(null);setEndReason("");setShowStats(false);setThinking(false); }
   function playerMove(move: { from: string; to: string; promotion?: string }) {
     if (!match || thinking || !engineReady) return;
     const chess = gameFromPgn(match.pgn);
@@ -91,10 +92,10 @@ export default function CpuGame({ player, onClose, onReward }: { player: ArenaPl
     if(remaining<=0)return;
     const result = boardResult(chess),increment=timeControl(match.control).increment*1000,next = { ...match, pgn: chess.pgn(),white_ms:remaining+increment, version: match.version + 1, status: result ? "finished" as const : "active" as const, result, last_tick:movedAt, server_now:movedAt };
     setMatch(next); matchRef.current = next;if(result){setEndReason("checkmate");setShowStats(true);}
-    if (!result) { setThinking(true); workerRef.current?.postMessage(`position fen ${chess.fen()}`); workerRef.current?.postMessage(`go movetime ${selectedLevel?.think ?? 300}`); }
+    if (!result) { const expectedVersion=next.version,thinkTime=selectedLevel?.think??300;setThinking(true); workerRef.current?.postMessage(`position fen ${chess.fen()}`); workerRef.current?.postMessage(`go movetime ${thinkTime}`);if(aiWatchdogRef.current!==null)window.clearTimeout(aiWatchdogRef.current);aiWatchdogRef.current=window.setTimeout(()=>{const current=matchRef.current;if(!current||current.status!=="active"||current.version!==expectedVersion||gameFromPgn(current.pgn).turn()!=="b")return;const fallbackGame=gameFromPgn(current.pgn),legal=fallbackGame.moves({verbose:true});if(!legal.length)return;const choice=legal[(current.version+(selectedLevel?.level??1))%legal.length],playedAt=Date.now(),remaining=Math.max(0,current.black_ms-Math.max(0,playedAt-current.last_tick));if(remaining<=0)return;fallbackGame.move({from:choice.from,to:choice.to,promotion:choice.promotion||"q"});const fallbackResult=boardResult(fallbackGame),increment=timeControl(current.control).increment*1000,fallback={...current,pgn:fallbackGame.pgn(),black_ms:remaining+increment,version:current.version+1,status:fallbackResult?"finished" as const:"active" as const,result:fallbackResult,last_tick:playedAt,server_now:playedAt};matchRef.current=fallback;setMatch(fallback);setThinking(false);aiWatchdogRef.current=null;if(fallbackResult){setEndReason("checkmate");setShowStats(true);}},Math.max(3200,thinkTime+1800)); }
   }
-  function resign(){workerRef.current?.postMessage("stop");setThinking(false);setEndReason("resigned");setShowStats(true);setMatch(value=>value?{...value,status:"finished",result:"black",version:value.version+1}:value);}
-  function abort(){workerRef.current?.postMessage("stop");setThinking(false);setEndReason("aborted");setRewardStatus("Aborted CPU game · no CBR or Gold change");setSettledStats({cbr:player.cbr,gold:player.gold_points,cbrDelta:0,goldDelta:0});setShowStats(true);setMatch(value=>value?{...value,status:"cancelled",result:null,version:value.version+1}:value);}
+  function resign(){if(aiWatchdogRef.current!==null)window.clearTimeout(aiWatchdogRef.current);workerRef.current?.postMessage("stop");setThinking(false);setEndReason("resigned");setShowStats(true);setMatch(value=>value?{...value,status:"finished",result:"black",version:value.version+1}:value);}
+  function abort(){if(aiWatchdogRef.current!==null)window.clearTimeout(aiWatchdogRef.current);workerRef.current?.postMessage("stop");setThinking(false);setEndReason("aborted");setRewardStatus("Aborted CPU game · no CBR or Gold change");setSettledStats({cbr:player.cbr,gold:player.gold_points,cbrDelta:0,goldDelta:0});setShowStats(true);setMatch(value=>value?{...value,status:"cancelled",result:null,version:value.version+1}:value);}
 
   if (!selectedLevel || !match) return <section className="cpu-setup"><button className="back-button" type="button" onClick={onClose}><ChevronLeft size={16}/>Match Lobby</button><div className="page-heading"><div><span className="cpu-eyebrow">Chess Burger AI Arena</span><h1>Play with CPU</h1><p>Wins earn Gold and CBR; losses deduct CBR only. CPU games never change your live-match count.</p></div><Bot size={38}/></div><div className="cpu-rewards"><strong>CPU rating</strong><span>Bullet: win +2 Gold/+2 CBR · loss −3 CBR</span><span>Blitz: win +3 Gold/+3 CBR · loss −4 CBR</span><span>Rapid: win +5 Gold/+5 CBR · loss −6 CBR</span></div><div className="cpu-time-controls" aria-label="CPU time control">{TIME_CONTROLS.map(item=><button type="button" className={control===item.id?"active":""} aria-pressed={control===item.id} key={item.id} onClick={()=>setControl(item.id)}><strong>{item.label}</strong><small>{item.group} · win +{REWARDS[item.group as keyof typeof REWARDS]} / loss −{LOSSES[item.group as keyof typeof LOSSES]}</small></button>)}</div><div className="cpu-levels" role="list" aria-label="AI strength levels">{levels.map(level=><button type="button" role="listitem" key={level.level} onClick={()=>start(level)}><span>{level.level}</span><div><strong>{level.label}</strong><small>Approx. {level.elo} strength</small></div></button>)}</div></section>;
   const moves=gameFromPgn(match.pgn).history().length,outcome=match.status==="cancelled"?"aborted":match.result==="white"?"win":match.result==="black"?"loss":"draw";

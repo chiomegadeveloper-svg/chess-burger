@@ -19,6 +19,12 @@ test('CPU match ends when the active clock reaches zero',()=>{
   assert.match(cpu,/black_ms:whiteTurn\?current\.black_ms:0/);
 });
 
+test('every CPU level has a legal-move watchdog if the engine stalls',()=>{
+  assert.match(cpu,/aiWatchdogRef/);
+  assert.match(cpu,/fallbackGame\.moves\(\{verbose:true\}\)/);
+  assert.match(cpu,/Math\.max\(3200,thinkTime\+1800\)/);
+});
+
 test('chess glyphs stay monochrome and colorable on iOS',()=>{
   assert.match(board,/wp: "♟︎"/);
   assert.match(css,/font-variant-emoji:text/);
