@@ -627,6 +627,8 @@ export default async function handler(req: Req, res: Res) {
     // Keep it as a first-class migration action rather than falling through to
     // a 404 on every page load.
     if (action === 'me') return res.status(200).json({ profile: { ...account.profile, ocbr: Number(account.profile.ocbr ?? 88) }, rank: await playerRank(client, account.profile) });
+    if (!account.profile.username?.trim() || !account.profile.display_name?.trim() || !account.profile.avatar_url?.trim())
+      fail(403, 'Complete registration and save a profile picture to unlock Chess Burger.');
     const isStaff = account.profile.role === 'owner' || account.profile.role === 'admin';
     const requireStaff = () => { if (!isStaff) fail(403, 'Owner or GM access is required.'); };
     const audit = async (auditAction: string, details: Record<string, unknown> = {}) => {
