@@ -635,6 +635,19 @@ export default async function handler(req: Req, res: Res) {
     if (action === 'me') return res.status(200).json({ profile: { ...account.profile, ocbr: Number(account.profile.ocbr ?? 88) }, rank: await playerRank(client, account.profile) });
     if (!account.profile.username?.trim() || !account.profile.display_name?.trim() || !account.profile.avatar_url?.trim())
       fail(403, 'Complete registration and save a profile picture to unlock Chess Burger.');
+    if(action==='claim-cpu-reward'){
+      const gameId=String(body.game_id??''),control=String(body.control??''),level=Number(body.level),pgn=String(body.pgn??''),outcome=String(body.outcome??'');
+      if(!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(gameId)||!Number.isInteger(level)||level<1||level>10||!['win','loss'].includes(outcome))fail(400,'Invalid CPU game result.');
+      const group=tc(control).group,reward=group==='Bullet'?2:group==='Blitz'?3:5,loss=group==='Bullet'?3:group==='Blitz'?4:6;
+      const game=new Chess();try{if(pgn)game.loadPgn(pgn);}catch{fail(400,'Invalid CPU game record.');}
+      if(outcome==='win'&&(!game.isCheckmate()||game.turn()!=='b'))fail(400,'Only a completed checkmate victory earns a CPU reward.');
+      const cbrDelta=outcome==='win'?reward:-loss,goldDelta=outcome==='win'?reward:0;
+      const claimed=await client.rpc('cb_claim_cpu_reward',{p_user_id:account.id,p_game_id:gameId,p_cbr:cbrDelta,p_gold:goldDelta});
+      if(claimed.error)fail(/cb_claim_cpu_reward|schema cache|function/i.test(claimed.error.message)?503:500,/cb_claim_cpu_reward|schema cache|function/i.test(claimed.error.message)?'Run supabase/0026_cpu_match_rewards.sql in Supabase, then try again.':claimed.error.message);
+      const result=claimed.data??{};
+      if(result.awarded){const event=await client.from('cb_feed').insert({user_id:account.id,kind:outcome==='win'?'win':'loss',display_name:account.profile.display_name,content:`${outcome==='win'?'defeated':'lost to'} Stockfish Level ${level} in a ${group.toLowerCase()} CPU match.`,cbr_delta:cbrDelta,gold_delta:goldDelta});if(event.error)console.warn('arena.cpu-feed-failed',{gameId});}
+      return res.status(200).json(result);
+    }
     const isStaff = account.profile.role === 'owner' || account.profile.role === 'admin';
     const requireStaff = () => { if (!isStaff) fail(403, 'Owner or GM access is required.'); };
     const audit = async (auditAction: string, details: Record<string, unknown> = {}) => {
