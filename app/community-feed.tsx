@@ -10,10 +10,11 @@ import {SocialButtons} from "./social";
 import {levelFor} from "./cbr";
 import type {ArenaMatch,ArenaPlayer} from "./game-rules";
 import {feedBanner} from "./feed-banner-catalog";
+import DailyRewards from "./daily-rewards";
 type CommunityEvent=FeedEvent&{origin?:"arena"};
 type OnlinePlayer=ArenaPlayer&{available:boolean};
 
-type FeedTab="recent"|"popular"|"first_blood"|"announcement"|"online";
+type FeedTab="recent"|"popular"|"first_blood"|"announcement"|"online"|"rewards";
 const PAGE_SIZE=10,ONLINE_PAGE_SIZE=60;
 const labels:Record<string,string>={profile_created:"New player",profile_updated:"Profile",win:"Win",first_blood:"First blood",new_reward:"Reward",top10:"Top 10 reward",announcement:"Announcement"};
 const cardStyles:Record<string,CSSProperties>={
@@ -47,6 +48,7 @@ export default function CommunityFeed({onOpenProfile,onMatch,onChallenge}:{onOpe
  const[total,setTotal]=useState(0),[status,setStatus]=useState("Loading activity…"),[userId,setUserId]=useState<string|null>(null),[reacted,setReacted]=useState<Set<string>>(new Set());
  const refresh=useCallback(async()=>{
   const seq=++request.current;
+  if(tab==='rewards'){setTotal(0);setEvents([]);setStatus('');return;}
   const [localFeed,online,me]=await Promise.allSettled([arena<{events:CommunityEvent[]}>('feed',{},true),arena<{users:OnlinePlayer[],count:number}>('online-users',{},true),arena<{profile:ArenaPlayer}>('me')]);
   if(seq!==request.current)return;
   const users:OnlinePlayer[]=online.status==='fulfilled'?[...online.value.users]:[];
@@ -101,14 +103,16 @@ export default function CommunityFeed({onOpenProfile,onMatch,onChallenge}:{onOpe
  const onlinePages=Math.max(1,Math.ceil(shownOnline.length/ONLINE_PAGE_SIZE));
  const visibleOnline=shownOnline.slice((onlinePage-1)*ONLINE_PAGE_SIZE,onlinePage*ONLINE_PAGE_SIZE);
  return <section className="feed-page">
-  <div className="page-heading"><h1>{tab==="announcement"?"Announcements":tab==="online"?"Online players":"Community feed"}</h1><span className="sample-label">{tab==="announcement"?"Official updates":tab==="online"?`${onlineUsers.length} online`:"Latest 50"}</span></div>
-  <div className="feed-tabs" role="tablist" aria-label="Community feed views" style={{display:"grid",gridTemplateColumns:"repeat(5,minmax(0,1fr))",width:"100%"}}>
+  <div className="page-heading"><h1>{tab==="announcement"?"Announcements":tab==="online"?"Online players":tab==="rewards"?"Daily Rewards":"Community feed"}</h1><span className="sample-label">{tab==="announcement"?"Official updates":tab==="online"?`${onlineUsers.length} online`:tab==="rewards"?"7-day login streak":"Latest 50"}</span></div>
+  <div className="feed-tabs community-feed-tabs" role="tablist" aria-label="Community feed views">
    <button role="tab" aria-selected={tab==="recent"} onClick={()=>selectTab("recent")}>Recent feed</button>
    <button className="online-feed-tab" role="tab" aria-selected={tab==="online"} onClick={()=>selectTab("online")}>Online <span className="online-count-badge" aria-label={`${onlineUsers.length} users online`}>{onlineUsers.length}</span></button>
    <button role="tab" aria-selected={tab==="popular"} onClick={()=>selectTab("popular")}>Popular</button>
    <button role="tab" aria-selected={tab==="first_blood"} onClick={()=>selectTab("first_blood")}>First blood</button>
    <button role="tab" aria-selected={tab==="announcement"} onClick={()=>selectTab("announcement")}>Announcements</button>
+   <button className="rewards-feed-tab" role="tab" aria-selected={tab==="rewards"} onClick={()=>selectTab("rewards")}>Rewards</button>
   </div>
+  {tab==='rewards'&&<DailyRewards/>}
   {tab==='recent'&&challenges.length>0&&<section className="pinned-challenges" aria-label="Open challenges"><h2>Open challenges</h2>{challenges.map(event=><article className="pinned-challenge" key={event.id}>
     <span className="challenge-glow" aria-hidden="true"/><span className="challenge-info"><Swords size={19}/><span><strong>{event.display_name}</strong><small>{event.content.replace(/^is looking for a /,'').replace(/^is looking for /,'')}</small></span></span>
     <button className="gold-button" disabled={accepting!==null||event.user_id===userId} onClick={()=>void acceptChallenge(event)}>{event.user_id===userId?'Your challenge':accepting===event.id?'Joining…':'Accept challenge'}</button>

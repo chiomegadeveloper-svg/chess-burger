@@ -49,7 +49,6 @@ import InstallPrompt from "./install-prompt";
 import { BagPage, ShopPage } from "./shop";
 import { isProfileComplete } from "./profile-completion";
 import Testimonials from "./testimonials";
-import DailyRewards from "./daily-rewards";
 import CpuGame from "./cpu-game";
 
 const modes = [
@@ -101,7 +100,6 @@ function AppPage() {
     [replayGame, setReplayGame] = useState<SavedGame | null>(null),
     [showSplash, setShowSplash] = useState(true),
     [showWelcome, setShowWelcome] = useState(false),
-    [showDailyRewards, setShowDailyRewards] = useState(false),
     [member, setMember] = useState<boolean | null>(null);
   const [matchId, setMatchId] = useState(""),
     [target, setTarget] = useState<ArenaPlayer | null>(null),
@@ -115,12 +113,10 @@ function AppPage() {
   const [summary, setSummary] = useState<MatchSummary | null>(null);
   const shownResults = useRef(new Set<string>());
   const welcomeDecision = useRef(false);
-  const dailyRewardPrompted = useRef("");
   const finishWelcome = (nextTab?:string) => {
     setShowWelcome(false);
     if(nextTab)setTab(nextTab);
   };
-  const closeDailyRewards = useCallback(() => setShowDailyRewards(false), []);
   const showOnlineResult = useCallback(
     (m: ArenaMatch) => {
       const ownId = profile?.user_id;
@@ -426,28 +422,6 @@ function AppPage() {
     setShowWelcome(false);
     setTab("profile");
   }, [showSplash, member]);
-  useEffect(() => {
-    if (showSplash || showWelcome || member !== true || tab !== "home" || showDailyRewards) return;
-    let live = true;
-    const manilaRewardDay = () => new Date(Date.now() + 8 * 60 * 60 * 1000 - 60 * 1000).toISOString().slice(0, 10);
-    const check = async () => {
-      const day = manilaRewardDay();
-      if (dailyRewardPrompted.current === day) return;
-      dailyRewardPrompted.current = day;
-      try {
-        const reward = await arena<{ claimed_today:boolean }>("daily-reward-status");
-        if (live && !reward.claimed_today && tab === "home") setShowDailyRewards(true);
-      } catch {
-        if (live) dailyRewardPrompted.current = "";
-      }
-    };
-    void check();
-    const manilaNow = new Date(Date.now() + 8 * 60 * 60 * 1000);
-    let nextReset = Date.UTC(manilaNow.getUTCFullYear(), manilaNow.getUTCMonth(), manilaNow.getUTCDate(), 0, 1) - 8 * 60 * 60 * 1000;
-    if (nextReset <= Date.now()) nextReset += 24 * 60 * 60 * 1000;
-    const timer = window.setTimeout(() => { dailyRewardPrompted.current = ""; void check(); }, nextReset - Date.now());
-    return () => { live = false; window.clearTimeout(timer); };
-  }, [showSplash, showWelcome, member, tab, showDailyRewards]);
   useEffect(() => {
     if (!profile || profile.user_id === "guest-device") return;
     const userId = profile.user_id;
@@ -842,7 +816,6 @@ function AppPage() {
           </section>
         </div>
       )}
-      <DailyRewards open={showDailyRewards&&!showSplash} onClose={closeDailyRewards} onClaimed={refreshProfile}/>
       <header className="app-header">
         <div className="brand">
           <img src="/cburger_logo.png" alt="Chess Burger" />
