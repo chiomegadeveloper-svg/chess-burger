@@ -500,6 +500,21 @@ async function activeMatchFor(client: Db, userId: string) {
   return found.data ?? null;
 }
 
+async function cancelWaitingForUser(client: Db, userId: string) {
+  const found = await client.from('cb_matches').select('id,host_id,invite_to').eq('status', 'waiting').or(`host_id.eq.${userId},invite_to.eq.${userId}`);
+  if (found.error) fail(500, found.error.message);
+  const rows = found.data ?? [], ids = rows.map((row: any) => row.id);
+  if (!ids.length) return;
+  const cancelled = await client.from('cb_matches').update({ status: 'cancelled' }).in('id', ids).eq('status', 'waiting');
+  if (cancelled.error) fail(500, cancelled.error.message);
+  const expired = await client.from('cb_feed').update({ expires_at: new Date().toISOString() }).in('challenge_match_id', ids).eq('kind', 'challenge');
+  if (expired.error) fail(500, expired.error.message);
+  const linkedQueues = await client.from('cb_match_queue').delete().in('match_id', ids);
+  if (linkedQueues.error) fail(500, linkedQueues.error.message);
+  const ownQueue = await client.from('cb_match_queue').delete().eq('user_id', userId);
+  if (ownQueue.error) fail(500, ownQueue.error.message);
+}
+
 export function pickQueueCandidate(rows: any[], ownId: string, ownSeenAt: string, ownCbr: number, ratings: Map<string, any>) {
   const ownSeen = Date.parse(ownSeenAt);
   return rows
@@ -524,6 +539,11 @@ async function queuedMatch(client: Db, account: any, controlId: string) {
     const current = await finishExpiredMatch(client, active);
     if (current.status === 'active') return { match: await matchView(client, current), searching: false };
   }
+
+  // Entering automatic pairing means the player has left every unanswered
+  // direct/KING invitation. Clear both the match and any linked queue rows so
+  // a declined or timed-out challenge cannot block Play Online.
+  await cancelWaitingForUser(client, account.id);
 
   const existing = await client.from('cb_match_queue').select('user_id,control,match_id,seen_at').eq('user_id', account.id).maybeSingle();
   if (existing.error) fail(500, existing.error.message);
@@ -1013,8 +1033,7 @@ export default async function handler(req: Req, res: Res) {
       const waiting=await client.from('cb_matches').select('id').eq('status','waiting').eq('match_kind','invasion').eq('territory_id',territoryId).or(`and(host_id.eq.${account.id},invite_to.eq.${ownerId}),and(host_id.eq.${ownerId},invite_to.eq.${account.id})`).gt('created_at',new Date(now()-120000).toISOString()).limit(1);
       if(waiting.error)fail(/match_kind|territory_id|schema cache/i.test(waiting.error.message)?503:500,/match_kind|territory_id|schema cache/i.test(waiting.error.message)?'Run supabase/0014_barangay_territory_defense.sql in Supabase, then try again.':waiting.error.message);
       if(waiting.data?.length)fail(409,'A challenge for this kingdom is already waiting.');
-      const old=await client.from('cb_matches').update({status:'cancelled'}).eq('host_id',account.id).eq('status','waiting');
-      if(old.error)fail(500,old.error.message);
+      await cancelWaitingForUser(client,account.id);
       const unqueued=await client.from('cb_match_queue').delete().eq('user_id',account.id).is('match_id',null);
       if(unqueued.error)fail(500,unqueued.error.message);
       const created=await client.from('cb_matches').insert({host_id:account.id,white_id:account.id,invite_to:ownerId,status:'waiting',code:code(),control,white_ms:clock.seconds*1000,black_ms:clock.seconds*1000,last_tick:new Date().toISOString(),white_cbr:account.profile.cbr,play_mode:'normal',wager_gold:0,public_challenge:false,match_kind:'invasion',territory_id:territoryId,invasion_challenger_id:account.id,invasion_fee_paid:false}).select('*').single();
@@ -1118,11 +1137,15 @@ export default async function handler(req: Req, res: Res) {
     }
     if (action === 'cancel-room' || action === 'decline-room') {
       const id = String(body.id ?? '');
+      const waiting = await client.from('cb_matches').select('host_id,invite_to').eq('id', id).eq('status', 'waiting').maybeSingle();
+      if (waiting.error) fail(500, waiting.error.message);
       const r = await client.from('cb_matches').update({ status: 'cancelled' }).eq('id', id).eq(action === 'cancel-room' ? 'host_id' : 'invite_to', account.id).eq('status', 'waiting').select('id').maybeSingle();
       if (r.error) fail(500, r.error.message);
       if (!r.data) fail(409, 'This invitation is no longer available.');
       const expired = await client.from('cb_feed').update({ expires_at: new Date().toISOString() }).eq('kind', 'challenge').eq('challenge_match_id', id);
       if (expired.error) fail(500, expired.error.message);
+      const queues = await client.from('cb_match_queue').delete().eq('match_id', id);
+      if (queues.error) fail(500, queues.error.message);
       return res.status(200).json({ ok: true });
     }
     if (action === 'reject-challenge') {

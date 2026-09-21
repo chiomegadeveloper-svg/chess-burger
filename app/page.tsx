@@ -456,12 +456,17 @@ function AppPage() {
         .on("postgres_changes", { event: "*", schema: "public", table: "cb_matches" }, () => void refreshState())
         .subscribe((status) => { if (status === "SUBSCRIBED") void refreshState(); });
     });
+    // Realtime delivery can be delayed or unavailable on some mobile sessions.
+    // Keep a lightweight inbox poll so targeted and KING challenges arrive
+    // without requiring the recipient to restart the app.
+    const stateTimer = window.setInterval(() => void refreshState(), 2000);
     const onVisible = () => { if (document.visibilityState === "visible") void refreshState(); };
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onVisible);
     window.addEventListener("online", onVisible);
     return () => {
       live = false;
+      window.clearInterval(stateTimer);
       if (channel) void channel.unsubscribe();
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onVisible);

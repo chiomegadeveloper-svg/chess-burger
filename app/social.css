@@ -40,7 +40,7 @@
 .chat-dialog .chat-compose textarea{min-height:44px;max-height:96px;resize:none;border-radius:14px;padding:10px 12px}
 .chat-dialog .chat-compose button{min-height:44px;border-color:#37cad8;background:#17434c;color:#75f2ff;font-weight:700}
 .chat-dialog .chat-person-toolbar{min-height:42px;padding:0 2px 8px;border-bottom:1px solid #2d3b44}
-.floating-chat-button{position:fixed;z-index:2147483200;border-color:#42dbe7;background:linear-gradient(145deg,#196071,#133844);color:#fff;box-shadow:0 12px 30px #000a,0 0 0 3px #30e4f02e,0 0 24px #21d7e73d}
+.floating-chat-button{position:fixed;z-index:2147483200;width:52px;height:52px;min-width:52px;min-height:52px;border-color:#ffd4b0;background:linear-gradient(145deg,#ffc79d,#e99562);color:#402113;box-shadow:0 12px 30px #000a,0 0 0 3px #ffc89b35,0 0 24px #efa06842}.floating-chat-button svg{width:23px;height:23px;stroke-width:2.2}@media(max-width:520px){.floating-chat-button{width:49px;height:49px;min-width:49px;min-height:49px}}
 
 @media(max-width:700px){
   .chat-dialog{padding:10px!important;grid-template-rows:auto auto minmax(0,1fr);gap:8px!important}

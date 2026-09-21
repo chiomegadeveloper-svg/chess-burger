@@ -113,6 +113,7 @@ export default function OnlinePlay({
         if (active) setError((e as Error).message);
       }
     };
+    void poll();
     const timer = setInterval(poll, 2000);
     return () => {
       active = false;
@@ -293,12 +294,17 @@ export default function OnlinePlay({
             · {timeControl(room.control).label}
           </p>
           <button
+            disabled={busy}
             onClick={() => {
-              void arena("cancel-room", { id: room.id });
-              setRoom(null);
+              setBusy(true);
+              setError("");
+              void arena("cancel-room", { id: room.id })
+                .then(() => setRoom(null))
+                .catch((e) => setError((e as Error).message))
+                .finally(() => setBusy(false));
             }}
           >
-            Cancel invitation
+            {busy ? "Cancelling…" : "Cancel invitation"}
           </button>
         </div>
       )}
