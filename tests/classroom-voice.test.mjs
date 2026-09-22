@@ -37,6 +37,15 @@ test("Classroom Voice stores no audio and uses free WebRTC signaling",()=>{
 test("SEba Voice is pre-activated when the workshop opens",()=>{
   assert.match(voice,/autoStartedRef/);
   assert.match(voice,/autoStartedRef\.current=true/);
-  assert.match(voice,/void start\(\)/);
-  assert.match(voice,/Retry SEba Voice/);
+  assert.match(voice,/navigator\.permissions\.query/);
+  assert.match(voice,/permissionStatus\.state==="granted"/);
+  assert.match(voice,/seba-voice-enabled/);
+  assert.match(voice,/Enable Voice/);
+  assert.match(voice,/Mic blocked/);
+});
+
+test("Microphone is explicitly permitted for same-origin classrooms",()=>{
+  const config=fs.readFileSync("next.config.ts","utf8");
+  assert.match(config,/Permissions-Policy/);
+  assert.match(config,/microphone=\(self\)/);
 });

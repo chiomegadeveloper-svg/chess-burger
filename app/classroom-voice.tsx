@@ -30,6 +30,7 @@ function RemoteAudio({voice}:{voice:RemoteVoice}){
 
 export default function ClassroomVoice({roomId,role}:{roomId:string;role:VoiceRole}){
   const [status,setStatus]=useState<"idle"|"starting"|"live">("idle");
+  const [permission,setPermission]=useState<"checking"|"prompt"|"granted"|"denied"|"unsupported">("checking");
   const [muted,setMuted]=useState(false);
   const [remoteVoices,setRemoteVoices]=useState<RemoteVoice[]>([]);
   const [participantCount,setParticipantCount]=useState(0);
@@ -135,6 +136,8 @@ export default function ClassroomVoice({roomId,role}:{roomId:string;role:VoiceRo
       if(!navigator.mediaDevices?.getUserMedia)throw Error("Microphone calling is not supported on this browser.");
       const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true},video:false});
       streamRef.current=stream;
+      setPermission("granted");
+      window.localStorage.setItem("seba-voice-enabled","1");
       const client=await getSupabase();
       if(!client)throw Error("Live Classroom connection is unavailable.");
       const session=(await client.auth.getSession()).data.session;
@@ -160,7 +163,11 @@ export default function ClassroomVoice({roomId,role}:{roomId:string;role:VoiceRo
       channelRef.current=channel;
     }catch(error){
       leave();
-      const message=error instanceof DOMException&&error.name==="NotAllowedError"?"Microphone permission was denied. Allow microphone access and try again.":error instanceof Error?error.message:"Microphone could not start.";
+      if(error instanceof DOMException&&error.name==="NotAllowedError"){
+        setPermission("denied");
+        window.localStorage.removeItem("seba-voice-enabled");
+      }
+      const message=error instanceof DOMException&&error.name==="NotAllowedError"?"Microphone is blocked. Allow it in this site’s browser settings, then tap Enable Voice.":error instanceof Error?error.message:"Microphone could not start.";
       toast.error(message);
     }
   },[leave,receiveSignal,role,roomId,status,syncPresence]);
@@ -174,14 +181,33 @@ export default function ClassroomVoice({roomId,role}:{roomId:string;role:VoiceRo
   useEffect(()=>{
     if(autoStartedRef.current)return;
     autoStartedRef.current=true;
-    void start();
+    let active=true,permissionStatus:PermissionStatus|null=null;
+    const prepare=async()=>{
+      if(!navigator.mediaDevices?.getUserMedia){if(active)setPermission("unsupported");return}
+      try{
+        permissionStatus=await navigator.permissions.query({name:"microphone" as PermissionName});
+        if(!active)return;
+        setPermission(permissionStatus.state);
+        permissionStatus.onchange=()=>{
+          const next=permissionStatus?.state||"prompt";
+          setPermission(next);
+          if(next==="granted")void start();
+        };
+        if(permissionStatus.state==="granted")void start();
+      }catch{
+        setPermission("unsupported");
+        if(window.localStorage.getItem("seba-voice-enabled")==="1")void start();
+      }
+    };
+    void prepare();
+    return()=>{active=false;if(permissionStatus)permissionStatus.onchange=null};
   },[start]);
 
   useEffect(()=>leave,[leave,roomId]);
 
   return <div className={`classroom-voice ${status}`}>
     {remoteVoices.map(voice=><RemoteAudio key={voice.id} voice={voice}/>)}
-    {status==="idle"?<button type="button" onClick={()=>void start()} title="Retry SEba Voice"><Mic/>Join Voice</button>:
+    {status==="idle"?<button type="button" className={permission==="denied"?"permission-blocked":""} onClick={()=>void start()} title={permission==="denied"?"Allow microphone access in browser site settings, then retry":"Enable microphone and join SEba Voice"}>{permission==="denied"?<MicOff/>:<Mic/>}{permission==="denied"?"Mic blocked":"Enable Voice"}</button>:
       status==="starting"?<button type="button" disabled><Radio/>Connecting…</button>:<>
         <span title="People connected to SEba Voice"><Radio/><b>{participantCount}</b></span>
         <button type="button" className={muted?"muted":""} onClick={toggleMute} title={muted?"Unmute microphone":"Mute microphone"}>{muted?<MicOff/>:<Mic/>}{muted?"Unmute":"Mute"}</button>

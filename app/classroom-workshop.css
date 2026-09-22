@@ -751,3 +751,78 @@
     font-size: 0;
   }
 }
+
+/* Student session summary and touch-first teacher hand tool */
+.student-session-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(92px, 1fr));
+  overflow: hidden;
+  min-height: 40px;
+  border: 1px solid #806729;
+  border-radius: 12px;
+  background: linear-gradient(145deg, #2a240f, #151b1b);
+  box-shadow: inset 0 1px #ffe89a16;
+}
+.student-session-summary > span {
+  display: grid;
+  grid-template-columns: 22px auto;
+  grid-template-rows: auto auto;
+  align-items: center;
+  column-gap: 7px;
+  padding: 6px 10px;
+  color: #fff0bb;
+}
+.student-session-summary > span + span { border-left: 1px solid #6d5928; }
+.student-session-summary svg,
+.student-session-summary img {
+  grid-row: 1 / 3;
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  color: #f0c75f;
+}
+.student-session-summary small {
+  color: #9caaad;
+  font-size: 6px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  line-height: 1;
+}
+.student-session-summary b {
+  color: #ffe28b;
+  font-size: 11px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.teaching-board { touch-action: none; }
+.teach-square { touch-action: none; user-select: none; -webkit-user-select: none; }
+.teach-square.drag-origin > span { opacity: .16; }
+.held-piece {
+  position: fixed;
+  z-index: 400;
+  display: grid;
+  place-items: center;
+  width: clamp(42px, 7vw, 76px);
+  height: clamp(42px, 7vw, 76px);
+  color: #f8f2dc;
+  font: clamp(40px, 6.5vw, 72px)/1 Georgia, serif;
+  opacity: .72;
+  pointer-events: none;
+  transform: translate(-50%, -115%);
+  filter: drop-shadow(0 10px 8px #000b);
+  text-shadow: 0 1px 2px #fff6, 0 3px 2px #182126, 0 8px 12px #000b;
+}
+.piece-held .teach-square.legal::after {
+  box-shadow: 0 0 0 4px #48e5ef66, 0 0 16px #25dce599;
+}
+@media (max-width: 1180px) {
+  .student-session-summary { order: -1; }
+}
+@media (max-width: 700px) {
+  .student-session-summary {
+    width: 100%;
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .student-session-summary > span { justify-content: center; }
+  .held-piece { transform: translate(-50%, -125%); }
+}
