@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 
 const workshop=fs.readFileSync("app/classroom-workshop.tsx","utf8");
+const css=fs.readFileSync("app/classroom-workshop.css","utf8");
 const api=fs.readFileSync("api/classroom.ts","utf8");
 const migration=fs.readFileSync("supabase/0044_seba_lesson_activity.sql","utf8");
 
@@ -20,6 +21,9 @@ test("teacher tools are categorized with opaque white pieces and two board theme
   assert.match(workshop,/Warm Wood/);
   assert.match(workshop,/white-palette-piece/);
   assert.match(workshop,/board-theme-/);
+  assert.match(css,/grid-template-columns:minmax\(170px,1\.1fr\)/);
+  assert.match(css,/max-width:calc\(100vw - 20px\)/);
+  assert.match(css,/teach-square\.white-piece>span\{color:#fff;opacity:1/);
 });
 
 test("teacher activity is persisted and can be replayed for students",()=>{
