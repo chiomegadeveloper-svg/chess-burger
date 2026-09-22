@@ -172,11 +172,21 @@ const CLAIM_ACCURACY_METRES = 250;
 
 async function publicRanks(client: Db) {
   await reconcileAuthProfiles(client);
-  const r = await client.from('cb_profiles')
-    .select('user_id,username,display_name,avatar_url,country_code,cbr,gold_points,wins,losses,win_streak')
-    .order('cbr', { ascending: false }).order('wins', { ascending: false }).order('user_id', { ascending: true }).limit(10);
+  const [r, presence] = await Promise.all([
+    client.from('cb_profiles')
+      .select('user_id,username,display_name,avatar_url,country_code,cbr,gold_points,wins,losses,win_streak')
+      .order('cbr', { ascending: false }).order('wins', { ascending: false }).order('user_id', { ascending: true }).limit(10),
+    client.from('cb_live_presence').select('*').limit(500),
+  ]);
   if (r.error) fail(500, r.error.message);
-  return { players: r.data ?? [] };
+  const cutoff = now() - 60_000;
+  const onlineIds = new Set((presence.error ? [] : presence.data ?? [])
+    .filter((row: any) => {
+      const timestamp = liveAt(row);
+      return timestamp === null ? row.online !== false && row.is_online !== false : timestamp > cutoff;
+    })
+    .map((row: any) => row.user_id));
+  return { players: (r.data ?? []).map((player: any) => ({ ...player, online: onlineIds.has(player.user_id) })) };
 }
 
 function profileSeed(user: any) {
