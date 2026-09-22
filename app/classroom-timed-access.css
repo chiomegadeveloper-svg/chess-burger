@@ -1,0 +1,52 @@
+.session-list article.access-active {
+  border-color: #2f8f75;
+  box-shadow: inset 3px 0 #52dba9;
+}
+
+.session-list article.access-expired {
+  border-color: #8a3d3d;
+  box-shadow: inset 3px 0 #ef6262;
+}
+
+.session-list article.access-active small {
+  color: #6ce8b8;
+}
+
+.session-list article.access-expired small {
+  color: #ff7777;
+}
+
+.session-list article.access-active button,
+.session-list article.access-expired button {
+  min-height: 42px;
+  align-self: center;
+  border-color: #b78e35;
+  background: linear-gradient(135deg, #3f3118, #201b11);
+  color: #f7d878;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.session-list article.access-expired button {
+  background: linear-gradient(135deg, #603131, #28191a);
+  color: #ffd1d1;
+}
+
+.session-list article button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+@media (max-width: 520px) {
+  .session-list article.access-active,
+  .session-list article.access-expired {
+    grid-template-columns: 1fr;
+  }
+
+  .session-list article.access-active button,
+  .session-list article.access-expired button {
+    width: 100%;
+    min-height: 46px;
+    font-size: 12px;
+  }
+}

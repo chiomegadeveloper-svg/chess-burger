@@ -22,7 +22,7 @@ export default async function handler(req:Req,res:Res){
       const [wallet,owned,joined,active,settings]=await Promise.all([
         client.from("cb_classroom_wallets").select("cbc").eq("user_id",userId).single(),
         client.from("cb_classroom_rooms").select("*").eq("teacher_id",userId).eq("status","active").gt("expires_at",new Date().toISOString()).order("created_at",{ascending:false}),
-        client.from("cb_classroom_enrollments").select("joined_at,room:cb_classroom_rooms(*)").eq("student_id",userId).order("joined_at",{ascending:false}),
+        client.from("cb_classroom_enrollments").select("joined_at,access_expires_at,room:cb_classroom_rooms(*)").eq("student_id",userId).order("joined_at",{ascending:false}),
         client.from("cb_classroom_rooms").select("id,name,package_kind,max_students,expires_at,teacher_id,students:cb_classroom_enrollments(count)").eq("status","active").gt("expires_at",new Date().toISOString()).order("created_at",{ascending:false}).limit(60),
         client.from("cb_classroom_settings").select("*").eq("id",true).single()
       ]);
@@ -50,6 +50,10 @@ export default async function handler(req:Req,res:Res){
     if(action==="join"){
       const result=await client.rpc("cb_join_classroom",{p_user_id:userId,p_code:String(body.code||""),p_request_id:String(body.request_id||"")});
       if(result.error)fail(400,result.error.message);return res.status(200).json({room:result.data});
+    }
+    if(action==="extend-access"){
+      const result=await client.rpc("cb_extend_classroom_access",{p_user_id:userId,p_room_id:String(body.room_id||""),p_request_id:String(body.request_id||"")});
+      if(result.error)fail(400,result.error.message);return res.status(200).json(result.data);
     }
     if(action==="rename"){
       const result=await client.rpc("cb_rename_classroom",{p_user_id:userId,p_room_id:String(body.room_id||""),p_name:String(body.name||"")});

@@ -7,10 +7,10 @@ import { gameFromPgn, boardResult, finishClockTurn, remainingClock, TIME_CONTROL
 import MatchBoard from "./match-board";
 
 const levels = [
-  { level: 1, label: "Beginner", elo: 800, skill: 0, think: 80 },
-  { level: 2, label: "Learner", elo: 1000, skill: 2, think: 120 },
-  { level: 3, label: "Casual", elo: 1200, skill: 4, think: 180 },
-  { level: 4, label: "Club", elo: 1450, skill: 6, think: 260 },
+  { level: 1, label: "Beginner", elo: 1320, skill: 0, think: 80 },
+  { level: 2, label: "Learner", elo: 1450, skill: 2, think: 120 },
+  { level: 3, label: "Casual", elo: 1600, skill: 4, think: 180 },
+  { level: 4, label: "Club", elo: 1750, skill: 6, think: 260 },
   { level: 5, label: "Skilled", elo: 1900, skill: 8, think: 360 },
   { level: 6, label: "Advanced", elo: 2050, skill: 10, think: 480 },
   { level: 7, label: "Expert", elo: 2200, skill: 13, think: 650 },
