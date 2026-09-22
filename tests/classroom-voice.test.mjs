@@ -40,8 +40,17 @@ test("SEba Voice is pre-activated when the workshop opens",()=>{
   assert.match(voice,/navigator\.permissions\.query/);
   assert.match(voice,/permissionStatus\.state==="granted"/);
   assert.match(voice,/seba-voice-enabled/);
-  assert.match(voice,/Enable Voice/);
+  assert.match(voice,/Enable Microphone/);
   assert.match(voice,/Mic blocked/);
+});
+
+test("Blocked microphones show recovery steps for Safari, Chrome and Android privacy",()=>{
+  assert.match(voice,/Allow microphone access/);
+  assert.match(voice,/Try Microphone Again/);
+  assert.match(voice,/Website Settings/);
+  assert.match(voice,/Android privacy blocks it/);
+  assert.match(voice,/visibilitychange/);
+  assert.match(css,/voice-permission-dialog/);
 });
 
 test("Microphone is explicitly permitted for same-origin classrooms",()=>{
