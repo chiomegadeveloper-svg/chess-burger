@@ -20,6 +20,7 @@ import {
   PackageOpen,
   Castle,
   Bot,
+  GraduationCap,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
@@ -548,7 +549,6 @@ function AppPage() {
           <button className="play-destination lobby" type="button" onClick={() => setTab("play")}><img src="/play-selection/match-lobby.webp" alt="Colorful Chess Burger Match Lobby"/><span><strong>Match Lobby</strong><small>Online, CPU, nearby and offline matches</small><b>Enter Lobby <ChevronRight size={17}/></b></span></button>
           <button className="play-destination arena arena-live" type="button" onClick={() => setTab("grand-arena")}><img src="/play-selection/grand-arena.webp" alt="Chess Burger Grand Arena entrance"/><span><strong>Grand Arena</strong><small>Timed elimination battles with live standings</small><b>Enter Arena <ChevronRight size={17}/></b></span></button>
           <button className="play-destination puzzles" type="button" onClick={() => setTab("puzzles")}><img src="/play-selection/puzzle-quest.webp" alt="Chess Burger puzzle maze arena"/><span><strong>Puzzle Quest</strong><small>100 puzzles, Coach Patty and Gold rewards</small><b>Enter Puzzles <ChevronRight size={17}/></b></span></button>
-          <button className="play-destination classroom" type="button" onClick={() => setTab("classroom")}><img src="/classroom/teacher.webp" alt="ChessBurger classroom instructor"/><span><strong>Classroom</strong><small>Create a Room Session or join your teacher</small><b>Enter Class <ChevronRight size={17}/></b></span></button>
         </div>
       </section>
     );
@@ -854,6 +854,14 @@ function AppPage() {
           </span>
         </div>
         <div className="header-actions">
+          <button
+            className="header-classroom-button"
+            aria-label="Open Classroom"
+            onClick={() => navigate("classroom")}
+          >
+            <GraduationCap size={17} />
+            <span>Classroom</span>
+          </button>
           <button
             aria-label="About Chess Burger"
             onClick={() =>
