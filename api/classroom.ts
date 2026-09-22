@@ -59,6 +59,18 @@ export default async function handler(req:Req,res:Res){
       const result=await client.rpc("cb_extend_classroom_access",{p_user_id:userId,p_room_id:String(body.room_id||""),p_request_id:String(body.request_id||"")});
       if(result.error)fail(400,result.error.message);return res.status(200).json(result.data);
     }
+    if(action==="quit"){
+      const roomId=String(body.room_id||"");
+      if(!roomId)fail(400,"Classroom is required.");
+      const enrollment=await client.from("cb_classroom_enrollments").select("student_id").eq("room_id",roomId).eq("student_id",userId).maybeSingle();
+      if(enrollment.error)fail(500,enrollment.error.message);
+      if(!enrollment.data)fail(404,"You are not enrolled in this classroom.");
+      const board=await client.from("cb_classroom_student_boards").delete().eq("room_id",roomId).eq("student_id",userId);
+      if(board.error)fail(500,board.error.message);
+      const removed=await client.from("cb_classroom_enrollments").delete().eq("room_id",roomId).eq("student_id",userId);
+      if(removed.error)fail(500,removed.error.message);
+      return res.status(200).json({ok:true});
+    }
     if(action==="workshop-state"){
       const roomId=String(body.room_id||""),now=new Date().toISOString();
       const room=await client.from("cb_classroom_rooms").select("*").eq("id",roomId).eq("status","active").gt("expires_at",now).single();
@@ -91,6 +103,17 @@ export default async function handler(req:Req,res:Res){
       const teacher=room.data.teacher_id===userId;
       if(!teacher){const access=await client.from("cb_classroom_enrollments").select("student_id").eq("room_id",roomId).eq("student_id",userId).gt("access_expires_at",now).maybeSingle();if(!access.data)fail(403,"Your paid classroom time has expired.");}
       const fen=String(body.fen||"start");if(fen.length>160)fail(400,"Invalid board position.");
+      if(kind==="assign-puzzle"){
+        if(!teacher)fail(403,"Only the teacher can assign puzzles.");
+        const enrollments=await client.from("cb_classroom_enrollments").select("student_id").eq("room_id",roomId).gt("access_expires_at",now);
+        if(enrollments.error)fail(500,enrollments.error.message);
+        const assignments=(enrollments.data||[]).map(row=>({room_id:roomId,student_id:row.student_id,fen,annotations:[],updated_by:userId,updated_at:now}));
+        if(assignments.length){
+          const saved=await client.from("cb_classroom_student_boards").upsert(assignments,{onConflict:"room_id,student_id"});
+          if(saved.error)fail(500,saved.error.message);
+        }
+        return res.status(200).json({assigned:assignments.length});
+      }
       if(kind==="master"){
         if(!teacher)fail(403,"Only the teacher can control the lesson board.");
         const annotations=Array.isArray(body.annotations)?body.annotations.slice(0,80):[];

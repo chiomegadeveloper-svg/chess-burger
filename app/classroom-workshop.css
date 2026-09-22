@@ -465,6 +465,43 @@
   color: #8fa3aa;
   font-size: 7px;
 }
+.puzzle-picker .puzzle-assignment-card {
+  display: grid;
+  gap: 5px;
+  padding: 10px;
+  border: 1px solid #364a52;
+  border-radius: 11px;
+  background: #111d22;
+}
+.puzzle-assignment-card > div {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 5px;
+}
+.puzzle-picker .puzzle-assignment-card button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 34px;
+  padding: 7px;
+  text-align: center;
+  font-size: 8px;
+}
+.puzzle-picker .puzzle-assignment-card button:last-child {
+  border-color: #d6ad4c;
+  background: #493716;
+  color: #ffe292;
+}
+.puzzle-assignment-card button svg {
+  width: 12px;
+  height: 12px;
+}
+.puzzle-assignment-card button:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+}
 @media (max-width: 900px) {
   .teacher-toolbar {
     overflow-x: auto;
@@ -567,6 +604,22 @@
   display: flex;
   align-items: center;
   gap: 11px;
+}
+.workshop-quit {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 10px;
+  border: 1px solid #8b4850;
+  border-radius: 9px;
+  background: #35181d;
+  color: #ffbec5;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.workshop-quit svg {
+  width: 14px;
+  height: 14px;
 }
 .workshop-room-copy {
   display: grid;
