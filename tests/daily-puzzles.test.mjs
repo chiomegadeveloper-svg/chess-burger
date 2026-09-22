@@ -53,7 +53,8 @@ test("puzzle UI plays forced replies and requires the complete line",()=>{
   assert.match(puzzleUi,/Coach Patty is playing the forced reply/);
   assert.match(puzzleUi,/setStep\(opponentStep\+1\)/);
   assert.match(puzzleUi,/proof:\s*puzzle\.moves\.join\(" "\)/);
-  assert.match(puzzleUi,/Lichess CC0 source/);
+  assert.doesNotMatch(puzzleUi,/Lichess CC0 source/);
+  assert.doesNotMatch(puzzleUi,/className="puzzle-trail"/);
 });
 
 test("Coach Patty prefers a friendly female English device voice", () => {
