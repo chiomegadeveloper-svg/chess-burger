@@ -23,6 +23,13 @@ test("CPU mode offers ten distinct strength levels", () => {
   assert.match(cpu, /never change your live-match count/);
 });
 
+test("CPU levels one through four use the 800 to 1450 rating range", () => {
+  assert.match(cpu, /level:\s*1[^\n]*elo:\s*800/);
+  assert.match(cpu, /level:\s*2[^\n]*elo:\s*1000/);
+  assert.match(cpu, /level:\s*3[^\n]*elo:\s*1200/);
+  assert.match(cpu, /level:\s*4[^\n]*elo:\s*1450/);
+});
+
 test("CPU results settle once without changing human match counts", () => {
   assert.match(cpu, /claim-cpu-reward/);
   assert.match(api, /action==='claim-cpu-reward'/);
