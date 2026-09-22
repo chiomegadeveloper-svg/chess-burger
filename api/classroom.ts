@@ -113,6 +113,10 @@ export default async function handler(req:Req,res:Res){
       const result=await client.rpc("cb_rename_classroom",{p_user_id:userId,p_room_id:String(body.room_id||""),p_name:String(body.name||"")});
       if(result.error)fail(400,result.error.message);return res.status(200).json({ok:true});
     }
+    if(action==="terminate"){
+      const result=await client.rpc("cb_terminate_classroom",{p_user_id:userId,p_room_id:String(body.room_id||"")});
+      if(result.error)fail(400,result.error.message);return res.status(200).json({ok:true});
+    }
     if(action==="gift-cbc"){
       const result=await client.rpc("cb_gift_cbc",{p_sender_id:userId,p_username:String(body.username||""),p_quantity:Number(body.quantity||0),p_request_id:String(body.request_id||"")});if(result.error)fail(400,result.error.message);return res.status(200).json(result.data);
     }

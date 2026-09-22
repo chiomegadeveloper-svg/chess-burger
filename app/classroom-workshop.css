@@ -12,6 +12,7 @@
   place-items: center;
   font-size: 18px;
 }
+.workshop-error section{width:min(460px,calc(100% - 32px));padding:24px;border:1px solid #6a4b4b;border-radius:18px;background:#151d22;text-align:center;box-shadow:0 18px 45px #0008}.workshop-error h1{margin:0 0 8px;color:#fff}.workshop-error p{color:#ffb7b7;font-size:12px;line-height:1.6}.workshop-error div{display:flex;justify-content:center;gap:8px}.workshop-error button{padding:10px 14px;border:1px solid #49717c;border-radius:10px;background:#17323a;color:#dff8fa}
 .workshop-topbar {
   position: sticky;
   z-index: 20;
@@ -94,6 +95,7 @@
   background: #19414a;
   color: #8cf2f7;
 }
+.teacher-toolbar button.terminate-room{border-color:#8b3f45;background:#3b1b1f;color:#ffb6bb}.teacher-toolbar button.terminate-room:hover{background:#552329;color:#fff}.teacher-toolbar button.terminate-room:disabled{opacity:.5}
 .teacher-toolbar .ink {
   padding-inline: 12px;
 }
