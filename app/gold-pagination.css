@@ -1,0 +1,29 @@
+.gold-list-pagination {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.gold-list-pagination button {
+  min-height: 31px;
+  padding: 6px 10px;
+  border: 1px solid #54656d;
+  border-radius: 8px;
+  background: #202b31;
+  color: #dce7ea;
+  font: 700 9px Poppins, sans-serif;
+}
+
+.gold-list-pagination button:disabled {
+  cursor: not-allowed;
+  opacity: .38;
+}
+
+.gold-list-pagination span {
+  color: #96a6ad;
+  font-size: 8px;
+  white-space: nowrap;
+  text-align: center;
+}
