@@ -7,7 +7,7 @@ import { DAILY_PUZZLES } from "../app/puzzle-data.ts";
 const page = readFileSync(new URL("../app/page.tsx", import.meta.url), "utf8");
 const puzzleUi = readFileSync(new URL("../app/puzzles.tsx", import.meta.url), "utf8");
 const api = readFileSync(new URL("../api/arena.ts", import.meta.url), "utf8");
-const sql = readFileSync(new URL("../supabase/0028_daily_puzzles.sql", import.meta.url), "utf8")+readFileSync(new URL("../supabase/0043_daily_puzzle_rating.sql", import.meta.url), "utf8");
+const sql = readFileSync(new URL("../supabase/0028_daily_puzzles.sql", import.meta.url), "utf8")+readFileSync(new URL("../supabase/0043_daily_puzzle_rating.sql", import.meta.url), "utf8")+readFileSync(new URL("../supabase/0045_puzzle_leaderboard.sql", import.meta.url), "utf8");
 
 test("Match Lobby exposes a Gold-earning Puzzle Quest", () => {
   assert.match(page, /Puzzle Quest/);
@@ -37,7 +37,7 @@ test("daily puzzle Gold and rating are server validated and idempotent", () => {
   assert.doesNotMatch(api, /from ['"]\.\.\/app\/puzzle-data/);
   assert.match(api, /const PUZZLE_PROOFS:Record<string,string>/);
   assert.match(api, /proof!==puzzle\.moves\.join\(' '\)/);
-  assert.match(api, /dailyPuzzleIds/);
+  assert.match(api, /dailyPuzzleTracks/);
   assert.match(api, /Asia\/Manila/);
   assert.match(api, /This puzzle is not in today's quest/);
   assert.match(sql, /primary key\(user_id,puzzle_day,puzzle_id\)/);
@@ -69,15 +69,27 @@ test("every correct puzzle solve displays a popup notification", () => {
 });
 
 test("Puzzle Quest resets daily with Easy, Regular, Hard, and Random tracks",()=>{
-  assert.match(puzzleUi,/100 DAILY PUZZLES/);
+  assert.match(puzzleUi,/NEW PUZZLES DAILY/);
   assert.match(puzzleUi,/RESETS 12:00 AM PH/);
   for(const level of ["Easy","Regular","Hard","Random"])assert.match(puzzleUi,new RegExp(`label:\"${level}\"`));
   assert.match(puzzleUi,/100 completed today/);
   assert.match(api,/completed\.length===100/);
-  assert.match(api,/easy\.slice\(0,25\)/);
-  assert.match(api,/regular\.slice\(0,25\)/);
-  assert.match(api,/hard\.slice\(0,25\)/);
+  assert.match(api,/easy:easy\.slice\(0,5\)/);
+  assert.match(api,/regular:regular\.slice\(0,5\)/);
+  assert.match(api,/hard:hard\.slice\(0,5\)/);
+  assert.match(api,/random=shuffle\(DAILY_PUZZLES\.map/);
+  assert.match(puzzleUi,/count:100/);
   assert.match(api,/puzzleReward/);
   assert.match(puzzleUi,/1–3 CBG/);
   assert.match(sql,/v_count=100/);
+});
+
+test("Puzzle Quest shows all-time, today, and rating leaders below Coach Patty",()=>{
+  assert.match(puzzleUi,/TOP RANK RATING/);
+  assert.match(puzzleUi,/Most Solved · All Time/);
+  assert.match(puzzleUi,/Most Solved · Today/);
+  assert.match(puzzleUi,/Highest Puzzle Rating/);
+  assert.match(api,/cb_puzzle_leaders/);
+  assert.match(sql,/today_counts/);
+  assert.match(sql,/order by pp\.puzzle_rating desc/);
 });
