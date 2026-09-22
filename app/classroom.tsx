@@ -15,7 +15,7 @@ const PACKAGES=[
   {kind:"queen",name:"Room Queen",slots:30,hours:168},
   {kind:"king",name:"Room King",slots:40,hours:336},
 ] as const;
-type Room={id:string;name:string;package_kind:string;invite_code:string;max_students:number;student_count?:number;cbc_included?:number;expires_at:string;teacher?:{display_name?:string;username?:string;avatar_url?:string};students?:Array<{count:number}>};
+type Room={id:string;name:string;package_kind:string;invite_code:string;max_students:number;student_count?:number;cbc_included?:number;expires_at:string;status?:"active"|"closed";teacher?:{display_name?:string;username?:string;avatar_url?:string};students?:Array<{count:number}>};
 type Settings={cbc_gold_price:number}&Record<`${string}_${"cbg"|"cbc"}`,number>;
 type Enrollment={joined_at:string;access_expires_at:string;room:Room};
 type State={wallet:{cbc:number};gold:number;settings:Settings;owned:Room[];joined:Enrollment[];active:Room[]};
@@ -25,12 +25,12 @@ export default function Classroom({onBack,onOpenShop}:{onBack:()=>void;onOpenSho
   const [role,setRole]=useState<""|"teacher"|"student">("");
   const [state,setState]=useState<State|null>(null),[busy,setBusy]=useState(false),[selected,setSelected]=useState("pawn"),[name,setName]=useState(""),[code,setCode]=useState(""),[workshop,setWorkshop]=useState<string|null>(null);
   const load=useCallback(()=>classroom<State>("state").then(setState).catch(e=>toast.error(e.message)),[]);
-  useEffect(()=>{void load()},[load]);
+  useEffect(()=>{if(workshop)return;void load();const refresh=window.setInterval(()=>void load(),5000);return()=>window.clearInterval(refresh)},[load,workshop]);
   const create=async()=>{if(!name.trim())return toast.error("Name your Room Session.");setBusy(true);try{const result=await classroom<{room:Room}>("create",{package:selected,name,request_id:crypto.randomUUID()});toast.success(`${result.room.name} created`,{description:`Student code: ${result.room.invite_code}`});setName("");await load()}catch(e){toast.error(e instanceof Error?e.message:"Unable to create room.")}finally{setBusy(false)}};
   const join=async()=>{setBusy(true);try{const result=await classroom<{room:Room}>("join",{code:code.trim().toUpperCase(),request_id:crypto.randomUUID()});toast.success(`Welcome to ${result.room.name}`);setCode("");await load()}catch(e){toast.error(e instanceof Error?e.message:"Unable to join room.")}finally{setBusy(false)}};
   const extend=async(room:Room)=>{setBusy(true);try{await classroom("extend-access",{room_id:room.id,request_id:crypto.randomUUID()});toast.success("30 classroom minutes added",{description:"1 CBC was used from My Bag."});await load()}catch(e){toast.error(e instanceof Error?e.message:"Unable to extend classroom access.")}finally{setBusy(false)}};
   const rename=async(room:Room)=>{const next=window.prompt("Rename Room Session",room.name)?.trim();if(!next||next===room.name)return;setBusy(true);try{await classroom("rename",{room_id:room.id,name:next});toast.success("Room renamed.");await load()}catch(e){toast.error(e instanceof Error?e.message:"Unable to rename room.")}finally{setBusy(false)}};
-  if(workshop)return <ClassroomWorkshop roomId={workshop} onExit={()=>setWorkshop(null)}/>;
+  if(workshop)return <ClassroomWorkshop roomId={workshop} onExit={()=>{setWorkshop(null);void load()}}/>;
   return <section className="classroom-page">
     <button className="back-button" type="button" onClick={role?()=>setRole(""):onBack}><ArrowLeft size={15}/>{role?"Student Lobby":"Play selection"}</button>
     <header className="classroom-hero"><span>CHESSBURGER LEARNING</span><h1>Classroom</h1><p>Create welcoming chess rooms or join your instructor with a private code.</p></header>

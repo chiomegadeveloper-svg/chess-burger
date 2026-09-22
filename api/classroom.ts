@@ -32,7 +32,8 @@ export default async function handler(req:Req,res:Res){
       if(counts.error)fail(500,counts.error.message);
       const byRoom:Record<string,number>={};for(const row of counts.data||[])byRoom[row.room_id]=(byRoom[row.room_id]||0)+1;
       const profile=await client.from("cb_profiles").select("gold_points,role").eq("user_id",userId).single();
-      return res.status(200).json({wallet:wallet.data,gold:profile.data?.gold_points||0,settings:settings.data,owned:(owned.data||[]).map((r:any)=>({...r,student_count:byRoom[r.id]||0})),joined:joined.data||[],active:active.data||[]});
+      const now=Date.now(),validJoined=(joined.data||[]).filter((row:any)=>row.room?.status==="active"&&new Date(row.room.expires_at).getTime()>now);
+      return res.status(200).json({wallet:wallet.data,gold:profile.data?.gold_points||0,settings:settings.data,owned:(owned.data||[]).map((r:any)=>({...r,student_count:byRoom[r.id]||0})),joined:validJoined,active:active.data||[]});
     }
     if(action==="buy-cbc"){
       const result=await client.rpc("cb_buy_cbc",{p_user_id:userId,p_quantity:Number(body.quantity||0),p_request_id:String(body.request_id||"")});if(result.error)fail(400,result.error.message);return res.status(200).json(result.data);
