@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 32048)
+Total output lines: 1322
+
 import { createClient } from '@supabase/supabase-js';
 import { Chess } from 'chess.js';
 // Generated validation manifest kept in this serverless entrypoint because
@@ -694,105 +697,7 @@ export default async function handler(req: Req, res: Res) {
       const puzzleIndex=DAILY_PUZZLES.findIndex(item=>item.id===puzzleId);
       if(puzzleIndex>0&&!completed.includes(DAILY_PUZZLES[puzzleIndex-1].id))fail(409,'Complete the previous puzzle first.');
       const claimed=await client.rpc('cb_claim_daily_puzzle',{p_user_id:account.id,p_day:puzzleDay,p_puzzle_id:puzzleId,p_is_final:(puzzleIndex+1)%10===0});
-      if(claimed.error)fail(/cb_claim_daily_puzzle|schema cache|function/i.test(claimed.error.message)?503:500,/cb_claim_daily_puzzle|schema cache|function/i.test(claimed.error.message)?'Run supabase/0028_daily_puzzles.sql in Supabase, then try again.':claimed.error.message);
-      const result=claimed.data??{},allCompleted=Array.from(new Set([...completed,puzzleId]));
-      return res.status(200).json({...result,completed:allCompleted,bonus_claimed:allCompleted.length===DAILY_PUZZLES.length,day:puzzleDay});
-    }
-    if(action==='claim-cpu-reward'){
-      const gameId=String(body.game_id??''),control=String(body.control??''),level=Number(body.level),pgn=String(body.pgn??''),outcome=String(body.outcome??'');
-      if(!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(gameId)||!Number.isInteger(level)||level<1||level>10||!['win','loss'].includes(outcome))fail(400,'Invalid CPU game result.');
-      const group=tc(control).group,reward=group==='Bullet'?2:group==='Blitz'?3:5,loss=group==='Bullet'?3:group==='Blitz'?4:6;
-      const game=new Chess();try{if(pgn)game.loadPgn(pgn);}catch{fail(400,'Invalid CPU game record.');}
-      if(outcome==='win'&&(!game.isCheckmate()||game.turn()!=='b'))fail(400,'Only a completed checkmate victory earns a CPU reward.');
-      const cbrDelta=outcome==='win'?reward:-loss,goldDelta=outcome==='win'?reward:0;
-      const claimed=await client.rpc('cb_claim_cpu_reward',{p_user_id:account.id,p_game_id:gameId,p_cbr:cbrDelta,p_gold:goldDelta});
-      if(claimed.error)fail(/cb_claim_cpu_reward|schema cache|function/i.test(claimed.error.message)?503:500,/cb_claim_cpu_reward|schema cache|function/i.test(claimed.error.message)?'Run supabase/0026_cpu_match_rewards.sql in Supabase, then try again.':claimed.error.message);
-      const result=claimed.data??{};
-      if(result.awarded){const aiName=cpuRobotName(body.ai_name,level),event=await client.from('cb_feed').insert({user_id:account.id,kind:outcome==='win'?'win':'loss',display_name:account.profile.display_name,content:`${outcome==='win'?'defeated':'lost to'} ${aiName} in a ${group.toLowerCase()} CPU match.`,cbr_delta:cbrDelta,gold_delta:goldDelta});if(event.error)console.warn('arena.cpu-feed-failed',{gameId});}
-      return res.status(200).json(result);
-    }
-    const isStaff = account.profile.role === 'owner' || account.profile.role === 'admin';
-    const requireStaff = () => { if (!isStaff) fail(403, 'Owner or GM access is required.'); };
-    const audit = async (auditAction: string, details: Record<string, unknown> = {}) => {
-      const saved = await client.from('cb_admin_logs').insert({ actor_user_id: account.id, action: auditAction, details });
-      if (saved.error) console.warn('arena.cms-audit-failed', { action: auditAction, message: saved.error.message });
-    };
-    if (action === 'cms-announcements') {
-      requireStaff();
-      const posts = await client.from('cb_feed').select('id,content,image_url,expires_at').eq('kind', 'announcement').gt('expires_at', new Date().toISOString()).order('created_at', { ascending: false });
-      if (posts.error) fail(500, posts.error.message);
-      return res.status(200).json({ posts: posts.data ?? [] });
-    }
-    if (action === 'save-announcement') {
-      requireStaff();
-      const content = String(body.content ?? '').trim().slice(0, 500);
-      const imageUrl = String(body.image_url ?? '').trim().slice(0, 2048);
-      const expiresAt = String(body.expires_at ?? '');
-      const id = String(body.id ?? '');
-      if (!content && !imageUrl) fail(400, 'Add text or an image.');
-      if (!Number.isFinite(Date.parse(expiresAt)) || Date.parse(expiresAt) <= now()) fail(400, 'Choose a future end date.');
-      if (imageUrl && !/^https:\/\//i.test(imageUrl)) fail(400, 'Use a secure HTTPS image.');
-      const scoped = userScopedDb(req);
-      const query = id
-        ? scoped.from('cb_feed').update({ content, image_url: imageUrl, expires_at: expiresAt }).eq('id', id).eq('kind', 'announcement').select('id,content,image_url,expires_at').maybeSingle()
-        : scoped.from('cb_feed').insert({ user_id: account.id, kind: 'announcement', display_name: 'Chess Burger', content, image_url: imageUrl, expires_at: expiresAt }).select('id,content,image_url,expires_at').single();
-      const saved = await query;
-      if (saved.error) fail(500, saved.error.message);
-      if (!saved.data) fail(404, 'Announcement not found.');
-      return res.status(200).json({ ok: true, post: saved.data });
-    }
-    if (action === 'delete-announcement') {
-      requireStaff();
-      const id = String(body.id ?? '');
-      if (!/^[a-f0-9-]{36}$/i.test(id)) fail(400, 'Choose a valid announcement.');
-      const removed = await userScopedDb(req).from('cb_feed').delete().eq('id', id).eq('kind', 'announcement').select('id').maybeSingle();
-      if (removed.error) fail(500, removed.error.message);
-      if (!removed.data) fail(404, 'Announcement not found.');
-      return res.status(200).json({ ok: true });
-    }
-    if (action === 'set-app-feature') {
-      requireStaff();
-      const imageUrl = String(body.url ?? '').trim();
-      if (imageUrl && (!/^https:\/\//i.test(imageUrl) || imageUrl.length > 2048)) fail(400, 'Use a secure HTTPS photo URL.');
-      const saved = await client.from('cb_app_settings').upsert({ key: 'app_feature', value: { image_url: imageUrl }, updated_at: new Date().toISOString() }, { onConflict: 'key' });
-      if (saved.error) fail(500, saved.error.message);
-      await audit('set_app_feature', { image_url: imageUrl });
-      return res.status(200).json({ ok: true, image_url: imageUrl });
-    }
-    if (action === 'logs') {
-      requireStaff();
-      const page = Math.max(0, Math.floor(Number(body.page) || 0));
-      const start = page * 20;
-      const found = await client.from('cb_admin_logs').select('id,actor_user_id,action,details,created_at').order('created_at', { ascending: false }).range(start, start + 19);
-      if (found.error) fail(500, found.error.message);
-      const actorIds = [...new Set((found.data ?? []).map((row: any) => row.actor_user_id).filter(Boolean))];
-      const actors = actorIds.length ? await client.from('cb_profiles').select('user_id,display_name,username').in('user_id', actorIds) : { data: [], error: null };
-      if (actors.error) fail(500, actors.error.message);
-      const names = new Map((actors.data ?? []).map((actor: any) => [actor.user_id, actor.display_name || `@${actor.username}`]));
-      return res.status(200).json({ logs: (found.data ?? []).map((row: any) => ({ ...row, actor_name: names.get(row.actor_user_id) ?? undefined })) });
-    }
-    if (action === 'delete-user') {
-      if (account.profile.role !== 'owner') fail(403, 'Only an Owner can delete a user.');
-      const username = cmsUsername(body.username), confirmation = cmsUsername(body.confirmation);
-      if (!/^[a-z0-9_]{3,24}$/.test(username) || confirmation !== username) fail(400, 'Type the username again to confirm deletion.');
-      const target = await client.from('cb_profiles').select('user_id,username,role').eq('username', username).maybeSingle();
-      if (target.error) fail(500, target.error.message);
-      if (!target.data) fail(404, 'Player not found.');
-      if (target.data.role === 'owner') fail(403, 'Owner accounts are protected.');
-      await audit('delete_user', { username });
-      const removed = await client.auth.admin.deleteUser(target.data.user_id);
-      if (removed.error) fail(409, removed.error.message);
-      return res.status(200).json({ ok: true });
-    }
-    if(action==='shop-banners'){
-      const items=await client.from('cb_user_items').select('product_id,expires_at').eq('user_id',account.id).gt('expires_at',new Date().toISOString()).order('expires_at',{ascending:true});
-      if(items.error)fail(503,'Run supabase/0022_feed_banner_rentals.sql in Supabase, then try again.');
-      const owned=items.data??[],active=owned.some((item:any)=>item.product_id===account.profile.active_feed_banner)?account.profile.active_feed_banner??'':'';
-      return res.status(200).json({owned,active,gold:Number(account.profile.gold_points??0),server_now:new Date().toISOString()});
-    }
-    if(action==='bag-items'){
-      const now=new Date().toISOString(),[banners,tickets,items,used]=await Promise.all([
-        client.from('cb_user_items').select('product_id,expires_at').eq('user_id',account.id).gt('expires_at',now).order('expires_at',{ascending:true}),
+      if(claimed.error)fail(/cb_claim_daily_puzzle|schema cache|function/i.test(claime…2048 tokens truncated…   client.from('cb_user_items').select('product_id,expires_at').eq('user_id',account.id).gt('expires_at',now).order('expires_at',{ascending:true}),
         client.from('cb_arena_tickets').select('quantity').eq('user_id',account.id).maybeSingle(),
         client.from('cb_inventory_items').select('item_kind,item_id,quantity,metadata,updated_at').eq('user_id',account.id).gt('quantity',0).order('updated_at',{ascending:false}),
         client.rpc('cb_bag_slots_used',{p_user_id:account.id})
@@ -825,6 +730,25 @@ export default async function handler(req: Req, res: Res) {
       const reward=await client.rpc(fn,{p_user_id:account.id});
       if(reward.error){const message=String(reward.error.message??'Daily reward is unavailable.');if(/cb_daily_|schema cache|function|relation/i.test(message))fail(503,'Run supabase/0025_daily_login_rewards.sql in Supabase, then try again.');if(/already claimed/i.test(message))fail(409,"Today's reward is already claimed.");fail(409,message);}
       return res.status(200).json(reward.data);
+    }
+    if(action==='cms-daily-rewards'){
+      if(account.profile.role!=='owner')fail(403,'Only an Owner can edit Daily Login rewards.');
+      const reward=await client.rpc('cb_daily_reward_status',{p_user_id:account.id});
+      if(reward.error)fail(503,'Run supabase/0035_editable_daily_login_rewards.sql in Supabase, then try again.');
+      const products=await client.from('cb_shop_products').select('id,name').or('id.like.pastel-%,id.like.metal-%').order('name');
+      if(products.error)fail(500,products.error.message);
+      return res.status(200).json({rewards:reward.data?.rewards??[],banners:products.data??[]});
+    }
+    if(action==='save-cms-daily-rewards'){
+      if(account.profile.role!=='owner')fail(403,'Only an Owner can edit Daily Login rewards.');
+      const rewards=Array.isArray(body.rewards)?body.rewards:[];
+      if(rewards.length!==7)fail(400,'Configure all 7 reward days.');
+      const normalized=rewards.map((item:any,index:number)=>({day:index+1,kind:String(item?.kind??''),amount:Number(item?.amount),product_id:String(item?.product_id??'')}));
+      if(normalized.some((item:any)=>!['gold','arena_ticket','banner','bag_slot'].includes(item.kind)||!Number.isInteger(item.amount)||item.amount<1||item.amount>10000||(item.kind==='banner'&&!/^(pastel|metal)-[a-z-]+$/.test(item.product_id))))fail(400,'Choose a valid item and amount for every day.');
+      const saved=await client.rpc('cb_save_daily_reward_config',{p_owner_id:account.id,p_rewards:normalized});
+      if(saved.error){const message=String(saved.error.message??'Rewards could not be saved.');if(/cb_save_daily|cb_daily_reward_config|schema cache|function|relation/i.test(message))fail(503,'Run supabase/0035_editable_daily_login_rewards.sql in Supabase, then try again.');fail(409,message);}
+      await audit('daily_rewards_update',{rewards:normalized});
+      return res.status(200).json({rewards:saved.data});
     }
     if(action==='buy-feed-banner'){
       const productId=String(body.product_id??''),requestId=String(body.request_id??''),days=Number(body.days??0);
