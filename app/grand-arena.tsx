@@ -58,6 +58,7 @@ type ArenaState = {
     ticket_gold_total: number;
     match_control: string;
   };
+  session_finalized?: boolean;
   entry: ArenaEntry | null;
   match: ArenaMatch | null;
   leaderboard: ArenaStanding[];
@@ -309,7 +310,11 @@ export default function GrandArena({
         {!state?.leaderboard.length ? (
           <div className="arena-empty">
             <Trophy />
-            <p>No competitors yet. Be the first through the gates.</p>
+            <p>
+              {state?.session_finalized
+                ? "Session complete. Final standings have been archived."
+                : "No competitors yet. Be the first through the gates."}
+            </p>
           </div>
         ) : (
           <ol>

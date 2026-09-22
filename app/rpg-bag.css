@@ -2,3 +2,14 @@
 @media(max-width:760px){.rpg-bag .unified-bag-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
 @media(max-width:560px){.rpg-bag{padding:7px 7px 82px}.rpg-bag-heading{padding:14px;border-radius:18px}.rpg-bag-heading h1{font-size:22px}.rpg-bag-heading p{max-width:210px}.rpg-bag .unified-bag-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;padding:8px;border-radius:18px}.rpg-bag .bag-inventory-card{min-height:184px;padding:6px;border-radius:13px}.rpg-item-art{border-radius:10px}.rpg-bag .rpg-item-copy h3{font-size:9px}.rpg-bag-wallet>span{padding:5px 8px;font-size:7px}}
 @media(max-width:370px){.rpg-bag-heading{align-items:flex-start}.rpg-bag-heading p{display:none}.rpg-bag .unified-bag-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Structured currency summary and consistent inventory-card alignment. */
+.rpg-bag-wallet{min-width:140px;justify-items:stretch}
+.rpg-bag-wallet>.bag-cbg-balance{display:grid;grid-template-columns:38px minmax(0,1fr);grid-template-rows:auto auto;column-gap:9px;row-gap:0;padding:8px 12px;border-radius:14px}
+.bag-cbg-wallet-icon{grid-row:1/3;align-self:center;display:block!important;width:38px!important;height:38px!important;object-fit:contain;filter:drop-shadow(0 5px 6px #000a)}
+.rpg-bag-wallet>.bag-cbg-balance b{align-self:end;color:#f9d766;font-size:14px;line-height:1.05}
+.rpg-bag-wallet>.bag-cbg-balance small{align-self:start;color:#c7b26d;font-size:6px;font-weight:800;letter-spacing:.7px;text-transform:uppercase;white-space:nowrap}
+.rpg-bag .unified-bag-grid{align-items:stretch}
+.rpg-bag .bag-inventory-card{height:100%}
+.rpg-gold-art>.bag-cbg-card-icon{display:block!important;width:88%!important;height:88%!important;max-width:132px;max-height:132px;object-fit:contain;filter:drop-shadow(0 8px 9px #000b)}
+@media(max-width:560px){.rpg-bag-heading{align-items:center}.rpg-bag-wallet{min-width:116px}.rpg-bag-wallet>.bag-cbg-balance{grid-template-columns:30px minmax(0,1fr);padding:6px 8px;column-gap:6px}.bag-cbg-wallet-icon{width:30px!important;height:30px!important}.rpg-bag-wallet>.bag-cbg-balance b{font-size:11px}.rpg-gold-art>.bag-cbg-card-icon{width:84%!important;height:84%!important}}

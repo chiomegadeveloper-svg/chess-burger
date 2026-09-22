@@ -540,8 +540,10 @@ export function BagPage({ onChanged }: { onChanged: () => void }) {
           </p>
         </div>
         <div className="rpg-bag-wallet">
-          <span>
-            <CbgIcon className="currency-inline-icon" alt=""/> {state.gold} {cbgTier(state.gold)}
+          <span className="bag-cbg-balance">
+            <CbgIcon className="bag-cbg-wallet-icon" alt=""/>
+            <b>{state.gold}</b>
+            <small>{cbgTier(state.gold)} balance</small>
           </span>
           <span className="bag-count">
             <ShoppingBag size={15} />
@@ -553,7 +555,7 @@ export function BagPage({ onChanged }: { onChanged: () => void }) {
         <p className="account-note">Opening your bag…</p>
       ) : (
         <div className="bag-tiles unified-bag-grid">
-          <article className="bag-inventory-card gold legendary"><div className="rpg-item-art rpg-gold-art"><CbgIcon alt="CBG coin"/><strong>{state.gold}</strong></div><div className="rpg-item-copy"><small>{cbgTier(state.gold)} CURRENCY</small><h3>Chess Burger Gold</h3><span>Gift CBG directly to another player.</span></div><div className="rpg-item-actions"><button type="button" disabled={state.gold<1} onClick={()=>openGift("gold","gold-coins","CBG Coins",state.gold)}><Gift size={14}/>Gift CBG</button></div></article>
+          <article className="bag-inventory-card gold legendary"><div className="rpg-item-art rpg-gold-art"><CbgIcon className="bag-cbg-card-icon" alt="CBG coin"/><strong>{state.gold}</strong></div><div className="rpg-item-copy"><small>{cbgTier(state.gold)} CURRENCY</small><h3>Chess Burger Gold</h3><span>Gift CBG directly to another player.</span></div><div className="rpg-item-actions"><button type="button" disabled={state.gold<1} onClick={()=>openGift("gold","gold-coins","CBG Coins",state.gold)}><Gift size={14}/>Gift CBG</button></div></article>
           {state.tickets > 0 && (
             <article className="bag-inventory-card ticket legendary">
               <div className="rpg-item-art">
