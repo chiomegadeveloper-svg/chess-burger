@@ -693,7 +693,7 @@ function AppPage() {
         onClaimed={() => void refreshProfile()}
       />
     );
-  else if (tab === "rank") content = <Rankings profile={profile} onChallenge={(player) => { setTarget(player); setTab("challenge"); }} />;
+  else if (tab === "rank") content = <Rankings profile={profile} />;
   else if (tab === "channel")
     content = (
       <>
