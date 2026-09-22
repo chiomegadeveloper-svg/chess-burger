@@ -26,7 +26,6 @@ import { levelFor } from "./cbr";
 import type { ArenaMatch, ArenaPlayer } from "./game-rules";
 import { feedBanner } from "./feed-banner-catalog";
 import DailyRewards from "./daily-rewards";
-import {cbgTier} from "./currency";
 import "./arena-champion-feed.css";
 type CommunityEvent = FeedEvent & { origin?: "arena" };
 type OnlinePlayer = ArenaPlayer & { available: boolean };
@@ -851,7 +850,7 @@ export default function CommunityFeed({
                             {[
                               [player.cbr, "CBR"],
                               [player.ocbr ?? 88, "OCBR"],
-                              [player.gold_points, cbgTier(player.gold_points)],
+                              [player.gold_points, "Gold"],
                               [`${winRate}%`, "Win rate"],
                             ].map(([value, label], index) => (
                               <div

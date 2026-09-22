@@ -52,6 +52,7 @@ import Testimonials from "./testimonials";
 import CpuGame from "./cpu-game";
 import Puzzles from "./puzzles";
 import GrandArena from "./grand-arena";
+import Classroom from "./classroom";
 
 const modes = [
   {
@@ -493,6 +494,7 @@ function AppPage() {
     "cpu",
     "puzzles",
     "grand-arena",
+    "classroom",
   ].includes(tab)
     ? "play"
     : tab === "cms"
@@ -546,6 +548,7 @@ function AppPage() {
           <button className="play-destination lobby" type="button" onClick={() => setTab("play")}><img src="/play-selection/match-lobby.webp" alt="Colorful Chess Burger Match Lobby"/><span><strong>Match Lobby</strong><small>Online, CPU, nearby and offline matches</small><b>Enter Lobby <ChevronRight size={17}/></b></span></button>
           <button className="play-destination arena arena-live" type="button" onClick={() => setTab("grand-arena")}><img src="/play-selection/grand-arena.webp" alt="Chess Burger Grand Arena entrance"/><span><strong>Grand Arena</strong><small>Timed elimination battles with live standings</small><b>Enter Arena <ChevronRight size={17}/></b></span></button>
           <button className="play-destination puzzles" type="button" onClick={() => setTab("puzzles")}><img src="/play-selection/puzzle-quest.webp" alt="Chess Burger puzzle maze arena"/><span><strong>Puzzle Quest</strong><small>100 puzzles, Coach Patty and Gold rewards</small><b>Enter Puzzles <ChevronRight size={17}/></b></span></button>
+          <button className="play-destination classroom" type="button" onClick={() => setTab("classroom")}><img src="/classroom/teacher.webp" alt="ChessBurger classroom instructor"/><span><strong>Classroom</strong><small>Create a Room Session or join your teacher</small><b>Enter Class <ChevronRight size={17}/></b></span></button>
         </div>
       </section>
     );
@@ -690,7 +693,7 @@ function AppPage() {
         onClaimed={() => void refreshProfile()}
       />
     );
-  else if (tab === "rank") content = <Rankings profile={profile} onChallenge={(player) => { setTarget(player); setTab("challenge"); }} />;
+  else if (tab === "rank") content = <Rankings profile={profile} />;
   else if (tab === "channel")
     content = (
       <>
@@ -705,6 +708,7 @@ function AppPage() {
     );
   else if (tab === "tournaments") content = <Tournaments profile={profile} />;
   else if (tab === "grand-arena") content = <GrandArena onBack={() => setTab("play-select")} onMatch={openMatch} onShop={() => setTab("shop")}/>;
+  else if (tab === "classroom") content = <Classroom onBack={() => setTab("play-select")} onOpenShop={() => setTab("shop")}/>;
   else if (tab === "cpu" && profile) content = <CpuGame player={profile} onClose={() => setTab("play")} onReward={() => void refreshProfile()}/>;
   else if (tab === "puzzles" && profile) content = <Puzzles onClose={() => setTab("play")} onReward={() => void refreshProfile()}/>;
   else if (tab === "card")
@@ -833,7 +837,7 @@ function AppPage() {
               </button>
               <button
                 className="welcome-card classroom"
-                onClick={() => { toast.info("Class Room feature coming very soon"); finishWelcome("home"); }}
+                onClick={() => finishWelcome("classroom")}
               >
                 <img src="/welcome/classroom.webp" alt="Chess classroom" />
                 <strong>CLASS ROOM</strong>

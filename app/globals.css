@@ -160,3 +160,4 @@ h2{font-size:17px;line-height:1.5;font-weight:600;margin:0}
 .auth-card .auth-secondary{border:1px solid #4d6873;background:#17242b;color:#e8f4f5}
 .auth-error{margin:14px 0 0;padding:10px 12px;border:1px solid #a95b54;border-radius:9px;background:#5c282833;color:#ffcbc6!important;font-size:11px;line-height:1.5}
 @media(max-width:650px){.auth-card{margin:10px auto;padding:23px 19px;border-radius:17px}.auth-card h2{font-size:21px}.auth-card .auth-brand{margin-bottom:15px}.auth-card .auth-subtitle{margin-bottom:17px}.google-auth-button{min-height:46px}}
+.classroom-cms-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:14px 0}.classroom-cms-grid fieldset{display:grid;gap:8px;padding:12px;border:1px solid #87948e;border-radius:14px;background:#f3f4ee}.classroom-cms-grid legend{padding:0 7px;color:#176b73;font-weight:800;text-transform:capitalize}@media(max-width:620px){.classroom-cms-grid{grid-template-columns:1fr}}

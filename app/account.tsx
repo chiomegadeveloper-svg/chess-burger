@@ -30,7 +30,6 @@ import { profileRequest } from "./profile-client";
 import { toWebpUnder1Mb, validateImageFile } from "./media";
 import { isProfileComplete } from "./profile-completion";
 import ProfilePhotoBucket from "./profile-photo-bucket";
-import {CbgIcon,cbgTier} from "./currency";
 
 const emptyPhotos = ["", "", "", ""],
   countries = [
@@ -812,10 +811,10 @@ export default function Account({
               </div>
               <div>
                 <strong>
-                  <CbgIcon className="currency-inline-icon" alt=""/>
+                  <i>♟</i>
                   {profile.gold_points.toLocaleString()}
                 </strong>
-                <span>{cbgTier(profile.gold_points)}</span>
+                <span>Gold</span>
               </div>
               <div>
                 <strong>
@@ -1015,8 +1014,8 @@ export default function Account({
             <strong>{profile.ocbr ?? 88}</strong>
           </div>
           <div>
-            <span>{cbgTier(profile.gold_points)} balance</span>
-            <strong><CbgIcon className="currency-inline-icon" alt=""/>{profile.gold_points.toLocaleString()}</strong>
+            <span>Gold points</span>
+            <strong>{profile.gold_points.toLocaleString()}</strong>
           </div>
           <div>
             <span>Online record</span>

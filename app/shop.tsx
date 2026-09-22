@@ -22,11 +22,11 @@ import {
 } from "./feed-banner-catalog";
 import type { PlayerProfile } from "./supabase";
 import { getSupabase } from "./supabase";
+import { classroom } from "./classroom-client";
 import "./feed-banner-shop.css";
 import "./shop-polish.css";
 import "./rpg-bag.css";
 import "./bag-upgrades.css";
-import {CbgIcon,cbgTier} from "./currency";
 
 type BannerRental = { product_id: string; expires_at: string };
 type ShopState = {
@@ -46,6 +46,18 @@ const ARENA_BUNDLES = [
   { quantity: 3, name: "Trio Tickets", price: 78 },
   { quantity: 5, name: "Arena Pack", price: 128 },
 ] as const;
+
+function ClassroomCreditStore(){
+  const [wallet,setWallet]=useState({cbc:0}),[gold,setGold]=useState(0),[price,setPrice]=useState(0),[quantity,setQuantity]=useState(1),[busy,setBusy]=useState(false);
+  const load=()=>classroom<{wallet:{cbc:number};gold:number;settings:{cbc_gold_price:number}}>("state").then(r=>{setWallet(r.wallet);setGold(r.gold);setPrice(r.settings.cbc_gold_price)});
+  useEffect(()=>{void load().catch(()=>{})},[]);
+  const buy=async()=>{setBusy(true);try{const result=await classroom<{cbc:number;gold:number}>("buy-cbc",{quantity,request_id:crypto.randomUUID()});setWallet({cbc:result.cbc});setGold(result.gold);toast.success(`${quantity} CBC added to your wallet.`)}catch(e){toast.error(e instanceof Error?e.message:"Unable to buy CBC.")}finally{setBusy(false)}};
+  return <section className="classroom-credit-store">
+    <div className="classroom-shop-heading"><div><small>CHESSBURGER CLASSROOM</small><h2>Classroom Credits</h2><p>CBC is used for Room Sessions and first-time student enrollment.</p></div><div className="classroom-shop-balances"><span><img src="/classroom/cbc-token.webp" alt="CBC"/><b>{wallet.cbc.toLocaleString()}</b> CBC</span><span><b>{gold.toLocaleString()}</b> CBG</span></div></div>
+    <div className="classroom-credit-products"><article><img src="/classroom/cbc-token.webp" alt="ChessBurger Classroom Credit token"/><div><h3>CBC</h3><p>Buy one unified Classroom Credit with ChessBurger Gold.</p><small>{price>0?`${price.toLocaleString()} CBG per CBC`:"Owner has not set the CBC price yet"}</small></div><label>Quantity<input type="number" min={1} max={1000} value={quantity} onChange={e=>setQuantity(Math.max(1,Math.min(1000,Number(e.target.value)||1)))}/></label><button type="button" disabled={busy||price<1||gold<price*quantity} onClick={()=>void buy()}>{price<1?"Price pending":`Buy · ${(price*quantity).toLocaleString()} CBG`}</button></article></div>
+    <p className="classroom-shop-note">Each room package costs owner-set CBG and deposits its included CBC bundle into the teacher's My Bag.</p>
+  </section>;
+}
 
 function ArenaTicketStore({ fallbackGold }: { fallbackGold: number }) {
   const [tickets, setTickets] = useState(0),
@@ -81,7 +93,7 @@ function ArenaTicketStore({ fallbackGold }: { fallbackGold: number }) {
     if (busy !== null) return;
     if (
       !window.confirm(
-        `Buy ${bundle.quantity} Arena Ticket${bundle.quantity > 1 ? "s" : ""} for ${bundle.price} CBG?`,
+        `Buy ${bundle.quantity} Arena Ticket${bundle.quantity > 1 ? "s" : ""} for ${bundle.price} Gold?`,
       )
     )
       return;
@@ -152,7 +164,7 @@ function ArenaTicketStore({ fallbackGold }: { fallbackGold: number }) {
               ) : (
                 <>
                   <i className="shop-gold-dot" />
-                  {bundle.price} CBG
+                  {bundle.price} Gold
                 </>
               )}
             </button>
@@ -179,7 +191,7 @@ function BagSlotStore({ fallbackGold }: { fallbackGold: number }) {
   }, []);
   const buy = async () => {
     if (busy || gold < 48) return;
-    if (!window.confirm("Buy 10 additional Bag slots for 48 CBG?")) return;
+    if (!window.confirm("Buy 10 additional Bag slots for 48 Gold?")) return;
     setBusy(true);
     try {
       const data = await arena<{ bag_slots: number; gold: number }>(
@@ -195,7 +207,7 @@ function BagSlotStore({ fallbackGold }: { fallbackGold: number }) {
       setBusy(false);
     }
   };
-  return <section className="bag-slot-store"><img src="/inventory/chess-burger-bag.webp" alt="Chess Burger Bag"/><div><span>INVENTORY UPGRADE</span><h2>Chess Burger Bag</h2><p>{used} of {slots} slots used · Every player starts with 10 free slots.</p></div><button type="button" disabled={busy||gold<48} onClick={()=>void buy()}>{busy?"Unlocking…":"+10 slots · 48 CBG"}</button></section>;
+  return <section className="bag-slot-store"><img src="/inventory/chess-burger-bag.webp" alt="Chess Burger Bag"/><div><span>INVENTORY UPGRADE</span><h2>Chess Burger Bag</h2><p>{used} of {slots} slots used · Every player starts with 10 free slots.</p></div><button type="button" disabled={busy||gold<48} onClick={()=>void buy()}>{busy?"Unlocking…":"+10 slots · 48 Gold"}</button></section>;
 }
 
 function BannerTile({
@@ -318,9 +330,9 @@ export function ShopPage({
             <p>Choose a signature color for every community post you share.</p>
           </div>
           <span className="banner-wallet">
-            <CbgIcon className="cbg-wallet-icon" alt=""/>
+            <span className="gold-coin">●</span>
             <strong>{state.gold || profile?.gold_points || 0}</strong>
-            <small>{cbgTier(state.gold || profile?.gold_points || 0)} balance</small>
+            <small>Gold balance</small>
           </span>
         </div>
         <fieldset className="rental-duration">
@@ -336,7 +348,7 @@ export function ShopPage({
               <strong>{option === 7 ? "1 Week" : `${option} Days`}</strong>
               <span>
                 Pastel {feedBannerRentalPrice("pastel", option)} · Premium{" "}
-                {feedBannerRentalPrice("metallic", option)} CBG
+                {feedBannerRentalPrice("metallic", option)} Gold
               </span>
             </button>
           ))}
@@ -381,7 +393,7 @@ export function ShopPage({
                               <span className="gold-coin">●</span>
                               {rental ? "Extend" : "Rent"}{" "}
                               {days === 7 ? "1 week" : `${days} days`} ·{" "}
-                              {feedBannerRentalPrice(banner.tier, days)} CBG
+                              {feedBannerRentalPrice(banner.tier, days)} Gold
                             </>
                           }
                           onAction={() => void act(banner)}
@@ -405,23 +417,24 @@ export function ShopPage({
           <p>Upgrade your look and unlock competitive experiences.</p>
         </div>
         <span className="banner-wallet">
-          <CbgIcon className="cbg-wallet-icon" alt=""/>
+          <span className="gold-coin">●</span>
           <strong>{state.gold || profile?.gold_points || 0}</strong>
-          <small>{cbgTier(state.gold || profile?.gold_points || 0)} balance</small>
+          <small>Gold balance</small>
         </span>
       </div>
     <ArenaTicketStore
           fallbackGold={state.gold || profile?.gold_points || 0}
         />
+        <ClassroomCreditStore />
         <BagSlotStore fallbackGold={state.gold || profile?.gold_points || 0}/>
       <div className="shop-grid">
         {[
           ["♞", "Avatar frames", "Decorative player-card frames."],
           ["♛", "Board themes", "Metallic boards and pieces."],
-          ["/currency/cbg-coin.webp", "CBG rewards", "Currency rewards for your collection."],
+          ["♟", "Gold rewards", "Reward items for your collection."],
         ].map(([icon, name, desc]) => (
           <article key={name}>
-            <span className="shop-icon">{icon.startsWith('/')?<img src={icon} alt=""/>:icon}</span>
+            <span className="shop-icon">{icon}</span>
             <div>
               <h2>{name}</h2>
               <p>{desc}</p>
@@ -479,10 +492,11 @@ export function BagPage({ onChanged }: { onChanged: () => void }) {
       max: number;
     } | null>(null),
     [username, setUsername] = useState(""),
-    [quantity, setQuantity] = useState(1);
+    [quantity, setQuantity] = useState(1),[cbc,setCbc]=useState(0);
   const load = async () => {
-    const data = await arena<BagState>("bag-items");
+    const [data,classData] = await Promise.all([arena<BagState>("bag-items"),classroom<{wallet:{cbc:number}}>("state")]);
     setState(data);
+    setCbc(classData.wallet.cbc);
   };
   useEffect(() => {
     void load()
@@ -516,8 +530,9 @@ export function BagPage({ onChanged }: { onChanged: () => void }) {
     setBusy(`gift:${giftItem.kind}:${giftItem.id}`);
     try {
       if(giftItem.kind==="gold") await arena("gift-gold",{username,amount:quantity,request_id:crypto.randomUUID()});
+      else if(giftItem.kind==="cbc") await classroom("gift-cbc",{username,quantity,request_id:crypto.randomUUID()});
       else await arena("gift-bag-item", {username,item_kind: giftItem.kind,item_id: giftItem.id,quantity,request_id: crypto.randomUUID()});
-      toast.success(giftItem.kind==="gold"?`${quantity} CBG sent to ${username}.`:`${giftItem.name} sent to ${username}. 4 CBG charged.`);
+      toast.success(giftItem.kind==="gold"?`${quantity} Gold sent to ${username}.`:`${giftItem.name} sent to ${username}. 4 Gold charged.`);
       setGiftItem(null);
       await load();
       onChanged();
@@ -536,14 +551,12 @@ export function BagPage({ onChanged }: { onChanged: () => void }) {
           <small>PLAYER INVENTORY</small>
           <h1>My Bag</h1>
           <p>
-            Equip collectibles or gift any item to another player for 4 CBG.
+            Equip collectibles or gift any item to another player for 4 Gold.
           </p>
         </div>
         <div className="rpg-bag-wallet">
-          <span className="bag-cbg-balance">
-            <CbgIcon className="bag-cbg-wallet-icon" alt=""/>
-            <b>{state.gold}</b>
-            <small>{cbgTier(state.gold)} balance</small>
+          <span>
+            <i /> {state.gold} Gold
           </span>
           <span className="bag-count">
             <ShoppingBag size={15} />
@@ -555,7 +568,8 @@ export function BagPage({ onChanged }: { onChanged: () => void }) {
         <p className="account-note">Opening your bag…</p>
       ) : (
         <div className="bag-tiles unified-bag-grid">
-          <article className="bag-inventory-card gold legendary"><div className="rpg-item-art rpg-gold-art"><CbgIcon className="bag-cbg-card-icon" alt="CBG coin"/><strong>{state.gold}</strong></div><div className="rpg-item-copy"><small>{cbgTier(state.gold)} CURRENCY</small><h3>Chess Burger Gold</h3><span>Gift CBG directly to another player.</span></div><div className="rpg-item-actions"><button type="button" disabled={state.gold<1} onClick={()=>openGift("gold","gold-coins","CBG Coins",state.gold)}><Gift size={14}/>Gift CBG</button></div></article>
+          <article className="bag-inventory-card gold legendary"><div className="rpg-item-art rpg-gold-art"><span>●</span><strong>{state.gold}</strong></div><div className="rpg-item-copy"><small>PLAYER CURRENCY</small><h3>Gold Coins</h3><span>Gift Gold directly to another player.</span></div><div className="rpg-item-actions"><button type="button" disabled={state.gold<1} onClick={()=>openGift("gold","gold-coins","Gold Coins",state.gold)}><Gift size={14}/>Gift Gold</button></div></article>
+          <article className="bag-inventory-card generic legendary"><div className="rpg-item-art"><img src="/classroom/cbc-token.webp" alt="CBC token"/><strong>×{cbc}</strong></div><div className="rpg-item-copy"><small>CLASSROOM CURRENCY</small><h3>Classroom Credits</h3><span>Gift any CBC amount to students by username.</span></div><div className="rpg-item-actions"><button type="button" disabled={cbc<1} onClick={()=>openGift("cbc","classroom-credit","CBC",cbc)}><Gift size={14}/>Gift CBC</button></div></article>
           {state.tickets > 0 && (
             <article className="bag-inventory-card ticket legendary">
               <div className="rpg-item-art">
@@ -705,7 +719,7 @@ export function BagPage({ onChanged }: { onChanged: () => void }) {
             </label>
               {giftItem.max > 1 && (
                 <label>
-                  {giftItem.kind==="gold"?"CBG amount":"Quantity"}
+                  {giftItem.kind==="gold"?"Gold amount":"Quantity"}
                 <input
                   required
                   type="number"
@@ -723,7 +737,7 @@ export function BagPage({ onChanged }: { onChanged: () => void }) {
                 />
               </label>
             )}
-              <p>{giftItem.kind==="gold"?"CBG transfers directly to the recipient. CBG gifts have no transaction fee.":"The item transfers directly to the recipient’s Bag. Your account is charged exactly 4 CBG for this transaction."}</p>
+              <p>{giftItem.kind==="gold"?"Gold transfers directly to the recipient. Gold gifts have no transaction fee.":"The item transfers directly to the recipient’s Bag. Your account is charged exactly 4 Gold for this transaction."}</p>
             <div>
               <button type="button" onClick={() => setGiftItem(null)}>
                 Cancel

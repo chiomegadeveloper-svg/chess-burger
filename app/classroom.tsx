@@ -1,0 +1,51 @@
+"use client";
+import {useCallback,useEffect,useState} from "react";
+import {ArrowLeft,BookOpen,Clock,Copy,GraduationCap,KeyRound,Users} from "lucide-react";
+import {toast} from "sonner";
+import {classroom} from "./classroom-client";
+import "./classroom.css";
+
+const PACKAGES=[
+  {kind:"pawn",name:"Room Pawn",slots:5,hours:12},
+  {kind:"bishop",name:"Room Bishop",slots:10,hours:24},
+  {kind:"knight",name:"Room Knight",slots:15,hours:72},
+  {kind:"rook",name:"Room Rook",slots:20,hours:120},
+  {kind:"queen",name:"Room Queen",slots:30,hours:168},
+  {kind:"king",name:"Room King",slots:40,hours:336},
+] as const;
+type Room={id:string;name:string;package_kind:string;invite_code:string;max_students:number;student_count?:number;cbc_included?:number;expires_at:string;teacher?:{display_name?:string;username?:string;avatar_url?:string};students?:Array<{count:number}>};
+type Settings={cbc_gold_price:number}&Record<`${string}_${"cbg"|"cbc"}`,number>;
+type State={wallet:{cbc:number};gold:number;settings:Settings;owned:Room[];joined:Array<{joined_at:string;room:Room}>;active:Room[]};
+const duration=(hours:number)=>hours<24?`${hours} hours`:hours===24?"1 day":hours===168?"1 week":hours===336?"2 weeks":`${hours/24} days`;
+
+export default function Classroom({onBack,onOpenShop}:{onBack:()=>void;onOpenShop:()=>void}){
+  const [role,setRole]=useState<""|"teacher"|"student">("");
+  const [state,setState]=useState<State|null>(null),[busy,setBusy]=useState(false),[selected,setSelected]=useState("pawn"),[name,setName]=useState(""),[code,setCode]=useState("");
+  const load=useCallback(()=>classroom<State>("state").then(setState).catch(e=>toast.error(e.message)),[]);
+  useEffect(()=>{void load()},[load]);
+  const create=async()=>{if(!name.trim())return toast.error("Name your Room Session.");setBusy(true);try{const result=await classroom<{room:Room}>("create",{package:selected,name,request_id:crypto.randomUUID()});toast.success(`${result.room.name} created`,{description:`Student code: ${result.room.invite_code}`});setName("");await load()}catch(e){toast.error(e instanceof Error?e.message:"Unable to create room.")}finally{setBusy(false)}};
+  const join=async()=>{setBusy(true);try{const result=await classroom<{room:Room}>("join",{code:code.trim().toUpperCase(),request_id:crypto.randomUUID()});toast.success(`Welcome to ${result.room.name}`);setCode("");await load()}catch(e){toast.error(e instanceof Error?e.message:"Unable to join room.")}finally{setBusy(false)}};
+  const rename=async(room:Room)=>{const next=window.prompt("Rename Room Session",room.name)?.trim();if(!next||next===room.name)return;setBusy(true);try{await classroom("rename",{room_id:room.id,name:next});toast.success("Room renamed.");await load()}catch(e){toast.error(e instanceof Error?e.message:"Unable to rename room.")}finally{setBusy(false)}};
+  return <section className="classroom-page">
+    <button className="back-button" type="button" onClick={role?()=>setRole(""):onBack}><ArrowLeft size={15}/>{role?"Choose role":"Play selection"}</button>
+    <header className="classroom-hero"><span>CHESSBURGER LEARNING</span><h1>Classroom</h1><p>Create welcoming chess rooms or join your instructor with a private code.</p></header>
+    {!role?<div className="classroom-role-grid">
+      <button onClick={()=>setRole("teacher")}><img src="/classroom/teacher.webp" alt="Chess instructor"/><span><small>CREATE & TEACH</small><strong>Teacher</strong><b>Open instructor tools</b></span></button>
+      <button onClick={()=>setRole("student")}><img src="/classroom/student.webp" alt="Chess student"/><span><small>JOIN & LEARN</small><strong>Student</strong><b>Enter a classroom</b></span></button>
+    </div>:<>
+      <div className="classroom-wallets">
+        <article><img src="/classroom/cbc-token.webp" alt="CBC token"/><span><small>CLASSROOM CREDITS</small><strong>{state?.wallet?.cbc??0} CBC</strong></span></article>
+        <article><span><small>CHESSBURGER GOLD</small><strong>{state?.gold??0} CBG</strong></span></article>
+        <button type="button" onClick={onOpenShop}>Open Shop</button>
+      </div>
+      {role==="teacher"?<div className="classroom-columns">
+        <section className="classroom-panel"><div className="panel-title"><GraduationCap/><span><small>TEACHER DESK</small><h2>Create Room Session</h2></span></div><div className="room-packages">{PACKAGES.map(p=>{const cbg=state?.settings?.[`${p.kind}_cbg`]??0,cbc=state?.settings?.[`${p.kind}_cbc`]??0;return <button key={p.kind} className={selected===p.kind?"selected":""} onClick={()=>setSelected(p.kind)}><b>{p.name}</b><span><Users size={13}/>{p.slots} students</span><span><Clock size={13}/>{duration(p.hours)}</span><strong>{cbg&&cbc?`${cbg.toLocaleString()} CBG · includes ${cbc.toLocaleString()} CBC`:"Awaiting owner setup"}</strong></button>})}</div><label>Room Session name<input maxLength={60} value={name} onChange={e=>setName(e.target.value)} placeholder="Example: Coach Maria's Endgames"/></label><button className="classroom-primary" disabled={busy} onClick={()=>void create()}>{busy?"Creating…":"Create Room Session"}</button></section>
+        <section className="classroom-panel"><div className="panel-title"><BookOpen/><span><small>CLASSROOM SESSION TAB</small><h2>Your active rooms</h2></span></div><div className="session-list">{state?.owned?.length?state.owned.map(r=><article key={r.id}><div><small>{r.package_kind.toUpperCase()}</small><h3>{r.name}</h3><span>{r.student_count??0}/{r.max_students} students · package added {r.cbc_included??0} CBC to your Bag · ends {new Date(r.expires_at).toLocaleString()}</span></div><button onClick={()=>navigator.clipboard.writeText(r.invite_code).then(()=>toast.success("Code copied"))}><KeyRound size={14}/>{r.invite_code}<Copy size={12}/></button><button onClick={()=>void rename(r)}>Rename</button></article>):<p className="empty-room">No active Room Sessions yet.</p>}</div></section>
+      </div>:<div className="classroom-columns">
+        <section className="classroom-panel join-panel"><div className="panel-title"><KeyRound/><span><small>STUDENT ENTRY</small><h2>Enter teacher code</h2></span></div><p>First enrollment uses 1 CBC from your My Bag. Your teacher can gift CBC to your username. Reopening the same room is free.</p><label>8-character classroom code<input maxLength={8} value={code} onChange={e=>setCode(e.target.value.replace(/[^a-z0-9]/gi,"").toUpperCase())} placeholder="PAWN1234"/></label><button className="classroom-primary" disabled={busy||code.length!==8} onClick={()=>void join()}>{busy?"Checking…":"Join Room · 1 CBC"}</button></section>
+        <section className="classroom-panel"><div className="panel-title"><BookOpen/><span><small>MY CLASSROOMS</small><h2>Enrolled sessions</h2></span></div><div className="session-list">{state?.joined?.length?state.joined.map(({room})=><article key={room.id}><div><small>{room.package_kind?.toUpperCase()}</small><h3>{room.name}</h3><span>{new Date(room.expires_at).toLocaleString()}</span></div></article>):<p className="empty-room">Enter your teacher's code to join a room.</p>}</div></section>
+      </div>}
+      <section className="classroom-panel active-directory"><div className="panel-title"><Users/><span><small>ACTIVE NOW</small><h2>Classroom Sessions</h2></span></div><div className="active-room-grid">{state?.active?.map(r=><article key={r.id}><b>{r.name}</b><span>{r.package_kind} · {r.students?.[0]?.count??0}/{r.max_students} students</span><small>Private code required</small></article>)}</div></section>
+    </>}
+  </section>
+}

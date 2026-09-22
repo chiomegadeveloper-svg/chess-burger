@@ -2,11 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Chess, type Square } from "chess.js";
-import { ArrowLeft, Check, Lightbulb, LockKeyhole, RotateCcw, Volume2 } from "lucide-react";
+import { ArrowLeft, Check, Coins, Lightbulb, LockKeyhole, RotateCcw, Volume2 } from "lucide-react";
 import { toast } from "sonner";
 import { arena } from "./arena-client";
 import { DAILY_PUZZLES, PUZZLE_CHAPTERS } from "./puzzle-data";
-import {CbgIcon,cbgTier} from "./currency";
 
 const symbols: Record<string, string> = { wk: "♚︎", wq: "♛︎", wr: "♜︎", wb: "♝︎", wn: "♞︎", wp: "♟︎", bk: "♚︎", bq: "♛︎", br: "♜︎", bb: "♝︎", bn: "♞︎", bp: "♟︎" };
 type PuzzleState = { completed: string[]; gold: number; bonus_claimed: boolean; day: string };
@@ -61,12 +60,12 @@ export default function Puzzles({ onClose, onReward }: { onClose: () => void; on
       setGame(new Chess(copy.fen()));setStep(opponentStep+1);setBusy(false);setMessage("Good. Continue with the strongest move.");return;
     }
     if (completed.has(puzzle.id)) { setMessage("Correct — excellent pattern recognition!");toast.success(`Puzzle ${puzzle.number} solved again!`,{description:`Chapter ${puzzle.chapter}: ${chapter.title} · Practice replay`});return; }
-    setBusy(true); setMessage("Correct! Securing your CBG…");
+    setBusy(true); setMessage("Correct! Securing your Gold…");
     try {
       const result = await arena<PuzzleState & { awarded: boolean; gold_delta: number }>("claim-puzzle", { puzzle_id: puzzle.id, proof: puzzle.moves.join(" ") });
       setState(result); onReward();
-      setMessage(result.awarded ? `Solved! +${result.gold_delta} CBG added.` : "This puzzle was already claimed.");
-      if(result.awarded)toast.success(`Puzzle ${puzzle.number} solved!`,{description:result.gold_delta>2?`+2 CBG · +5 CBG chapter bonus`:`+${result.gold_delta} CBG added to your balance`});
+      setMessage(result.awarded ? `Solved! +${result.gold_delta} Gold added.` : "This puzzle was already claimed.");
+      if(result.awarded)toast.success(`Puzzle ${puzzle.number} solved!`,{description:result.gold_delta>2?`+2 Gold · +5 Gold chapter bonus`:`+${result.gold_delta} Gold added to your balance`});
       else toast.success(`Puzzle ${puzzle.number} solved!`,{description:"Reward already claimed for this puzzle."});
     } catch (error) { setMessage(error instanceof Error ? error.message : "Reward could not be claimed."); }
     finally { setBusy(false); }
@@ -91,7 +90,7 @@ export default function Puzzles({ onClose, onReward }: { onClose: () => void; on
 
   return <section className="puzzle-page">
     <button className="back-button" type="button" onClick={onClose}><ArrowLeft size={16}/>Match Lobby</button>
-    <header className="puzzle-hero"><div><span>100-puzzle campaign</span><h1>Puzzle Quest</h1><p>100 distinct, real-game tactical positions. Earn 2 CBG per first solve and a 5-CBG chapter bonus.</p></div><div className="puzzle-gold"><CbgIcon alt=""/><strong>{state?.gold ?? "—"}</strong><small>{state?cbgTier(state.gold):"Your CBG"}</small></div></header>
+    <header className="puzzle-hero"><div><span>100-puzzle campaign</span><h1>Puzzle Quest</h1><p>100 distinct, real-game tactical positions. Earn 2 Gold per first solve and a 5-Gold chapter bonus.</p></div><div className="puzzle-gold"><Coins/><strong>{state?.gold ?? "—"}</strong><small>Your Gold</small></div></header>
     <div className="puzzle-chapters" aria-label="Puzzle chapters">{PUZZLE_CHAPTERS.map(item=>{const first=(item.number-1)*10,open=first===0||completed.has(DAILY_PUZZLES[first-1].id),done=completed.has(DAILY_PUZZLES[first+9].id);return <button type="button" key={item.number} className={`${item.number===puzzle.chapter?"active":""} ${done?"done":""}`} disabled={!open} onClick={()=>openChapter(item.number)}><b>{open?item.number:<LockKeyhole/>}</b><span><small>{item.difficulty}</small><strong>{item.title}</strong></span></button>})}</div>
     <div className="chapter-heading"><div><span>Chapter {chapter.number} · {chapter.difficulty}</span><h2>{chapter.title}</h2><p>{chapter.description}</p></div><strong>{chapterPuzzles.filter(item=>completed.has(item.id)).length}/10 solved</strong></div>
     <div className="puzzle-trail" aria-label={`Chapter ${chapter.number} puzzle levels`}>{chapterPuzzles.map(item => {const level=DAILY_PUZZLES.indexOf(item),done=completed.has(item.id),open=level===0||completed.has(DAILY_PUZZLES[level-1].id);return <button type="button" key={item.id} className={`${level===index?"active":""} ${done?"done":""}`} disabled={!open} onClick={()=>setIndex(level)} aria-label={`Puzzle ${item.number}: ${done?"complete":open?"available":"locked"}`}><span>{done?<Check/>:open?item.number:<LockKeyhole/>}</span><small>{done?"Solved":open?"Play":"Locked"}</small></button>})}</div>

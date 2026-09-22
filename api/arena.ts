@@ -172,15 +172,11 @@ const CLAIM_ACCURACY_METRES = 250;
 
 async function publicRanks(client: Db) {
   await reconcileAuthProfiles(client);
-  const [r,presence] = await Promise.all([
-    client.from('cb_profiles')
-      .select('user_id,username,display_name,avatar_url,country_code,cbr,gold_points,wins,losses,win_streak')
-      .order('cbr', { ascending: false }).order('wins', { ascending: false }).order('user_id', { ascending: true }).limit(10),
-    client.from('cb_live_presence').select('*').limit(500),
-  ]);
-  if (r.error || presence.error) fail(500, r.error?.message ?? presence.error?.message ?? 'Rankings are temporarily unavailable.');
-  const cutoff=now()-60_000,online=new Set((presence.data??[]).filter((row:any)=>{const stamp=liveAt(row);return stamp===null?row.online!==false&&row.is_online!==false:stamp>cutoff;}).map((row:any)=>row.user_id));
-  return { players: (r.data ?? []).map((player:any)=>({...player,online:online.has(player.user_id)})) };
+  const r = await client.from('cb_profiles')
+    .select('user_id,username,display_name,avatar_url,country_code,cbr,gold_points,wins,losses,win_streak')
+    .order('cbr', { ascending: false }).order('wins', { ascending: false }).order('user_id', { ascending: true }).limit(10);
+  if (r.error) fail(500, r.error.message);
+  return { players: r.data ?? [] };
 }
 
 function profileSeed(user: any) {
@@ -718,8 +714,7 @@ export default async function handler(req: Req, res: Res) {
     const isStaff = account.profile.role === 'owner' || account.profile.role === 'admin';
     const requireStaff = () => { if (!isStaff) fail(403, 'Owner or GM access is required.'); };
     const audit = async (auditAction: string, details: Record<string, unknown> = {}) => {
-      const actor = { actor_name: account.profile.display_name, actor_username: account.profile.username, actor_role: account.profile.role };
-      const saved = await client.from('cb_admin_logs').insert({ actor_user_id: account.id, action: auditAction, details: { ...actor, ...details } });
+      const saved = await client.from('cb_admin_logs').insert({ actor_user_id: account.id, action: auditAction, details });
       if (saved.error) console.warn('arena.cms-audit-failed', { action: auditAction, message: saved.error.message });
     };
     if (action === 'cms-announcements') {
@@ -759,11 +754,9 @@ export default async function handler(req: Req, res: Res) {
       requireStaff();
       const imageUrl = String(body.url ?? '').trim();
       if (imageUrl && (!/^https:\/\//i.test(imageUrl) || imageUrl.length > 2048)) fail(400, 'Use a secure HTTPS photo URL.');
-      const previous = await client.from('cb_app_settings').select('value').eq('key', 'app_feature').maybeSingle();
-      if (previous.error) fail(500, previous.error.message);
       const saved = await client.from('cb_app_settings').upsert({ key: 'app_feature', value: { image_url: imageUrl }, updated_at: new Date().toISOString() }, { onConflict: 'key' });
       if (saved.error) fail(500, saved.error.message);
-      await audit('set_app_feature', { previous: previous.data?.value ?? null, current: { image_url: imageUrl } });
+      await audit('set_app_feature', { image_url: imageUrl });
       return res.status(200).json({ ok: true, image_url: imageUrl });
     }
     if (action === 'logs') {
@@ -776,7 +769,7 @@ export default async function handler(req: Req, res: Res) {
       const actors = actorIds.length ? await client.from('cb_profiles').select('user_id,display_name,username').in('user_id', actorIds) : { data: [], error: null };
       if (actors.error) fail(500, actors.error.message);
       const names = new Map((actors.data ?? []).map((actor: any) => [actor.user_id, actor.display_name || `@${actor.username}`]));
-      return res.status(200).json({ logs: (found.data ?? []).map((row: any) => ({ ...row, actor_name: names.get(row.actor_user_id) ?? row.details?.actor_name ?? (row.details?.actor_username ? `@${row.details.actor_username}` : undefined), actor_role: row.details?.actor_role })) });
+      return res.status(200).json({ logs: (found.data ?? []).map((row: any) => ({ ...row, actor_name: names.get(row.actor_user_id) ?? undefined })) });
     }
     if (action === 'delete-user') {
       if (account.profile.role !== 'owner') fail(403, 'Only an Owner can delete a user.');
@@ -786,7 +779,7 @@ export default async function handler(req: Req, res: Res) {
       if (target.error) fail(500, target.error.message);
       if (!target.data) fail(404, 'Player not found.');
       if (target.data.role === 'owner') fail(403, 'Owner accounts are protected.');
-      await audit('delete_user', { username, target_user_id: target.data.user_id, previous_role: target.data.role });
+      await audit('delete_user', { username });
       const removed = await client.auth.admin.deleteUser(target.data.user_id);
       if (removed.error) fail(409, removed.error.message);
       return res.status(200).json({ ok: true });
@@ -833,27 +826,6 @@ export default async function handler(req: Req, res: Res) {
       if(reward.error){const message=String(reward.error.message??'Daily reward is unavailable.');if(/cb_daily_|schema cache|function|relation/i.test(message))fail(503,'Run supabase/0025_daily_login_rewards.sql in Supabase, then try again.');if(/already claimed/i.test(message))fail(409,"Today's reward is already claimed.");fail(409,message);}
       return res.status(200).json(reward.data);
     }
-    if(action==='cms-daily-rewards'){
-      if(account.profile.role!=='owner')fail(403,'Only an Owner can edit Daily Login rewards.');
-      const reward=await client.rpc('cb_daily_reward_status',{p_user_id:account.id});
-      if(reward.error)fail(503,'Run supabase/0035_editable_daily_login_rewards.sql in Supabase, then try again.');
-      const products=await client.from('cb_shop_products').select('id,name').or('id.like.pastel-%,id.like.metal-%').order('name');
-      if(products.error)fail(500,products.error.message);
-      return res.status(200).json({rewards:reward.data?.rewards??[],banners:products.data??[]});
-    }
-    if(action==='save-cms-daily-rewards'){
-      if(account.profile.role!=='owner')fail(403,'Only an Owner can edit Daily Login rewards.');
-      const rewards=Array.isArray(body.rewards)?body.rewards:[];
-      if(rewards.length!==7)fail(400,'Configure all 7 reward days.');
-      const normalized=rewards.map((item:any,index:number)=>({day:index+1,kind:String(item?.kind??''),amount:Number(item?.amount),product_id:String(item?.product_id??'')}));
-      if(normalized.some((item:any)=>!['gold','arena_ticket','banner','bag_slot'].includes(item.kind)||!Number.isInteger(item.amount)||item.amount<1||item.amount>10000||(item.kind==='banner'&&!/^(pastel|metal)-[a-z-]+$/.test(item.product_id))))fail(400,'Choose a valid item and amount for every day.');
-      const previous=await client.from('cb_daily_reward_config').select('day,reward_kind,amount,product_id').order('day');
-      if(previous.error)fail(500,previous.error.message);
-      const saved=await client.rpc('cb_save_daily_reward_config',{p_owner_id:account.id,p_rewards:normalized});
-      if(saved.error){const message=String(saved.error.message??'Rewards could not be saved.');if(/cb_save_daily|cb_daily_reward_config|schema cache|function|relation/i.test(message))fail(503,'Run supabase/0035_editable_daily_login_rewards.sql in Supabase, then try again.');fail(409,message);}
-      await audit('daily_rewards_update',{previous:previous.data??[],current:normalized});
-      return res.status(200).json({rewards:saved.data});
-    }
     if(action==='buy-feed-banner'){
       const productId=String(body.product_id??''),requestId=String(body.request_id??''),days=Number(body.days??0);
       if(!/^(pastel|metal)-[a-z-]{2,30}$/.test(productId)||![3,5,7].includes(days)||!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(requestId))fail(400,'Choose a valid Feed Banner rental.');
@@ -883,12 +855,6 @@ export default async function handler(req: Req, res: Res) {
       }
       console.info('arena.gold-granted',{actorId:account.id,username,amount,requestId});
       return res.status(200).json({ok:true,username,amount});
-    }
-    if(action==='owner-gold-analytics'){
-      if(account.profile.role!=='owner')fail(403,'Only an Owner can view CBG analytics.');
-      const report=await userScopedDb(req).rpc('cb_owner_gold_analytics');
-      if(report.error){const message=String(report.error.message??'CBG analytics are unavailable.');if(/cb_owner_gold_analytics|cb_gold_gifts|schema cache|function/i.test(message))fail(503,'Run supabase/0037_owner_gold_analytics.sql, then try again.');fail(/owner only/i.test(message)?403:500,message);}
-      return res.status(200).json(report.data);
     }
     if (action === 'heartbeat') return res.status(200).json(await saveLiveHeartbeat(client, account.id));
     if (action === 'map-stats') {
