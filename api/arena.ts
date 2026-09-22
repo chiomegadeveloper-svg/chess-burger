@@ -880,6 +880,12 @@ export default async function handler(req: Req, res: Res) {
       console.info('arena.gold-granted',{actorId:account.id,username,amount,requestId});
       return res.status(200).json({ok:true,username,amount});
     }
+    if(action==='owner-gold-analytics'){
+      if(account.profile.role!=='owner')fail(403,'Only an Owner can view CBG analytics.');
+      const report=await userScopedDb(req).rpc('cb_owner_gold_analytics');
+      if(report.error){const message=String(report.error.message??'CBG analytics are unavailable.');if(/cb_owner_gold_analytics|cb_gold_gifts|schema cache|function/i.test(message))fail(503,'Run supabase/0037_owner_gold_analytics.sql, then try again.');fail(/owner only/i.test(message)?403:500,message);}
+      return res.status(200).json(report.data);
+    }
     if (action === 'heartbeat') return res.status(200).json(await saveLiveHeartbeat(client, account.id));
     if (action === 'map-stats') {
       const registered = await reconcileAuthProfiles(client);
