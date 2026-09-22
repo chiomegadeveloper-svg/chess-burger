@@ -27,6 +27,12 @@
   white-space: nowrap;
 }
 
+.session-list article button.enter-workshop {
+  border-color: #42b9c6;
+  background: linear-gradient(135deg, #15505a, #102e35);
+  color: #8ef1f6;
+}
+
 .session-list article.access-expired button {
   background: linear-gradient(135deg, #603131, #28191a);
   color: #ffd1d1;

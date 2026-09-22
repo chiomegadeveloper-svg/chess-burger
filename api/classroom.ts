@@ -17,22 +17,6 @@ export default async function handler(req:Req,res:Res){
     const auth=await client.auth.getUser(token);
     if(auth.error||!auth.data.user)fail(401,"Please sign in again.");
     const userId=auth.data.user.id,body=req.body||{},action=String(body.action||"");
-    const audit=async(auditAction:string,details:Record<string,unknown>={})=>{
-      const actor=await client.from("cb_profiles").select("display_name,username,role").eq("user_id",userId).single();
-      if(actor.error)fail(500,`Classroom activity identity could not be loaded: ${actor.error.message}`);
-      const logged=await client.from("cb_admin_logs").insert({actor_user_id:userId,action:auditAction,details:{actor_name:actor.data.display_name,actor_username:actor.data.username,actor_role:actor.data.role,economy:"classroom",...details}});
-      if(logged.error)fail(500,`Classroom activity could not be logged: ${logged.error.message}`);
-    };
-    const hasActiveTeacherSession=async()=>{
-      const current=await client.from("cb_classroom_rooms").select("id").eq("teacher_id",userId).eq("status","active").gt("expires_at",new Date().toISOString()).limit(1);
-      if(current.error)fail(500,current.error.message);
-      return Boolean(current.data?.length);
-    };
-    const hasActiveStudentAccess=async()=>{
-      const current=await client.from("cb_classroom_enrollments").select("room_id,room:cb_classroom_rooms!inner(id)").eq("student_id",userId).gt("access_expires_at",new Date().toISOString()).eq("room.status","active").gt("room.expires_at",new Date().toISOString()).limit(1);
-      if(current.error)fail(500,current.error.message);
-      return Boolean(current.data?.length);
-    };
     if(action==="state"){
       await client.from("cb_classroom_wallets").upsert({user_id:userId},{onConflict:"user_id",ignoreDuplicates:true});
       const [wallet,owned,joined,active,settings]=await Promise.all([
@@ -51,57 +35,79 @@ export default async function handler(req:Req,res:Res){
       return res.status(200).json({wallet:wallet.data,gold:profile.data?.gold_points||0,settings:settings.data,owned:(owned.data||[]).map((r:any)=>({...r,student_count:byRoom[r.id]||0})),joined:joined.data||[],active:active.data||[]});
     }
     if(action==="buy-cbc"){
-      const quantity=Number(body.quantity||0),requestId=String(body.request_id||"");
-      const result=await client.rpc("cb_buy_cbc",{p_user_id:userId,p_quantity:quantity,p_request_id:requestId});if(result.error)fail(400,result.error.message);
-      await audit("classroom_cbc_purchased",{quantity,request_id:requestId,current_cbc:result.data?.cbc,current_cbg:result.data?.gold});
-      return res.status(200).json(result.data);
+      const result=await client.rpc("cb_buy_cbc",{p_user_id:userId,p_quantity:Number(body.quantity||0),p_request_id:String(body.request_id||"")});if(result.error)fail(400,result.error.message);return res.status(200).json(result.data);
     }
     if(action==="save-settings"){
       const profile=await client.from("cb_profiles").select("role").eq("user_id",userId).single();if(profile.data?.role!=="owner")fail(403,"Owner access required.");
       const keys=["cbc_gold_price","pawn_cbg","pawn_cbc","bishop_cbg","bishop_cbc","knight_cbg","knight_cbc","rook_cbg","rook_cbc","queen_cbg","queen_cbc","king_cbg","king_cbc"];
       const patch:Record<string,number|boolean|string>={id:true,updated_at:new Date().toISOString()};for(const key of keys){const value=Number(body[key]);if(!Number.isInteger(value)||value<0||value>1000000)fail(400,`Invalid ${key}.`);patch[key]=value;}
-      const previous=await client.from("cb_classroom_settings").select("*").eq("id",true).single();if(previous.error)fail(500,previous.error.message);
-      const saved=await client.from("cb_classroom_settings").upsert(patch).select("*").single();if(saved.error)fail(500,saved.error.message);
-      await audit("classroom_settings_updated",{previous:previous.data,current:saved.data});
-      return res.status(200).json({settings:saved.data});
+      const saved=await client.from("cb_classroom_settings").upsert(patch).select("*").single();if(saved.error)fail(500,saved.error.message);return res.status(200).json({settings:saved.data});
     }
     if(action==="create"){
-      if(await hasActiveStudentAccess())fail(409,"You are currently an active student. Finish your classroom access before creating a teacher session.");
-      const packageKind=String(body.package||""),roomName=String(body.name||""),requestId=String(body.request_id||"");
-      const result=await client.rpc("cb_create_classroom",{p_user_id:userId,p_package:packageKind,p_name:roomName,p_request_id:requestId});
-      if(result.error)fail(400,result.error.message);
-      await audit("classroom_room_created",{package:packageKind,room_name:roomName,room_id:result.data?.id,cbg_paid:result.data?.cbg_paid,cbc_included:result.data?.cbc_included,request_id:requestId});
-      return res.status(200).json({room:result.data});
+      const result=await client.rpc("cb_create_classroom",{p_user_id:userId,p_package:String(body.package||""),p_name:String(body.name||""),p_request_id:String(body.request_id||"")});
+      if(result.error)fail(400,result.error.message);return res.status(200).json({room:result.data});
     }
     if(action==="join"){
-      if(await hasActiveTeacherSession())fail(409,"You have an active teacher session. A teacher cannot enter a student classroom.");
-      const code=String(body.code||""),requestId=String(body.request_id||"");
-      const result=await client.rpc("cb_join_classroom",{p_user_id:userId,p_code:code,p_request_id:requestId});
-      if(result.error)fail(400,result.error.message);
-      await audit("classroom_access_started",{room_id:result.data?.id,room_name:result.data?.name,access_expires_at:result.data?.access_expires_at,request_id:requestId});
-      return res.status(200).json({room:result.data});
+      const result=await client.rpc("cb_join_classroom",{p_user_id:userId,p_code:String(body.code||""),p_request_id:String(body.request_id||"")});
+      if(result.error)fail(400,result.error.message);return res.status(200).json({room:result.data});
     }
     if(action==="extend-access"){
-      if(await hasActiveTeacherSession())fail(409,"You have an active teacher session. A teacher cannot renew student classroom access.");
-      const roomId=String(body.room_id||""),requestId=String(body.request_id||"");
-      const result=await client.rpc("cb_extend_classroom_access",{p_user_id:userId,p_room_id:roomId,p_request_id:requestId});
-      if(result.error)fail(400,result.error.message);
-      await audit("classroom_access_extended",{room_id:roomId,access_expires_at:result.data?.access_expires_at,current_cbc:result.data?.cbc,request_id:requestId});
-      return res.status(200).json(result.data);
+      const result=await client.rpc("cb_extend_classroom_access",{p_user_id:userId,p_room_id:String(body.room_id||""),p_request_id:String(body.request_id||"")});
+      if(result.error)fail(400,result.error.message);return res.status(200).json(result.data);
+    }
+    if(action==="workshop-state"){
+      const roomId=String(body.room_id||""),now=new Date().toISOString();
+      const room=await client.from("cb_classroom_rooms").select("*").eq("id",roomId).eq("status","active").gt("expires_at",now).single();
+      if(room.error||!room.data)fail(404,"Active classroom not found.");
+      const teacher=room.data.teacher_id===userId;
+      const ownEnrollment=teacher?null:await client.from("cb_classroom_enrollments").select("access_expires_at").eq("room_id",roomId).eq("student_id",userId).gt("access_expires_at",now).maybeSingle();
+      if(!teacher&&!ownEnrollment?.data)fail(403,"Your paid classroom time has expired. Renew with 1 CBC.");
+      await client.from("cb_classroom_workspaces").upsert({room_id:roomId},{onConflict:"room_id",ignoreDuplicates:true});
+      const [workspace,enrollments,boards]=await Promise.all([
+        client.from("cb_classroom_workspaces").select("*").eq("room_id",roomId).single(),
+        client.from("cb_classroom_enrollments").select("student_id,access_expires_at").eq("room_id",roomId).gt("access_expires_at",now),
+        client.from("cb_classroom_student_boards").select("*").eq("room_id",roomId)
+      ]);
+      for(const result of [workspace,enrollments,boards])if(result.error)fail(500,result.error.message);
+      const studentIds=(enrollments.data||[]).map((row:any)=>row.student_id);
+      const profiles=studentIds.length?await client.from("cb_profiles").select("user_id,display_name,username,avatar_url").in("user_id",studentIds):{data:[],error:null};
+      if(profiles.error)fail(500,profiles.error.message);
+      const profileMap=new Map((profiles.data||[]).map((p:any)=>[p.user_id,p]));
+      const boardMap=new Map((boards.data||[]).map((b:any)=>[b.student_id,b]));
+      const students=(enrollments.data||[]).map((e:any)=>({...(profileMap.get(e.student_id)||{user_id:e.student_id,display_name:"Student"}),access_expires_at:e.access_expires_at,board:boardMap.get(e.student_id)||{room_id:roomId,student_id:e.student_id,fen:"start",version:0}}));
+      return res.status(200).json({role:teacher?"teacher":"student",room:room.data,workspace:workspace.data,students,own_student_id:teacher?null:userId});
+    }
+    if(action==="workshop-update"){
+      const roomId=String(body.room_id||""),kind=String(body.kind||""),now=new Date().toISOString();
+      const room=await client.from("cb_classroom_rooms").select("teacher_id,status,expires_at").eq("id",roomId).single();
+      if(room.error||!room.data||room.data.status!=="active"||room.data.expires_at<=now)fail(404,"Active classroom not found.");
+      const teacher=room.data.teacher_id===userId;
+      if(!teacher){const access=await client.from("cb_classroom_enrollments").select("student_id").eq("room_id",roomId).eq("student_id",userId).gt("access_expires_at",now).maybeSingle();if(!access.data)fail(403,"Your paid classroom time has expired.");}
+      const fen=String(body.fen||"start");if(fen.length>160)fail(400,"Invalid board position.");
+      if(kind==="master"){
+        if(!teacher)fail(403,"Only the teacher can control the lesson board.");
+        const annotations=Array.isArray(body.annotations)?body.annotations.slice(0,80):[];
+        const control=String(body.time_control||"10+0").slice(0,12);
+        const saved=await client.from("cb_classroom_workspaces").upsert({room_id:roomId,fen,annotations,time_control:control,selected_student_id:body.selected_student_id||null,updated_by:userId,updated_at:now},{onConflict:"room_id"}).select("*").single();
+        if(saved.error)fail(500,saved.error.message);return res.status(200).json({workspace:saved.data});
+      }
+      if(kind==="student"){
+        const studentId=teacher?String(body.student_id||""):userId;
+        const enrollment=await client.from("cb_classroom_enrollments").select("student_id").eq("room_id",roomId).eq("student_id",studentId).gt("access_expires_at",now).maybeSingle();
+        if(!enrollment.data)fail(403,"Student classroom access is not active.");
+        const boardPatch:Record<string,unknown>={room_id:roomId,student_id:studentId,fen,updated_by:userId,updated_at:now};
+        if(teacher&&Array.isArray(body.annotations))boardPatch.annotations=body.annotations.slice(0,80);
+        const saved=await client.from("cb_classroom_student_boards").upsert(boardPatch,{onConflict:"room_id,student_id"}).select("*").single();
+        if(saved.error)fail(500,saved.error.message);return res.status(200).json({board:saved.data});
+      }
+      fail(400,"Unknown workshop update.");
     }
     if(action==="rename"){
-      const roomId=String(body.room_id||""),roomName=String(body.name||"");
-      const previous=await client.from("cb_classroom_rooms").select("name").eq("id",roomId).eq("teacher_id",userId).single();
-      const result=await client.rpc("cb_rename_classroom",{p_user_id:userId,p_room_id:roomId,p_name:roomName});
-      if(result.error)fail(400,result.error.message);
-      await audit("classroom_room_renamed",{room_id:roomId,previous_name:previous.data?.name,room_name:roomName});
-      return res.status(200).json({ok:true});
+      const result=await client.rpc("cb_rename_classroom",{p_user_id:userId,p_room_id:String(body.room_id||""),p_name:String(body.name||"")});
+      if(result.error)fail(400,result.error.message);return res.status(200).json({ok:true});
     }
     if(action==="gift-cbc"){
-      const username=String(body.username||""),quantity=Number(body.quantity||0),requestId=String(body.request_id||"");
-      const result=await client.rpc("cb_gift_cbc",{p_sender_id:userId,p_username:username,p_quantity:quantity,p_request_id:requestId});if(result.error)fail(400,result.error.message);
-      await audit("classroom_cbc_gifted",{recipient_username:username.replace(/^@+/,""),quantity,gift_fee_cbg:4,current_cbc:result.data?.cbc,recipient_cbc:result.data?.recipient_cbc,request_id:requestId});
-      return res.status(200).json(result.data);
+      const result=await client.rpc("cb_gift_cbc",{p_sender_id:userId,p_username:String(body.username||""),p_quantity:Number(body.quantity||0),p_request_id:String(body.request_id||"")});if(result.error)fail(400,result.error.message);return res.status(200).json(result.data);
     }
     fail(400,"Unknown classroom action.");
   }catch(error){const e=error as Error&{status?:number};res.status(e.status||500).json({error:e.message||"Classroom request failed."});}
