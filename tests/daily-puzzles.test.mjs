@@ -7,7 +7,7 @@ import { DAILY_PUZZLES } from "../app/puzzle-data.ts";
 const page = readFileSync(new URL("../app/page.tsx", import.meta.url), "utf8");
 const puzzleUi = readFileSync(new URL("../app/puzzles.tsx", import.meta.url), "utf8");
 const api = readFileSync(new URL("../api/arena.ts", import.meta.url), "utf8");
-const sql = readFileSync(new URL("../supabase/0028_daily_puzzles.sql", import.meta.url), "utf8");
+const sql = readFileSync(new URL("../supabase/0028_daily_puzzles.sql", import.meta.url), "utf8")+readFileSync(new URL("../supabase/0043_daily_puzzle_rating.sql", import.meta.url), "utf8");
 
 test("Match Lobby exposes a Gold-earning Puzzle Quest", () => {
   assert.match(page, /Puzzle Quest/);
@@ -33,12 +33,16 @@ test("campaign contains 100 distinct real-game Lichess positions", () => {
   }
 });
 
-test("puzzle Gold is server validated and idempotent", () => {
+test("daily puzzle Gold and rating are server validated and idempotent", () => {
   assert.doesNotMatch(api, /from ['"]\.\.\/app\/puzzle-data/);
   assert.match(api, /const PUZZLE_PROOFS:Record<string,string>/);
   assert.match(api, /proof!==puzzle\.moves\.join\(' '\)/);
-  assert.match(api, /Complete the previous puzzle first/);
+  assert.match(api, /dailyPuzzleIds/);
+  assert.match(api, /Asia\/Manila/);
+  assert.match(api, /This puzzle is not in today's quest/);
   assert.match(sql, /primary key\(user_id,puzzle_day,puzzle_id\)/);
+  assert.match(sql, /cb_puzzle_profiles/);
+  assert.match(sql, /puzzle_rating/);
   assert.match(sql, /v_delta:=2/);
   assert.match(sql, /v_delta:=v_delta\+5/);
   assert.match(sql, /on conflict do nothing/);
@@ -47,7 +51,7 @@ test("puzzle Gold is server validated and idempotent", () => {
 test("puzzle UI plays forced replies and requires the complete line",()=>{
   assert.match(puzzleUi,/Coach Patty is playing the forced reply/);
   assert.match(puzzleUi,/setStep\(opponentStep\+1\)/);
-  assert.match(puzzleUi,/proof: puzzle\.moves\.join\(" "\)/);
+  assert.match(puzzleUi,/proof:\s*puzzle\.moves\.join\(" "\)/);
   assert.match(puzzleUi,/Lichess CC0 source/);
 });
 
@@ -58,7 +62,14 @@ test("Coach Patty prefers a friendly female English device voice", () => {
 });
 
 test("every correct puzzle solve displays a popup notification", () => {
-  assert.match(puzzleUi, /toast\.success\(`Puzzle \$\{puzzle\.number\} solved/);
-  assert.match(puzzleUi, /\+5 Gold chapter bonus/);
+  assert.match(puzzleUi, /puzzle solved!/);
+  assert.match(puzzleUi, /Puzzle Rating/);
   assert.match(puzzleUi, /Practice replay/);
+});
+
+test("Puzzle Quest resets daily with Easy, Regular, and Hard tracks",()=>{
+  assert.match(puzzleUi,/RESETS 12:00 AM PH/);
+  for(const level of ["Easy","Regular","Hard"])assert.match(puzzleUi,new RegExp(`label:\"${level}\"`));
+  assert.match(puzzleUi,/3 completed today/);
+  assert.match(api,/completed\.length===3/);
 });

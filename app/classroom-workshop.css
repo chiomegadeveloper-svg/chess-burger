@@ -621,6 +621,26 @@
   width: 14px;
   height: 14px;
 }
+.teacher-toolbar .ai-reader-button {
+  border-color: #7a65cf;
+  background: linear-gradient(145deg,#302661,#191934);
+  color: #dcd2ff;
+}
+.ai-reader-result {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 250px;
+  padding: 7px 10px;
+  border: 1px solid #7664c6;
+  border-radius: 10px;
+  background: #17142c;
+  color: #e5ddff;
+}
+.ai-reader-result svg { flex: 0 0 17px; width: 17px; }
+.ai-reader-result span,.ai-reader-result small,.ai-reader-result strong { display: block; }
+.ai-reader-result small { color: #a99bef; font-size: 7px; }
+.ai-reader-result strong { font-size: 9px; white-space: normal; }
 .workshop-room-copy {
   display: grid;
   gap: 1px;
