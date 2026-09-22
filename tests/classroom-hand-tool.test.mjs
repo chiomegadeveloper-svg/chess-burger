@@ -28,3 +28,14 @@ test("student session timer and CBC balance use one compact summary",()=>{
   assert.match(workshop,/BALANCE/);
   assert.match(css,/grid-template-columns: repeat\(2, minmax\(92px, 1fr\)\)/);
 });
+
+test("teacher free-move board hides unused destination dots",()=>{
+  assert.match(workshop,/!freeMove&&legal\.includes\(sq\)/);
+});
+
+test("SEba Workshop displays and copies the classroom room code",()=>{
+  assert.match(workshop,/data\.room\.code/);
+  assert.match(workshop,/workshop-room-code/);
+  assert.match(workshop,/navigator\.clipboard\.writeText/);
+  assert.match(css,/\.workshop-room-code/);
+});
