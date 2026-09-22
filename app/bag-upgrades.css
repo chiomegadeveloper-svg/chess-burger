@@ -1,1 +1,89 @@
-.rpg-gold-art>span{display:grid;place-items:center;width:62%;height:62%;border:4px solid #a87818;border-radius:50%;background:radial-gradient(circle at 38% 30%,#fff1a8,#efbd35 42%,#9f6811);color:#fff0a3;font-size:34px;box-shadow:inset 0 3px 5px #fff8,0 0 18px #e8b83277}.rpg-bag .bag-inventory-card.gold{border-color:#e0b33e}.bag-slot-store{display:grid;grid-template-columns:72px minmax(0,1fr) auto;align-items:center;gap:13px;margin:0 0 14px;padding:13px 15px;border:1px solid #846b32;border-radius:18px;background:radial-gradient(circle at 10% 20%,#0b809044,transparent 35%),linear-gradient(145deg,#202a30,#12191d);box-shadow:0 12px 28px #0005}.bag-slot-store>img{width:70px;height:70px;object-fit:contain;filter:drop-shadow(0 7px 7px #000b)}.bag-slot-store span{color:#62dce7;font-size:7px;font-weight:900;letter-spacing:1.2px}.bag-slot-store h2{margin:2px 0;color:#f4f7f8;font-size:15px}.bag-slot-store p{margin:0;color:#9babb2;font-size:8px}.bag-slot-store button{padding:9px 12px;border:1px solid #d2a83c;border-radius:11px;background:linear-gradient(#ebc960,#b88625);color:#211704;font:800 8px Poppins,sans-serif}.bag-slot-store button:disabled{opacity:.45}@media(max-width:560px){.bag-slot-store{grid-template-columns:58px minmax(0,1fr);padding:10px}.bag-slot-store>img{width:56px;height:56px}.bag-slot-store button{grid-column:1/-1}.bag-slot-store h2{font-size:13px}}
+.rpg-gold-art > span {
+  display: grid;
+  place-items: center;
+  width: 62%;
+  height: 62%;
+  border: 4px solid #a87818;
+  border-radius: 50%;
+  background: radial-gradient(circle at 38% 30%, #fff1a8, #efbd35 42%, #9f6811);
+  color: #fff0a3;
+  font-size: 34px;
+  box-shadow:
+    inset 0 3px 5px #fff8,
+    0 0 18px #e8b83277;
+}
+
+.rpg-gold-art > img {
+  width: 88%;
+  height: 88%;
+  object-fit: contain;
+  filter: drop-shadow(0 8px 12px #000b) drop-shadow(0 0 12px #e8b83255);
+}
+.rpg-bag .bag-inventory-card.gold {
+  border-color: #e0b33e;
+}
+.bag-slot-store {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 13px;
+  margin: 0 0 14px;
+  padding: 13px 15px;
+  border: 1px solid #846b32;
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 10% 20%, #0b809044, transparent 35%),
+    linear-gradient(145deg, #202a30, #12191d);
+  box-shadow: 0 12px 28px #0005;
+}
+.bag-slot-store > img {
+  width: 70px;
+  height: 70px;
+  object-fit: contain;
+  filter: drop-shadow(0 7px 7px #000b);
+}
+.bag-slot-store span {
+  color: #62dce7;
+  font-size: 7px;
+  font-weight: 900;
+  letter-spacing: 1.2px;
+}
+.bag-slot-store h2 {
+  margin: 2px 0;
+  color: #f4f7f8;
+  font-size: 15px;
+}
+.bag-slot-store p {
+  margin: 0;
+  color: #9babb2;
+  font-size: 8px;
+}
+.bag-slot-store button {
+  padding: 9px 12px;
+  border: 1px solid #d2a83c;
+  border-radius: 11px;
+  background: linear-gradient(#ebc960, #b88625);
+  color: #211704;
+  font:
+    800 8px Poppins,
+    sans-serif;
+}
+.bag-slot-store button:disabled {
+  opacity: 0.45;
+}
+@media (max-width: 560px) {
+  .bag-slot-store {
+    grid-template-columns: 58px minmax(0, 1fr);
+    padding: 10px;
+  }
+  .bag-slot-store > img {
+    width: 56px;
+    height: 56px;
+  }
+  .bag-slot-store button {
+    grid-column: 1/-1;
+  }
+  .bag-slot-store h2 {
+    font-size: 13px;
+  }
+}

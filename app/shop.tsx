@@ -330,7 +330,7 @@ export function ShopPage({
             <p>Choose a signature color for every community post you share.</p>
           </div>
           <span className="banner-wallet">
-            <span className="gold-coin">●</span>
+            <img className="gold-coin" src="/inventory/cbg-coin.webp" alt="CBG" />
             <strong>{state.gold || profile?.gold_points || 0}</strong>
             <small>Gold balance</small>
           </span>
@@ -390,7 +390,7 @@ export function ShopPage({
                           busy={busy === banner.id}
                           actionLabel={
                             <>
-                              <span className="gold-coin">●</span>
+                              <img className="gold-coin" src="/inventory/cbg-coin.webp" alt="" />
                               {rental ? "Extend" : "Rent"}{" "}
                               {days === 7 ? "1 week" : `${days} days`} ·{" "}
                               {feedBannerRentalPrice(banner.tier, days)} Gold
@@ -417,7 +417,7 @@ export function ShopPage({
           <p>Upgrade your look and unlock competitive experiences.</p>
         </div>
         <span className="banner-wallet">
-          <span className="gold-coin">●</span>
+          <img className="gold-coin" src="/inventory/cbg-coin.webp" alt="CBG" />
           <strong>{state.gold || profile?.gold_points || 0}</strong>
           <small>Gold balance</small>
         </span>
@@ -556,7 +556,7 @@ export function BagPage({ onChanged }: { onChanged: () => void }) {
         </div>
         <div className="rpg-bag-wallet">
           <span>
-            <i /> {state.gold} Gold
+            <img className="cbg-wallet-icon" src="/inventory/cbg-coin.webp" alt="CBG" /> {state.gold} Gold
           </span>
           <span className="bag-count">
             <ShoppingBag size={15} />
@@ -568,7 +568,7 @@ export function BagPage({ onChanged }: { onChanged: () => void }) {
         <p className="account-note">Opening your bag…</p>
       ) : (
         <div className="bag-tiles unified-bag-grid">
-          <article className="bag-inventory-card gold legendary"><div className="rpg-item-art rpg-gold-art"><span>●</span><strong>{state.gold}</strong></div><div className="rpg-item-copy"><small>PLAYER CURRENCY</small><h3>Gold Coins</h3><span>Gift Gold directly to another player.</span></div><div className="rpg-item-actions"><button type="button" disabled={state.gold<1} onClick={()=>openGift("gold","gold-coins","Gold Coins",state.gold)}><Gift size={14}/>Gift Gold</button></div></article>
+          <article className="bag-inventory-card gold legendary"><div className="rpg-item-art rpg-gold-art"><img src="/inventory/cbg-coin.webp" alt="ChessBurger CBG coin"/><strong>{state.gold}</strong></div><div className="rpg-item-copy"><small>PLAYER CURRENCY</small><h3>Gold Coins</h3><span>Gift Gold directly to another player.</span></div><div className="rpg-item-actions"><button type="button" disabled={state.gold<1} onClick={()=>openGift("gold","gold-coins","Gold Coins",state.gold)}><Gift size={14}/>Gift Gold</button></div></article>
           {cbc>0&&<article className="bag-inventory-card generic legendary"><div className="rpg-item-art"><img src="/classroom/cbc-token.webp" alt="CBC token"/><strong>×{cbc}</strong></div><div className="rpg-item-copy"><small>CLASSROOM CURRENCY</small><h3>Classroom Credits</h3><span>Gift any CBC amount to students by username.</span></div><div className="rpg-item-actions"><button type="button" onClick={()=>openGift("cbc","classroom-credit","CBC",cbc)}><Gift size={14}/>Gift CBC</button></div></article>}
           {state.tickets > 0 && (
             <article className="bag-inventory-card ticket legendary">
