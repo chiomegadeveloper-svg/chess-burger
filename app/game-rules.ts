@@ -101,6 +101,7 @@ export type ArenaPlayer = {
   losses: number;
   win_streak: number;
   rank?: number;
+  online?: boolean;
 };
 export type MatchReaction = { emote: string; at: number };
 export type ArenaMatch = {
