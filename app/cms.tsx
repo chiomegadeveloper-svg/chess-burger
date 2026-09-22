@@ -10,6 +10,7 @@ import StaffImageEditor from './staff-image-editor';
 import {uploadStaffImage,validateImageFile} from "./media";
 import {TIME_CONTROLS} from "./game-rules";
 import {classroom} from "./classroom-client";
+import "./classroom-cms-readable.css";
 type Log={id:string;actor_user_id:string;actor_name?:string;action:string;details:Record<string,unknown>;created_at:string};
 type Post={id:string;content:string;image_url:string;expires_at:string};
 type ArenaSettings={slot1_start:string;slot1_end:string;slot2_start:string;slot2_end:string;prize_mode:'fixed'|'auto';fixed_prize_gold:number;match_control:string};

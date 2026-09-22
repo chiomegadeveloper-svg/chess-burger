@@ -1,0 +1,126 @@
+/* Readable, responsive owner Classroom pricing controls. */
+.classroom-cms-panel .classroom-cms-section-title span {
+  font-size: clamp(11px, 1vw, 14px);
+  line-height: 1.4;
+  letter-spacing: 1.5px;
+}
+
+.classroom-cms-panel .classroom-cms-section-title h3 {
+  margin-top: 6px;
+  font-size: clamp(20px, 2vw, 28px);
+  line-height: 1.25;
+}
+
+.classroom-cms-panel .classroom-cms-grid {
+  gap: clamp(14px, 1.6vw, 22px);
+}
+
+.classroom-cms-panel .classroom-cms-grid fieldset {
+  gap: 16px !important;
+  padding: clamp(16px, 1.7vw, 22px) !important;
+}
+
+.classroom-cms-panel .classroom-cms-grid legend {
+  gap: 12px;
+}
+
+.classroom-cms-panel .classroom-cms-grid legend i {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  font-size: 25px;
+}
+
+.classroom-cms-panel .classroom-cms-grid legend small {
+  font-size: clamp(10px, 0.85vw, 12px);
+  line-height: 1.35;
+  letter-spacing: 0.8px;
+}
+
+.classroom-cms-panel .classroom-cms-grid legend strong {
+  font-size: clamp(18px, 1.45vw, 22px);
+  line-height: 1.25;
+}
+
+.classroom-cms-panel .classroom-price-fields {
+  gap: 12px;
+}
+
+.classroom-cms-panel .classroom-price-fields label {
+  gap: 8px;
+  font-size: clamp(13px, 1vw, 15px) !important;
+  line-height: 1.35;
+}
+
+.classroom-cms-panel .classroom-price-fields label > div {
+  min-height: 52px;
+  border-width: 2px;
+}
+
+.classroom-cms-panel .classroom-price-fields input {
+  min-height: 52px;
+  padding: 12px 14px !important;
+  font-size: clamp(17px, 1.3vw, 20px) !important;
+}
+
+.classroom-cms-panel .classroom-price-fields label b {
+  padding: 0 14px;
+  font-size: clamp(12px, 1vw, 15px);
+  letter-spacing: 0.4px;
+}
+
+.classroom-cms-panel .classroom-cms-grid fieldset > p {
+  font-size: clamp(11px, 0.9vw, 13px);
+  line-height: 1.55;
+}
+
+.classroom-cms-panel .classroom-cms-savebar b {
+  font-size: clamp(13px, 1vw, 15px);
+}
+
+.classroom-cms-panel .classroom-cms-savebar small {
+  font-size: clamp(11px, 0.85vw, 13px);
+}
+
+.classroom-cms-panel .classroom-cms-savebar button {
+  min-height: 48px;
+  font-size: clamp(13px, 1vw, 15px);
+}
+
+@media (max-width: 760px) {
+  .classroom-cms-panel .classroom-cms-section-title {
+    padding: 16px 16px 5px;
+  }
+
+  .classroom-cms-panel .classroom-cms-grid {
+    grid-template-columns: 1fr;
+    margin: 12px 14px 18px !important;
+  }
+
+  .classroom-cms-panel .classroom-price-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .classroom-cms-panel .classroom-cms-section-title h3 {
+    font-size: 21px;
+  }
+
+  .classroom-cms-panel .classroom-cms-grid fieldset {
+    padding: 16px 13px !important;
+  }
+
+  .classroom-cms-panel .classroom-price-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .classroom-cms-panel .classroom-price-fields label,
+  .classroom-cms-panel .classroom-cms-grid fieldset > p {
+    font-size: 13px !important;
+  }
+
+  .classroom-cms-panel .classroom-price-fields input {
+    font-size: 18px !important;
+  }
+}
