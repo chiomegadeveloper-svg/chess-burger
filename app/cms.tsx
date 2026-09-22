@@ -1,6 +1,6 @@
 "use client";
 import {useEffect,useState} from "react";
-import {Megaphone,Trophy,Coins,ScrollText,Image as ImageIcon,ShieldCheck,Clock3,Gift} from "lucide-react";
+import {Megaphone,Trophy,Coins,ScrollText,Image as ImageIcon,ShieldCheck,Clock3,Gift,LayoutDashboard,X} from "lucide-react";
 import {toast} from "sonner";
 import {getSupabase,PlayerProfile} from "./supabase";
 import {setCmsRole} from "./cms-role-client";
@@ -10,6 +10,7 @@ import StaffImageEditor from './staff-image-editor';
 import {uploadStaffImage,validateImageFile} from "./media";
 import {TIME_CONTROLS} from "./game-rules";
 import "./daily-rewards.css";
+import "./cms.css";
 type Log={id:string;actor_user_id:string;actor_name?:string;action:string;details:Record<string,unknown>;created_at:string};
 type Post={id:string;content:string;image_url:string;expires_at:string};
 type DailyReward={day:number;kind:"gold"|"arena_ticket"|"banner"|"bag_slot";amount:number;product_id?:string;name?:string};
@@ -46,7 +47,7 @@ export default function Cms({profile,onClose}:{profile:PlayerProfile;onClose:()=
 }
  async function upload(file:File,target:"announcement"|"card"){const url=await uploadStaffImage(file,profile.user_id);if(target==="announcement"){setImage(url);toast.success("Image uploaded. Save to publish it.");return;}setCardUrl(url);await arena("set-app-feature",{url});window.dispatchEvent(new Event("cb-app-feature-changed"));toast.success("Featured photo published beneath every User Card.");}
  if(!staff)return <p>Owner or GM access is required.</p>;
- return <section className="cms-page"><div className="cms-heading"><div><span>{owner?"OWNER":"GM ADMIN"} CONTROL</span><h1>Chess Burger CMS</h1></div><button onClick={onClose}>Close</button></div><div className="cms-tabs">{menu.map(([key,label,Icon])=><button key={key as string} className={section===key?"active":""} onClick={()=>setSection(key as string)}><Icon/>{label as string}</button>)}</div>
+ return <section className="cms-page"><header className="cms-heading"><div className="cms-heading-icon" aria-hidden="true"><LayoutDashboard/></div><div className="cms-heading-copy"><span>{owner?"OWNER":"GM ADMIN"} CONTROL CENTER</span><h1>Chess Burger CMS</h1><p>Manage your community, rewards, and live events.</p></div><button type="button" className="cms-close" onClick={onClose} aria-label="Close control center"><X/><span>Close</span></button></header><nav className="cms-tabs" aria-label="CMS sections">{menu.map(([key,label,Icon])=><button key={key as string} type="button" aria-current={section===key?"page":undefined} className={section===key?"active":""} onClick={()=>setSection(key as string)}><span className="cms-tab-icon"><Icon/></span><span>{label as string}</span></button>)}</nav>
  {section==="tournament"&&<Tournaments profile={profile} host/>}
  {section==="announcement"&&<div className="cms-panel announcement-cms">
   <div className="cms-panel-heading">

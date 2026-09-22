@@ -1,0 +1,192 @@
+.cms-page {
+  --cms-cyan: #52d7e4;
+  --cms-gold: #e7bd63;
+  --cms-panel: #20252c;
+  --cms-panel-deep: #171b21;
+  width: min(100%, 960px) !important;
+  max-width: 960px !important;
+  margin-inline: auto;
+  padding: 18px 18px 40px;
+  box-sizing: border-box;
+}
+
+.cms-page .cms-heading {
+  position: relative;
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 20px;
+  overflow: hidden;
+  border: 1px solid #4b5660;
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at 85% 0%, #4fd7e414, transparent 33%),
+    linear-gradient(135deg, #252b33, #171c22 72%);
+  box-shadow: 0 12px 30px #0004, inset 0 1px #ffffff0a;
+}
+
+.cms-page .cms-heading::after {
+  content: "";
+  position: absolute;
+  inset: auto 20px 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--cms-cyan), var(--cms-gold), transparent 82%);
+}
+
+.cms-heading-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid #5a7478;
+  border-radius: 12px;
+  color: var(--cms-cyan);
+  background: linear-gradient(145deg, #21343a, #182329);
+  box-shadow: inset 0 1px #ffffff12;
+}
+
+.cms-heading-icon svg { width: 21px; height: 21px; }
+.cms-heading-copy { min-width: 0; }
+.cms-page .cms-heading-copy > span {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--cms-cyan);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1.45px;
+}
+.cms-page .cms-heading h1 { margin: 0; color: #f7f8fa; font-size: clamp(19px, 3vw, 25px); line-height: 1.15; }
+.cms-page .cms-heading p { margin: 5px 0 0; color: #9daab6; font-size: 11px; }
+
+.cms-page .cms-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 8px 13px;
+  border: 1px solid #5a626b !important;
+  border-radius: 10px;
+  background: #292f36 !important;
+  color: #e8edf1 !important;
+  box-shadow: inset 0 1px #ffffff10 !important;
+  font-size: 11px;
+  font-weight: 600;
+}
+.cms-close svg { width: 15px; height: 15px; }
+.cms-close:hover { border-color: var(--cms-gold) !important; color: var(--cms-gold) !important; }
+
+.cms-page .cms-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 7px;
+  margin: 12px 0 16px;
+  padding: 8px;
+  overflow: visible;
+  border: 1px solid #333b45;
+  border-radius: 14px;
+  background: #171b20;
+  box-shadow: inset 0 1px 8px #0005;
+}
+
+.cms-page .cms-tabs button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 9px;
+  min-width: 0;
+  min-height: 42px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: #9faab5;
+  box-shadow: none;
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.cms-tab-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 27px;
+  width: 27px;
+  height: 27px;
+  border-radius: 8px;
+  background: #262c33;
+  color: #aab7c2;
+}
+.cms-tab-icon svg { width: 14px; height: 14px; }
+.cms-page .cms-tabs button:hover { color: #f1f4f6; background: #232930; }
+.cms-page .cms-tabs button.active {
+  border-color: #806a37;
+  background: linear-gradient(145deg, #30343a, #24282e);
+  color: #f4d78f;
+  box-shadow: inset 0 1px #ffffff0c, 0 4px 12px #0003;
+}
+.cms-page .cms-tabs button.active::after {
+  content: "";
+  position: absolute;
+  right: 10px;
+  bottom: 5px;
+  left: 46px;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--cms-gold), transparent);
+}
+.cms-page .cms-tabs button.active .cms-tab-icon { background: #453a24; color: #f2cc75; }
+
+.cms-page .cms-panel,
+.cms-page .tournaments-page > section,
+.cms-page .tournament-host {
+  border: 1px solid #353d47 !important;
+  border-radius: 16px !important;
+  background: linear-gradient(145deg, var(--cms-panel), var(--cms-panel-deep)) !important;
+  box-shadow: 0 12px 28px #0003, inset 0 1px #ffffff08 !important;
+}
+
+.cms-page .cms-panel { gap: 13px; padding: clamp(16px, 3vw, 22px); }
+.cms-page .cms-panel h2 { margin: 0; color: #f4f6f8; font-size: 17px; }
+.cms-page .cms-panel h3 { color: #edf1f4; }
+.cms-page .cms-panel label { gap: 6px; color: #aeb9c4; font-size: 10px; font-weight: 600; }
+.cms-page .cms-panel input,
+.cms-page .cms-panel select,
+.cms-page .cms-panel textarea {
+  min-height: 40px;
+  border: 1px solid #3c4652 !important;
+  border-radius: 9px !important;
+  background: #15191f !important;
+  color: #eef2f5 !important;
+  box-shadow: inset 0 2px 7px #0004 !important;
+}
+.cms-page .cms-panel input:focus,
+.cms-page .cms-panel select:focus,
+.cms-page .cms-panel textarea:focus { border-color: #4faab4 !important; outline: 2px solid #52d7e426; }
+.cms-page .cms-panel > button,
+.cms-page .gold-button { min-height: 41px; border-radius: 9px !important; font-size: 11px; font-weight: 700; }
+
+@media (max-width: 720px) {
+  .cms-page { padding: 12px 12px 30px; }
+  .cms-page .cms-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cms-page .cms-heading { grid-template-columns: 40px minmax(0, 1fr) auto; gap: 10px; padding: 15px; }
+  .cms-heading-icon { width: 38px; height: 38px; }
+  .cms-page .cms-heading p { display: none; }
+  .cms-page .cms-close { width: 38px; min-height: 38px; padding: 0; }
+  .cms-page .cms-close span { display: none; }
+}
+
+@media (max-width: 390px) {
+  .cms-page { padding-inline: 9px; }
+  .cms-page .cms-heading { grid-template-columns: 36px minmax(0, 1fr) 34px; padding: 12px; border-radius: 13px; }
+  .cms-heading-icon { width: 34px; height: 34px; border-radius: 9px; }
+  .cms-page .cms-heading h1 { font-size: 17px; }
+  .cms-page .cms-heading-copy > span { font-size: 7px; letter-spacing: 1px; }
+  .cms-page .cms-close { width: 34px; min-height: 34px; }
+  .cms-page .cms-tabs { gap: 5px; padding: 6px; }
+  .cms-page .cms-tabs button { gap: 7px; min-height: 39px; padding: 6px 7px; font-size: 9px; }
+  .cms-tab-icon { flex-basis: 24px; width: 24px; height: 24px; }
+  .cms-page .cms-tabs button.active::after { left: 38px; }
+}
