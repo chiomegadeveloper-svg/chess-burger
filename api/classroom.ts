@@ -8,9 +8,10 @@ export default async function handler(req:Req,res:Res){
   res.setHeader("Cache-Control","no-store");
   try{
     if(req.method!=="POST")fail(405,"Method not allowed.");
-    const url=process.env.SUPABASE_URL||process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const key=process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if(!url||!key)fail(500,"Classroom server is not configured.");
+    const url=process.env.NEXT_PUBLIC_SUPABASE_URL||process.env.VITE_SUPABASE_URL||process.env.SUPABASE_URL;
+    const key=process.env.SUPABASE_SERVICE_ROLE_KEY||"";
+    if(!url)fail(503,"Classroom server is missing NEXT_PUBLIC_SUPABASE_URL or VITE_SUPABASE_URL.");
+    if(!key)fail(503,"Classroom server is missing SUPABASE_SERVICE_ROLE_KEY.");
     const client=createClient(url,key,{auth:{persistSession:false}});
     const raw=req.headers.authorization,token=(Array.isArray(raw)?raw[0]:raw||"").replace(/^Bearer\s+/i,"");
     const auth=await client.auth.getUser(token);
