@@ -85,10 +85,12 @@ test("Puzzle Quest resets daily with Easy, Regular, Hard, and Random tracks",()=
   assert.match(sql,/v_count=100/);
 });
 
-test("Puzzle Quest shows all-time, today, and rating leaders below Coach Patty",()=>{
-  assert.match(puzzleUi,/TOP RANK RATING/);
+test("Puzzle Quest shows today before all-time and rating leaders below Coach Patty",()=>{
+  assert.match(puzzleUi,/TOP RANK/);
+  assert.doesNotMatch(puzzleUi,/TOP RANK RATING/);
   assert.match(puzzleUi,/Most Solved · All Time/);
   assert.match(puzzleUi,/Most Solved · Today/);
+  assert.ok(puzzleUi.indexOf('key:"today"')<puzzleUi.indexOf('key:"all_time"'));
   assert.match(puzzleUi,/Highest Puzzle Rating/);
   assert.match(api,/cb_puzzle_leaders/);
   assert.match(sql,/today_counts/);
