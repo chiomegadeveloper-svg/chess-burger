@@ -23,7 +23,7 @@ begin
     v_delta:=greatest(1,least(3,p_gold_reward));
     insert into public.cb_gold_ledger(id,user_id,delta,kind) values('daily-puzzle:'||p_day::text||':'||p_user_id::text||':'||p_puzzle_id,p_user_id,v_delta,'daily_puzzle') on conflict do nothing;
     select count(*) into v_count from public.cb_daily_puzzle_claims where user_id=p_user_id and puzzle_day=p_day;
-    if p_is_final and v_count=4 then
+    if p_is_final and v_count=100 then
       insert into public.cb_gold_ledger(id,user_id,delta,kind) values('daily-puzzle-bonus:'||p_day::text||':'||p_user_id::text,p_user_id,5,'daily_puzzle_bonus') on conflict do nothing returning true into v_bonus;
       if coalesce(v_bonus,false) then v_delta:=v_delta+5;end if;
     end if;

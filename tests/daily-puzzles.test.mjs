@@ -69,10 +69,15 @@ test("every correct puzzle solve displays a popup notification", () => {
 });
 
 test("Puzzle Quest resets daily with Easy, Regular, Hard, and Random tracks",()=>{
+  assert.match(puzzleUi,/100 DAILY PUZZLES/);
   assert.match(puzzleUi,/RESETS 12:00 AM PH/);
   for(const level of ["Easy","Regular","Hard","Random"])assert.match(puzzleUi,new RegExp(`label:\"${level}\"`));
-  assert.match(puzzleUi,/4 completed today/);
-  assert.match(api,/completed\.length===4/);
+  assert.match(puzzleUi,/100 completed today/);
+  assert.match(api,/completed\.length===100/);
+  assert.match(api,/easy\.slice\(0,25\)/);
+  assert.match(api,/regular\.slice\(0,25\)/);
+  assert.match(api,/hard\.slice\(0,25\)/);
   assert.match(api,/puzzleReward/);
   assert.match(puzzleUi,/1–3 CBG/);
+  assert.match(sql,/v_count=100/);
 });

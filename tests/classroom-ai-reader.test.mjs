@@ -9,7 +9,7 @@ test("teacher has a local Stockfish board reader for student positions",()=>{
   assert.match(workshop,/Analyze Student/);
   assert.match(workshop,/AI BEST MOVE/);
   assert.match(workshop,/position fen/);
-  assert.match(workshop,/go depth 14/);
+  assert.match(workshop,/go depth 18/);
   assert.match(workshop,/line\.startsWith\("bestmove /);
   assert.match(workshop,/student\?\.board\.fen\?\?data\.workspace\.fen/);
 });
