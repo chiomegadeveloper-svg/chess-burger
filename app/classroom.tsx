@@ -14,17 +14,24 @@ const PACKAGES=[
   {kind:"queen",name:"Room Queen",slots:30,hours:168},
   {kind:"king",name:"Room King",slots:40,hours:336},
 ] as const;
-type Room={id:string;name:string;package_kind:string;invite_code:string;max_students:number;student_count?:number;cbc_included?:number;expires_at:string;teacher?:{display_name?:string;username?:string;avatar_url?:string};students?:Array<{count:number}>};
+type Room={id:string;name:string;package_kind:string;invite_code:string;max_students:number;student_count?:number;cbc_included?:number;expires_at:string;status?:string;teacher?:{display_name?:string;username?:string;avatar_url?:string};students?:Array<{count:number}>};
 type Settings={cbc_gold_price:number}&Record<`${string}_${"cbg"|"cbc"}`,number>;
 type Enrollment={joined_at:string;access_expires_at:string;room:Room};
 type State={wallet:{cbc:number};gold:number;settings:Settings;owned:Room[];joined:Enrollment[];active:Room[]};
 const duration=(hours:number)=>hours<24?`${hours} hours`:hours===24?"1 day":hours===168?"1 week":hours===336?"2 weeks":`${hours/24} days`;
+const activeStudentAccess=(state:State|null)=>state?.joined?.some(({access_expires_at,room})=>new Date(access_expires_at).getTime()>Date.now()&&room.status!=="closed"&&new Date(room.expires_at).getTime()>Date.now())??false;
 
 export default function Classroom({onBack,onOpenShop}:{onBack:()=>void;onOpenShop:()=>void}){
   const [role,setRole]=useState<""|"teacher"|"student">("");
   const [state,setState]=useState<State|null>(null),[busy,setBusy]=useState(false),[selected,setSelected]=useState("pawn"),[name,setName]=useState(""),[code,setCode]=useState("");
   const load=useCallback(()=>classroom<State>("state").then(setState).catch(e=>toast.error(e.message)),[]);
   useEffect(()=>{void load()},[load]);
+  const teacherActive=(state?.owned?.length??0)>0,studentActive=activeStudentAccess(state);
+  const chooseRole=(next:"teacher"|"student")=>{
+    if(next==="student"&&teacherActive)return toast.error("Student access is locked while you have an active teacher session.");
+    if(next==="teacher"&&studentActive)return toast.error("Teacher access is locked while you are active as a student.");
+    setRole(next);
+  };
   const create=async()=>{if(!name.trim())return toast.error("Name your Room Session.");setBusy(true);try{const result=await classroom<{room:Room}>("create",{package:selected,name,request_id:crypto.randomUUID()});toast.success(`${result.room.name} created`,{description:`Student code: ${result.room.invite_code}`});setName("");await load()}catch(e){toast.error(e instanceof Error?e.message:"Unable to create room.")}finally{setBusy(false)}};
   const join=async()=>{setBusy(true);try{const result=await classroom<{room:Room}>("join",{code:code.trim().toUpperCase(),request_id:crypto.randomUUID()});toast.success(`Welcome to ${result.room.name}`);setCode("");await load()}catch(e){toast.error(e instanceof Error?e.message:"Unable to join room.")}finally{setBusy(false)}};
   const extend=async(room:Room)=>{setBusy(true);try{await classroom("extend-access",{room_id:room.id,request_id:crypto.randomUUID()});toast.success("30 classroom minutes added",{description:"1 CBC was used from My Bag."});await load()}catch(e){toast.error(e instanceof Error?e.message:"Unable to extend classroom access.")}finally{setBusy(false)}};
@@ -33,8 +40,8 @@ export default function Classroom({onBack,onOpenShop}:{onBack:()=>void;onOpenSho
     <button className="back-button" type="button" onClick={role?()=>setRole(""):onBack}><ArrowLeft size={15}/>{role?"Student Lobby":"Play selection"}</button>
     <header className="classroom-hero"><span>CHESSBURGER LEARNING</span><h1>Classroom</h1><p>Create welcoming chess rooms or join your instructor with a private code.</p></header>
     {!role?<div className="classroom-role-grid">
-      <button onClick={()=>setRole("teacher")}><img src="/classroom/teacher.webp" alt="Chess instructor"/><span><small>CREATE & TEACH</small><strong>Teacher</strong><b>Open instructor tools</b></span></button>
-      <button onClick={()=>setRole("student")}><img src="/classroom/student.webp" alt="Chess student"/><span><small>JOIN & LEARN</small><strong>Student</strong><b>Enter a classroom</b></span></button>
+      <button disabled={studentActive} aria-disabled={studentActive} title={studentActive?"Finish your active student access before becoming a teacher.":undefined} onClick={()=>chooseRole("teacher")}><img src="/classroom/teacher.webp" alt="Chess instructor"/><span><small>CREATE & TEACH</small><strong>Teacher</strong><b>{studentActive?"Locked while active as Student":"Open instructor tools"}</b></span></button>
+      <button disabled={teacherActive} aria-disabled={teacherActive} title={teacherActive?"Your active teacher session must end before entering as a student.":undefined} onClick={()=>chooseRole("student")}><img src="/classroom/student.webp" alt="Chess student"/><span><small>JOIN & LEARN</small><strong>Student</strong><b>{teacherActive?"Locked while teaching":"Enter a classroom"}</b></span></button>
     </div>:<>
       <div className="classroom-wallets">
         <article><img src="/classroom/cbc-token.webp" alt="CBC token"/><span><small>CLASSROOM CREDITS</small><strong>{state?.wallet?.cbc??0} CBC</strong></span></article>

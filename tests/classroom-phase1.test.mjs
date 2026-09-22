@@ -17,3 +17,18 @@ test("zero CBC stays hidden from My Bag and mobile item counters are readable",(
 test("branded CBG coin replaces fallback circles in Bag and Shop",()=>{const asset=fs.statSync("public/inventory/cbg-coin.webp");assert.ok(asset.size>1000&&asset.size<600000);assert.match(shop,/\/inventory\/cbg-coin\.webp/);assert.doesNotMatch(shop,/className="gold-coin">●/);assert.doesNotMatch(shop,/rpg-gold-art"><span>●/)});
 test("Classroom CMS pricing uses large responsive typography",()=>{const css=fs.readFileSync("app/classroom-cms-readable.css","utf8");assert.match(css,/font-size:\s*clamp\(18px/);assert.match(css,/min-height:\s*52px/);assert.match(css,/@media \(max-width: 480px\)/);assert.match(css,/grid-template-columns:\s*1fr/)});
 test("student Classroom access costs 1 CBC per 30 minutes",()=>{const timed=fs.readFileSync("supabase/0036_classroom_timed_student_access.sql","utf8");assert.match(timed,/access_expires_at/);assert.match(timed,/interval '30 minutes'/);assert.match(timed,/cbc=cbc-1/);assert.match(timed,/cb_extend_classroom_access/);assert.match(timed,/cb_has_classroom_access/);assert.match(api,/extend-access/);assert.match(ui,/1 CBC \/ 30 min/);assert.match(ui,/Renew 30 min · 1 CBC/)});
+
+test("teacher and student Classroom roles are mutually exclusive",()=>{
+  const guard=fs.readFileSync("supabase/0037_exclusive_classroom_roles.sql","utf8");
+  assert.match(ui,/teacherActive/);
+  assert.match(ui,/studentActive/);
+  assert.match(ui,/Locked while teaching/);
+  assert.match(ui,/Locked while active as Student/);
+  assert.match(api,/hasActiveTeacherSession/);
+  assert.match(api,/hasActiveStudentAccess/);
+  assert.match(api,/A teacher cannot enter a student classroom/);
+  assert.match(guard,/cb_classroom_teacher_role_guard/);
+  assert.match(guard,/cb_classroom_student_role_guard/);
+  assert.match(guard,/before insert or update of teacher_id,status,expires_at/);
+  assert.match(guard,/before insert or update of student_id,access_expires_at/);
+});

@@ -23,6 +23,16 @@ export default async function handler(req:Req,res:Res){
       const logged=await client.from("cb_admin_logs").insert({actor_user_id:userId,action:auditAction,details:{actor_name:actor.data.display_name,actor_username:actor.data.username,actor_role:actor.data.role,economy:"classroom",...details}});
       if(logged.error)fail(500,`Classroom activity could not be logged: ${logged.error.message}`);
     };
+    const hasActiveTeacherSession=async()=>{
+      const current=await client.from("cb_classroom_rooms").select("id").eq("teacher_id",userId).eq("status","active").gt("expires_at",new Date().toISOString()).limit(1);
+      if(current.error)fail(500,current.error.message);
+      return Boolean(current.data?.length);
+    };
+    const hasActiveStudentAccess=async()=>{
+      const current=await client.from("cb_classroom_enrollments").select("room_id,room:cb_classroom_rooms!inner(id)").eq("student_id",userId).gt("access_expires_at",new Date().toISOString()).eq("room.status","active").gt("room.expires_at",new Date().toISOString()).limit(1);
+      if(current.error)fail(500,current.error.message);
+      return Boolean(current.data?.length);
+    };
     if(action==="state"){
       await client.from("cb_classroom_wallets").upsert({user_id:userId},{onConflict:"user_id",ignoreDuplicates:true});
       const [wallet,owned,joined,active,settings]=await Promise.all([
@@ -56,6 +66,7 @@ export default async function handler(req:Req,res:Res){
       return res.status(200).json({settings:saved.data});
     }
     if(action==="create"){
+      if(await hasActiveStudentAccess())fail(409,"You are currently an active student. Finish your classroom access before creating a teacher session.");
       const packageKind=String(body.package||""),roomName=String(body.name||""),requestId=String(body.request_id||"");
       const result=await client.rpc("cb_create_classroom",{p_user_id:userId,p_package:packageKind,p_name:roomName,p_request_id:requestId});
       if(result.error)fail(400,result.error.message);
@@ -63,6 +74,7 @@ export default async function handler(req:Req,res:Res){
       return res.status(200).json({room:result.data});
     }
     if(action==="join"){
+      if(await hasActiveTeacherSession())fail(409,"You have an active teacher session. A teacher cannot enter a student classroom.");
       const code=String(body.code||""),requestId=String(body.request_id||"");
       const result=await client.rpc("cb_join_classroom",{p_user_id:userId,p_code:code,p_request_id:requestId});
       if(result.error)fail(400,result.error.message);
@@ -70,6 +82,7 @@ export default async function handler(req:Req,res:Res){
       return res.status(200).json({room:result.data});
     }
     if(action==="extend-access"){
+      if(await hasActiveTeacherSession())fail(409,"You have an active teacher session. A teacher cannot renew student classroom access.");
       const roomId=String(body.room_id||""),requestId=String(body.request_id||"");
       const result=await client.rpc("cb_extend_classroom_access",{p_user_id:userId,p_room_id:roomId,p_request_id:requestId});
       if(result.error)fail(400,result.error.message);
