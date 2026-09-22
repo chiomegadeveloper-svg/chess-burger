@@ -91,6 +91,13 @@ export default async function handler(req:Req,res:Res){
         const saved=await client.from("cb_classroom_workspaces").upsert({room_id:roomId,fen,annotations,time_control:control,selected_student_id:body.selected_student_id||null,updated_by:userId,updated_at:now},{onConflict:"room_id"}).select("*").single();
         if(saved.error)fail(500,saved.error.message);return res.status(200).json({workspace:saved.data});
       }
+      if(kind==="shared"){
+        if(teacher)fail(400,"Teacher updates use the lesson board control.");
+        const activeCount=await client.from("cb_classroom_enrollments").select("student_id",{count:"exact",head:true}).eq("room_id",roomId).gt("access_expires_at",now);
+        if(activeCount.error)fail(500,activeCount.error.message);if(activeCount.count!==1)fail(409,"Shared board is available only for one-on-one sessions.");
+        const saved=await client.from("cb_classroom_workspaces").update({fen,updated_by:userId,updated_at:now}).eq("room_id",roomId).select("*").single();
+        if(saved.error)fail(500,saved.error.message);return res.status(200).json({workspace:saved.data});
+      }
       if(kind==="student"){
         const studentId=teacher?String(body.student_id||""):userId;
         const enrollment=await client.from("cb_classroom_enrollments").select("student_id").eq("room_id",roomId).eq("student_id",studentId).gt("access_expires_at",now).maybeSingle();
