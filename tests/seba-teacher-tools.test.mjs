@@ -7,10 +7,19 @@ const api=fs.readFileSync("api/classroom.ts","utf8");
 const migration=fs.readFileSync("supabase/0044_seba_lesson_activity.sql","utf8");
 
 test("teacher can clear and personally arrange all white and black pieces",()=>{
-  assert.match(workshop,/Clear board/);
+  assert.match(workshop,/Clear Board/);
   assert.match(workshop,/8\/8\/8\/8\/8\/8\/8\/8 w - - 0 1/);
+  assert.match(workshop,/skipValidation:true/);
   for(const piece of ["wp","wn","wb","wr","wq","wk","bp","bn","bb","br","bq","bk"])assert.match(workshop,new RegExp(`"${piece}"`));
   assert.match(workshop,/placementPiece/);
+});
+
+test("teacher tools are categorized with opaque white pieces and two board themes",()=>{
+  for(const category of ["MOVE & DRAW","PIECE SETUP","LESSON","AI READER","BOARD STYLE","SESSION"])assert.match(workshop,new RegExp(category));
+  assert.match(workshop,/Classic Green/);
+  assert.match(workshop,/Warm Wood/);
+  assert.match(workshop,/white-palette-piece/);
+  assert.match(workshop,/board-theme-/);
 });
 
 test("teacher activity is persisted and can be replayed for students",()=>{
