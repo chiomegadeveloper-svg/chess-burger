@@ -545,3 +545,209 @@
     font-size: clamp(11px, 10cqw, 24px);
   }
 }
+
+
+/* Professional responsive SEba workspace header */
+.workshop-topbar {
+  display: grid;
+  grid-template-columns: minmax(250px, 1fr) auto minmax(250px, 1fr);
+  align-items: center;
+  gap: 14px;
+  min-height: 72px;
+  padding: 9px clamp(12px, 2vw, 24px);
+}
+.workshop-topbar div { margin-right: 0; }
+.workshop-session,
+.workshop-actions,
+.workshop-room-copy,
+.workshop-topbar .seba-brand {
+  min-width: 0;
+}
+.workshop-session {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+.workshop-room-copy {
+  display: grid;
+  gap: 1px;
+}
+.workshop-room-copy h1 {
+  overflow: hidden;
+  max-width: 320px;
+  margin: 0;
+  color: #f5f8f9;
+  font-size: clamp(13px, 1.3vw, 17px);
+  font-weight: 700;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workshop-room-copy small {
+  color: #64dce5;
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: 1.25px;
+}
+.workshop-topbar .seba-brand {
+  position: static;
+  display: flex;
+  align-items: center;
+  justify-self: center;
+  gap: 9px;
+  min-width: 178px;
+  margin: 0;
+  padding: 8px 13px;
+  border: 1px solid #826a34;
+  border-radius: 13px;
+  background: linear-gradient(145deg, #242319, #111b1f);
+  box-shadow: inset 0 1px #fff1b21a, 0 6px 16px #0005;
+  transform: none;
+}
+.workshop-topbar .seba-brand > span:last-child {
+  display: grid;
+  gap: 2px;
+}
+.workshop-topbar .seba-brand strong {
+  background: none;
+  color: #f8e1a1;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: .2px;
+  line-height: 1;
+  text-shadow: none;
+  -webkit-background-clip: initial;
+  background-clip: initial;
+  -webkit-text-stroke: 0;
+}
+.workshop-topbar .seba-brand small {
+  margin: 0;
+  color: #8fdde2;
+  font-size: 6px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-shadow: none;
+  white-space: nowrap;
+}
+.seba-mark {
+  display: grid;
+  place-items: center;
+  width: 31px;
+  height: 31px;
+  border: 1px solid #a17b2c;
+  border-radius: 9px;
+  background: linear-gradient(145deg, #d7aa48, #735015);
+  color: #10191d;
+  font: 700 21px/1 Georgia, serif;
+  box-shadow: inset 0 1px #fff4bc88;
+}
+.workshop-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+}
+.workshop-actions > .student-session-stat,
+.workshop-actions > .workshop-stat {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 38px;
+  padding: 7px 9px;
+  border: 1px solid #31464e;
+  border-radius: 10px;
+  background: #111f24;
+  color: #aabcc2;
+  font-size: 8px;
+  white-space: nowrap;
+}
+.workshop-actions > .student-session-stat {
+  border-color: #78632f;
+  background: #2b240f;
+  color: #f4dda0;
+}
+.workshop-actions > span svg {
+  width: 14px;
+  color: #d9b85c;
+}
+.workshop-actions > span img {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+}
+.workshop-actions .seba-cbc-button {
+  min-height: 38px;
+  padding: 8px 10px;
+  white-space: nowrap;
+}
+
+@media (max-width: 1180px) {
+  .workshop-topbar {
+    grid-template-columns: minmax(230px, 1fr) minmax(0, 2fr);
+    gap: 8px 12px;
+    min-height: 0;
+  }
+  .workshop-topbar .seba-brand {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    justify-self: center;
+  }
+  .workshop-session {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .workshop-actions {
+    grid-column: 2;
+    grid-row: 2;
+    flex-wrap: wrap;
+  }
+  .teacher-toolbar {
+    position: relative;
+    top: auto;
+  }
+}
+@media (max-width: 700px) {
+  .workshop-topbar {
+    grid-template-columns: 1fr;
+    padding: 8px;
+  }
+  .workshop-topbar .seba-brand {
+    grid-column: 1;
+    width: fit-content;
+    min-width: 0;
+    padding: 7px 10px;
+  }
+  .workshop-session,
+  .workshop-actions {
+    grid-column: 1;
+  }
+  .workshop-session {
+    grid-row: 2;
+  }
+  .workshop-actions {
+    grid-row: 3;
+    justify-content: center;
+  }
+  .workshop-room-copy {
+    flex: 1;
+  }
+  .workshop-room-copy h1 {
+    max-width: none;
+  }
+  .workshop-actions > .student-session-stat,
+  .workshop-actions > .workshop-stat {
+    min-height: 34px;
+    padding: 5px 7px;
+  }
+}
+@media (max-width: 430px) {
+  .workshop-actions .seba-cbc-button {
+    font-size: 0;
+  }
+  .workshop-actions .seba-cbc-button svg {
+    margin: 0;
+  }
+  .workshop-actions > .workshop-stat {
+    font-size: 0;
+  }
+}

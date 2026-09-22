@@ -37,6 +37,7 @@ export default function ClassroomVoice({roomId,role}:{roomId:string;role:VoiceRo
   const channelRef=useRef<RealtimeChannel|null>(null);
   const clientRef=useRef<SupabaseClient|null>(null);
   const userIdRef=useRef("");
+  const autoStartedRef=useRef(false);
   const peersRef=useRef(new Map<string,RTCPeerConnection>());
   const pendingCandidates=useRef(new Map<string,RTCIceCandidateInit[]>());
 
@@ -170,11 +171,17 @@ export default function ClassroomVoice({roomId,role}:{roomId:string;role:VoiceRo
     setMuted(next);
   };
 
+  useEffect(()=>{
+    if(autoStartedRef.current)return;
+    autoStartedRef.current=true;
+    void start();
+  },[start]);
+
   useEffect(()=>leave,[leave,roomId]);
 
   return <div className={`classroom-voice ${status}`}>
     {remoteVoices.map(voice=><RemoteAudio key={voice.id} voice={voice}/>)}
-    {status==="idle"?<button type="button" onClick={()=>void start()} title="Join free SEba Voice"><Mic/>SEba Voice</button>:
+    {status==="idle"?<button type="button" onClick={()=>void start()} title="Retry SEba Voice"><Mic/>Join Voice</button>:
       status==="starting"?<button type="button" disabled><Radio/>Connecting…</button>:<>
         <span title="People connected to SEba Voice"><Radio/><b>{participantCount}</b></span>
         <button type="button" className={muted?"muted":""} onClick={toggleMute} title={muted?"Unmute microphone":"Mute microphone"}>{muted?<MicOff/>:<Mic/>}{muted?"Unmute":"Mute"}</button>

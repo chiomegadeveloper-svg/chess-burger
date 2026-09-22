@@ -32,3 +32,11 @@ test("Classroom Voice stores no audio and uses free WebRTC signaling",()=>{
   assert.match(voice,/stun:stun\.l\.google\.com:19302/);
   assert.match(voice,/RemoteAudio/);
 });
+
+
+test("SEba Voice is pre-activated when the workshop opens",()=>{
+  assert.match(voice,/autoStartedRef/);
+  assert.match(voice,/autoStartedRef\.current=true/);
+  assert.match(voice,/void start\(\)/);
+  assert.match(voice,/Retry SEba Voice/);
+});
