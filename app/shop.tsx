@@ -25,6 +25,7 @@ import { getSupabase } from "./supabase";
 import "./feed-banner-shop.css";
 import "./shop-polish.css";
 import "./rpg-bag.css";
+import "./bag-upgrades.css";
 
 type BannerRental = { product_id: string; expires_at: string };
 type ShopState = {
@@ -159,6 +160,41 @@ function ArenaTicketStore({ fallbackGold }: { fallbackGold: number }) {
       </div>
     </section>
   );
+}
+
+function BagSlotStore({ fallbackGold }: { fallbackGold: number }) {
+  const [slots, setSlots] = useState(10),
+    [used, setUsed] = useState(0),
+    [gold, setGold] = useState(fallbackGold),
+    [busy, setBusy] = useState(false);
+  useEffect(() => {
+    void arena<{ bag_slots: number; used_slots: number; gold: number }>("bag-items")
+      .then((data) => {
+        setSlots(data.bag_slots);
+        setUsed(data.used_slots);
+        setGold(data.gold);
+      })
+      .catch(() => {});
+  }, []);
+  const buy = async () => {
+    if (busy || gold < 48) return;
+    if (!window.confirm("Buy 10 additional Bag slots for 48 Gold?")) return;
+    setBusy(true);
+    try {
+      const data = await arena<{ bag_slots: number; gold: number }>(
+        "buy-bag-slots",
+        { request_id: crypto.randomUUID() },
+      );
+      setSlots(data.bag_slots);
+      setGold(data.gold);
+      toast.success("10 new Bag slots unlocked.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Bag upgrade failed.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return <section className="bag-slot-store"><img src="/inventory/chess-burger-bag.webp" alt="Chess Burger Bag"/><div><span>INVENTORY UPGRADE</span><h2>Chess Burger Bag</h2><p>{used} of {slots} slots used · Every player starts with 10 free slots.</p></div><button type="button" disabled={busy||gold<48} onClick={()=>void buy()}>{busy?"Unlocking…":"+10 slots · 48 Gold"}</button></section>;
 }
 
 function BannerTile({
@@ -373,9 +409,10 @@ export function ShopPage({
           <small>Gold balance</small>
         </span>
       </div>
-      <ArenaTicketStore
-        fallbackGold={state.gold || profile?.gold_points || 0}
-      />
+    <ArenaTicketStore
+          fallbackGold={state.gold || profile?.gold_points || 0}
+        />
+        <BagSlotStore fallbackGold={state.gold || profile?.gold_points || 0}/>
       <div className="shop-grid">
         {[
           ["♞", "Avatar frames", "Decorative player-card frames."],
@@ -420,6 +457,8 @@ export function BagPage({ onChanged }: { onChanged: () => void }) {
     }>;
     active: string;
     gold: number;
+    bag_slots: number;
+    used_slots: number;
   };
   const [state, setState] = useState<BagState>({
       banners: [],
@@ -427,6 +466,8 @@ export function BagPage({ onChanged }: { onChanged: () => void }) {
       items: [],
       active: "",
       gold: 0,
+      bag_slots: 10,
+      used_slots: 0,
     }),
     [loading, setLoading] = useState(true),
     [busy, setBusy] = useState(""),
@@ -473,14 +514,9 @@ export function BagPage({ onChanged }: { onChanged: () => void }) {
     if (!giftItem || busy) return;
     setBusy(`gift:${giftItem.kind}:${giftItem.id}`);
     try {
-      await arena("gift-bag-item", {
-        username,
-        item_kind: giftItem.kind,
-        item_id: giftItem.id,
-        quantity,
-        request_id: crypto.randomUUID(),
-      });
-      toast.success(`${giftItem.name} sent to ${username}. 4 Gold charged.`);
+      if(giftItem.kind==="gold") await arena("gift-gold",{username,amount:quantity,request_id:crypto.randomUUID()});
+      else await arena("gift-bag-item", {username,item_kind: giftItem.kind,item_id: giftItem.id,quantity,request_id: crypto.randomUUID()});
+      toast.success(giftItem.kind==="gold"?`${quantity} Gold sent to ${username}.`:`${giftItem.name} sent to ${username}. 4 Gold charged.`);
       setGiftItem(null);
       await load();
       onChanged();
@@ -492,8 +528,6 @@ export function BagPage({ onChanged }: { onChanged: () => void }) {
       setBusy("");
     }
   };
-  const count =
-    state.banners.length + state.items.length + (state.tickets > 0 ? 1 : 0);
   return (
     <section className="bag-page rpg-bag">
       <div className="page-heading rpg-bag-heading">
@@ -510,20 +544,15 @@ export function BagPage({ onChanged }: { onChanged: () => void }) {
           </span>
           <span className="bag-count">
             <ShoppingBag size={15} />
-            {count} slots
+            {state.used_slots}/{state.bag_slots} slots
           </span>
         </div>
       </div>
       {loading ? (
         <p className="account-note">Opening your bag…</p>
-      ) : count === 0 ? (
-        <div className="empty-bag">
-          <PackageOpen size={42} />
-          <h2>Your bag is empty</h2>
-          <p>Purchased Arena Tickets and Feed Banners will appear here.</p>
-        </div>
       ) : (
         <div className="bag-tiles unified-bag-grid">
+          <article className="bag-inventory-card gold legendary"><div className="rpg-item-art rpg-gold-art"><span>●</span><strong>{state.gold}</strong></div><div className="rpg-item-copy"><small>PLAYER CURRENCY</small><h3>Gold Coins</h3><span>Gift Gold directly to another player.</span></div><div className="rpg-item-actions"><button type="button" disabled={state.gold<1} onClick={()=>openGift("gold","gold-coins","Gold Coins",state.gold)}><Gift size={14}/>Gift Gold</button></div></article>
           {state.tickets > 0 && (
             <article className="bag-inventory-card ticket legendary">
               <div className="rpg-item-art">
@@ -658,7 +687,7 @@ export function BagPage({ onChanged }: { onChanged: () => void }) {
           >
             <Gift />
             <div>
-              <small>4 GOLD GIFT FEE</small>
+                  <small>{giftItem.kind==="gold"?"DIRECT GOLD TRANSFER":"4 GOLD GIFT FEE"}</small>
               <h2 id="bag-gift-title">Gift {giftItem.name}</h2>
             </div>
             <label>
@@ -671,9 +700,9 @@ export function BagPage({ onChanged }: { onChanged: () => void }) {
                 placeholder="@username"
               />
             </label>
-            {giftItem.max > 1 && (
-              <label>
-                Quantity
+              {giftItem.max > 1 && (
+                <label>
+                  {giftItem.kind==="gold"?"Gold amount":"Quantity"}
                 <input
                   required
                   type="number"
@@ -691,10 +720,7 @@ export function BagPage({ onChanged }: { onChanged: () => void }) {
                 />
               </label>
             )}
-            <p>
-              The item transfers directly to the recipient’s Bag. Your account
-              is charged exactly 4 Gold for this transaction.
-            </p>
+              <p>{giftItem.kind==="gold"?"Gold transfers directly to the recipient. Gold gifts have no transaction fee.":"The item transfers directly to the recipient’s Bag. Your account is charged exactly 4 Gold for this transaction."}</p>
             <div>
               <button type="button" onClick={() => setGiftItem(null)}>
                 Cancel

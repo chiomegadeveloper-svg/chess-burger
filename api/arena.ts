@@ -791,13 +791,27 @@ export default async function handler(req: Req, res: Res) {
       return res.status(200).json({owned,active,gold:Number(account.profile.gold_points??0),server_now:new Date().toISOString()});
     }
     if(action==='bag-items'){
-      const now=new Date().toISOString(),[banners,tickets,items]=await Promise.all([
+      const now=new Date().toISOString(),[banners,tickets,items,used]=await Promise.all([
         client.from('cb_user_items').select('product_id,expires_at').eq('user_id',account.id).gt('expires_at',now).order('expires_at',{ascending:true}),
         client.from('cb_arena_tickets').select('quantity').eq('user_id',account.id).maybeSingle(),
-        client.from('cb_inventory_items').select('item_kind,item_id,quantity,metadata,updated_at').eq('user_id',account.id).gt('quantity',0).order('updated_at',{ascending:false})
+        client.from('cb_inventory_items').select('item_kind,item_id,quantity,metadata,updated_at').eq('user_id',account.id).gt('quantity',0).order('updated_at',{ascending:false}),
+        client.rpc('cb_bag_slots_used',{p_user_id:account.id})
       ]);
-      const error=banners.error??tickets.error??items.error;if(error)fail(503,'Run Supabase migrations through 0032, then reopen your Bag.');
-      return res.status(200).json({banners:banners.data??[],tickets:Number(tickets.data?.quantity??0),items:items.data??[],active:account.profile.active_feed_banner??'',gold:Number(account.profile.gold_points??0),server_now:now});
+      const error=banners.error??tickets.error??items.error??used.error;if(error)fail(503,'Run Supabase migrations through 0034, then reopen your Bag.');
+      return res.status(200).json({banners:banners.data??[],tickets:Number(tickets.data?.quantity??0),items:items.data??[],active:account.profile.active_feed_banner??'',gold:Number(account.profile.gold_points??0),bag_slots:Number(account.profile.bag_slots??10),used_slots:Number(used.data??0),server_now:now});
+    }
+    if(action==='buy-bag-slots'){
+      const requestId=String(body.request_id??'');if(!/^[a-f0-9-]{36}$/i.test(requestId))fail(400,'Invalid Bag upgrade request.');
+      const bought=await client.rpc('cb_buy_bag_slots',{p_user_id:account.id,p_request_id:requestId});
+      if(bought.error){const message=String(bought.error.message??'Bag upgrade failed.');if(/cb_buy_bag_slots|bag_slots|schema cache|function/i.test(message))fail(503,'Run supabase/0034_bag_slots_and_gold_gifts.sql, then try again.');fail(409,message);}
+      return res.status(200).json(bought.data);
+    }
+    if(action==='gift-gold'){
+      const username=String(body.username??'').trim(),amount=Number(body.amount),requestId=String(body.request_id??'');
+      if(!/^@?[a-z0-9_]{2,40}$/i.test(username)||!Number.isInteger(amount)||amount<1||amount>1000000||!/^[a-f0-9-]{36}$/i.test(requestId))fail(400,'Choose a valid username and Gold amount.');
+      const gifted=await client.rpc('cb_gift_gold',{p_sender_id:account.id,p_username:username,p_amount:amount,p_request_id:requestId});
+      if(gifted.error){const message=String(gifted.error.message??'Gold gift failed.');if(/cb_gift_gold|cb_gold_gifts|bag_slots|schema cache|function/i.test(message))fail(503,'Run supabase/0034_bag_slots_and_gold_gifts.sql, then try again.');fail(409,message);}
+      return res.status(200).json(gifted.data);
     }
     if(action==='gift-bag-item'){
       const username=String(body.username??'').trim(),kind=String(body.item_kind??''),itemId=String(body.item_id??''),quantity=Number(body.quantity??1),requestId=String(body.request_id??'');
