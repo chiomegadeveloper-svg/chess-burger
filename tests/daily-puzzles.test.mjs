@@ -43,7 +43,8 @@ test("daily puzzle Gold and rating are server validated and idempotent", () => {
   assert.match(sql, /primary key\(user_id,puzzle_day,puzzle_id\)/);
   assert.match(sql, /cb_puzzle_profiles/);
   assert.match(sql, /puzzle_rating/);
-  assert.match(sql, /v_delta:=2/);
+  assert.match(sql, /p_gold_reward/);
+  assert.match(sql, /greatest\(1,least\(3,p_gold_reward\)\)/);
   assert.match(sql, /v_delta:=v_delta\+5/);
   assert.match(sql, /on conflict do nothing/);
 });
@@ -67,9 +68,11 @@ test("every correct puzzle solve displays a popup notification", () => {
   assert.match(puzzleUi, /Practice replay/);
 });
 
-test("Puzzle Quest resets daily with Easy, Regular, and Hard tracks",()=>{
+test("Puzzle Quest resets daily with Easy, Regular, Hard, and Random tracks",()=>{
   assert.match(puzzleUi,/RESETS 12:00 AM PH/);
-  for(const level of ["Easy","Regular","Hard"])assert.match(puzzleUi,new RegExp(`label:\"${level}\"`));
-  assert.match(puzzleUi,/3 completed today/);
-  assert.match(api,/completed\.length===3/);
+  for(const level of ["Easy","Regular","Hard","Random"])assert.match(puzzleUi,new RegExp(`label:\"${level}\"`));
+  assert.match(puzzleUi,/4 completed today/);
+  assert.match(api,/completed\.length===4/);
+  assert.match(api,/puzzleReward/);
+  assert.match(puzzleUi,/1–3 CBG/);
 });
