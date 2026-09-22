@@ -714,7 +714,8 @@ export default async function handler(req: Req, res: Res) {
     const isStaff = account.profile.role === 'owner' || account.profile.role === 'admin';
     const requireStaff = () => { if (!isStaff) fail(403, 'Owner or GM access is required.'); };
     const audit = async (auditAction: string, details: Record<string, unknown> = {}) => {
-      const saved = await client.from('cb_admin_logs').insert({ actor_user_id: account.id, action: auditAction, details });
+      const actor = { actor_name: account.profile.display_name, actor_username: account.profile.username, actor_role: account.profile.role };
+      const saved = await client.from('cb_admin_logs').insert({ actor_user_id: account.id, action: auditAction, details: { ...actor, ...details } });
       if (saved.error) console.warn('arena.cms-audit-failed', { action: auditAction, message: saved.error.message });
     };
     if (action === 'cms-announcements') {
@@ -754,9 +755,11 @@ export default async function handler(req: Req, res: Res) {
       requireStaff();
       const imageUrl = String(body.url ?? '').trim();
       if (imageUrl && (!/^https:\/\//i.test(imageUrl) || imageUrl.length > 2048)) fail(400, 'Use a secure HTTPS photo URL.');
+      const previous = await client.from('cb_app_settings').select('value').eq('key', 'app_feature').maybeSingle();
+      if (previous.error) fail(500, previous.error.message);
       const saved = await client.from('cb_app_settings').upsert({ key: 'app_feature', value: { image_url: imageUrl }, updated_at: new Date().toISOString() }, { onConflict: 'key' });
       if (saved.error) fail(500, saved.error.message);
-      await audit('set_app_feature', { image_url: imageUrl });
+      await audit('set_app_feature', { previous: previous.data?.value ?? null, current: { image_url: imageUrl } });
       return res.status(200).json({ ok: true, image_url: imageUrl });
     }
     if (action === 'logs') {
@@ -769,7 +772,7 @@ export default async function handler(req: Req, res: Res) {
       const actors = actorIds.length ? await client.from('cb_profiles').select('user_id,display_name,username').in('user_id', actorIds) : { data: [], error: null };
       if (actors.error) fail(500, actors.error.message);
       const names = new Map((actors.data ?? []).map((actor: any) => [actor.user_id, actor.display_name || `@${actor.username}`]));
-      return res.status(200).json({ logs: (found.data ?? []).map((row: any) => ({ ...row, actor_name: names.get(row.actor_user_id) ?? undefined })) });
+      return res.status(200).json({ logs: (found.data ?? []).map((row: any) => ({ ...row, actor_name: names.get(row.actor_user_id) ?? row.details?.actor_name ?? (row.details?.actor_username ? `@${row.details.actor_username}` : undefined), actor_role: row.details?.actor_role })) });
     }
     if (action === 'delete-user') {
       if (account.profile.role !== 'owner') fail(403, 'Only an Owner can delete a user.');
@@ -779,7 +782,7 @@ export default async function handler(req: Req, res: Res) {
       if (target.error) fail(500, target.error.message);
       if (!target.data) fail(404, 'Player not found.');
       if (target.data.role === 'owner') fail(403, 'Owner accounts are protected.');
-      await audit('delete_user', { username });
+      await audit('delete_user', { username, target_user_id: target.data.user_id, previous_role: target.data.role });
       const removed = await client.auth.admin.deleteUser(target.data.user_id);
       if (removed.error) fail(409, removed.error.message);
       return res.status(200).json({ ok: true });
@@ -840,9 +843,11 @@ export default async function handler(req: Req, res: Res) {
       if(rewards.length!==7)fail(400,'Configure all 7 reward days.');
       const normalized=rewards.map((item:any,index:number)=>({day:index+1,kind:String(item?.kind??''),amount:Number(item?.amount),product_id:String(item?.product_id??'')}));
       if(normalized.some((item:any)=>!['gold','arena_ticket','banner','bag_slot'].includes(item.kind)||!Number.isInteger(item.amount)||item.amount<1||item.amount>10000||(item.kind==='banner'&&!/^(pastel|metal)-[a-z-]+$/.test(item.product_id))))fail(400,'Choose a valid item and amount for every day.');
+      const previous=await client.from('cb_daily_reward_config').select('day,reward_kind,amount,product_id').order('day');
+      if(previous.error)fail(500,previous.error.message);
       const saved=await client.rpc('cb_save_daily_reward_config',{p_owner_id:account.id,p_rewards:normalized});
       if(saved.error){const message=String(saved.error.message??'Rewards could not be saved.');if(/cb_save_daily|cb_daily_reward_config|schema cache|function|relation/i.test(message))fail(503,'Run supabase/0035_editable_daily_login_rewards.sql in Supabase, then try again.');fail(409,message);}
-      await audit('daily_rewards_update',{rewards:normalized});
+      await audit('daily_rewards_update',{previous:previous.data??[],current:normalized});
       return res.status(200).json({rewards:saved.data});
     }
     if(action==='buy-feed-banner'){

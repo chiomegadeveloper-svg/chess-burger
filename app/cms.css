@@ -168,6 +168,10 @@
 .cms-page .cms-panel > button,
 .cms-page .gold-button { min-height: 41px; border-radius: 9px !important; font-size: 11px; font-weight: 700; }
 
+.cms-audit-kicker { color: var(--cms-cyan); font-size: 8px; font-weight: 800; letter-spacing: 1.35px; }
+.cms-page .activity-logs .log-copy > span { color: #8795a2; }
+.cms-page .activity-logs .log-copy > span b { color: #e7c46f; font-weight: 700; }
+
 @media (max-width: 720px) {
   .cms-page { padding: 12px 12px 30px; }
   .cms-page .cms-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
