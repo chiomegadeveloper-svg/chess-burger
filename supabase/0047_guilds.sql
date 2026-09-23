@@ -163,7 +163,7 @@ do $$ begin
  if to_regprocedure('cron.schedule(text,text,text)') is not null then
   perform cron.schedule('cb-guild-release','* * * * *','select public.cb_guild_distribute_due()');
  end if;
-exception when undefined_schema or insufficient_privilege then
+exception when SQLSTATE '3F000' or SQLSTATE '42883' or SQLSTATE '42501' then
  raise notice 'Enable pg_cron for automatic guild releases; page visits still process due releases';
 end $$;
 commit;
