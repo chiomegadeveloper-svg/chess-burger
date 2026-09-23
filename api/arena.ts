@@ -485,23 +485,7 @@ async function publicFeed(client: Db) {
     for (const m of waiting.data ?? []) activeChallenges.set(m.id, m);
   }
   const people = await playerMap(client, visible.map((e: any) => e.user_id));
-  const guildByUser = new Map<string, { name: string; logo_url: string }>();
-  const actorIds = [...new Set(visible.filter((e: any) => e.kind !== 'announcement').map((e: any) => String(e.user_id)))];
-  if (actorIds.length) {
-    const memberships = await client.from('cb_guild_members').select('user_id,guild_id').in('user_id', actorIds);
-    if (memberships.error && !/cb_guild_members|schema cache|does not exist/i.test(memberships.error.message)) fail(500, memberships.error.message);
-    const guildIds = [...new Set((memberships.data ?? []).map((m: any) => String(m.guild_id)))];
-    if (guildIds.length) {
-      const guilds = await client.from('cb_guilds').select('id,name,logo_url').in('id', guildIds);
-      if (guilds.error) fail(500, guilds.error.message);
-      const byId = new Map((guilds.data ?? []).map((g: any) => [g.id, g]));
-      for (const member of memberships.data ?? []) {
-        const guild: any = byId.get(member.guild_id);
-        if (guild) guildByUser.set(member.user_id, { name: guild.name, logo_url: guild.logo_url ?? '' });
-      }
-    }
-  }
-  return { events: visible.filter((e: any) => e.kind !== 'challenge' || activeChallenges.has(e.challenge_match_id)).map((e: any) => { const match = activeChallenges.get(e.challenge_match_id), guild = guildByUser.get(e.user_id); return { id: e.kind === 'challenge' && e.challenge_match_id ? `challenge:${e.challenge_match_id}` : e.id, user_id: e.user_id, kind: e.kind, display_name: e.kind === 'announcement' ? 'Chess Burger' : people.get(e.user_id)?.display_name ?? e.display_name, guild_name: guild?.name ?? '', guild_logo_url: guild?.logo_url ?? '', content: modernCpuFeedContent(e.content), image_url: e.image_url ?? '', expires_at: e.expires_at, cbr_delta: e.cbr_delta ?? 0, gold_delta: e.gold_delta ?? 0, heart_count: e.heart_count ?? 0, created_at: e.created_at, avatar_url: e.kind === 'announcement' ? '/cburger_logo.png' : people.get(e.user_id)?.avatar_url ?? '', cbr: people.get(e.user_id)?.cbr ?? 88, feed_banner: e.kind === 'announcement' ? '' : people.get(e.user_id)?.active_feed_banner ?? '', play_mode: match?.play_mode ?? 'normal', wager_gold: Number(match?.wager_gold ?? 0) }; }) };
+  return { events: visible.filter((e: any) => e.kind !== 'challenge' || activeChallenges.has(e.challenge_match_id)).map((e: any) => { const match = activeChallenges.get(e.challenge_match_id); return { id: e.kind === 'challenge' && e.challenge_match_id ? `challenge:${e.challenge_match_id}` : e.id, user_id: e.user_id, kind: e.kind, display_name: e.kind === 'announcement' ? 'Chess Burger' : e.display_name, content: modernCpuFeedContent(e.content), image_url: e.image_url ?? '', expires_at: e.expires_at, cbr_delta: e.cbr_delta ?? 0, gold_delta: e.gold_delta ?? 0, heart_count: e.heart_count ?? 0, created_at: e.created_at, avatar_url: e.kind === 'announcement' ? '/cburger_logo.png' : people.get(e.user_id)?.avatar_url ?? '', cbr: people.get(e.user_id)?.cbr ?? 88, feed_banner: e.kind === 'announcement' ? '' : people.get(e.user_id)?.active_feed_banner ?? '', play_mode: match?.play_mode ?? 'normal', wager_gold: Number(match?.wager_gold ?? 0) }; }) };
 }
 async function saveLiveHeartbeat(client: Db, userId: string) {
   const stamp = new Date().toISOString();

@@ -1183,6 +1183,8 @@
 .teacher-toolbar-handle button.active{border-color:#5ce3ed;background:#16404a;color:#9af2f7}
 .teacher-toolbar-handle svg{width:15px;height:15px}
 .teacher-toolbar-shell>.teacher-toolbar{position:relative;top:auto;width:100%;box-sizing:border-box;max-height:0;overflow:hidden;padding-block:0;border-bottom-color:transparent;opacity:0;pointer-events:none;transform:translateY(-12px);transition:max-height .28s ease,opacity .18s ease,transform .22s ease,padding .22s ease,border-color .22s ease}
+.teacher-toolbar-shell:focus-within>.teacher-toolbar,.teacher-toolbar-shell.open>.teacher-toolbar{max-height:min(68dvh,620px);overflow:auto;padding-block:10px;border-bottom-color:#354850;opacity:1;pointer-events:auto;transform:translateY(0)}
+@media(hover:hover) and (pointer:fine){.teacher-toolbar-shell:hover>.teacher-toolbar{max-height:min(68dvh,620px);overflow:auto;padding-block:10px;border-bottom-color:#354850;opacity:1;pointer-events:auto;transform:translateY(0)}}
 .classroom-workshop.board-maximized{position:fixed;z-index:10000;inset:0;width:100vw;height:100dvh;min-height:0;overflow:hidden;background:#071115}
 .classroom-workshop.board-maximized:fullscreen{width:100vw;height:100dvh;overflow:hidden}
 .board-maximized .workshop-topbar{display:none}
@@ -1194,7 +1196,7 @@
 .board-maximized .focus-board>h2,.board-maximized .one-board>h2{margin-bottom:4px;font-size:12px}
 .board-maximized .board-piece-layout{max-width:min(1180px,calc(100dvh + 70px))}
 @media(max-width:1100px){.board-maximized .board-piece-layout{max-width:min(100%,calc(100dvh - 100px))}}
-@media(max-width:760px){.teacher-toolbar-shell{top:58px}.teacher-toolbar-handle{justify-content:stretch;padding:4px 6px}.teacher-toolbar-handle button{flex:1;min-height:36px;padding-inline:7px}.board-maximized .master-board-panel,.board-maximized .focus-board,.board-maximized .one-board{width:min(calc(100vw - 4px),calc(100dvh + 20px));padding:2px}}
+@media(max-width:760px){.teacher-toolbar-shell{top:58px}.teacher-toolbar-handle{justify-content:stretch;padding:4px 6px}.teacher-toolbar-handle button{flex:1;min-height:36px;padding-inline:7px}.teacher-toolbar-shell>.teacher-toolbar{max-height:0}.teacher-toolbar-shell:focus-within>.teacher-toolbar,.teacher-toolbar-shell.open>.teacher-toolbar{max-height:70dvh}.board-maximized .master-board-panel,.board-maximized .focus-board,.board-maximized .one-board{width:min(calc(100vw - 4px),calc(100dvh + 20px));padding:2px}}
 
 /* Polished responsive SEba control console. */
 .teacher-toolbar {
@@ -1498,25 +1500,48 @@
   white-space: nowrap;
 }
 .teacher-toolbar-shell > .teacher-toolbar {
-  display: flex;
+  display: none;
   flex: 1 1 auto;
   align-items: center;
   flex-wrap: nowrap;
   gap: 5px;
   min-width: 0;
   width: auto;
-  max-height: 66px;
+  max-height: none;
   margin: 0;
   padding: 0;
   border: 0;
   background: none;
   transform: none;
+}
+.teacher-toolbar-shell.open > .teacher-toolbar,
+.teacher-toolbar-shell:focus-within > .teacher-toolbar {
+  display: flex;
+  max-height: 66px;
   overflow-x: auto;
   overflow-y: hidden;
+  padding: 0;
+  border: 0;
   opacity: 1;
   pointer-events: auto;
+  transform: none;
   scrollbar-width: thin;
   overscroll-behavior-inline: contain;
+}
+@media (hover: hover) and (pointer: fine) {
+  .teacher-toolbar-shell:hover > .teacher-toolbar {
+    display: flex;
+    max-height: 66px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0;
+    border: 0;
+    opacity: 1;
+    pointer-events: auto;
+    transform: none;
+    scrollbar-width: thin;
+    overscroll-behavior-inline: contain;
+  }
 }
 .teacher-toolbar > header {
   display: none;

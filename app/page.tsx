@@ -54,7 +54,6 @@ import CpuGame from "./cpu-game";
 import Puzzles from "./puzzles";
 import GrandArena from "./grand-arena";
 import Classroom from "./classroom";
-import GuildPage from "./guild";
 
 const modes = [
   {
@@ -729,7 +728,7 @@ function AppPage() {
     );
   else if (tab === "shop") content = <ShopPage profile={profile} onChanged={() => void refreshProfile()} />;
   else if (tab === "bag") content = <BagPage onChanged={() => void refreshProfile()} />;
-  else if (tab === "guild") content = <GuildPage profile={profile} onChanged={() => void refreshProfile()} />;
+  else if (tab === "guild") content = <section className="guild-page"><div className="coming-soon-panel"><Castle size={46}/><span>Guild</span><h1>Coming soon</h1><p>Build your guild, gather teammates, and compete together in a future update.</p></div></section>;
   else if (tab === "cms" && staff)
     content = <Cms profile={profile} onClose={() => setTab("profile")} />;
   else
@@ -842,6 +841,14 @@ function AppPage() {
               >
                 <img src="/welcome/classroom.webp" alt="Chess classroom" />
                 <strong>CLASS ROOM</strong>
+              </button>
+              <button className="welcome-card guild" onClick={() => finishWelcome("guild")}>
+                <img src="/welcome/guild.webp" alt="Chess Burger guild tavern" />
+                <strong>GUILD</strong>
+              </button>
+              <button className="welcome-card home" onClick={() => finishWelcome("home")}>
+                <img src="/welcome/home.webp" alt="Chess Burger kingdom" />
+                <strong>HOME</strong>
               </button>
             </div>
           </section>
