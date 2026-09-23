@@ -12,7 +12,7 @@ test("SEba header has professional non-overlapping layout zones",()=>{
   assert.match(workshop,/CHESS BURGER CLASSROOM/);
   assert.match(css,/grid-template-columns: minmax\(250px, 1fr\) auto minmax\(250px, 1fr\)/);
   const start=css.indexOf("Professional responsive SEba workspace header");
-  const professional=css.slice(start,css.indexOf("Student session summary",start));
+  const professional=css.slice(start,css.indexOf("@media (max-width: 1180px)",start));
   assert.doesNotMatch(professional,/position:\s*absolute/);
   assert.doesNotMatch(professional,/-webkit-text-stroke:\s*1px/);
 });

@@ -831,6 +831,209 @@
     padding: 5px 7px;
   }
 }
+
+/* Compact single-row teacher toolbar. */
+.teacher-toolbar-shell > .teacher-toolbar {
+  display: flex;
+  grid-template-columns: none;
+  grid-auto-rows: auto;
+  align-items: center;
+  gap: 7px;
+  min-height: 0;
+  padding: 7px 10px;
+  overflow: visible;
+}
+.teacher-toolbar > header {
+  flex: 0 0 142px;
+  display: grid;
+  grid-column: auto;
+  align-content: center;
+  gap: 2px;
+  width: 142px;
+  min-width: 0;
+  padding: 0 8px 0 2px;
+}
+.teacher-toolbar > header b {
+  font-size: 8px;
+  white-space: nowrap;
+}
+.teacher-toolbar > header small {
+  overflow: hidden;
+  max-width: 132px;
+  font-size: 7px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.teacher-toolbar > .tool-group,
+.teacher-toolbar > .piece-setup {
+  position: relative;
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: none;
+  grid-template-rows: auto 38px;
+  align-self: center;
+  align-content: center;
+  gap: 4px;
+  min-width: 0;
+  min-height: 0;
+  height: auto;
+  padding: 6px;
+  border-radius: 10px;
+  box-shadow: inset 0 1px rgba(255,255,255,.025);
+}
+.teacher-toolbar > .tool-group > b,
+.teacher-toolbar > .piece-setup > b {
+  grid-column: auto;
+  font-size: 6px;
+  line-height: 1;
+  letter-spacing: .85px;
+  white-space: nowrap;
+}
+.teacher-toolbar .tool-group > div:not(.piece-palette):not(.ai-move-line),
+.teacher-toolbar .move-draw-tools > div,
+.teacher-toolbar .lesson-tools > div,
+.teacher-toolbar .ai-reader-tools > div,
+.teacher-toolbar .board-style > div,
+.teacher-toolbar .session-tools > div,
+.teacher-toolbar .piece-setup > div {
+  display: flex;
+  grid-template-columns: none;
+  grid-auto-rows: auto;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 4px;
+  width: auto;
+  min-width: 0;
+  height: 38px;
+}
+.teacher-toolbar .move-draw-tools > div > button:last-child {
+  grid-column: auto;
+}
+.teacher-toolbar .tool-group button,
+.teacher-toolbar .piece-setup > div > button,
+.teacher-toolbar .piece-setup > div > .clear-board-button {
+  position: relative;
+  flex: 0 0 38px;
+  width: 38px;
+  min-width: 38px;
+  max-width: 38px;
+  min-height: 38px;
+  height: 38px;
+  padding: 0;
+  border-radius: 9px;
+}
+.teacher-toolbar .tool-group button svg {
+  flex-basis: 16px;
+  width: 16px;
+  height: 16px;
+}
+.teacher-toolbar .tool-button-label {
+  position: absolute;
+  z-index: 90;
+  top: calc(100% + 7px);
+  left: 50%;
+  overflow: visible;
+  width: max-content;
+  max-width: 180px;
+  padding: 6px 8px;
+  border: 1px solid #47616a;
+  border-radius: 7px;
+  background: #071216f2;
+  color: #edf9fa;
+  font: 700 8px/1.2 Poppins, sans-serif;
+  white-space: nowrap;
+  box-shadow: 0 7px 20px #000b;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -3px);
+  transition: opacity .14s ease, transform .14s ease;
+}
+.teacher-toolbar .tool-group button:hover .tool-button-label,
+.teacher-toolbar .tool-group button:focus-visible .tool-button-label {
+  max-width: 180px;
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+.teacher-toolbar .tool-color-dot {
+  flex-basis: 16px;
+  width: 16px;
+  height: 16px;
+}
+.teacher-toolbar .session-tools label {
+  display: flex;
+  grid-template-columns: none;
+  flex: 0 0 auto;
+  width: auto;
+  min-height: 38px;
+  height: 38px;
+  padding: 3px 4px 3px 7px;
+  font-size: 7px;
+}
+.teacher-toolbar .session-tools select {
+  width: 72px;
+  min-height: 30px;
+  padding: 4px 6px;
+}
+.teacher-toolbar .ai-reader-result,
+.teacher-toolbar .ai-move-line {
+  position: absolute;
+  z-index: 70;
+  top: calc(100% + 7px);
+  right: 0;
+  width: min(320px, 80vw);
+  box-sizing: border-box;
+}
+.teacher-toolbar .ai-move-line {
+  top: calc(100% + 60px);
+}
+
+@media (max-width: 1100px) {
+  .teacher-toolbar-shell > .teacher-toolbar {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+    overscroll-behavior-inline: contain;
+  }
+  .teacher-toolbar > header {
+    flex-basis: 112px;
+    width: 112px;
+    position: sticky;
+    z-index: 4;
+    left: 0;
+    align-self: stretch;
+    padding-left: 7px;
+    background: #0d181d;
+  }
+  .teacher-toolbar > header small {
+    max-width: 102px;
+  }
+}
+@media (max-width: 560px) {
+  .teacher-toolbar-shell > .teacher-toolbar {
+    display: flex;
+    grid-template-columns: none;
+    grid-auto-rows: auto;
+    gap: 5px;
+    padding: 6px;
+  }
+  .teacher-toolbar > .tool-group,
+  .teacher-toolbar > .piece-setup {
+    min-height: 0;
+    padding: 5px;
+  }
+  .teacher-toolbar .tool-group button,
+  .teacher-toolbar .piece-setup > div > button {
+    flex-basis: 36px;
+    width: 36px;
+    min-width: 36px;
+    max-width: 36px;
+    min-height: 36px;
+    height: 36px;
+  }
+}
 @media (max-width: 430px) {
   .workshop-actions .seba-cbc-button {
     font-size: 0;
@@ -1204,6 +1407,12 @@
   min-height: 42px;
   padding: 0;
   font-size: 0;
+}
+.workshop-actions .seba-cbc-button.icon-action img {
+  width: 27px;
+  height: 27px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 5px rgba(0,0,0,.55));
 }
 .workshop-actions > .workshop-stat.icon-action {
   min-height: 42px;

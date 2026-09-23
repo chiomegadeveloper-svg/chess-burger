@@ -11,28 +11,28 @@ test("SEba teacher console uses named professional control groups", () => {
   assert.match(source, /className="tool-group ai-reader-tools"/);
 });
 
-test("teacher control cards and buttons fill their responsive grid", () => {
-  assert.match(css, /\.teacher-toolbar \{[\s\S]*?grid-template-columns: repeat\(6, minmax\(0, 1fr\)\)/);
-  assert.match(css, /\.teacher-toolbar > \.tool-group \{[\s\S]*?align-self: stretch;[\s\S]*?grid-template-rows: auto minmax\(0, 1fr\)/);
-  assert.match(css, /\.teacher-toolbar \.tool-group button \{[\s\S]*?width: 100%;[\s\S]*?min-height: 44px;[\s\S]*?height: 100%/);
+test("teacher controls form one compact icon row", () => {
+  assert.match(css, /\/\* Compact single-row teacher toolbar\. \*\/[\s\S]*?\.teacher-toolbar-shell > \.teacher-toolbar \{[\s\S]*?display: flex;[\s\S]*?align-items: center/);
+  assert.match(css, /\.teacher-toolbar > \.tool-group,[\s\S]*?grid-template-rows: auto 38px/);
+  assert.match(css, /\.teacher-toolbar \.tool-group button,[\s\S]*?flex: 0 0 38px;[\s\S]*?width: 38px;[\s\S]*?height: 38px/);
 });
 
-test("teacher console collapses cleanly for tablet and mobile", () => {
-  assert.match(css, /@media \(max-width: 1500px\)[\s\S]*?grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
-  assert.match(css, /@media \(max-width: 900px\)[\s\S]*?grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
-  assert.match(css, /@media \(max-width: 560px\)[\s\S]*?grid-template-columns: minmax\(0, 1fr\)/);
+test("teacher toolbar stays one row and scrolls on smaller screens", () => {
+  assert.match(css, /@media \(max-width: 1100px\)[\s\S]*?flex-wrap: nowrap;[\s\S]*?overflow-x: auto/);
+  assert.match(css, /@media \(max-width: 560px\)[\s\S]*?display: flex;[\s\S]*?grid-template-columns: none/);
 });
 
 test("teacher actions are accessible icon-first controls with hover labels", () => {
   assert.match(source, /aria-label="Hand" title="Hand"/);
   assert.match(source, /className="tool-button-label">Activity Log/);
   assert.match(source, /className="tool-color-dot red"/);
-  assert.match(css, /\.teacher-toolbar \.tool-button-label \{[\s\S]*?max-width: 0;[\s\S]*?opacity: 0/);
+  assert.match(css, /\/\* Compact single-row teacher toolbar\. \*\/[\s\S]*?\.teacher-toolbar \.tool-button-label \{[\s\S]*?position: absolute;[\s\S]*?opacity: 0/);
   assert.match(css, /button:hover \.tool-button-label,[\s\S]*?button:focus-visible \.tool-button-label/);
 });
 
 test("top-right classroom actions are compact icon controls with tooltips", () => {
   assert.match(source, /className="seba-cbc-button icon-action"[\s\S]*?data-tooltip=/);
+  assert.match(source, /seba-cbc-button icon-action[\s\S]*?cbc-token\.webp/);
   assert.match(source, /className="workshop-stat icon-action"[\s\S]*?data-tooltip=/);
   assert.match(css, /\.workshop-actions > \.icon-action,[\s\S]*?width: 42px;[\s\S]*?height: 42px/);
   assert.match(css, /\.workshop-actions \[data-tooltip\]::after/);
