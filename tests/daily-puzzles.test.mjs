@@ -3,11 +3,22 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { Chess } from "chess.js";
 import { DAILY_PUZZLES } from "../app/puzzle-data.ts";
+import { PUZZLE_BANK } from "../app/puzzle-bank.ts";
 
 const page = readFileSync(new URL("../app/page.tsx", import.meta.url), "utf8");
 const puzzleUi = readFileSync(new URL("../app/puzzles.tsx", import.meta.url), "utf8");
 const api = readFileSync(new URL("../api/arena.ts", import.meta.url), "utf8");
-const sql = readFileSync(new URL("../supabase/0028_daily_puzzles.sql", import.meta.url), "utf8")+readFileSync(new URL("../supabase/0043_daily_puzzle_rating.sql", import.meta.url), "utf8")+readFileSync(new URL("../supabase/0045_puzzle_leaderboard.sql", import.meta.url), "utf8");
+const sql = readFileSync(new URL("../supabase/0028_daily_puzzles.sql", import.meta.url), "utf8")+readFileSync(new URL("../supabase/0043_daily_puzzle_rating.sql", import.meta.url), "utf8")+readFileSync(new URL("../supabase/0045_puzzle_leaderboard.sql", import.meta.url), "utf8")+readFileSync(new URL("../supabase/0051_daily_puzzle_500.sql", import.meta.url), "utf8");
+
+test("expanded bank has 1200 distinct legal positions with 750 very hard puzzles",()=>{
+  assert.equal(PUZZLE_BANK.length,1200);
+  assert.equal(new Set([...DAILY_PUZZLES,...PUZZLE_BANK].map(p=>p.fen)).size,1300);
+  assert.equal(PUZZLE_BANK.filter(p=>p.rating>=2200).length,750);
+  for(const puzzle of PUZZLE_BANK){
+    const game=new Chess(puzzle.fen);
+    for(const uci of puzzle.moves)assert.ok(game.move({from:uci.slice(0,2),to:uci.slice(2,4),promotion:uci.slice(4)||undefined}));
+  }
+});
 
 test("Match Lobby exposes a Gold-earning Puzzle Quest", () => {
   assert.match(page, /Puzzle Quest/);
@@ -71,18 +82,19 @@ test("every correct puzzle solve displays a popup notification", () => {
 
 test("Puzzle Quest resets daily with Easy, Regular, Hard, and Random tracks",()=>{
   assert.match(puzzleUi,/NEW PUZZLES DAILY/);
-  assert.match(puzzleUi,/RESETS 12:00 AM PH/);
+  assert.match(puzzleUi,/RESETS 12:01 AM PH/);
   for(const level of ["Easy","Regular","Hard","Random"])assert.match(puzzleUi,new RegExp(`label:\"${level}\"`));
-  assert.match(puzzleUi,/100 completed today/);
-  assert.match(api,/completed\.length===100/);
+  assert.match(puzzleUi,/500 completed today/);
+  assert.match(api,/pick\(VERY_HARD_IDS,300\)/);
+  assert.match(api,/pick\(OTHER_IDS,200\)/);
   assert.match(api,/easy:easy\.slice\(0,5\)/);
   assert.match(api,/regular:regular\.slice\(0,5\)/);
   assert.match(api,/hard:hard\.slice\(0,5\)/);
-  assert.match(api,/random=shuffle\(DAILY_PUZZLES\.map/);
-  assert.match(puzzleUi,/count:100/);
+  assert.match(api,/random=shuffle/);
+  assert.match(puzzleUi,/count:500/);
   assert.match(api,/puzzleReward/);
   assert.match(puzzleUi,/1–3 CBG/);
-  assert.match(sql,/v_count=100/);
+  assert.match(sql,/v_count=500/);
 });
 
 test("Puzzle Quest shows today before all-time and rating leaders below Coach Patty",()=>{
