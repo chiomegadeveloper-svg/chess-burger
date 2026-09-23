@@ -750,22 +750,23 @@ export default async function handler(req: Req, res: Res) {
       if (!content && !imageUrl) fail(400, 'Add text or an image.');
       if (!Number.isFinite(Date.parse(expiresAt)) || Date.parse(expiresAt) <= now()) fail(400, 'Choose a future end date.');
       if (imageUrl && !/^https:\/\//i.test(imageUrl)) fail(400, 'Use a secure HTTPS image.');
-      const scoped = userScopedDb(req);
       const query = id
-        ? scoped.from('cb_feed').update({ content, image_url: imageUrl, expires_at: expiresAt }).eq('id', id).eq('kind', 'announcement').select('id,content,image_url,expires_at').maybeSingle()
-        : scoped.from('cb_feed').insert({ user_id: account.id, kind: 'announcement', display_name: 'Chess Burger', content, image_url: imageUrl, expires_at: expiresAt }).select('id,content,image_url,expires_at').single();
+        ? client.from('cb_feed').update({ content, image_url: imageUrl, expires_at: expiresAt }).eq('id', id).eq('kind', 'announcement').select('id,content,image_url,expires_at').maybeSingle()
+        : client.from('cb_feed').insert({ user_id: account.id, kind: 'announcement', display_name: 'Chess Burger', content, image_url: imageUrl, expires_at: expiresAt }).select('id,content,image_url,expires_at').single();
       const saved = await query;
       if (saved.error) fail(500, saved.error.message);
       if (!saved.data) fail(404, 'Announcement not found.');
+      await audit(id ? 'announcement_update' : 'announcement_insert', { id: saved.data.id, expires_at: expiresAt, image_url: imageUrl });
       return res.status(200).json({ ok: true, post: saved.data });
     }
     if (action === 'delete-announcement') {
       requireStaff();
       const id = String(body.id ?? '');
       if (!/^[a-f0-9-]{36}$/i.test(id)) fail(400, 'Choose a valid announcement.');
-      const removed = await userScopedDb(req).from('cb_feed').delete().eq('id', id).eq('kind', 'announcement').select('id').maybeSingle();
+      const removed = await client.from('cb_feed').delete().eq('id', id).eq('kind', 'announcement').select('id').maybeSingle();
       if (removed.error) fail(500, removed.error.message);
       if (!removed.data) fail(404, 'Announcement not found.');
+      await audit('announcement_delete', { id });
       return res.status(200).json({ ok: true });
     }
     if (action === 'set-app-feature') {

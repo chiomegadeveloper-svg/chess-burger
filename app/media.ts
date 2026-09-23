@@ -139,6 +139,10 @@ export async function uploadStaffImage(file: File, userId: string) {
       contentType: "image/webp",
       cacheControl: "31536000",
     });
-  if (error) throw Error(error.message);
+  if (error) throw Error(/bucket not found/i.test(error.message)
+    ? "Photo storage is not set up. Run supabase/0046_announcement_photo_repair.sql in Supabase."
+    : /permission|policy|unauthoriz/i.test(error.message)
+      ? "Photo upload was denied. Run supabase/0046_announcement_photo_repair.sql in Supabase."
+      : error.message);
   return client.storage.from("cb-profile-media").getPublicUrl(path).data.publicUrl;
 }
