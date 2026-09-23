@@ -54,6 +54,7 @@ import CpuGame from "./cpu-game";
 import Puzzles from "./puzzles";
 import GrandArena from "./grand-arena";
 import Classroom from "./classroom";
+import GuildPage from "./guild";
 
 const modes = [
   {
@@ -728,7 +729,7 @@ function AppPage() {
     );
   else if (tab === "shop") content = <ShopPage profile={profile} onChanged={() => void refreshProfile()} />;
   else if (tab === "bag") content = <BagPage onChanged={() => void refreshProfile()} />;
-  else if (tab === "guild") content = <section className="guild-page"><div className="coming-soon-panel"><Castle size={46}/><span>Guild</span><h1>Coming soon</h1><p>Build your guild, gather teammates, and compete together in a future update.</p></div></section>;
+  else if (tab === "guild") content = <GuildPage profile={profile} onChanged={() => void refreshProfile()} />;
   else if (tab === "cms" && staff)
     content = <Cms profile={profile} onClose={() => setTab("profile")} />;
   else

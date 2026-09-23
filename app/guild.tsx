@@ -1,0 +1,59 @@
+"use client";
+import {useCallback,useEffect,useState} from 'react';
+import {Castle,ChevronLeft,ChevronRight,Crown,ImagePlus,Coins,Users,CalendarClock} from 'lucide-react';
+import {toast} from 'sonner';
+import {getSupabase,type PlayerProfile} from './supabase';
+import {loadImageFile,toWebpUnder1Mb} from './media';
+import './guild.css';
+
+type Member={guild_id:string;user_id:string;joined_at:string;leader_vote:string|null;profile?:{username:string;display_name:string;avatar_url:string;cbr:number}};
+type Guild={id:string;name:string;logo_url:string;cover_url:string;leader_id:string;creator_id:string;chest_cbg:number;release_at:string|null;member_count:number;guild_points:number;members?:Member[]};
+type State={page:number;total:number;eligible:boolean;my_guild_id:string|null;guilds:Guild[];detail:Guild|null};
+async function request<T>(action:string,body:Record<string,unknown>={},get=false):Promise<T>{
+ const client=await getSupabase();if(!client)throw Error('Sign in to use Guilds.');
+ let session=(await client.auth.getSession()).data.session;if(!session)throw Error('Sign in to use Guilds.');
+ const send=(token:string)=>fetch(`/api/guild${get?'?'+new URLSearchParams(Object.entries(body).map(([k,v])=>[k,String(v)])):''}`,{method:get?'GET':'POST',headers:{Authorization:`Bearer ${token}`,...(get?{}:{'Content-Type':'application/json'})},body:get?undefined:JSON.stringify({...body,action}),cache:'no-store'});
+ let response=await send(session.access_token);
+ if(response.status===401){session=(await client.auth.refreshSession()).data.session;if(!session)throw Error('Sign in again.');response=await send(session.access_token)}
+ const data=await response.json() as {error?:string}&T;if(!response.ok)throw Error(data.error??'Guild request failed.');return data;
+}
+async function squareWebp(file:File){
+ const {image,width,height,dispose}=await loadImageFile(file);
+ try{
+  const canvas=document.createElement('canvas'),side=Math.min(width,height);
+  for(const edge of [Math.min(side,800),640,480,320,200]){
+   canvas.width=canvas.height=edge;
+   const ctx=canvas.getContext('2d');if(!ctx)throw Error('Image editing is not available.');
+   ctx.drawImage(image,(width-side)/2,(height-side)/2,side,side,0,0,edge,edge);
+   for(const quality of [.82,.7,.56,.42,.3]){
+    const blob=await new Promise<Blob|null>(resolve=>canvas.toBlob(resolve,'image/webp',quality));
+    if(blob?.type==='image/webp'&&blob.size<500_000)return blob;
+   }
+  }
+  throw Error('Could not reduce the logo below 500 KB. Choose a simpler photo.');
+ }finally{dispose()}
+}
+export default function GuildPage({profile,onChanged}:{profile:PlayerProfile|null;onChanged?:()=>void}){
+ const [page,setPage]=useState(1),[selected,setSelected]=useState(''),[state,setState]=useState<State|null>(null),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[release,setRelease]=useState('');
+ const load=useCallback(async()=>{try{const next=await request<State>('state',{page,...(selected?{guild_id:selected}:{})},true);setState(next)}catch(error){toast.error(error instanceof Error?error.message:'Guilds unavailable.')}finally{setLoading(false)}},[page,selected]);
+ useEffect(()=>{void load()},[load]);
+ const act=async(action:string,body:Record<string,unknown>={})=>{setBusy(true);try{await request(action,body);toast.success(action==='vote'?'Vote recorded.':'Guild updated.');await load();onChanged?.()}catch(error){toast.error(error instanceof Error?error.message:'Please retry.')}finally{setBusy(false)}};
+ const upload=async(file:File,kind:'logo'|'cover',guild:Guild)=>{if(!profile)return;setBusy(true);try{
+  const blob=kind==='logo'?await squareWebp(file):await toWebpUnder1Mb(file);
+  if(kind==='cover'&&blob.size>=1_000_000)throw Error('Cover must be smaller than 1 MB.');
+  const client=await getSupabase();if(!client)throw Error('Sign in first.');
+  const path=`${profile.user_id}/guild-${guild.id}-${kind}-${crypto.randomUUID()}.webp`;
+  const stored=await client.storage.from('cb-profile-media').upload(path,blob,{contentType:'image/webp',upsert:false});if(stored.error)throw stored.error;
+  await request('artwork',{guild_id:guild.id,kind,path});await load();toast.success(`${kind==='logo'?'Logo':'Cover'} saved.`);
+ }catch(error){toast.error(error instanceof Error?error.message:'Image upload failed.')}finally{setBusy(false)}};
+ const detail=state?.detail,member=state?.my_guild_id===detail?.id,editor=!!detail&&!!profile&&[detail.creator_id,detail.leader_id].includes(profile.user_id),leader=!!detail&&detail.leader_id===profile?.user_id,pages=Math.max(1,Math.ceil((state?.total??0)/10));
+ return <section className="guild-page"><div className="guild-heading"><div><span>CHESS BURGER GUILDS</span><h1><Castle/> Guild Hall</h1><p>Team up, earn CBG for your guild chest, and climb the Guild Points board.</p></div><button type="button" disabled={busy||!state?.eligible||!!state?.my_guild_id} onClick={()=>{const value=window.prompt('Guild name (3–40 characters)')?.trim();if(value)void act('create',{name:value})}} title={!state?.eligible?'Reach Level 3 (177 CBR) first':state?.my_guild_id?'Leave your guild before creating another':''}>Create Guild</button></div>
+ {!state?.eligible&&profile&&<p className="guild-notice">Reach Level 3 (177 CBR) to create or join a guild. You currently have {profile.cbr} CBR.</p>}
+ {loading&&!state?<p className="guild-notice">Loading guilds…</p>:<div className="guild-layout"><div className="guild-directory"><h2>Guild rankings <small>{state?.total??0} guilds · 10 per page</small></h2>{state?.guilds.map((guild,index)=><button type="button" className={`guild-row ${detail?.id===guild.id?'selected':''}`} key={guild.id} onClick={()=>setSelected(guild.id)}><b className="guild-rank">{(page-1)*10+index+1}</b>{guild.logo_url?<img src={guild.logo_url} alt=""/>:<span className="guild-default-logo"><Castle/></span>}<span className="guild-row-name"><strong>{guild.name}</strong><small><Users/> {guild.member_count}/18 members</small></span><span className="guild-row-points"><strong>{guild.guild_points.toLocaleString()}</strong><small>GUILD POINTS</small></span><ChevronRight/></button>)}{!state?.guilds.length&&<p className="guild-notice">No guilds yet. Be the first to create one.</p>}<nav className="guild-pages" aria-label="Guild list pages"><button disabled={page===1} onClick={()=>setPage(p=>p-1)}><ChevronLeft/> Previous</button><span>{page} / {pages}</span><button disabled={page>=pages} onClick={()=>setPage(p=>p+1)}>Next <ChevronRight/></button></nav></div>
+ {detail&&<article className="guild-detail"><div className="guild-cover" style={detail.cover_url?{backgroundImage:`linear-gradient(#101b20aa,#101b20ee),url(${JSON.stringify(detail.cover_url).slice(1,-1)})`}:undefined}>{editor&&<label className="guild-cover-upload"><ImagePlus/> Change cover<input type="file" accept="image/jpeg,image/png,image/webp" disabled={busy} onChange={e=>{const file=e.target.files?.[0];e.target.value='';if(file)void upload(file,'cover',detail)}}/></label>}</div><div className="guild-identity">{detail.logo_url?<img src={detail.logo_url} alt={`${detail.name} logo`}/>:<span className="guild-default-logo"><Castle/></span>}<div><h2>{detail.name}</h2><p>{detail.member_count}/18 members · {detail.guild_points.toLocaleString()} Guild Points</p></div>{editor&&<label className="guild-logo-upload"><ImagePlus/> Logo<input type="file" accept="image/jpeg,image/png,image/webp" disabled={busy} onChange={e=>{const file=e.target.files?.[0];e.target.value='';if(file)void upload(file,'logo',detail)}}/></label>}</div>
+ <div className="guild-chest"><Coins/><span><strong>{Number(detail.chest_cbg).toLocaleString()} CBG</strong><small>Guild treasure chest</small></span></div><p className="guild-rule">A member's eligible game win earns its normal CBG reward for the player and the same amount for this chest. Offline games, wager stakes, and refunds do not count.</p>
+ {detail.release_at&&<p className="guild-release"><CalendarClock/> Equal release scheduled for {new Date(detail.release_at).toLocaleString()}</p>}
+ {leader&&<div className="guild-schedule"><label>Schedule equal CBG release<input type="datetime-local" value={release} min={new Date(Date.now()+60_000).toISOString().slice(0,16)} onChange={e=>setRelease(e.target.value)}/></label><button disabled={busy||!release} onClick={()=>void act('schedule',{release_at:new Date(release).toISOString()})}>Set release</button>{detail.release_at&&<button disabled={busy} onClick={()=>void act('schedule',{release_at:null})}>Cancel</button>}<small>Each member receives an equal whole CBG share. Any remainder stays in the chest.</small></div>}
+ <h3>Members</h3><div className="guild-members">{detail.members?.map(m=><div className="guild-member" key={m.user_id}><img src={m.profile?.avatar_url||'/avatar-default.svg'} alt=""/><span><strong>{m.profile?.display_name||m.profile?.username||'Player'} {detail.leader_id===m.user_id&&<Crown size={15} aria-label="Guild leader"/>}</strong><small>@{m.profile?.username||'player'} · {Number(m.profile?.cbr??0).toLocaleString()} CBR</small></span>{member&&detail.leader_id!==m.user_id&&<button disabled={busy} onClick={()=>void act('vote',{candidate_id:m.user_id})}>Vote leader</button>}</div>)}</div><p className="guild-rule">A candidate becomes leader after receiving more than half of current members' votes. The creator and leader can edit guild images.</p>
+ <div className="guild-actions">{!state?.my_guild_id&&<button disabled={busy||!state?.eligible||detail.member_count>=18} onClick={()=>void act('join',{guild_id:detail.id})}>Join Guild</button>}{member&&<button disabled={busy||detail.member_count===1} onClick={()=>{if(window.confirm('Leave this guild?'))void act('leave')}}>Leave Guild</button>}</div></article>}</div>}</section>;
+}
