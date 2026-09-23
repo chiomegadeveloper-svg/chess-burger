@@ -1144,6 +1144,12 @@
 .board-piece-layout{position:relative;display:grid;grid-template-columns:clamp(44px,5vw,58px) minmax(0,1fr) clamp(44px,5vw,58px);align-items:center;gap:clamp(6px,1.2vw,12px);width:100%;max-width:min(820px,calc(100dvh - 40px));margin-inline:auto;transition:width .2s ease}
 .board-piece-center{min-width:0;width:100%}
 .board-piece-center>.teaching-board{width:100%;max-width:100%;margin:0}
+.piece-tray-column{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-width:0}
+.piece-tray-column .piece-side-tray{width:100%}
+.board-class-media-trigger{display:grid;place-items:center;width:46px;max-width:100%;aspect-ratio:1;padding:3px;border:1px solid #68818a;border-radius:12px;background:#f0f5f8;box-shadow:0 5px 16px #0008;cursor:pointer;transition:border-color .15s,transform .15s,box-shadow .15s}
+.board-class-media-trigger:hover,.board-class-media-trigger.active{border-color:#f1c966;box-shadow:0 0 0 2px #eabf5740,0 6px 18px #0009;transform:translateY(-1px)}
+.board-class-media-trigger:focus-visible{outline:2px solid #82e5ea;outline-offset:3px}
+.board-class-media-trigger img{display:block;width:100%;height:100%;border-radius:8px;object-fit:cover}
 .piece-side-tray{display:grid;align-content:center;gap:6px;box-sizing:border-box;width:100%;padding:8px 5px;border:1px solid #3e5962;border-radius:14px;background:linear-gradient(160deg,#15272e,#091317);box-shadow:inset 0 1px #ffffff0b,0 8px 18px #0006}
 .piece-side-tray small{overflow:hidden;color:#68dee7;font-size:8px;font-weight:800;letter-spacing:.6px;text-align:center;text-overflow:ellipsis}
 .piece-side-tray button{display:grid;place-items:center;width:100%;aspect-ratio:1;min-height:0;padding:0;border:1px solid #425860;border-radius:10px;background:#0d191e;font:clamp(25px,3vw,38px)/1 Georgia,"Times New Roman",serif;transition:border-color .15s,background .15s,transform .15s,box-shadow .15s}
@@ -1164,7 +1170,9 @@
 @media(max-width:1250px){.teacher-toolbar{grid-template-columns:repeat(3,minmax(0,1fr))}.teacher-toolbar .piece-setup{grid-column:auto}}
 @media(max-width:1100px){.board-piece-layout{max-width:min(100%,calc(100dvh - 82px))}.board-zoom-control{position:static;grid-column:1/-1;flex-direction:row;justify-self:center;min-width:0;padding:5px 8px;transform:none}.board-zoom-control input{width:min(200px,38vw);height:26px;direction:ltr;writing-mode:horizontal-tb}.board-zoom-control button{width:32px;height:32px}.board-zoom-control .zoom-fit{height:28px}}
 @media(max-width:760px){.teacher-toolbar{grid-template-columns:repeat(2,minmax(0,1fr))}.teacher-toolbar .piece-setup{grid-column:1/-1}.board-piece-layout{grid-template-columns:38px minmax(0,1fr) 38px;max-width:min(100%,calc(100dvh - 64px));gap:4px}.piece-side-tray{gap:4px;padding:6px 3px;border-radius:10px}.piece-side-tray small{font-size:6px}.piece-side-tray button{border-radius:7px;font-size:clamp(22px,7vw,30px)}}
+@media(max-width:760px){.piece-tray-column{gap:5px}.board-class-media-trigger{width:38px;border-radius:9px}}
 @media(max-width:420px){.board-piece-layout{grid-template-columns:34px minmax(0,1fr) 34px;gap:3px}.piece-side-tray{padding:4px 2px}.piece-side-tray small{display:none}.piece-side-tray button{border-radius:6px;font-size:22px}}
+@media(max-width:420px){.board-class-media-trigger{width:34px;padding:2px}}
 @media(max-width:480px){.board-zoom-control{gap:3px;padding:4px}.board-zoom-control input{width:80px}.board-zoom-control output{font-size:8px}.board-zoom-control .zoom-fit{width:30px;padding:0;font-size:0}.board-zoom-control .zoom-fit svg{width:14px;height:14px}}
 
 /* Auto-hiding SEba teacher console and distraction-free board mode. */

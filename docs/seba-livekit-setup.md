@@ -25,6 +25,7 @@ No database migration is required. The token endpoint authorizes against the exi
 - Students can raise or lower a hand after connecting. The teacher sees a large orange badge on that student's board. Raise-hand status is live room state, so it clears when a student disconnects.
 - The camera toggle works for teacher and students; turning it off stops publishing camera video. Audio and camera use the same room and the existing LiveKit credentials.
 - The teacher's Class media controls can mute one or all students and turn off every camera. Ask to unmute sends a request that the student may accept or decline; the teacher cannot remotely switch on a microphone or camera. Acknowledging a raised hand clears its indicator.
+- The Class media button uses `public/classroom/class-media.webp` and sits above the Black piece tray next to the board zoom controls. The separate panel keeps the classroom voice buttons compact.
 - LiveKit Cloud's Build plan includes monthly WebRTC minutes and downstream transfer. Video can consume the transfer allowance quickly in large classes; check the project's Usage dashboard.
 - Teachers must own an active room. Students must have unexpired paid enrollment.
 
