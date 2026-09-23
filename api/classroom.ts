@@ -37,7 +37,7 @@ export default async function handler(req:Req,res:Res){
       if(profile.error)fail(500,profile.error.message);
       const participantName=String(profile.data?.display_name||profile.data?.username||(teacher?"Teacher":"Student")).slice(0,80);
       const accessToken=new AccessToken(apiKey,apiSecret,{identity:userId,name:participantName,ttl:"10m",metadata:JSON.stringify({role:teacher?"teacher":"student"})});
-      accessToken.addGrant({roomJoin:true,room:`seba-${roomId}`,canPublish:true,canPublishSources:[TrackSource.MICROPHONE],canSubscribe:true,canPublishData:false});
+      accessToken.addGrant({roomJoin:true,room:`seba-${roomId}`,canPublish:true,canPublishSources:[TrackSource.MICROPHONE,TrackSource.CAMERA],canSubscribe:true,canPublishData:true});
       return res.status(200).json({server_url:livekitUrl,participant_token:await accessToken.toJwt()});
     }
     if(action==="state"){

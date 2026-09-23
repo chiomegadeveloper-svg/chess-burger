@@ -1733,3 +1733,7 @@
     height: 34px;
   }
 }
+.seba-raised-hand{display:inline-flex!important;align-items:center;gap:8px;padding:8px 12px;margin:6px 0;border:2px solid #ffa735;border-radius:12px;background:#60320f;color:#fff1cf;font-weight:800;box-shadow:0 0 24px #fb8b2466;animation:seba-hand-pulse 1.3s ease-in-out infinite}
+.seba-raised-hand svg{width:32px;height:32px;min-width:32px;fill:#ff9c26;color:#ffce7e}
+.student-monitor article.has-raised-hand{border:2px solid #ffa735!important;box-shadow:0 0 25px #fa8e3273}
+@keyframes seba-hand-pulse{50%{box-shadow:0 0 34px #ffa134bd}}

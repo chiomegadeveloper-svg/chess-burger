@@ -14,7 +14,7 @@ test("LiveKit tokens require authenticated Supabase classroom access",()=>{
   assert.match(api,/gt\("access_expires_at",now\)/);
 });
 
-test("LiveKit credentials are server-only, short-lived and microphone-scoped",()=>{
+test("LiveKit credentials are server-only, short-lived and classroom media-scoped",()=>{
   assert.match(api,/process\.env\.LIVEKIT_URL/);
   assert.match(api,/process\.env\.LIVEKIT_API_KEY/);
   assert.match(api,/process\.env\.LIVEKIT_API_SECRET/);
@@ -22,9 +22,9 @@ test("LiveKit credentials are server-only, short-lived and microphone-scoped",()
   assert.match(api,/identity:userId/);
   assert.match(api,/room:`seba-\$\{roomId\}`/);
   assert.match(api,/roomJoin:true/);
-  assert.match(api,/canPublishSources:\[TrackSource\.MICROPHONE\]/);
+  assert.match(api,/canPublishSources:\[TrackSource\.MICROPHONE,TrackSource\.CAMERA\]/);
   assert.match(api,/canSubscribe:true/);
-  assert.match(api,/canPublishData:false/);
+  assert.match(api,/canPublishData:true/);
   assert.match(api,/participant_token:await accessToken\.toJwt\(\)/);
   assert.match(api,/server_url:livekitUrl/);
 });

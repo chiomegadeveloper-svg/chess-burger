@@ -63,4 +63,14 @@ test("Microphone is explicitly permitted for same-origin classrooms",()=>{
   const vercelConfig=fs.readFileSync("vercel.json","utf8");
   assert.match(nextConfig,/microphone=\(self\)/);
   assert.match(vercelConfig,/microphone=\(self\)/);
+  assert.match(nextConfig,/camera=\(self\)/);
+  assert.match(vercelConfig,/camera=\(self\)/);
+});
+
+test("Live camera starts off and raise hand reaches the teacher board",()=>{
+  assert.match(voice,/setCameraEnabled\(!cameraOn\)/);
+  assert.match(voice,/RoomEvent\.DataReceived/);
+  assert.match(voice,/publishData\(/);
+  assert.match(workshop,/raisedHands\.includes\(s\.user_id\)/);
+  assert.match(workshop,/id="seba-camera-stage"/);
 });
