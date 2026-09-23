@@ -62,6 +62,29 @@ begin
  update public.cb_guild_members set leader_vote=null where guild_id=v_id and leader_vote=p_member_id;
  return v_id;
 end $$;
+create or replace function public.cb_guild_leave(p_user_id uuid) returns void
+language plpgsql security definer set search_path=public as $$
+declare v_guild public.cb_guilds%rowtype; v_next uuid;
+begin
+ select g.* into v_guild from public.cb_guilds g join public.cb_guild_members m on m.guild_id=g.id where m.user_id=p_user_id for update of g;
+ if v_guild.id is null then raise exception 'You are not in a guild';end if;
+ if v_guild.leader_id=p_user_id then
+  select user_id into v_next from public.cb_guild_members where guild_id=v_guild.id and user_id<>p_user_id order by joined_at,user_id limit 1;
+  if v_next is null then
+   if v_guild.chest_cbg>0 then
+    update public.cb_profiles set gold_points=gold_points+v_guild.chest_cbg where user_id=p_user_id;
+    insert into public.cb_gold_ledger(id,user_id,delta,kind,reference_id)
+    values('guild-close:'||v_guild.id::text,p_user_id,v_guild.chest_cbg,'guild_distribution',v_guild.id);
+   end if;
+   delete from public.cb_guild_chest_ledger where guild_id=v_guild.id;
+   delete from public.cb_guilds where id=v_guild.id;
+   return;
+  end if;
+  update public.cb_guilds set leader_id=v_next where id=v_guild.id;
+ end if;
+ delete from public.cb_guild_members where user_id=p_user_id;
+ update public.cb_guild_members set leader_vote=null where guild_id=v_guild.id and leader_vote=p_user_id;
+end $$;
 revoke all on function public.cb_guild_rename(uuid,text),public.cb_guild_kick(uuid,uuid,text) from public,anon,authenticated;
 grant execute on function public.cb_guild_rename(uuid,text),public.cb_guild_kick(uuid,uuid,text) to service_role;
 commit;
