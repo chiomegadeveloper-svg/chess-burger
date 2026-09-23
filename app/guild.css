@@ -38,3 +38,8 @@
 .guild-activity-row time{flex:none;color:#99afb7;font-size:9px}
 .guild-pending{display:flex;align-items:center;gap:9px;color:#eed194;font-size:10px}
 @media(max-width:480px){.guild-request{flex-wrap:wrap}.guild-activity-row{display:grid;gap:2px}}
+.guild-search{display:flex;gap:6px;margin:8px 0}
+.guild-search input{min-width:0;flex:1;padding:9px 10px;border:1px solid #53636b;border-radius:9px;background:#162229;color:#fff;font:inherit;font-size:11px}
+.guild-search button,.guild-code button{padding:7px 10px;border:1px solid #a48c55;border-radius:9px;background:#40331e;color:#ffe3a6;font-size:10px}
+.guild-row-name strong{font-size:13px}
+.guild-code{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:7px;color:#edcf84;font-size:10px;font-weight:700}
