@@ -22,3 +22,7 @@
 .guild-chest strong{font-size:19px}
 @media(max-width:760px){.guild-heading{min-height:220px;align-items:flex-end;padding:20px 16px;background-position:63% center}.guild-heading:before{background:linear-gradient(90deg,#09131aee,#09131ab7 50%,#09131a38),linear-gradient(0deg,#09131ade,transparent 80%)}.guild-heading-copy{max-width:60%}.guild-heading h1{font-size:23px}.guild-heading p{font-size:9px}.guild-empty-art{min-height:190px}.guild-empty-art img{min-width:120px}}
 @media(max-width:420px){.guild-heading{min-height:210px;gap:8px;padding:15px 11px}.guild-heading-copy{max-width:61%}.guild-heading>button{max-width:110px;padding:8px;font-size:9px}.guild-heading h1{font-size:20px}.guild-heading h1 svg{width:23px;height:23px}.guild-empty-art{padding:12px}.guild-empty-art img{min-width:100px}.guild-empty-art h2{font-size:15px}}
+.guild-rename{margin-top:7px;padding:5px 8px;border:1px solid #a98a47;border-radius:8px;background:#49361e;color:#ffe1a0;font-size:9px;font-weight:700}
+.guild-kick-notice{border-color:#9b6a48;background:#39261f;color:#ffe0c1}
+.guild-member button.guild-kick{border-color:#94534d;background:#422528;color:#ffc8c1}
+@media(max-width:420px){.guild-heading>button{max-width:126px}}

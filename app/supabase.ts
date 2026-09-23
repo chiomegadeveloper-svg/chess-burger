@@ -15,4 +15,4 @@ export function getSupabase(){
  return pending;
 }
 export type PlayerProfile={user_id:string;username:string;display_name:string;bio:string;avatar_url:string;card_photo_url:string;country_code:string;featured_photos:string[];featured_badges:string[];cbr:number;ocbr:number;gold_points:number;win_streak:number;wins:number;losses:number;role:"player"|"admin"|"owner";created_at:string;rating_delta?:number};
-export type FeedEvent={id:string;user_id:string;kind:string;display_name:string;avatar_url:string;cbr:number;content:string;image_url:string;expires_at:string|null;cbr_delta:number;gold_delta:number;heart_count:number;created_at:string;feed_banner?:string};
+export type FeedEvent={id:string;user_id:string;kind:string;display_name:string;avatar_url:string;cbr:number;content:string;image_url:string;expires_at:string|null;cbr_delta:number;gold_delta:number;heart_count:number;created_at:string;feed_banner?:string;guild_name?:string;guild_logo_url?:string};

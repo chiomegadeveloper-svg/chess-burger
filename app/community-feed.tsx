@@ -27,6 +27,7 @@ import type { ArenaMatch, ArenaPlayer } from "./game-rules";
 import { feedBanner } from "./feed-banner-catalog";
 import DailyRewards from "./daily-rewards";
 import "./arena-champion-feed.css";
+import "./guild-feed.css";
 type CommunityEvent = FeedEvent & { origin?: "arena" };
 type OnlinePlayer = ArenaPlayer & { available: boolean };
 
@@ -982,11 +983,16 @@ export default function CommunityFeed({
                 </span>
               </button>
               {!announcement && (
-                <img
-                  className="feed-level"
-                  src={`/levels/level-${String(level.level - 1).padStart(2, "0")}.png`}
-                  alt={`Level ${level.level}`}
-                />
+                <span className="feed-identity-badges">
+                  <img
+                    className="feed-level"
+                    src={`/levels/level-${String(level.level - 1).padStart(2, "0")}.png`}
+                    alt={`Level ${level.level}`}
+                  />
+                  {event.guild_name && (event.guild_logo_url ?
+                    <img className="feed-guild-logo" src={event.guild_logo_url} alt={`${event.guild_name} guild logo`} /> :
+                    <span className="feed-guild-logo feed-guild-initial" title={event.guild_name}>{event.guild_name.charAt(0)}</span>)}
+                </span>
               )}
               <div className="feed-copy">
                 {arenaChampion && (
@@ -1020,7 +1026,7 @@ export default function CommunityFeed({
                       className="feed-name"
                       onClick={() => onOpenProfile(event.user_id)}
                     >
-                      {event.display_name}
+                      {event.display_name}{event.guild_name && <span className="feed-guild-name"> of {event.guild_name}</span>}
                     </button>
                   )}
                   <span className="feed-activity">

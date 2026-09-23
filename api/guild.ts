@@ -36,8 +36,10 @@ export default async function handler(req:Req,res:Res){
    const params:Record<string,unknown>={p_user_id:userId};
    let rpc='';
    if(action==='create'){rpc='cb_guild_create';params.p_name=String(body.name??'').trim();}
+   else if(action==='rename'){rpc='cb_guild_rename';params.p_name=String(body.name??'').trim();}
    else if(action==='join'){if(!uuid(body.guild_id))throw fail(400,'Choose a guild.');rpc='cb_guild_join';params.p_guild_id=body.guild_id;}
    else if(action==='leave')rpc='cb_guild_leave';
+   else if(action==='kick'){if(!uuid(body.member_id))throw fail(400,'Choose a member.');rpc='cb_guild_kick';params.p_member_id=body.member_id;params.p_reason=String(body.reason??'').trim();}
    else if(action==='vote'){if(!uuid(body.candidate_id))throw fail(400,'Choose a member.');rpc='cb_guild_vote';params.p_candidate=body.candidate_id;}
    else if(action==='schedule'){rpc='cb_guild_schedule';params.p_release_at=body.release_at===null?null:String(body.release_at??'');if(params.p_release_at!==null&&!Number.isFinite(Date.parse(String(params.p_release_at))))throw fail(400,'Choose a valid release date.');}
    else if(action==='artwork'){
@@ -45,6 +47,8 @@ export default async function handler(req:Req,res:Res){
     if(!['logo','cover'].includes(kind)||!uuid(guildId)||!new RegExp(`^${userId}/guild-${guildId}-${kind}-[0-9a-f-]{36}\\.webp$`,'i').test(path))throw fail(400,'Invalid guild image.');
     const guild=await db.from('cb_guilds').select('id,creator_id,leader_id').eq('id',guildId).single();
     if(guild.error||![guild.data.creator_id,guild.data.leader_id].includes(userId))throw fail(403,'Only the guild creator or leader can edit images.');
+    const membership=await db.from('cb_guild_members').select('user_id').eq('guild_id',guildId).eq('user_id',userId).maybeSingle();
+    if(membership.error||!membership.data)throw fail(403,'You must still belong to this guild to edit its images.');
     const file=await db.storage.from('cb-profile-media').download(path);
     if(file.error||!file.data)throw fail(400,'Upload the image before saving it.');
     const bytes=new Uint8Array(await file.data.arrayBuffer());
@@ -70,6 +74,8 @@ export default async function handler(req:Req,res:Res){
   if(me.error)throw me.error;
   const profile=await db.from('cb_profiles').select('cbr').eq('user_id',userId).single();
   if(profile.error)throw profile.error;
+  const kickNotice=await db.from('cb_guild_kicks').select('guild_id,reason,created_at,cb_guilds(name)').eq('member_id',userId).order('created_at',{ascending:false}).limit(1).maybeSingle();
+  if(kickNotice.error&&!/cb_guild_kicks|schema cache|does not exist/i.test(kickNotice.error.message))throw kickNotice.error;
   const guilds=await db.from('cb_guild_directory').select('*', {count:'exact'}).order('guild_points',{ascending:false}).order('created_at',{ascending:true}).range((page-1)*10,page*10-1);
   if(guilds.error)throw guilds.error;
   const detailId=selected||me.data?.guild_id;
@@ -86,6 +92,6 @@ export default async function handler(req:Req,res:Res){
    const list=(members.data??[]).filter(m=>m.guild_id===id).map(m=>({...m,profile:playersById.get(m.user_id)}));
    return {member_count:list.length,guild_points:list.reduce((n,m)=>n+Number(m.profile?.cbr??0),0),members:list};
   };
-  return res.status(200).json({page,total:guilds.count??0,eligible:Number(profile.data.cbr)>=177,my_guild_id:me.data?.guild_id??null,guilds:guilds.data??[],detail:details?.data?{...details.data,...stats(details.data.id)}:null});
+  return res.status(200).json({page,total:guilds.count??0,eligible:Number(profile.data.cbr)>=177,my_guild_id:me.data?.guild_id??null,kick_notice:kickNotice.data??null,guilds:guilds.data??[],detail:details?.data?{...details.data,...stats(details.data.id)}:null});
  }catch(error){const status=Number((error as {status?:number}).status)||500;if(status===500)console.error('Guild request failed',error);return res.status(status).json({error:status===500?'Guild request failed. Please retry.':message(error)});}
 }
