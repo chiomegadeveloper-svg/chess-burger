@@ -16,11 +16,15 @@ test("SEba teacher tools auto-hide with hover and button access",()=>{
 
 test("SEba board can maximize and restore without dropping setup tools",()=>{
   assert.match(workshop,/boardMaximized/);
+  assert.match(workshop,/requestFullscreen/);
+  assert.match(workshop,/exitFullscreen/);
+  assert.match(workshop,/fullscreenchange/);
   assert.match(workshop,/Maximize Board/);
   assert.match(workshop,/Restore Layout/);
   assert.match(workshop,/aria-pressed=\{boardMaximized\}/);
   assert.match(workshop,/board-piece-layout/);
   assert.match(workshop,/>Reset Board/);
   assert.match(styles,/\.board-maximized \.student-monitor\{display:none\}/);
-  assert.match(styles,/\.board-maximized \.board-piece-layout\{max-width:1080px\}/);
+  assert.match(styles,/\.classroom-workshop\.board-maximized\{position:fixed/);
+  assert.match(styles,/\.classroom-workshop\.board-maximized:fullscreen/);
 });

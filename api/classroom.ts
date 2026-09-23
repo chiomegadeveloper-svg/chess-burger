@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { AccessToken, TrackSource } from "livekit-server-sdk";
 
 type Req={method?:string;headers:{authorization?:string|string[]};body?:Record<string,unknown>};
 type Res={status:(n:number)=>Res;json:(v:unknown)=>void;setHeader:(k:string,v:string)=>void};
@@ -17,6 +18,28 @@ export default async function handler(req:Req,res:Res){
     const auth=await client.auth.getUser(token);
     if(auth.error||!auth.data.user)fail(401,"Please sign in again.");
     const userId=auth.data.user.id,body=req.body||{},action=String(body.action||"");
+    if(action==="voice-token"){
+      const roomId=String(body.room_id||""),now=new Date().toISOString();
+      if(!roomId)fail(400,"Classroom is required.");
+      const room=await client.from("cb_classroom_rooms").select("id,teacher_id,status,expires_at").eq("id",roomId).eq("status","active").gt("expires_at",now).maybeSingle();
+      if(room.error)fail(500,room.error.message);
+      const voiceRoom=room.data;
+      if(!voiceRoom)fail(404,"Active classroom not found.");
+      const teacher=voiceRoom!.teacher_id===userId;
+      if(!teacher){
+        const enrollment=await client.from("cb_classroom_enrollments").select("student_id").eq("room_id",roomId).eq("student_id",userId).gt("access_expires_at",now).maybeSingle();
+        if(enrollment.error)fail(500,enrollment.error.message);
+        if(!enrollment.data)fail(403,"Your paid classroom time has expired. Renew with 1 CBC.");
+      }
+      const livekitUrl=process.env.LIVEKIT_URL||"",apiKey=process.env.LIVEKIT_API_KEY||"",apiSecret=process.env.LIVEKIT_API_SECRET||"";
+      if(!livekitUrl||!apiKey||!apiSecret)fail(503,"SEba Voice is not configured. Add the LiveKit Cloud environment variables.");
+      const profile=await client.from("cb_profiles").select("display_name,username").eq("user_id",userId).maybeSingle();
+      if(profile.error)fail(500,profile.error.message);
+      const participantName=String(profile.data?.display_name||profile.data?.username||(teacher?"Teacher":"Student")).slice(0,80);
+      const accessToken=new AccessToken(apiKey,apiSecret,{identity:userId,name:participantName,ttl:"10m",metadata:JSON.stringify({role:teacher?"teacher":"student"})});
+      accessToken.addGrant({roomJoin:true,room:`seba-${roomId}`,canPublish:true,canPublishSources:[TrackSource.MICROPHONE],canSubscribe:true,canPublishData:false});
+      return res.status(200).json({server_url:livekitUrl,participant_token:await accessToken.toJwt()});
+    }
     if(action==="state"){
       await client.from("cb_classroom_wallets").upsert({user_id:userId},{onConflict:"user_id",ignoreDuplicates:true});
       const [wallet,owned,joined,active,settings]=await Promise.all([

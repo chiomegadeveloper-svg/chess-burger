@@ -11,7 +11,7 @@ test('SEba adjustable pieces sit in responsive trays beside teacher boards',()=>
   assert.match(workshop,/className="piece-side-tray black-tray"/);
   assert.match(workshop,/withPieceTrays\(<TeachingBoard/);
   assert.doesNotMatch(workshop,/className="piece-palette"/);
-  assert.match(styles,/\.board-piece-layout\{display:grid;grid-template-columns:/);
+  assert.match(styles,/\.board-piece-layout\{position:relative;display:grid;grid-template-columns:/);
   assert.match(styles,/@media\(max-width:420px\)\{\.board-piece-layout/);
 });
 

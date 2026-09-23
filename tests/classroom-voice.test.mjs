@@ -6,33 +6,38 @@ const voice=fs.readFileSync("app/classroom-voice.tsx","utf8");
 const workshop=fs.readFileSync("app/classroom-workshop.tsx","utf8");
 const css=fs.readFileSync("app/classroom-voice.css","utf8");
 
-test("Classroom workshop offers cost-free room-scoped voice",()=>{
+test("Classroom workshop uses LiveKit Cloud room audio",()=>{
   assert.match(workshop,/ClassroomVoice/);
   assert.match(workshop,/roomId=\{roomId\}/);
-  assert.match(voice,/navigator\.mediaDevices\.getUserMedia/);
-  assert.match(voice,/new RTCPeerConnection/);
-  assert.match(voice,/classroom-voice:\$\{roomId\}/);
-  assert.match(voice,/event:"voice-signal"/);
-  assert.match(voice,/presence:\{key:session\.user\.id\}/);
+  assert.match(voice,/from "livekit-client"/);
+  assert.match(voice,/new Room\(/);
+  assert.match(voice,/"voice-token",\{room_id:roomId\}/);
+  assert.match(voice,/liveRoom\.connect\(credentials\.server_url,credentials\.participant_token\)/);
+  assert.match(voice,/RoomEvent\.TrackSubscribed/);
+  assert.match(voice,/RoomEvent\.TrackUnsubscribed/);
+  assert.doesNotMatch(voice,/RTCPeerConnection/);
+  assert.doesNotMatch(voice,/voice-signal/);
+  assert.doesNotMatch(voice,/stun:stun\.l\.google\.com/);
 });
 
 test("Classroom Voice supports permission errors, mute, leave and cleanup",()=>{
   assert.match(voice,/NotAllowedError/);
   assert.match(voice,/echoCancellation:true/);
   assert.match(voice,/noiseSuppression:true/);
-  assert.match(voice,/track\.enabled=!next/);
-  assert.match(voice,/getTracks\(\)\.forEach\(track=>track\.stop\(\)\)/);
-  assert.match(voice,/removeChannel/);
+  assert.match(voice,/setMicrophoneEnabled\(!next\)/);
+  assert.match(voice,/room\.disconnect\(true\)/);
+  assert.match(voice,/track\.detach\(\)\.forEach/);
   assert.match(css,/leave-voice/);
 });
 
-test("Classroom Voice stores no audio and uses free WebRTC signaling",()=>{
+test("Classroom Voice attaches remote audio and recovers from autoplay blocking",()=>{
+  assert.match(voice,/track\.attach\(\)/);
+  assert.match(voice,/RoomEvent\.AudioPlaybackStatusChanged/);
+  assert.match(voice,/room\.startAudio\(\)/);
+  assert.match(voice,/Enable Sound/);
   assert.doesNotMatch(voice,/MediaRecorder/);
   assert.doesNotMatch(voice,/upload/);
-  assert.match(voice,/stun:stun\.l\.google\.com:19302/);
-  assert.match(voice,/RemoteAudio/);
 });
-
 
 test("SEba Voice is pre-activated when the workshop opens",()=>{
   assert.match(voice,/autoStartedRef/);
@@ -54,7 +59,8 @@ test("Blocked microphones show recovery steps for Safari, Chrome and Android pri
 });
 
 test("Microphone is explicitly permitted for same-origin classrooms",()=>{
-  const config=fs.readFileSync("next.config.ts","utf8");
-  assert.match(config,/Permissions-Policy/);
-  assert.match(config,/microphone=\(self\)/);
+  const nextConfig=fs.readFileSync("next.config.ts","utf8");
+  const vercelConfig=fs.readFileSync("vercel.json","utf8");
+  assert.match(nextConfig,/microphone=\(self\)/);
+  assert.match(vercelConfig,/microphone=\(self\)/);
 });
