@@ -16,7 +16,7 @@ test('SEba adjustable pieces sit in responsive trays beside teacher boards',()=>
 });
 
 test('SEba Reset Board restores the standard chess position',()=>{
-  assert.match(workshop,/>Reset Board<\/button>/);
+  assert.match(workshop,/className="tool-button-label">Reset Board<\/span>/);
   assert.match(workshop,/updateMaster\(\{fen:"start",annotations:\[\]\}\)/);
   assert.match(workshop,/setPlacementPiece\(null\);setTool\("hand"\)/);
 });

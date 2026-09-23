@@ -986,3 +986,272 @@
 .board-maximized .board-piece-layout{max-width:min(1180px,calc(100dvh + 70px))}
 @media(max-width:1100px){.board-maximized .board-piece-layout{max-width:min(100%,calc(100dvh - 100px))}}
 @media(max-width:760px){.teacher-toolbar-shell{top:58px}.teacher-toolbar-handle{justify-content:stretch;padding:4px 6px}.teacher-toolbar-handle button{flex:1;min-height:36px;padding-inline:7px}.teacher-toolbar-shell>.teacher-toolbar{max-height:0}.teacher-toolbar-shell:focus-within>.teacher-toolbar,.teacher-toolbar-shell.open>.teacher-toolbar{max-height:70dvh}.board-maximized .master-board-panel,.board-maximized .focus-board,.board-maximized .one-board{width:min(calc(100vw - 4px),calc(100dvh + 20px));padding:2px}}
+
+/* Polished responsive SEba control console. */
+.teacher-toolbar {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-auto-rows: minmax(142px, auto);
+  align-items: stretch;
+  gap: clamp(8px, .8vw, 12px);
+  padding: clamp(10px, 1vw, 16px);
+}
+.teacher-toolbar > header {
+  min-height: 0;
+  grid-column: 1 / -1;
+  align-self: center;
+}
+.teacher-toolbar > .tool-group {
+  align-self: stretch;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  align-content: stretch;
+  gap: 9px;
+  min-width: 0;
+  min-height: 142px;
+  padding: 11px;
+  border-color: #38515a;
+  border-radius: 15px;
+  background: linear-gradient(150deg, #17282f 0%, #0c171c 70%);
+  box-shadow: inset 0 1px rgba(255,255,255,.035), 0 8px 20px rgba(0,0,0,.2);
+}
+.teacher-toolbar > .tool-group > b {
+  color: #87e6ed;
+  font-size: 8px;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: 1.05px;
+}
+.teacher-toolbar .tool-group > div:not(.piece-palette):not(.ai-move-line) {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: minmax(44px, 1fr);
+  align-items: stretch;
+  gap: 7px;
+  width: 100%;
+  min-width: 0;
+}
+.teacher-toolbar .tool-group button {
+  justify-content: center;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  height: 100%;
+  padding: 9px 10px;
+  border-color: #425e68;
+  border-radius: 11px;
+  background: linear-gradient(145deg, #182b33, #101d22);
+  color: #e2eef1;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: center;
+  white-space: normal;
+  box-shadow: inset 0 1px rgba(255,255,255,.025);
+  transition: border-color .16s ease, background .16s ease, color .16s ease, transform .16s ease, box-shadow .16s ease;
+}
+.teacher-toolbar .tool-group button:hover:not(:disabled) {
+  border-color: #69dfe8;
+  background: linear-gradient(145deg, #21404a, #12272e);
+  color: #f4feff;
+  box-shadow: 0 5px 13px rgba(0,0,0,.25);
+  transform: translateY(-1px);
+}
+.teacher-toolbar .tool-group button:focus-visible,
+.teacher-toolbar .tool-group select:focus-visible {
+  outline: 2px solid #61dfe8;
+  outline-offset: 2px;
+}
+.teacher-toolbar .tool-group button:disabled {
+  cursor: not-allowed;
+  opacity: .5;
+}
+.teacher-toolbar .tool-group button svg {
+  flex: 0 0 17px;
+  width: 17px;
+  height: 17px;
+}
+.teacher-toolbar .tool-button-label {
+  overflow: hidden;
+  max-width: 0;
+  opacity: 0;
+  white-space: nowrap;
+  transform: translateX(-3px);
+  transition: max-width .2s ease, opacity .16s ease, transform .2s ease;
+}
+.teacher-toolbar .tool-group button:hover .tool-button-label,
+.teacher-toolbar .tool-group button:focus-visible .tool-button-label {
+  max-width: 130px;
+  opacity: 1;
+  transform: translateX(0);
+}
+.teacher-toolbar .tool-color-dot {
+  flex: 0 0 17px;
+  width: 17px;
+  height: 17px;
+  border: 2px solid rgba(255,255,255,.72);
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px rgba(0,0,0,.28);
+}
+.teacher-toolbar .tool-color-dot.red {
+  background: #ff4d59;
+}
+.teacher-toolbar .tool-color-dot.cyan {
+  background: #35ddea;
+}
+.teacher-toolbar .move-draw-tools > div {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.teacher-toolbar .move-draw-tools > div > button:last-child {
+  grid-column: 1 / -1;
+}
+.teacher-toolbar > .piece-setup {
+  grid-column: auto;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: auto minmax(44px, 1fr);
+}
+.teacher-toolbar > .piece-setup > b {
+  grid-column: 1 / -1;
+}
+.teacher-toolbar > .piece-setup > button,
+.teacher-toolbar .piece-setup > .clear-board-button {
+  width: 100%;
+  min-height: 44px;
+}
+.teacher-toolbar .lesson-tools > div,
+.teacher-toolbar .board-style > div {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.teacher-toolbar .ai-reader-tools > div {
+  grid-template-columns: minmax(0, 1fr);
+}
+.teacher-toolbar .ai-reader-tools .ai-reader-button {
+  border-color: #7765c8;
+  background: linear-gradient(145deg, #332a64, #1a1b39);
+}
+.teacher-toolbar .session-tools > div {
+  grid-template-columns: minmax(0, 1fr);
+}
+.teacher-toolbar .session-tools label {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(76px, auto);
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  margin: 0;
+  padding: 6px 8px;
+  border: 1px solid #344d56;
+  border-radius: 11px;
+  background: #0d191e;
+  color: #bdcdd2;
+  font-size: 9px;
+  font-weight: 700;
+}
+.teacher-toolbar .session-tools select {
+  width: 100%;
+  min-width: 0;
+  min-height: 32px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  font: 700 10px Poppins, sans-serif;
+}
+.teacher-toolbar .session-tools .terminate-room {
+  border-color: #87444b;
+  background: linear-gradient(145deg, #4b2228, #2b171b);
+  color: #ffc0c5;
+}
+
+@media (max-width: 1500px) {
+  .teacher-toolbar {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 900px) {
+  .teacher-toolbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 560px) {
+  .teacher-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+    grid-auto-rows: auto;
+    gap: 8px;
+    padding: 8px;
+  }
+  .teacher-toolbar > .tool-group {
+    min-height: 0;
+  }
+  .teacher-toolbar .tool-group button {
+    min-height: 46px;
+    font-size: 11px;
+  }
+}
+
+/* Icon-only top actions with hover/focus labels. */
+.workshop-actions > .icon-action,
+.workshop-actions .classroom-voice button,
+.workshop-actions .classroom-voice > span {
+  position: relative;
+  flex: 0 0 42px;
+  width: 42px;
+  min-width: 42px;
+  min-height: 42px;
+  height: 42px;
+  padding: 0;
+  border-radius: 12px;
+}
+.workshop-actions .seba-cbc-button.icon-action {
+  min-height: 42px;
+  padding: 0;
+  font-size: 0;
+}
+.workshop-actions > .workshop-stat.icon-action {
+  min-height: 42px;
+  padding: 0;
+  justify-content: center;
+  font-size: 0;
+}
+.workshop-actions [data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  z-index: 80;
+  top: calc(100% + 8px);
+  right: 0;
+  width: max-content;
+  max-width: min(230px, 80vw);
+  padding: 7px 9px;
+  border: 1px solid #48616a;
+  border-radius: 8px;
+  background: #081216f2;
+  color: #e9f6f7;
+  font: 700 9px/1.25 Poppins, sans-serif;
+  letter-spacing: 0;
+  text-align: center;
+  white-space: normal;
+  box-shadow: 0 8px 24px #000a;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-3px);
+  transition: opacity .14s ease, transform .14s ease;
+}
+.workshop-actions [data-tooltip]:hover::after,
+.workshop-actions [data-tooltip]:focus-visible::after,
+.workshop-actions [data-tooltip]:focus-within::after {
+  opacity: 1;
+  transform: translateY(0);
+}
+.workshop-actions .classroom-voice {
+  flex: 0 0 auto;
+  gap: 7px;
+}
+@media (max-width: 700px) {
+  .workshop-actions > .icon-action,
+  .workshop-actions .classroom-voice button,
+  .workshop-actions .classroom-voice > span {
+    flex-basis: 40px;
+    width: 40px;
+    min-width: 40px;
+    min-height: 40px;
+    height: 40px;
+  }
+}

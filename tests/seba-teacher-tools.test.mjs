@@ -16,12 +16,13 @@ test("teacher can clear and personally arrange all white and black pieces",()=>{
 });
 
 test("teacher tools are categorized with opaque white pieces and two board themes",()=>{
-  for(const category of ["MOVE & DRAW","PIECE SETUP","LESSON","AI READER","BOARD STYLE","SESSION"])assert.match(workshop,new RegExp(category));
+  for(const category of ["MOVE & DRAW","BOARD SETUP","LESSON","AI READER","BOARD STYLE","SESSION"])assert.match(workshop,new RegExp(category));
   assert.match(workshop,/Classic Green/);
   assert.match(workshop,/Warm Wood/);
-  assert.match(workshop,/white-palette-piece/);
+  assert.match(workshop,/white-tray/);
+  assert.match(workshop,/black-tray/);
   assert.match(workshop,/board-theme-/);
-  assert.match(css,/grid-template-columns:minmax\(170px,1\.1fr\)/);
+  assert.match(css,/grid-template-columns: repeat\(6, minmax\(0, 1fr\)\)/);
   assert.match(css,/max-width:calc\(100vw - 20px\)/);
   assert.match(css,/teach-square\.white-piece>span\{color:#fff;opacity:1/);
 });
