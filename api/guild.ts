@@ -82,7 +82,7 @@ export default async function handler(req:Req,res:Res){
   if(search.length>40||/[^\p{L}\p{N} .-]/u.test(search))throw fail(400,'Use letters, numbers or spaces to search guilds.');
   const code=String(first(req.query?.code)??'').trim().toUpperCase();
   if(code&&!/^CB-[0-9A-F]{8}$/.test(code))throw fail(400,'Enter a valid guild code (CB- plus 8 characters).');
-  let listQuery=db.from('cb_guild_directory').select('id,name,guild_points,created_at',{count:'exact'});
+  let listQuery=db.from('cb_guild_directory').select('id,name,logo_url,guild_points,created_at',{count:'exact'});
   if(search&&!me.data?.guild_id)listQuery=listQuery.ilike('name',`%${search}%`);
   const guilds=await listQuery.order('guild_points',{ascending:false}).order('created_at',{ascending:true}).range((page-1)*10,page*10-1);
   if(guilds.error)throw guilds.error;
@@ -126,6 +126,6 @@ export default async function handler(req:Req,res:Res){
    }
   }
   const detail=guild?isMember?{...guild,members}:{id:guild.id,name:guild.name,logo_url:guild.logo_url,cover_url:guild.cover_url,guild_points:guild.guild_points,member_count:guild.member_count,guild_code:guild.guild_code}:null;
-  return res.status(200).json({page,total:guilds.count??0,eligible:Number(profile.data.cbr)>=177,my_guild_id:me.data?.guild_id??null,my_request:myRequest.data??null,requests,activity,kick_notice:kickNotice.data??null,guilds:(guilds.data??[]).map(row=>({id:row.id,name:row.name,guild_points:row.guild_points})),detail});
+  return res.status(200).json({page,total:guilds.count??0,eligible:Number(profile.data.cbr)>=177,my_guild_id:me.data?.guild_id??null,my_request:myRequest.data??null,requests,activity,kick_notice:kickNotice.data??null,guilds:(guilds.data??[]).map(row=>({id:row.id,name:row.name,logo_url:row.logo_url,guild_points:row.guild_points})),detail});
  }catch(error){const status=Number((error as {status?:number}).status)||500;if(status===500)console.error('Guild request failed',error);return res.status(status).json({error:status===500?'Guild request failed. Please retry.':message(error)});}
 }
