@@ -43,4 +43,6 @@ test("top-right classroom actions are compact icon controls with tooltips", () =
   assert.match(source, /className="workshop-stat icon-action"[\s\S]*?data-tooltip=/);
   assert.match(css, /\.workshop-actions > \.icon-action,[\s\S]*?width: 42px;[\s\S]*?height: 42px/);
   assert.match(css, /\.workshop-actions \[data-tooltip\]::after/);
+  assert.match(css, /Keep header tooltips above the sticky teaching rail[\s\S]*?\.workshop-topbar \{\s*z-index: 50;\s*overflow: visible;/);
+  assert.match(css, /Keep header tooltips above the sticky teaching rail[\s\S]*?\.workshop-actions \.seba-cbc-button\.icon-action img \{[\s\S]*?width: 36px;\s*height: 36px;/);
 });
