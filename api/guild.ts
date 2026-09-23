@@ -70,13 +70,15 @@ export default async function handler(req:Req,res:Res){
   const page=Math.min(100000,Math.max(1,Number(first(req.query?.page))||1));
   const selected=first(req.query?.guild_id);
   if(selected&&!uuid(selected))throw fail(400,'Invalid guild.');
-  const released=await db.rpc('cb_guild_distribute_due');
+  const [released,me,profile,kickNotice]=await Promise.all([
+   db.rpc('cb_guild_distribute_due'),
+   db.from('cb_guild_members').select('guild_id,leader_vote').eq('user_id',userId).maybeSingle(),
+   db.from('cb_profiles').select('cbr').eq('user_id',userId).single(),
+   db.from('cb_guild_kicks').select('guild_id,reason,created_at,cb_guilds(name)').eq('member_id',userId).order('created_at',{ascending:false}).limit(1).maybeSingle()
+  ]);
   if(released.error)throw fail(503,'Guild database is not ready. Apply supabase/0047_guilds.sql.');
-  const me=await db.from('cb_guild_members').select('guild_id,leader_vote').eq('user_id',userId).maybeSingle();
   if(me.error)throw me.error;
-  const profile=await db.from('cb_profiles').select('cbr').eq('user_id',userId).single();
   if(profile.error)throw profile.error;
-  const kickNotice=await db.from('cb_guild_kicks').select('guild_id,reason,created_at,cb_guilds(name)').eq('member_id',userId).order('created_at',{ascending:false}).limit(1).maybeSingle();
   if(kickNotice.error&&!/cb_guild_kicks|schema cache|does not exist/i.test(kickNotice.error.message))throw kickNotice.error;
   const search=String(first(req.query?.search)??'').trim();
   if(search.length>40||/[^\p{L}\p{N} .-]/u.test(search))throw fail(400,'Use letters, numbers or spaces to search guilds.');
@@ -84,45 +86,48 @@ export default async function handler(req:Req,res:Res){
   if(code&&!/^CB-[0-9A-F]{8}$/.test(code))throw fail(400,'Enter a valid guild code (CB- plus 8 characters).');
   let listQuery=db.from('cb_guild_directory').select('id,name,logo_url,guild_points,created_at',{count:'exact'});
   if(search&&!me.data?.guild_id)listQuery=listQuery.ilike('name',`%${search}%`);
-  const guilds=await listQuery.order('guild_points',{ascending:false}).order('created_at',{ascending:true}).range((page-1)*10,page*10-1);
+  const [guilds,lookup,myRequest]=await Promise.all([
+   listQuery.order('guild_points',{ascending:false}).order('created_at',{ascending:true}).range((page-1)*10,page*10-1),
+   code?db.from('cb_guilds').select('id').eq('guild_code',code).maybeSingle():Promise.resolve(null),
+   db.from('cb_guild_join_requests').select('id,guild_id,created_at').eq('user_id',userId).eq('status','pending').limit(1).maybeSingle()
+  ]);
   if(guilds.error)throw guilds.error;
-  let detailId=selected||me.data?.guild_id;
-  if(code){
-   const lookup=await db.from('cb_guilds').select('id').eq('guild_code',code).maybeSingle();
-   if(lookup.error)throw lookup.error;
-   detailId=lookup.data?.id;
-  }
+  if(lookup?.error)throw lookup.error;
+  const detailId=code?lookup?.data?.id:selected||me.data?.guild_id;
   const detailRow=detailId?await db.from('cb_guild_directory').select('*').eq('id',detailId).maybeSingle():null;
   if(detailRow?.error)throw detailRow.error;
   const guild=detailRow?.data;
   const isMember=!!guild&&me.data?.guild_id===guild.id;
   const isLeader=isMember&&guild.leader_id===userId;
-  const myRequest=await db.from('cb_guild_join_requests').select('id,guild_id,created_at').eq('user_id',userId).eq('status','pending').limit(1).maybeSingle();
   if(myRequest.error&&!/cb_guild_join_requests|schema cache|does not exist/i.test(myRequest.error.message))throw myRequest.error;
   let requests:unknown[]=[],activity:unknown[]=[],members:unknown[]=[];
   if(guild&&isMember){
-   const memberRows=await db.from('cb_guild_members').select('guild_id,user_id,joined_at,leader_vote').eq('guild_id',guild.id);
+   const [memberRows,history,pending]=await Promise.all([
+    db.from('cb_guild_members').select('guild_id,user_id,joined_at,leader_vote').eq('guild_id',guild.id),
+    db.from('cb_guild_activity').select('id,actor_id,kind,detail,amount,created_at').eq('guild_id',guild.id).order('id',{ascending:false}).limit(30),
+    isLeader?db.from('cb_guild_join_requests').select('id,user_id,created_at').eq('guild_id',guild.id).eq('status','pending').order('created_at',{ascending:true}).limit(18):Promise.resolve(null)
+   ]);
    if(memberRows.error)throw memberRows.error;
+   if(history.error&&!/cb_guild_activity|schema cache|does not exist/i.test(history.error.message))throw history.error;
+   if(pending?.error&&!/cb_guild_join_requests|schema cache|does not exist/i.test(pending.error.message))throw pending.error;
    const userIds=(memberRows.data??[]).map(row=>row.user_id);
-   const players=userIds.length?await db.from('cb_profiles').select('user_id,username,display_name,avatar_url,cbr').in('user_id',userIds):{data:[],error:null};
+   const actors=[...new Set((history.data??[]).map(row=>row.actor_id).filter(Boolean))];
+   const applicantIds=(pending?.data??[]).map(row=>row.user_id);
+   const [players,actorProfiles,applicants]=await Promise.all([
+    userIds.length?db.from('cb_profiles').select('user_id,username,display_name,avatar_url,cbr').in('user_id',userIds):Promise.resolve({data:[],error:null}),
+    actors.length?db.from('cb_profiles').select('user_id,display_name,username').in('user_id',actors):Promise.resolve({data:[],error:null}),
+    applicantIds.length?db.from('cb_profiles').select('user_id,username,display_name,avatar_url,cbr').in('user_id',applicantIds):Promise.resolve({data:[],error:null})
+   ]);
    if(players.error)throw players.error;
+   if(actorProfiles.error)throw actorProfiles.error;
+   if(applicants.error)throw applicants.error;
    const byId=new Map((players.data??[]).map(row=>[row.user_id,row]));
    members=(memberRows.data??[]).map(row=>({...row,profile:byId.get(row.user_id)}));
-   const history=await db.from('cb_guild_activity').select('id,actor_id,kind,detail,amount,created_at').eq('guild_id',guild.id).order('id',{ascending:false}).limit(30);
-   if(history.error&&!/cb_guild_activity|schema cache|does not exist/i.test(history.error.message))throw history.error;
-   const actors=[...new Set((history.data??[]).map(row=>row.actor_id).filter(Boolean))];
-   const actorProfiles=actors.length?await db.from('cb_profiles').select('user_id,display_name,username').in('user_id',actors):{data:[],error:null};
-   if(actorProfiles.error)throw actorProfiles.error;
    const actorNames=new Map((actorProfiles.data??[]).map(row=>[row.user_id,row.display_name||row.username]));
    activity=(history.data??[]).map(row=>({...row,actor_name:actorNames.get(row.actor_id)||'Player'}));
    if(isLeader){
-    const pending=await db.from('cb_guild_join_requests').select('id,user_id,created_at').eq('guild_id',guild.id).eq('status','pending').order('created_at',{ascending:true}).limit(18);
-    if(pending.error&&!/cb_guild_join_requests|schema cache|does not exist/i.test(pending.error.message))throw pending.error;
-    const applicantIds=(pending.data??[]).map(row=>row.user_id);
-    const applicants=applicantIds.length?await db.from('cb_profiles').select('user_id,username,display_name,avatar_url,cbr').in('user_id',applicantIds):{data:[],error:null};
-    if(applicants.error)throw applicants.error;
     const byUser=new Map((applicants.data??[]).map(row=>[row.user_id,row]));
-    requests=(pending.data??[]).map(row=>({...row,profile:byUser.get(row.user_id)}));
+    requests=(pending?.data??[]).map(row=>({...row,profile:byUser.get(row.user_id)}));
    }
   }
   const detail=guild?isMember?{...guild,members}:{id:guild.id,name:guild.name,logo_url:guild.logo_url,cover_url:guild.cover_url,guild_points:guild.guild_points,member_count:guild.member_count,guild_code:guild.guild_code}:null;
