@@ -38,6 +38,8 @@ export default async function handler(req:Req,res:Res){
    if(action==='create'){rpc='cb_guild_create';params.p_name=String(body.name??'').trim();}
    else if(action==='rename'){rpc='cb_guild_rename';params.p_name=String(body.name??'').trim();}
    else if(action==='join'){if(!uuid(body.guild_id))throw fail(400,'Choose a guild.');rpc='cb_guild_join';params.p_guild_id=body.guild_id;}
+   else if(action==='cancel_request'){if(!uuid(body.request_id))throw fail(400,'Choose a request.');rpc='cb_guild_cancel_request';params.p_request_id=body.request_id;}
+   else if(action==='review_request'){if(!uuid(body.request_id)||typeof body.approve!=='boolean')throw fail(400,'Choose a request and decision.');rpc='cb_guild_review_request';params.p_request_id=body.request_id;params.p_approve=body.approve;}
    else if(action==='leave')rpc='cb_guild_leave';
    else if(action==='kick'){if(!uuid(body.member_id))throw fail(400,'Choose a member.');rpc='cb_guild_kick';params.p_member_id=body.member_id;params.p_reason=String(body.reason??'').trim();}
    else if(action==='vote'){if(!uuid(body.candidate_id))throw fail(400,'Choose a member.');rpc='cb_guild_vote';params.p_candidate=body.candidate_id;}
@@ -88,10 +90,31 @@ export default async function handler(req:Req,res:Res){
   const players=userIds.length?await db.from('cb_profiles').select('user_id,username,display_name,avatar_url,cbr').in('user_id',userIds):{data:[],error:null};
   if(players.error)throw players.error;
   const playersById=new Map((players.data??[]).map(p=>[p.user_id,p]));
+  const myRequest=await db.from('cb_guild_join_requests').select('id,guild_id,created_at').eq('user_id',userId).eq('status','pending').limit(1).maybeSingle();
+  if(myRequest.error&&!/cb_guild_join_requests|schema cache|does not exist/i.test(myRequest.error.message))throw myRequest.error;
+  let requests:unknown[]=[],activity:unknown[]=[];
+  if(details?.data){
+   const history=await db.from('cb_guild_activity').select('id,actor_id,kind,detail,amount,created_at').eq('guild_id',details.data.id).order('id',{ascending:false}).limit(30);
+   if(history.error&&!/cb_guild_activity|schema cache|does not exist/i.test(history.error.message))throw history.error;
+   const actors=[...new Set((history.data??[]).map(row=>row.actor_id).filter(Boolean))];
+   const actorProfiles=actors.length?await db.from('cb_profiles').select('user_id,display_name,username').in('user_id',actors):{data:[],error:null};
+   if(actorProfiles.error)throw actorProfiles.error;
+   const actorNames=new Map((actorProfiles.data??[]).map(row=>[row.user_id,row.display_name||row.username]));
+   activity=(history.data??[]).map(row=>({...row,actor_name:actorNames.get(row.actor_id)||'Player'}));
+   if(details.data.leader_id===userId&&me.data?.guild_id===details.data.id){
+    const pending=await db.from('cb_guild_join_requests').select('id,user_id,created_at').eq('guild_id',details.data.id).eq('status','pending').order('created_at',{ascending:true}).limit(18);
+    if(pending.error&&!/cb_guild_join_requests|schema cache|does not exist/i.test(pending.error.message))throw pending.error;
+    const applicantIds=(pending.data??[]).map(row=>row.user_id);
+    const applicants=applicantIds.length?await db.from('cb_profiles').select('user_id,username,display_name,avatar_url,cbr').in('user_id',applicantIds):{data:[],error:null};
+    if(applicants.error)throw applicants.error;
+    const byUser=new Map((applicants.data??[]).map(row=>[row.user_id,row]));
+    requests=(pending.data??[]).map(row=>({...row,profile:byUser.get(row.user_id)}));
+   }
+  }
   const stats=(id:string)=>{
    const list=(members.data??[]).filter(m=>m.guild_id===id).map(m=>({...m,profile:playersById.get(m.user_id)}));
    return {member_count:list.length,guild_points:list.reduce((n,m)=>n+Number(m.profile?.cbr??0),0),members:list};
   };
-  return res.status(200).json({page,total:guilds.count??0,eligible:Number(profile.data.cbr)>=177,my_guild_id:me.data?.guild_id??null,kick_notice:kickNotice.data??null,guilds:guilds.data??[],detail:details?.data?{...details.data,...stats(details.data.id)}:null});
+  return res.status(200).json({page,total:guilds.count??0,eligible:Number(profile.data.cbr)>=177,my_guild_id:me.data?.guild_id??null,my_request:myRequest.data??null,requests,activity,kick_notice:kickNotice.data??null,guilds:guilds.data??[],detail:details?.data?{...details.data,...stats(details.data.id)}:null});
  }catch(error){const status=Number((error as {status?:number}).status)||500;if(status===500)console.error('Guild request failed',error);return res.status(status).json({error:status===500?'Guild request failed. Please retry.':message(error)});}
 }

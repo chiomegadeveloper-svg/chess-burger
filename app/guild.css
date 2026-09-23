@@ -26,3 +26,15 @@
 .guild-kick-notice{border-color:#9b6a48;background:#39261f;color:#ffe0c1}
 .guild-member button.guild-kick{border-color:#94534d;background:#422528;color:#ffc8c1}
 @media(max-width:420px){.guild-heading>button{max-width:126px}}
+.guild-requests,.guild-activity{margin:16px;padding:12px;border:1px solid #42545b;border-radius:13px;background:#17242a}
+.guild-requests h3,.guild-activity h3{margin:0 0 8px;color:#f3d68c}
+.guild-requests p,.guild-activity p{font-size:10px;color:#a9bdc2}
+.guild-request{display:flex;align-items:center;gap:8px;padding:9px 0;border-top:1px solid #33434a}
+.guild-request img{width:34px;height:34px;border-radius:50%;object-fit:cover}
+.guild-request span{display:grid;flex:1;min-width:0;font-size:10px}
+.guild-request small{font-size:9px;color:#a9bac0}
+.guild-request button,.guild-pending button{padding:6px 8px;border:1px solid #9f8754;border-radius:8px;background:#463720;color:#ffdc99;font-size:9px}
+.guild-activity-row{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-top:1px solid #33434a;font-size:10px;line-height:1.5}
+.guild-activity-row time{flex:none;color:#99afb7;font-size:9px}
+.guild-pending{display:flex;align-items:center;gap:9px;color:#eed194;font-size:10px}
+@media(max-width:480px){.guild-request{flex-wrap:wrap}.guild-activity-row{display:grid;gap:2px}}
