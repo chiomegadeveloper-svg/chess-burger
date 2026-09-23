@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { Chess } from 'chess.js';
-import {PUZZLE_BANK_PROOFS,VERY_HARD_IDS,OTHER_IDS} from './puzzle-bank';
+import {PUZZLE_BANK_PROOFS,VERY_HARD_IDS,OTHER_IDS} from './_puzzles/_puzzle-bank.js';
 // Generated validation manifest kept in this serverless entrypoint because
 // Vercel's function runtime cannot load cross-directory app modules here.
 const PUZZLE_PROOFS:Record<string,string>={"v2-chapter-1-puzzle-1":"d2d8 b6d8 d1d8","v2-chapter-1-puzzle-2":"f1f8 d1d8 f8d8","v2-chapter-1-puzzle-3":"a4a8 c7b8 a8b8","v2-chapter-1-puzzle-4":"d4b3 d2c3 b3a1","v2-chapter-1-puzzle-5":"b1b6 c4b6 a4a3 b6d7 a3a2","v2-chapter-1-puzzle-6":"d5e7 g8f8 e7c8","v2-chapter-1-puzzle-7":"f3d1 e3e1 d1e1","v2-chapter-1-puzzle-8":"d4a4 a6b5 a4b5","v2-chapter-1-puzzle-9":"f6d7 c5d7 c7d7","v2-chapter-1-puzzle-10":"d6c5 g1h1 c5c4","v2-chapter-2-puzzle-1":"d8a5 d1d2 a5b5","v2-chapter-2-puzzle-2":"c6e7 g8h8 e7d5","v2-chapter-2-puzzle-3":"d5f6 g7f6 d1d7","v2-chapter-2-puzzle-4":"b7d7 d6d7 b4c5","v2-chapter-2-puzzle-5":"a3b5 c3c2 e2d2","v2-chapter-2-puzzle-6":"f3f7 e8d8 f7f8 d8d7 f8a8","v2-chapter-2-puzzle-7":"c6e6 d5e7 e6f7","v2-chapter-2-puzzle-8":"d4e2 g1h1 e2g3 f2g3 d8d2","v2-chapter-2-puzzle-9":"b8b1 e1f2 b1h1 a4a7 e7f8","v2-chapter-2-puzzle-10":"h7h8 f6e6 h8c3","v2-chapter-3-puzzle-1":"h3g3 e5g3 h5g5 g8f7 g5g3","v2-chapter-3-puzzle-2":"b4a5 a6b7 c4d6 b7b8 a5d8","v2-chapter-3-puzzle-3":"e4e1 d1e1 e8e1 h1g2 d4d3","v2-chapter-3-puzzle-4":"f7f5 g2g4 f5e4","v2-chapter-3-puzzle-5":"b4b3 a2a3 d1a1","v2-chapter-3-puzzle-6":"e3e2 a6e6 f4f1","v2-chapter-3-puzzle-7":"d5d6 c7d6 c5d6 e7d6 e6e7","v2-chapter-3-puzzle-8":"a5a6 b3c4 a6a7","v2-chapter-3-puzzle-9":"d4e2 g1h2 a4f4 h2h1 e2g3 f2g3 f4f1","v2-chapter-3-puzzle-10":"c3c2 b1a2 c2c1q h7d7 d2e2","v2-chapter-4-puzzle-1":"e7f7 f6e5 f7f4","v2-chapter-4-puzzle-2":"e5c6 c8e6 c6d8","v2-chapter-4-puzzle-3":"c8b7 a8a7 f8a8 a7a8 b7a8","v2-chapter-4-puzzle-4":"e5c6 b7c6 d3e4","v2-chapter-4-puzzle-5":"f2f1 h1g2 f1g1","v2-chapter-4-puzzle-6":"d8d3 g2g3 d3g3 h3h2 g3c3","v2-chapter-4-puzzle-7":"f8a8 c6d6 a8f3","v2-chapter-4-puzzle-8":"c3b4 e7a7 b4c5","v2-chapter-4-puzzle-9":"h4g6 f8g8 f6h8","v2-chapter-4-puzzle-10":"b3c5 d6c5 f4b8 a2a1q g7g8q","v2-chapter-5-puzzle-1":"d1d7 c7d7 g4d7","v2-chapter-5-puzzle-2":"g5e6 f8g8 e6c7","v2-chapter-5-puzzle-3":"g3h2 f3h3 f6g4","v2-chapter-5-puzzle-4":"h7g7 g8g7 g5e6 g7g8 e6d8","v2-chapter-5-puzzle-5":"c1g5 f6g5 g3g5","v2-chapter-5-puzzle-6":"d7d6 b7b6 a7b6","v2-chapter-5-puzzle-7":"f5e5 e2f1 e5e6","v2-chapter-5-puzzle-8":"f6d8 c8d8 d3c4","v2-chapter-5-puzzle-9":"d2d7 c8d7 f3a8","v2-chapter-5-puzzle-10":"h5e5 c7e5 e4e5","v2-chapter-6-puzzle-1":"e6h6 h8g8 h6g7","v2-chapter-6-puzzle-2":"g4e2 e1e2 e3c5 e2f3 c5a3","v2-chapter-6-puzzle-3":"f8d8 d6d8 f6d8","v2-chapter-6-puzzle-4":"f5h6 g7h6 h5c5","v2-chapter-6-puzzle-5":"e2e6 f7f8 e6f7","v2-chapter-6-puzzle-6":"e2e4 d5e4 f3e4","v2-chapter-6-puzzle-7":"d3c4 b6c4 d1a4 d8d7 a4c4","v2-chapter-6-puzzle-8":"f8e8 e1f1 g4h3 d5g2 e8e1 f1e1 h3g2","v2-chapter-6-puzzle-9":"d4e2 g1f1 e2c3","v2-chapter-6-puzzle-10":"d8e7 g7g8 f6g8","v2-chapter-7-puzzle-1":"e7f5 h6h7 f6g7","v2-chapter-7-puzzle-2":"f1b5 c8d7 d1d6 d7b5 d6d8","v2-chapter-7-puzzle-3":"f3e5 c7e5 e2g4","v2-chapter-7-puzzle-4":"f6f4 d1f3 f4f3","v2-chapter-7-puzzle-5":"d2b1 a3a4 d1a4","v2-chapter-7-puzzle-6":"f4f5 f6f5 a5a4 f5e4 a4a3 e4d3 a3a2","v2-chapter-7-puzzle-7":"e4c2 a2a1 c2b1","v2-chapter-7-puzzle-8":"b1b7 c7b7 e4f6 e7f6 g2b7","v2-chapter-7-puzzle-9":"h3c3 b3c3 a5a4 c3b2 a4b4","v2-chapter-7-puzzle-10":"c3c2 d7c8 c2d2","v2-chapter-8-puzzle-1":"h4g4 d7c7 g5d8 h8d8 g4g6","v2-chapter-8-puzzle-2":"c5c2 b1a1 a8a3 b2a3 c2a2","v2-chapter-8-puzzle-3":"h6g6 g3f2 g6g2","v2-chapter-8-puzzle-4":"g5f4 d5f4 d8g5 d2d1 g5f4","v2-chapter-8-puzzle-5":"f6e5 c2c7 a6d6","v2-chapter-8-puzzle-6":"e6e7 b2b1 b3c1 b1c1 h6c1","v2-chapter-8-puzzle-7":"b6c5 a6c8 c5c4","v2-chapter-8-puzzle-8":"d1h5 h7h6 h5c5","v2-chapter-8-puzzle-9":"f6d6 f4d6 f8f1","v2-chapter-8-puzzle-10":"e4c5 a4a5 c5d7 f8g7 d7b8","v2-chapter-9-puzzle-1":"f3d2 c4d2 c2d2 c5c1 e2c1","v2-chapter-9-puzzle-2":"d6h2 g1h1 h7g6","v2-chapter-9-puzzle-3":"a8d8 d6d8 g5d8","v2-chapter-9-puzzle-4":"c6b4 c3b4 b8c8 d2c4 c8c4","v2-chapter-9-puzzle-5":"f6h6 f2f4 g4g3 e2e7 d7d6 g1f1 h6h1","v2-chapter-9-puzzle-6":"d3f5 e5c7 f5c8 b7b6 a5b6 c7b6 c8a6","v2-chapter-9-puzzle-7":"h6g7 h8g7 e6e7 d7e7 e1e7","v2-chapter-9-puzzle-8":"d1h5 f7g8 h5c5","v2-chapter-9-puzzle-9":"e6h6 f4f6 h6h7 f7g6 h7a7","v2-chapter-9-puzzle-10":"f1e2 g3g2 e3e4 f3d4 e2f2","v2-chapter-10-puzzle-1":"a6a7 d3d8 e2e3 a3a2 e3a3","v2-chapter-10-puzzle-2":"f1f2 g7g5 h4g3 a2f2 g3f2","v2-chapter-10-puzzle-3":"f4f3 f1e1 c2c1 e1d2 c1g1","v2-chapter-10-puzzle-4":"e6f7 f8f7 h3c8 f7f8 c8e6","v2-chapter-10-puzzle-5":"f8e8 e5e8 d8e8","v2-chapter-10-puzzle-6":"e3e5 f7f6 e5c7 g7h6 c7h2","v2-chapter-10-puzzle-7":"h6f7 f8f7 h3e6","v2-chapter-10-puzzle-8":"d8d1 f1d1 g8g2 g1f1 g2g1 f1e2 g1d1","v2-chapter-10-puzzle-9":"f8c5 e3c5 d7c5","v2-chapter-10-puzzle-10":"h5f7 g8h7 f1f6 e7f6 f7d7"};
@@ -479,14 +479,42 @@ async function publicFeed(client: Db) {
   if (list.error) fail(500, list.error.message);
   const visible = (list.data ?? []).filter((event: any) => !event.expires_at || Date.parse(event.expires_at) > now());
   const challengeIds = visible.filter((e: any) => e.kind === 'challenge' && e.challenge_match_id).map((e: any) => e.challenge_match_id);
-  const activeChallenges = new Map<string, any>();
-  if (challengeIds.length) {
-    const waiting = await client.from('cb_matches').select('id,play_mode,wager_gold').in('id', challengeIds).eq('status', 'waiting').is('invite_to', null).gt('created_at', new Date(now() - 120000).toISOString());
-    if (waiting.error) fail(500, waiting.error.message);
-    for (const m of waiting.data ?? []) activeChallenges.set(m.id, m);
+  const actorIds = [...new Set<string>(visible.filter((e: any) => e.kind !== 'announcement').map((e: any) => e.user_id))];
+  // Public identity comes from current membership, including joins, quits and renames.
+  // Fetch all guilds in one join alongside the existing feed lookups.
+  const [waiting, people, memberships] = await Promise.all([
+    challengeIds.length
+      ? client.from('cb_matches').select('id,play_mode,wager_gold').in('id', challengeIds).eq('status', 'waiting').is('invite_to', null).gt('created_at', new Date(now() - 120000).toISOString())
+      : Promise.resolve({ data: [], error: null }),
+    playerMap(client, visible.map((e: any) => e.user_id)),
+    actorIds.length
+      ? client.from('cb_guild_members').select('user_id,guild:cb_guilds(name,logo_url)').in('user_id', actorIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  if (waiting.error) fail(500, waiting.error.message);
+  // Older databases can still show their feed before the guild migration is applied.
+  if (memberships.error && !['42P01', 'PGRST205'].includes(memberships.error.code)) fail(500, memberships.error.message);
+  const guildByUser = new Map<string, { name: string; logo_url: string | null }>();
+  for (const member of memberships.data ?? []) {
+    if (member.guild) guildByUser.set(member.user_id, member.guild);
   }
-  const people = await playerMap(client, visible.map((e: any) => e.user_id));
-  return { events: visible.filter((e: any) => e.kind !== 'challenge' || activeChallenges.has(e.challenge_match_id)).map((e: any) => { const match = activeChallenges.get(e.challenge_match_id); return { id: e.kind === 'challenge' && e.challenge_match_id ? `challenge:${e.challenge_match_id}` : e.id, user_id: e.user_id, kind: e.kind, display_name: e.kind === 'announcement' ? 'Chess Burger' : e.display_name, content: modernCpuFeedContent(e.content), image_url: e.image_url ?? '', expires_at: e.expires_at, cbr_delta: e.cbr_delta ?? 0, gold_delta: e.gold_delta ?? 0, heart_count: e.heart_count ?? 0, created_at: e.created_at, avatar_url: e.kind === 'announcement' ? '/cburger_logo.png' : people.get(e.user_id)?.avatar_url ?? '', cbr: people.get(e.user_id)?.cbr ?? 88, feed_banner: e.kind === 'announcement' ? '' : people.get(e.user_id)?.active_feed_banner ?? '', play_mode: match?.play_mode ?? 'normal', wager_gold: Number(match?.wager_gold ?? 0) }; }) };
+  const activeChallenges = new Map<string, any>();
+  for (const m of waiting.data ?? []) activeChallenges.set(m.id, m);
+  return { events: visible.filter((e: any) => e.kind !== 'challenge' || activeChallenges.has(e.challenge_match_id)).map((e: any) => {
+    const match = activeChallenges.get(e.challenge_match_id);
+    const announcement = e.kind === 'announcement';
+    const guild = announcement ? undefined : guildByUser.get(e.user_id);
+    return {
+      id: e.kind === 'challenge' && e.challenge_match_id ? `challenge:${e.challenge_match_id}` : e.id,
+      user_id: e.user_id, kind: e.kind, display_name: announcement ? 'Chess Burger' : e.display_name,
+      content: modernCpuFeedContent(e.content), image_url: e.image_url ?? '', expires_at: e.expires_at,
+      cbr_delta: e.cbr_delta ?? 0, gold_delta: e.gold_delta ?? 0, heart_count: e.heart_count ?? 0, created_at: e.created_at,
+      avatar_url: announcement ? '/cburger_logo.png' : people.get(e.user_id)?.avatar_url ?? '', cbr: people.get(e.user_id)?.cbr ?? 88,
+      feed_banner: announcement ? '' : people.get(e.user_id)?.active_feed_banner ?? '',
+      guild_name: guild?.name ?? '', guild_logo_url: guild?.logo_url ?? '',
+      play_mode: match?.play_mode ?? 'normal', wager_gold: Number(match?.wager_gold ?? 0),
+    };
+  }) };
 }
 async function saveLiveHeartbeat(client: Db, userId: string) {
   const stamp = new Date().toISOString();

@@ -1,8 +1,10 @@
 /* Avatar, level emblem and guild crest form one compact feed identity row. */
-body .feed-page .feed-cloud:not(.kind-announcement){grid-template-columns:45px 72px minmax(0,1fr) auto!important;gap:8px!important}
+body .feed-page .feed-cloud.has-guild{grid-template-columns:45px 72px minmax(0,1fr) auto!important;gap:8px!important}
+body .feed-page .feed-cloud:not(.kind-announcement):not(.has-guild){grid-template-columns:45px 36px minmax(0,1fr) auto!important;gap:8px!important}
 .feed-identity-badges{display:flex;align-items:center;gap:3px;min-width:0;height:40px}
 body .feed-page .feed-cloud .feed-identity-badges .feed-level{position:static!important;display:block!important;flex:none;width:36px!important;height:38px!important;object-fit:contain!important}
 .feed-guild-logo{display:grid;place-items:center;flex:none;width:30px;height:30px;box-sizing:border-box;border:1px solid #d7bb69;border-radius:9px;background:#26363a;object-fit:cover;box-shadow:0 2px 8px #0005}
 .feed-guild-initial{color:#f4d988;font-size:13px;font-weight:800}
 .feed-guild-name{color:inherit;opacity:.92}
-@media(max-width:650px){body .feed-page .feed-cloud:not(.kind-announcement){grid-template-columns:34px 55px minmax(0,1fr) auto!important;gap:5px!important}body .feed-page .feed-cloud .feed-identity-badges .feed-level{width:28px!important;height:31px!important}.feed-identity-badges{gap:2px;height:33px}.feed-guild-logo{width:23px;height:23px;border-radius:7px}.feed-guild-initial{font-size:10px}.feed-guild-name{font-size:inherit}}
+@media(max-width:650px){body .feed-page .feed-cloud.has-guild{grid-template-columns:34px 55px minmax(0,1fr) auto!important;gap:5px!important}body .feed-page .feed-cloud:not(.kind-announcement):not(.has-guild){grid-template-columns:34px 28px minmax(0,1fr) auto!important;gap:5px!important}body .feed-page .feed-cloud .feed-identity-badges .feed-level{width:28px!important;height:31px!important}.feed-identity-badges{gap:2px;height:33px}.feed-guild-logo{width:23px;height:23px;border-radius:7px}.feed-guild-initial{font-size:10px}.feed-guild-name{font-size:inherit}}
+@media(max-width:350px){body .feed-page .feed-cloud.has-guild{grid-template-columns:31px 55px minmax(0,1fr) auto!important;gap:4px!important}body .feed-page .feed-cloud:not(.kind-announcement):not(.has-guild){grid-template-columns:31px 28px minmax(0,1fr) auto!important;gap:4px!important}}

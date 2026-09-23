@@ -3,12 +3,26 @@ import { join } from "node:path";
 import ts from "typescript";
 
 const apiDirectory = new URL("../api/", import.meta.url);
-const files = readdirSync(apiDirectory).filter((name) => name.endsWith(".ts"));
+const files = readdirSync(apiDirectory, { recursive: true }).filter((name) => name.endsWith(".ts"));
 let failed = false;
+let entrypoints = 0;
 
 for (const name of files) {
   const path = join(apiDirectory.pathname, name);
   const source = readFileSync(path, "utf8");
+  const privateFile = name.split(/[\\/]/).some(part => part.startsWith("_") || part.startsWith(".")) || name.endsWith(".d.ts");
+  if (!privateFile) {
+    entrypoints++;
+    const parsed = ts.createSourceFile(name, source, ts.ScriptTarget.Latest, true);
+    const hasHandler = parsed.statements.some(node =>
+      ts.isExportAssignment(node) && !node.isExportEquals ||
+      node.modifiers?.some(modifier => modifier.kind === ts.SyntaxKind.DefaultKeyword),
+    );
+    if (!hasHandler) {
+      failed = true;
+      console.error(`[serverless-check] ${name} has no default handler. Prefix utility files with _ so Vercel does not deploy them as functions.`);
+    }
+  }
   const corruption = /Warning: truncated output|tokens truncated|original token count/i.test(source);
   const result = ts.transpileModule(source, {
     fileName: name,
@@ -34,4 +48,4 @@ for (const name of files) {
 }
 
 if (failed) process.exit(1);
-console.log(`[serverless-check] ${files.length} API entrypoints passed syntax validation.`);
+console.log(`[serverless-check] ${entrypoints} API entrypoints and ${files.length - entrypoints} private helpers passed validation.`);
