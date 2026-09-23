@@ -1737,3 +1737,7 @@
 .seba-raised-hand svg{width:32px;height:32px;min-width:32px;fill:#ff9c26;color:#ffce7e}
 .student-monitor article.has-raised-hand{border:2px solid #ffa735!important;box-shadow:0 0 25px #fa8e3273}
 @keyframes seba-hand-pulse{50%{box-shadow:0 0 34px #ffa134bd}}
+/* Classroom overview follows the teacher board and student-tile reference. */
+@media(min-width:1050px){.classroom-workshop:not(.board-maximized) .workshop-stage.teacher-view.group-view{grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);align-items:start;width:min(1600px,100%)}.workshop-stage.teacher-view.group-view .master-board-panel{width:100%;max-width:none;justify-self:stretch}.workshop-stage.teacher-view.group-view .student-monitor{min-width:0;max-height:calc(100dvh - 180px);overflow-y:auto}.workshop-stage.teacher-view.group-view .student-monitor>div{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.workshop-stage.teacher-view.group-view .student-monitor article{min-width:0;padding:6px}}
+@media(min-width:750px) and (max-width:1049px){.workshop-stage.teacher-view.group-view{grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start}.workshop-stage.teacher-view.group-view .master-board-panel{width:100%}.workshop-stage.teacher-view.group-view .student-monitor>div{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:749px){.workshop-stage.teacher-view.group-view{grid-template-columns:1fr}.workshop-stage.teacher-view.group-view .student-monitor>div{grid-template-columns:repeat(2,minmax(0,1fr))}}

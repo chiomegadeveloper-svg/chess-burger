@@ -2,7 +2,7 @@
 import {useCallback,useEffect,useRef,useState} from "react";
 import {Room,RoomEvent,Track,type RemoteTrack,type LocalVideoTrack} from "livekit-client";
 import {createPortal} from "react-dom";
-import {Camera,CameraOff,ExternalLink,Hand,Mic,MicOff,PhoneOff,Radio,Settings,Volume2,X} from "lucide-react";
+import {Camera,CameraOff,ExternalLink,Hand,Mic,MicOff,PhoneOff,Radio,Settings,Users,Volume2,X} from "lucide-react";
 import {toast} from "sonner";
 import {classroom} from "./classroom-client";
 import "./classroom-voice.css";
@@ -17,7 +17,7 @@ function VideoTile({feed}:{feed:VideoFeed}){
   return <figure className="seba-video-tile"><video ref={videoRef} autoPlay playsInline muted={feed.local} aria-label={`${feed.name} camera`}/><figcaption>{feed.local?"You":feed.name}</figcaption></figure>;
 }
 
-export default function ClassroomVoice({roomId,role,onRaisedHands}:{roomId:string;role:VoiceRole;onRaisedHands?:(ids:string[])=>void}){
+export default function ClassroomVoice({roomId,role,onRaisedHands,students=[],acknowledgedHand}:{roomId:string;role:VoiceRole;onRaisedHands?:(ids:string[])=>void;students?:{user_id:string;display_name?:string;username?:string}[];acknowledgedHand?:{id:string;sequence:number}|null}){
   const [status,setStatus]=useState<"idle"|"starting"|"live">("idle");
   const [permission,setPermission]=useState<PermissionState>("checking");
   const [showPermissionHelp,setShowPermissionHelp]=useState(false);
@@ -27,6 +27,9 @@ export default function ClassroomVoice({roomId,role,onRaisedHands}:{roomId:strin
   const [cameraOn,setCameraOn]=useState(false);
   const [cameraBusy,setCameraBusy]=useState(false);
   const [handRaised,setHandRaised]=useState(false);
+  const [mediaOpen,setMediaOpen]=useState(false);
+  const [mediaBusy,setMediaBusy]=useState(false);
+  const [unmuteRequested,setUnmuteRequested]=useState(false);
   const [videoFeeds,setVideoFeeds]=useState<VideoFeed[]>([]);
   const [videoHost,setVideoHost]=useState<HTMLElement|null>(null);
   const raisedRef=useRef(new Set<string>());
@@ -55,6 +58,7 @@ export default function ClassroomVoice({roomId,role,onRaisedHands}:{roomId:strin
     setCameraOn(false);
     setVideoFeeds([]);
     setHandRaised(false);
+    setUnmuteRequested(false);
     handRaisedRef.current=false;
     raisedRef.current.clear();
     onRaisedHands?.([]);
@@ -70,6 +74,7 @@ export default function ClassroomVoice({roomId,role,onRaisedHands}:{roomId:strin
     setVideoFeeds(feeds);
   },[]);
   const syncHands=useCallback(()=>onRaisedHands?.([...raisedRef.current]),[onRaisedHands]);
+  useEffect(()=>{if(acknowledgedHand){raisedRef.current.delete(acknowledgedHand.id);syncHands()}},[acknowledgedHand,syncHands]);
   const sendHand=useCallback(async(raised:boolean)=>{
     const room=roomRef.current;
     if(!room||!room.localParticipant.identity)return;
@@ -108,8 +113,20 @@ export default function ClassroomVoice({roomId,role,onRaisedHands}:{roomId:strin
       .on(RoomEvent.ParticipantConnected,()=>{updateCount();if(handRaisedRef.current)void sendHand(true)})
       .on(RoomEvent.ParticipantDisconnected,(participant)=>{updateCount();raisedRef.current.delete(participant.identity);syncHands();syncVideos(liveRoom)})
       .on(RoomEvent.DataReceived,(payload,participant)=>{
-        if(role!=="teacher"||!participant||payload.length>16)return;
+        if(payload.length>32)return;
         const message=new TextDecoder().decode(payload);
+        if(!participant&&message==="media:camera-off"){
+          void liveRoom.localParticipant.setCameraEnabled(false).then(()=>{setCameraOn(false);syncVideos(liveRoom)}).catch(()=>{});return;
+        }
+        if(role==="student"&&!participant){
+          if(message==="hand:ack"){handRaisedRef.current=false;setHandRaised(false);return}
+          if(message==="media:mute"){
+            void liveRoom.localParticipant.setMicrophoneEnabled(false).then(()=>setMuted(true)).catch(()=>{});
+            setUnmuteRequested(false);return;
+          }
+          if(message==="media:unmute-request"){setUnmuteRequested(true);return}
+        }
+        if(role!=="teacher"||!participant)return;
         if(message==="hand:1")raisedRef.current.add(participant.identity);
         else if(message==="hand:0")raisedRef.current.delete(participant.identity);
         else return;
@@ -132,7 +149,7 @@ export default function ClassroomVoice({roomId,role,onRaisedHands}:{roomId:strin
         setMuted(false);
         setNeedsAudioStart(false);
         setStatus("idle");
-        setCameraOn(false);setVideoFeeds([]);setHandRaised(false);handRaisedRef.current=false;raisedRef.current.clear();syncHands();
+        setCameraOn(false);setVideoFeeds([]);setHandRaised(false);setUnmuteRequested(false);handRaisedRef.current=false;raisedRef.current.clear();syncHands();
         toast.error("SEba Voice disconnected. Tap Enable Microphone to reconnect.");
       });
     try{
@@ -189,6 +206,17 @@ export default function ClassroomVoice({roomId,role,onRaisedHands}:{roomId:strin
       syncVideos(room);
     }catch(error){toast.error(error instanceof Error?error.message:"Camera could not start. Allow camera access in your browser.")}
     finally{setCameraBusy(false)}
+  };
+  const mediaAction=async(operation:"mute-all"|"mute-student"|"request-unmute"|"close-all-cameras",studentId?:string)=>{
+    setMediaBusy(true);
+    try{await classroom("media-control",{room_id:roomId,operation,student_id:studentId});toast.success(operation==="request-unmute"?"Student asked to turn on their microphone.":operation==="close-all-cameras"?"Class cameras turned off.":"Student microphones muted.")}
+    catch(error){toast.error(error instanceof Error?error.message:"Media control failed.")}
+    finally{setMediaBusy(false)}
+  };
+  const acceptUnmute=async()=>{
+    const room=roomRef.current;if(!room)return;
+    try{await room.localParticipant.setMicrophoneEnabled(true);setMuted(false);setUnmuteRequested(false)}
+    catch(error){toast.error(error instanceof Error?error.message:"Microphone could not start.")}
   };
   const toggleHand=async()=>{
     const next=!handRaised;
@@ -247,9 +275,12 @@ export default function ClassroomVoice({roomId,role,onRaisedHands}:{roomId:strin
         {needsAudioStart&&<button type="button" className="enable-sound" onClick={()=>void enableSound()} aria-label="Enable Sound" data-tooltip="Enable Sound"><Volume2/></button>}
         <button type="button" className={muted?"muted":""} onClick={()=>void toggleMute()} aria-label={muted?"Unmute microphone":"Mute microphone"} data-tooltip={muted?"Unmute microphone":"Mute microphone"}>{muted?<MicOff/>:<Mic/>}</button>
         <button type="button" disabled={cameraBusy} className={cameraOn?"camera-on":""} onClick={()=>void toggleCamera()} aria-label={cameraOn?"Turn camera off":"Turn camera on"} data-tooltip={cameraOn?"Turn camera off":"Turn camera on"}>{cameraOn?<Camera/>:<CameraOff/>}</button>
+        {role==="teacher"&&<button type="button" aria-expanded={mediaOpen} onClick={()=>setMediaOpen(value=>!value)} aria-label="Class media controls" data-tooltip="Class media controls"><Users/></button>}
         {role==="student"&&<button type="button" className={handRaised?"hand-raised":""} onClick={()=>void toggleHand()} aria-pressed={handRaised} aria-label={handRaised?"Lower hand":"Raise hand"} data-tooltip={handRaised?"Lower hand":"Raise hand"}><Hand/></button>}
         <button type="button" className="leave-voice" onClick={leave} aria-label="Leave Classroom Voice" data-tooltip="Leave classroom voice"><PhoneOff/></button>
       </>}
+    {role==="teacher"&&mediaOpen&&status==="live"&&<div className="seba-media-controls" role="dialog" aria-label="Class media controls"><header><strong>Class media</strong><button type="button" onClick={()=>setMediaOpen(false)} aria-label="Close media controls"><X/></button></header><div className="seba-media-actions"><button disabled={mediaBusy} onClick={()=>void mediaAction("mute-all")}><MicOff/>Mute all students</button><button disabled={mediaBusy} onClick={()=>void mediaAction("close-all-cameras")}><CameraOff/>Close all cameras</button></div><p>Students choose whether to accept an unmute request. Cameras can only be turned on by their owners.</p>{students.map(student=><div className="seba-media-student" key={student.user_id}><b>{student.display_name||student.username||"Student"}</b><button disabled={mediaBusy} onClick={()=>void mediaAction("mute-student",student.user_id)} aria-label={`Mute ${student.display_name||student.username||"student"}`}><MicOff/>Mute</button><button disabled={mediaBusy} onClick={()=>void mediaAction("request-unmute",student.user_id)} aria-label={`Ask ${student.display_name||student.username||"student"} to unmute`}><Mic/>Ask to unmute</button></div>)}</div>}
+    {role==="student"&&unmuteRequested&&<div className="seba-unmute-request" role="alert"><span>Teacher asks you to unmute your microphone.</span><button type="button" onClick={()=>void acceptUnmute()}>Unmute</button><button type="button" onClick={()=>setUnmuteRequested(false)}>Stay muted</button></div>}
     {videoHost&&videoFeeds.length>0&&createPortal(<div className="seba-camera-strip" aria-label="Live classroom cameras">{videoFeeds.map(feed=><VideoTile key={feed.id} feed={feed}/>)}</div>,videoHost)}
     {showPermissionHelp&&<div className="voice-permission-backdrop" role="presentation" onMouseDown={event=>{if(event.target===event.currentTarget)setShowPermissionHelp(false)}}><section className="voice-permission-dialog" role="dialog" aria-modal="true" aria-labelledby="voice-permission-title"><button type="button" className="voice-dialog-close" onClick={()=>setShowPermissionHelp(false)} aria-label="Close microphone help"><X/></button><div className="voice-dialog-icon"><MicOff/></div><h2 id="voice-permission-title">Allow microphone access</h2><p>For privacy, SEba cannot switch on a blocked microphone by itself. Change the permission, return here, then tap <b>Try Microphone Again</b>.</p><ol>{isIOS?<><li>Open the iPhone or iPad <b>Settings</b> app.</li><li>Open <b>Safari</b>, then <b>Microphone</b>, and choose <b>Allow</b>. You can also tap <b>aA</b> in Safari’s address bar → <b>Website Settings</b> → <b>Microphone</b> → <b>Allow</b>.</li></>:isAndroid?<><li>Tap the lock or site-settings icon beside the Chrome address.</li><li>Open <b>Permissions</b> → <b>Microphone</b> → <b>Allow</b>.</li><li>If Android privacy blocks it: <b>Settings</b> → <b>Privacy</b> → turn on <b>Microphone access</b>, then allow Chrome.</li></>:<><li>Click the lock or site-settings icon beside the browser address.</li><li>Set <b>Microphone</b> to <b>Allow</b>, then reload if your browser asks you to.</li></>}</ol><div className="voice-dialog-actions"><button type="button" onClick={()=>{setShowPermissionHelp(false);void start()}}><Mic/>Try Microphone Again</button><button type="button" className="voice-help-link" onClick={()=>window.open("https://support.google.com/chrome/answer/2693767","_blank","noopener,noreferrer")}><ExternalLink/>Browser Help</button></div></section></div>}
   </div>;

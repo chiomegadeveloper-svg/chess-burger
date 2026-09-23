@@ -845,6 +845,19 @@ export default async function handler(req: Req, res: Res) {
       if(reward.error){const message=String(reward.error.message??'Daily reward is unavailable.');if(/cb_daily_|schema cache|function|relation/i.test(message))fail(503,'Run supabase/0025_daily_login_rewards.sql in Supabase, then try again.');if(/already claimed/i.test(message))fail(409,"Today's reward is already claimed.");fail(409,message);}
       return res.status(200).json(reward.data);
     }
+    if(action==='cms-daily-rewards'||action==='save-daily-rewards'){
+      if(account.profile.role!=='owner')fail(403,'Owner access required for Daily Login settings.');
+      if(action==='cms-daily-rewards'){
+        const result=await client.rpc('cb_daily_reward_status',{p_user_id:account.id});
+        if(result.error)fail(503,'Run supabase/0035_editable_daily_login_rewards.sql in the app’s Supabase project.');
+        return res.status(200).json({rewards:result.data?.rewards??[]});
+      }
+      const rewards=body.rewards;
+      if(!Array.isArray(rewards)||rewards.length!==7||new Set(rewards.map((r:any)=>r.day)).size!==7||rewards.some((r:any)=>!Number.isInteger(r.day)||r.day<1||r.day>7||!['gold','banner','arena_ticket','bag_slot'].includes(r.kind)||!Number.isInteger(r.amount)||r.amount<1||r.amount>10000||r.kind==='banner'&&!/^(pastel|metal)-[a-z-]+$/.test(String(r.product_id||''))))fail(400,'Set a valid reward for all seven days.');
+      const saved=await client.rpc('cb_save_daily_reward_config',{p_owner_id:account.id,p_rewards:rewards});
+      if(saved.error)fail(/function|schema cache|relation/i.test(saved.error.message)?503:400,/function|schema cache|relation/i.test(saved.error.message)?'Run supabase/0035_editable_daily_login_rewards.sql in the app’s Supabase project.':saved.error.message);
+      return res.status(200).json({rewards:saved.data});
+    }
     if(action==='buy-feed-banner'){
       const productId=String(body.product_id??''),requestId=String(body.request_id??''),days=Number(body.days??0);
       if(!/^(pastel|metal)-[a-z-]{2,30}$/.test(productId)||![3,5,7].includes(days)||!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(requestId))fail(400,'Choose a valid Feed Banner rental.');

@@ -5,7 +5,7 @@ import fs from "node:fs";
 const api=fs.readFileSync("api/classroom.ts","utf8");
 
 test("LiveKit tokens require authenticated Supabase classroom access",()=>{
-  assert.match(api,/AccessToken, TrackSource/);
+  assert.match(api,/AccessToken, DataPacket_Kind, RoomServiceClient, TrackSource/);
   assert.match(api,/from "livekit-server-sdk"/);
   assert.match(api,/client\.auth\.getUser\(token\)/);
   assert.match(api,/action==="voice-token"/);

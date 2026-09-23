@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { AccessToken, TrackSource } from "livekit-server-sdk";
+import { AccessToken, DataPacket_Kind, RoomServiceClient, TrackSource } from "livekit-server-sdk";
 
 type Req={method?:string;headers:{authorization?:string|string[]};body?:Record<string,unknown>};
 type Res={status:(n:number)=>Res;json:(v:unknown)=>void;setHeader:(k:string,v:string)=>void};
@@ -39,6 +39,32 @@ export default async function handler(req:Req,res:Res){
       const accessToken=new AccessToken(apiKey,apiSecret,{identity:userId,name:participantName,ttl:"10m",metadata:JSON.stringify({role:teacher?"teacher":"student"})});
       accessToken.addGrant({roomJoin:true,room:`seba-${roomId}`,canPublish:true,canPublishSources:[TrackSource.MICROPHONE,TrackSource.CAMERA],canSubscribe:true,canPublishData:true});
       return res.status(200).json({server_url:livekitUrl,participant_token:await accessToken.toJwt()});
+    }
+    if(action==="media-control"){
+      const roomId=String(body.room_id||""),operation=String(body.operation||""),studentId=String(body.student_id||"");
+      if(!/^[a-f0-9-]{36}$/i.test(roomId)||!["mute-all","mute-student","request-unmute","close-all-cameras","ack-hand"].includes(operation))fail(400,"Invalid classroom media action.");
+      const active=await client.from("cb_classroom_rooms").select("id").eq("id",roomId).eq("teacher_id",userId).eq("status","active").gt("expires_at",new Date().toISOString()).maybeSingle();
+      if(active.error)fail(500,active.error.message);
+      if(!active.data)fail(403,"Only this room's active teacher can control class media.");
+      if(["mute-student","request-unmute","ack-hand"].includes(operation)){
+        if(!/^[a-f0-9-]{36}$/i.test(studentId))fail(400,"Choose a student.");
+        const enrolled=await client.from("cb_classroom_enrollments").select("student_id").eq("room_id",roomId).eq("student_id",studentId).gt("access_expires_at",new Date().toISOString()).maybeSingle();
+        if(enrolled.error)fail(500,enrolled.error.message);
+        if(!enrolled.data)fail(404,"Student is no longer in this classroom.");
+      }
+      const livekitUrl=process.env.LIVEKIT_URL||"",apiKey=process.env.LIVEKIT_API_KEY||"",apiSecret=process.env.LIVEKIT_API_SECRET||"";
+      if(!livekitUrl||!apiKey||!apiSecret)fail(503,"SEba media is not configured.");
+      const service=new RoomServiceClient(livekitUrl.replace(/^wss:/,"https:").replace(/^ws:/,"http:"),apiKey,apiSecret),liveRoom=`seba-${roomId}`;
+      const people=await service.listParticipants(liveRoom);
+      if(["mute-student","request-unmute","ack-hand"].includes(operation)&&!people.some(person=>person.identity===studentId))fail(409,"This student is not connected to class media.");
+      const targets=people.filter(person=>operation==="close-all-cameras"||operation==="mute-all"?operation==="close-all-cameras"||person.identity!==userId:person.identity===studentId);
+      if(operation==="mute-all"||operation==="mute-student"||operation==="close-all-cameras"){
+        const source=operation==="close-all-cameras"?TrackSource.CAMERA:TrackSource.MICROPHONE;
+        await Promise.all(targets.flatMap(person=>person.tracks.filter(track=>track.source===source&&!track.muted).map(track=>service.mutePublishedTrack(liveRoom,person.identity,track.sid,true))));
+      }
+      const command=operation==="mute-all"||operation==="mute-student"?"media:mute":operation==="close-all-cameras"?"media:camera-off":operation==="request-unmute"?"media:unmute-request":"hand:ack";
+      await service.sendData(liveRoom,new TextEncoder().encode(command),DataPacket_Kind.RELIABLE,{destinationIdentities:operation==="mute-student"||operation==="request-unmute"||operation==="ack-hand"?[studentId]:operation==="mute-all"?people.filter(person=>person.identity!==userId).map(person=>person.identity):people.map(person=>person.identity)});
+      return res.status(200).json({ok:true,affected:targets.length});
     }
     if(action==="state"){
       await client.from("cb_classroom_wallets").upsert({user_id:userId},{onConflict:"user_id",ignoreDuplicates:true});
