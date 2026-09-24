@@ -37,3 +37,27 @@
 .profile-portfolio .portfolio-grid .portfolio-open img{display:block!important;width:100%!important;height:auto!important;aspect-ratio:4/3;max-width:none;object-fit:cover}
 .profile-portfolio .portfolio-grid .portfolio-open strong{display:-webkit-box;width:100%;min-width:0;padding:10px 12px;color:#fff;font-size:13px;line-height:1.3;white-space:normal;overflow:hidden;overflow-wrap:anywhere;-webkit-box-orient:vertical;-webkit-line-clamp:2}
 @media(max-width:650px){.portfolio-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.profile-portfolio{padding:15px}.portfolio-empty{min-height:125px}}
+.portfolio-discussion{margin-top:23px;border-top:1px solid #ffffff24;padding-top:17px}
+.portfolio-reactions{display:flex;flex-wrap:wrap;gap:9px}
+.portfolio-reactions button{display:inline-flex;align-items:center;gap:8px;border:1px solid #8b7752;border-radius:10px;padding:9px 13px;background:#273339;color:#eed5a4;cursor:pointer}
+.portfolio-reactions button[aria-pressed=true]{border-color:#e9c26e;background:#564528;color:#fff0bc}
+.portfolio-reactions button:disabled{cursor:default;opacity:.8}
+.portfolio-reactions b{font-size:12px}
+.portfolio-discussion h3{display:flex;align-items:center;gap:8px;margin:24px 0 12px;font-size:16px}
+.portfolio-comments,.portfolio-thread>ul{list-style:none;padding:0;margin:0}
+.portfolio-thread{border-bottom:1px solid #ffffff17;padding:12px 0}
+.portfolio-comment{display:flex;align-items:flex-start;gap:10px;margin:0 0 11px}
+.portfolio-comment.is-reply{margin-left:36px;padding-left:12px;border-left:2px solid #baa46b66}
+.portfolio-comment>img,.portfolio-comment-avatar{flex:none;width:30px;height:30px;object-fit:cover;border-radius:50%;background:#58717b;display:grid;place-items:center}
+.portfolio-comment>div{min-width:0;flex:1}
+.portfolio-comment strong{display:block;font-size:12px}
+.portfolio-comment p{margin:3px 0!important;overflow-wrap:anywhere;font-size:13px;line-height:1.45!important}
+.portfolio-comment-actions{display:flex;gap:12px;padding:0!important}
+.portfolio-comment-actions button,.portfolio-reply-indicator button{border:0!important;padding:3px!important;background:transparent!important;color:#b9dce0!important;font-size:11px}
+.portfolio-comment-form{margin-top:16px;padding:0!important}
+.portfolio-comment-form>label{display:block;font-size:12px;margin:0 0 7px;color:#d6dbd8}
+.portfolio-comment-form>div:not(.portfolio-reply-indicator){display:flex;gap:7px;padding:0!important}
+.portfolio-comment-form input{flex:1;min-width:0;border:1px solid #64747a;border-radius:9px;padding:10px;background:#131c20;color:#fff;font:inherit;font-size:13px}
+.portfolio-comment-form>div>button{display:inline-flex;align-items:center;gap:5px;border:1px solid #cfac65;border-radius:9px;padding:8px 11px;background:#493b24;color:#ffe2a5}
+.portfolio-comment-form small{display:block;text-align:right;color:#9eafb2;font-size:11px;margin-top:5px}
+.portfolio-reply-indicator{display:flex;justify-content:space-between;gap:8px;padding:6px 0!important;color:#b9dce0;font-size:11px}

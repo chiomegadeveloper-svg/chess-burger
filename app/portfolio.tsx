@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Camera, Plus, Trash2, X } from "lucide-react";
 import { getSupabase } from "./supabase";
 import { toWebpUnder500Kb, validateImageFile } from "./media";
+import PortfolioDiscussion from "./portfolio-discussion";
 import "./portfolio.css";
 
 type Entry = { user_id: string; slot: number; image_url: string; title: string; article: string; updated_at: string };
@@ -118,7 +119,7 @@ export default function Portfolio({ userId, owner = false }: { userId: string; o
     </div>}
     {selected && <div className="portfolio-backdrop" role="presentation" onClick={() => setSelected(null)}><article className="portfolio-dialog" role="dialog" aria-modal="true" aria-label={selected.title} onClick={event => event.stopPropagation()}>
       <button className="portfolio-close" onClick={() => setSelected(null)} aria-label="Close article"><X/></button>
-      <img src={selected.image_url} alt={selected.title}/><div><h2>{selected.title}</h2><p>{selected.article}</p>{owner && <button type="button" onClick={() => edit(selected.slot)}>Edit article</button>}</div>
+      <img src={selected.image_url} alt={selected.title}/><div><h2>{selected.title}</h2><p>{selected.article}</p>{owner && <button type="button" onClick={() => edit(selected.slot)}>Edit article</button>}<PortfolioDiscussion userId={userId} slot={selected.slot}/></div>
     </article></div>}
     {draft && owner && <div className="portfolio-backdrop" role="presentation" onClick={() => !busy && setDraft(null)}><section className="portfolio-dialog portfolio-form" role="dialog" aria-modal="true" aria-label="Edit portfolio article" onClick={event => event.stopPropagation()}>
       <button className="portfolio-close" type="button" disabled={busy} onClick={() => setDraft(null)} aria-label="Close editor"><X/></button>
