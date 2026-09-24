@@ -6,6 +6,13 @@ const uuid=(value:unknown)=>/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0
 const first=(value:string|string[]|undefined)=>Array.isArray(value)?value[0]:value;
 const fail=(status:number,message:string)=>Object.assign(new Error(message),{status});
 const message=(error:unknown)=>error instanceof Error?error.message:String(error);
+const regionalSlugs=['tacloban','leyte','samar','biliran','s-leyte','e-samar','n-samar','cebu','davao','manila'];
+function guildArtwork<T extends {id:string;is_default?:boolean;logo_url:string;cover_url?:string}>(row:T):T{
+ const region=regionalSlugs.findIndex((_,index)=>row.id===`7dcb0000-0000-4000-8000-${(index+1).toString(16).padStart(12,'0')}`);
+ if(region<0)return row;
+ const slug=regionalSlugs[region];
+ return {...row,logo_url:`/guild/default-${slug}-logo.webp`,...(row.cover_url!==undefined?{cover_url:`/guild/default-${slug}-cover.webp`}:{})};
+}
 
 // Validate actual stored bytes instead of trusting a client-supplied URL or MIME type.
 function webpSize(bytes:Uint8Array){
@@ -48,6 +55,7 @@ export default async function handler(req:Req,res:Res){
     const kind=String(body.kind),guildId=String(body.guild_id),path=String(body.path??'');
     if(!['logo','cover'].includes(kind)||!uuid(guildId)||!new RegExp(`^${userId}/guild-${guildId}-${kind}-[0-9a-f-]{36}\\.webp$`,'i').test(path))throw fail(400,'Invalid guild image.');
     const guild=await db.from('cb_guilds').select('id,creator_id,leader_id').eq('id',guildId).single();
+    if(regionalSlugs.some((_,index)=>guildId===`7dcb0000-0000-4000-8000-${(index+1).toString(16).padStart(12,'0')}`))throw fail(403,'Default guild logos and covers are permanent.');
     if(guild.error||![guild.data.creator_id,guild.data.leader_id].includes(userId))throw fail(403,'Only the guild creator or leader can edit images.');
     const membership=await db.from('cb_guild_members').select('user_id').eq('guild_id',guildId).eq('user_id',userId).maybeSingle();
     if(membership.error||!membership.data)throw fail(403,'You must still belong to this guild to edit its images.');
@@ -90,7 +98,7 @@ export default async function handler(req:Req,res:Res){
    listQuery.order('guild_points',{ascending:false}).order('created_at',{ascending:true}).range((page-1)*10,page*10-1),
    code?db.from('cb_guilds').select('id').eq('guild_code',code).maybeSingle():Promise.resolve(null),
    db.from('cb_guild_join_requests').select('id,guild_id,created_at').eq('user_id',userId).eq('status','pending').limit(1).maybeSingle(),
-   db.from('cb_guilds').select('id,name,logo_url').eq('is_default',true).order('name')
+   db.from('cb_guilds').select('id,name,logo_url,is_default').eq('is_default',true).order('name')
   ]);
   if(guilds.error)throw guilds.error;
   if(regions.error&&!/is_default|schema cache|does not exist/i.test(regions.error.message))throw regions.error;
@@ -98,7 +106,7 @@ export default async function handler(req:Req,res:Res){
   const detailId=code?lookup?.data?.id:selected||me.data?.guild_id;
   const detailRow=detailId?await db.from('cb_guild_directory').select('*').eq('id',detailId).maybeSingle():null;
   if(detailRow?.error)throw detailRow.error;
-  const guild=detailRow?.data;
+  const guild=detailRow?.data?guildArtwork(detailRow.data):null;
   const isMember=!!guild&&me.data?.guild_id===guild.id;
   const isLeader=isMember&&guild.leader_id===userId;
   if(myRequest.error&&!/cb_guild_join_requests|schema cache|does not exist/i.test(myRequest.error.message))throw myRequest.error;
@@ -133,6 +141,6 @@ export default async function handler(req:Req,res:Res){
    }
   }
   const detail=guild?isMember?{...guild,members}:{id:guild.id,name:guild.name,logo_url:guild.logo_url,cover_url:guild.cover_url,guild_points:guild.guild_points,member_count:guild.member_count,guild_code:guild.guild_code,is_default:guild.is_default,leader_id:guild.leader_id}:null;
-  return res.status(200).json({page,total:guilds.count??0,eligible:Number(profile.data.cbr)>=177,my_guild_id:me.data?.guild_id??null,my_request:myRequest.data??null,requests,activity,kick_notice:kickNotice.data??null,regional_guilds:regions.data??[],guilds:(guilds.data??[]).map(row=>({id:row.id,name:row.name,logo_url:row.logo_url,guild_points:row.guild_points})),detail});
+  return res.status(200).json({page,total:guilds.count??0,eligible:Number(profile.data.cbr)>=177,my_guild_id:me.data?.guild_id??null,my_request:myRequest.data??null,requests,activity,kick_notice:kickNotice.data??null,regional_guilds:(regions.data??[]).map(guildArtwork),guilds:(guilds.data??[]).map(row=>{const art=guildArtwork(row);return {id:art.id,name:art.name,logo_url:art.logo_url,guild_points:art.guild_points}}),detail});
  }catch(error){const status=Number((error as {status?:number}).status)||500;if(status===500)console.error('Guild request failed',error);return res.status(status).json({error:status===500?'Guild request failed. Please retry.':message(error)});}
 }
