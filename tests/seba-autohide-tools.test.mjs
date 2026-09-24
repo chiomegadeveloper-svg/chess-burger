@@ -5,13 +5,13 @@ import {readFileSync} from "node:fs";
 const workshop=readFileSync(new URL("../app/classroom-workshop.tsx",import.meta.url),"utf8");
 const styles=readFileSync(new URL("../app/classroom-workshop.css",import.meta.url),"utf8");
 
-test("SEba teacher tools auto-hide with hover and button access",()=>{
-  assert.match(workshop,/toolsOpen/);
-  assert.match(workshop,/teacher-toolbar-shell/);
-  assert.match(workshop,/aria-expanded=\{toolsOpen\}/);
-  assert.match(styles,/\.teacher-toolbar-shell:hover>\.teacher-toolbar/);
-  assert.match(styles,/\.teacher-toolbar-shell\.open>\.teacher-toolbar/);
-  assert.match(styles,/max-height:0/);
+test("SEba teacher tools stay visible without an auto-hide toggle",()=>{
+  const oneRow=styles.slice(styles.lastIndexOf("/* Authoritative one-row SEba toolbar"));
+  assert.match(workshop,/className="teacher-toolbar-shell"/);
+  assert.match(oneRow,/\.teacher-toolbar-shell > \.teacher-toolbar \{\s*display: flex;/);
+  assert.match(oneRow,/overflow-x: auto;\s*overflow-y: hidden;/);
+  assert.doesNotMatch(workshop,/toolsOpen|Auto-hide Tools|onPointerLeave=.*setToolsOpen/);
+  assert.doesNotMatch(oneRow,/\.teacher-toolbar-shell\.open > \.teacher-toolbar|\.teacher-toolbar-shell:hover > \.teacher-toolbar/);
 });
 
 test("SEba board can maximize and restore without dropping setup tools",()=>{

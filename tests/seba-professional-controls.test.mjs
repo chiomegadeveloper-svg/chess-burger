@@ -16,13 +16,13 @@ test("SEba teacher console uses named professional control groups", () => {
 test("teacher controls form one compact icon row", () => {
   assert.ok(css.lastIndexOf(oneRowMarker) > css.lastIndexOf("/* Polished responsive SEba control console. */"), "one-row rules must be the final layout override");
   assert.match(finalToolbarCss, /\.teacher-toolbar-shell \{\s*display: flex;/);
-  assert.match(finalToolbarCss, /\.teacher-toolbar-shell > \.teacher-toolbar \{\s*display: none;[\s\S]*?flex: 1 1 auto;[\s\S]*?flex-wrap: nowrap/);
+  assert.match(finalToolbarCss, /\.teacher-toolbar-shell > \.teacher-toolbar \{\s*display: flex;[\s\S]*?flex: 1 1 auto;[\s\S]*?flex-wrap: nowrap/);
   assert.match(finalToolbarCss, /\.teacher-toolbar > \.tool-group,[\s\S]*?grid-template-rows: auto 36px/);
   assert.match(finalToolbarCss, /\.teacher-toolbar \.tool-group button \{[\s\S]*?flex: 0 0 36px;[\s\S]*?width: 36px;[\s\S]*?height: 36px/);
 });
 
 test("teacher toolbar stays one row and scrolls on smaller screens", () => {
-  assert.match(finalToolbarCss, /\.teacher-toolbar-shell\.open > \.teacher-toolbar,[\s\S]*?display: flex;[\s\S]*?overflow-x: auto;[\s\S]*?overflow-y: hidden/);
+  assert.match(finalToolbarCss, /\.teacher-toolbar-shell > \.teacher-toolbar \{[\s\S]*?overflow-x: auto;[\s\S]*?overflow-y: hidden/);
   assert.match(finalToolbarCss, /\.teacher-toolbar \.tool-group > div:not\(\.piece-palette\):not\(\.ai-move-line\) \{[\s\S]*?display: flex;[\s\S]*?flex-wrap: nowrap/);
   assert.match(finalToolbarCss, /@media \(max-width: 700px\)[\s\S]*?\.teacher-toolbar-handle button span \{\s*display: none;/);
 });
@@ -33,7 +33,7 @@ test("teacher actions are accessible icon-first controls with hover labels", () 
   assert.match(source, /className="tool-color-dot red"/);
   assert.match(finalToolbarCss, /\.teacher-toolbar \.tool-button-label \{\s*display: none;/);
   assert.match(source, /aria-label="Clear board" title="Clear board"/);
-  assert.match(source, /aria-label="Teacher tools"/);
+  assert.match(source, /<aside id="seba-teacher-tools" className="teacher-toolbar" aria-label="Teacher tools">/);
   assert.match(source, /<div className="ai-reader-insights" aria-live="polite">/);
 });
 
