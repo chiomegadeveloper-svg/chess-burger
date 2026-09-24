@@ -890,13 +890,13 @@ export default async function handler(req: Req, res: Res) {
     }
     if(action==='buy-feed-banner'){
       const productId=String(body.product_id??''),requestId=String(body.request_id??''),days=Number(body.days??0);
-      if(!/^(pastel|metal)-[a-z-]{2,30}$/.test(productId)||![3,5,7].includes(days)||!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(requestId))fail(400,'Choose a valid Feed Banner rental.');
+      if(!/^(pastel|metal|cute|warrior|animated|robot)-[a-z0-9-]{1,30}$/.test(productId)||(!/^(cute|warrior|animated|robot)-/.test(productId)&&![3,5,7].includes(days))||(/^(cute|warrior|animated|robot)-/.test(productId)&&days!==30)||!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(requestId))fail(400,'Choose a valid Feed Banner rental.');
       const bought=await client.rpc('cb_buy_feed_banner_timed',{p_user_id:account.id,p_product_id:productId,p_days:days,p_request_id:requestId});
-      if(bought.error){const message=String(bought.error.message??'Purchase failed.');if(/cb_buy_feed_banner_timed|cb_user_items|expires_at|schema cache|function/i.test(message))fail(503,'Run supabase/0022_feed_banner_rentals.sql in Supabase, then try again.');if(/not enough gold/i.test(message))fail(409,'You do not have enough Gold for this rental.');fail(409,message);}
+      if(bought.error){const message=String(bought.error.message??'Purchase failed.');if(/cb_buy_feed_banner_timed|cb_user_items|expires_at|schema cache|function/i.test(message))fail(503,'Run supabase/0057_graphic_feed_banners.sql in Supabase, then try again.');if(/not enough gold/i.test(message))fail(409,'You do not have enough Gold for this rental.');fail(409,message);}
       return res.status(200).json(bought.data);
     }
     if(action==='activate-feed-banner'){
-      const productId=String(body.product_id??'');if(!/^(pastel|metal)-[a-z-]{2,30}$/.test(productId))fail(400,'Choose a valid Feed Banner.');
+      const productId=String(body.product_id??'');if(!/^(pastel|metal|cute|warrior|animated|robot)-[a-z0-9-]{1,30}$/.test(productId))fail(400,'Choose a valid Feed Banner.');
       const activated=await client.rpc('cb_activate_feed_banner',{p_user_id:account.id,p_product_id:productId});
       if(activated.error){const message=String(activated.error.message??'Activation failed.');if(/cb_activate_feed_banner|expires_at|schema cache|function/i.test(message))fail(503,'Run supabase/0022_feed_banner_rentals.sql in Supabase, then try again.');if(/expired|not owned/i.test(message))fail(403,'This banner rental has expired. Rent it again to activate it.');fail(409,message);}
       return res.status(200).json({active:activated.data,gold:Number(account.profile.gold_points??0)});

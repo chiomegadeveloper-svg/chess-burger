@@ -24,10 +24,11 @@ import { arena } from "./arena-client";
 import { SocialButtons } from "./social";
 import { levelFor } from "./cbr";
 import type { ArenaMatch, ArenaPlayer } from "./game-rules";
-import { feedBanner } from "./feed-banner-catalog";
+import { feedBanner, isGraphicBanner } from "./feed-banner-catalog";
 import DailyRewards from "./daily-rewards";
 import "./arena-champion-feed.css";
 import "./guild-feed.css";
+import "./graphic-feed-banners.css";
 type CommunityEvent = FeedEvent & { origin?: "arena" };
 type OnlinePlayer = ArenaPlayer & { available: boolean };
 
@@ -961,7 +962,7 @@ export default function CommunityFeed({
           return (
             <li
               key={event.id}
-              className={`feed-cloud kind-${event.kind}${!announcement && event.guild_name ? " has-guild" : ""}${banner ? " has-feed-banner" : ""}${arenaChampion ? " grand-arena-champion-feed" : ""}`}
+              className={`feed-cloud kind-${event.kind}${!announcement && event.guild_name ? " has-guild" : ""}${banner ? " has-feed-banner" : ""}${banner && isGraphicBanner(banner) ? " has-graphic-banner" : ""}${banner?.tier === "animated" ? " animated-graphic-banner" : ""}${arenaChampion ? " grand-arena-champion-feed" : ""}`}
               style={bannerStyle}
             >
               <button

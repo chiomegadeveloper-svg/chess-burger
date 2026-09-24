@@ -17,6 +17,7 @@ import {
   FEED_BANNER_DURATIONS,
   feedBanner,
   feedBannerRentalPrice,
+  isGraphicBanner,
   type FeedBanner,
   type FeedBannerDuration,
 } from "./feed-banner-catalog";
@@ -24,6 +25,7 @@ import type { PlayerProfile } from "./supabase";
 import { getSupabase } from "./supabase";
 import { classroom } from "./classroom-client";
 import "./feed-banner-shop.css";
+import "./graphic-feed-banners.css";
 import "./shop-polish.css";
 import "./rpg-bag.css";
 import "./bag-upgrades.css";
@@ -240,7 +242,7 @@ function BannerTile({
         <h3>{banner.name}</h3>
         <span className={`banner-tier-tag ${banner.tier}`}>
           {banner.tier === "metallic" && <Crown size={10} />}{" "}
-          {banner.tier === "metallic" ? "Premium" : "Pastel"}
+          {({ pastel: "Pastel", metallic: "Premium", cute: "Cute", warrior: "Warrior", animated: "Animated", robot: "Robot" } as const)[banner.tier]}
         </span>
         {expiresAt && (
           <small className="rental-expiry">{rentalLabel(expiresAt)}</small>
@@ -289,7 +291,7 @@ export function ShopPage({
     try {
       const data = (await arena("buy-feed-banner", {
         product_id: banner.id,
-        days,
+        days: isGraphicBanner(banner) ? 30 : days,
         request_id: crypto.randomUUID(),
       })) as { active: string; gold: number; expires_at: string };
       setState((current) => ({
@@ -302,7 +304,7 @@ export function ShopPage({
         ],
       }));
       toast.success(
-        `${banner.name} rented for ${days === 7 ? "1 week" : `${days} days`} and activated.`,
+        `${banner.name} rented for ${isGraphicBanner(banner) ? "1 month" : days === 7 ? "1 week" : `${days} days`} and activated.`,
       );
       onChanged();
     } catch (error) {
@@ -326,8 +328,8 @@ export function ShopPage({
         <div className="page-heading banner-heading">
           <div>
             <span className="shop-eyebrow">Personalize your feed</span>
-            <h1>Feed Banner Colors</h1>
-            <p>Choose a signature color for every community post you share.</p>
+            <h1>Feed Banners</h1>
+            <p>Choose a color or graphic for every community post you share.</p>
           </div>
           <span className="banner-wallet">
             <img className="gold-coin" src="/inventory/cbg-coin.webp" alt="CBG" />
@@ -336,7 +338,7 @@ export function ShopPage({
           </span>
         </div>
         <fieldset className="rental-duration">
-          <legend>Choose rental duration</legend>
+          <legend>Color banner duration · graphics last one month</legend>
           {FEED_BANNER_DURATIONS.map((option) => (
             <button
               type="button"
@@ -347,8 +349,7 @@ export function ShopPage({
             >
               <strong>{option === 7 ? "1 Week" : `${option} Days`}</strong>
               <span>
-                Pastel {feedBannerRentalPrice("pastel", option)} · Premium{" "}
-                {feedBannerRentalPrice("metallic", option)} Gold
+                Choose this duration for pastel and metallic colors
               </span>
             </button>
           ))}
@@ -357,25 +358,21 @@ export function ShopPage({
           <p className="account-note">Loading banner collection…</p>
         ) : (
           <>
-            {(["pastel", "metallic"] as const).map((tier) => (
+            {(["pastel", "metallic", "cute", "warrior", "animated", "robot"] as const).map((tier) => (
               <section className={`banner-tier ${tier}`} key={tier}>
                 <div className="banner-tier-heading">
                   <div>
                     <span>
-                      {tier === "pastel"
-                        ? "Basic collection"
-                        : "Premium collection"}
+                      {tier === "pastel" ? "Basic collection" : tier === "metallic" ? "Premium collection" : "Graphic collection · one month"}
                     </span>
                     <h2>
-                      {tier === "pastel" ? "Pastel Colors" : "Metallic Colors"}
+                      {({ pastel: "Pastel Colors", metallic: "Metallic Colors", cute: "Cute Chess", warrior: "Electric Warriors", animated: "Animated Chess", robot: "Robot Chess" } as const)[tier]}
                     </h2>
                     <p>
-                      {tier === "pastel"
-                        ? "Soft, clean colors for a friendly feed."
-                        : "Reflective finishes for a distinctive profile."}
+                      {({ pastel: "Soft, clean colors for a friendly feed.", metallic: "Reflective finishes for a distinctive profile.", cute: "Playful pawns, hearts and queens.", warrior: "Electric armor and powerful chess pieces.", animated: "Cheerful characters with moving effects.", robot: "Glowing chess friends from the future." } as const)[tier]}
                     </p>
                   </div>
-                  <b>10 colors</b>
+                  <b>10 {tier === "pastel" || tier === "metallic" ? "colors" : "graphics"}</b>
                 </div>
                 <div className="banner-products">
                   {FEED_BANNERS.filter((banner) => banner.tier === tier).map(
@@ -392,8 +389,8 @@ export function ShopPage({
                             <>
                               <img className="gold-coin" src="/inventory/cbg-coin.webp" alt="" />
                               {rental ? "Extend" : "Rent"}{" "}
-                              {days === 7 ? "1 week" : `${days} days`} ·{" "}
-                              {feedBannerRentalPrice(banner.tier, days)} Gold
+                              {isGraphicBanner(banner) ? "1 month" : days === 7 ? "1 week" : `${days} days`} ·{" "}
+                              {feedBannerRentalPrice(banner.tier, days, banner.price)} Gold
                             </>
                           }
                           onAction={() => void act(banner)}

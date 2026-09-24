@@ -1,0 +1,28 @@
+.feed-page .feed-cloud.has-graphic-banner {
+  background: linear-gradient(90deg, #08131ac4, #07131a28 74%), var(--feed-banner) !important;
+  color: #fff !important;
+  border: 1px solid #ffffff7a !important;
+}
+.feed-cloud.has-graphic-banner .feed-copy {
+  position: relative;
+  z-index: 1;
+  border-radius: 12px;
+  padding: 5px 9px;
+  background: #07131abf;
+  text-shadow: 0 1px 3px #000 !important;
+}
+.feed-cloud.has-graphic-banner .feed-copy p,
+.feed-cloud.has-graphic-banner .feed-copy strong,
+.feed-cloud.has-graphic-banner .feed-name,
+.feed-cloud.has-graphic-banner .feed-activity,
+.feed-cloud.has-graphic-banner time,
+.feed-cloud.has-graphic-banner .feed-kind,
+.feed-cloud.has-graphic-banner .heart-button { color: #fff !important; text-shadow: 0 1px 3px #000 !important; }
+.feed-cloud.has-graphic-banner .feed-avatar,
+.feed-cloud.has-graphic-banner .feed-level-emblem,
+.feed-cloud.has-graphic-banner .feed-guild-logo { filter: drop-shadow(0 2px 5px #000); }
+.banner-tier.cute,.banner-tier.warrior,.banner-tier.animated,.banner-tier.robot { border-color: #6c6675; }
+.banner-tier.cute .banner-swatch,.banner-tier.warrior .banner-swatch,.banner-tier.animated .banner-swatch,.banner-tier.robot .banner-swatch { width: 100% !important; height: auto !important; aspect-ratio: 3 / 1; border-radius: 9px !important; border-color: #dcbf75 !important; }
+@keyframes chess-banner-glow { 0%,100% { box-shadow: inset 0 0 16px #ffd6ff55, 0 7px 18px #0005; } 50% { box-shadow: inset 0 0 24px #93edff91, 0 7px 20px #0006; } }
+.feed-page .feed-cloud.animated-graphic-banner { animation: chess-banner-glow 3.5s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .feed-page .feed-cloud.animated-graphic-banner { animation: none; } }
