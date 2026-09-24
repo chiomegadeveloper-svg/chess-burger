@@ -18,7 +18,8 @@ test("profile completion requires identity fields and a profile photo", () => {
 });
 
 test("incomplete users remain inside registration without app navigation", () => {
-  assert.match(page, /if \(member !== true && !showSplash\)/);
+  assert.match(page, /if \(\(member !== true \|\| !isProfileComplete\(profile\)\) && !showSplash\)/);
+  assert.match(page, /if \(member && isProfileComplete\(profile\)\)/);
   assert.match(page, /registrationOnly/);
   assert.match(page, /registration-locked-shell/);
   assert.match(page, /Your name, username, country, and profile photo are required/);

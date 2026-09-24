@@ -421,13 +421,13 @@ function AppPage() {
   useEffect(() => {
     if (showSplash || member === null || welcomeDecision.current) return;
     welcomeDecision.current = true;
-    if (member) {
+    if (member && isProfileComplete(profile)) {
       setShowWelcome(true);
       return;
     }
     setShowWelcome(false);
     setTab("profile");
-  }, [showSplash, member]);
+  }, [showSplash, member, profile]);
   useEffect(() => {
     if (!profile || profile.user_id === "guest-device") return;
     const userId = profile.user_id;
@@ -757,7 +757,7 @@ function AppPage() {
         )}
       </section>
     );
-  if (member !== true && !showSplash)
+  if ((member !== true || !isProfileComplete(profile)) && !showSplash)
     return (
       <main className="app-shell registration-locked-shell">
         <header className="app-header">
