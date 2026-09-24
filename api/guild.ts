@@ -6,7 +6,7 @@ const uuid=(value:unknown)=>/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0
 const first=(value:string|string[]|undefined)=>Array.isArray(value)?value[0]:value;
 const fail=(status:number,message:string)=>Object.assign(new Error(message),{status});
 const message=(error:unknown)=>error instanceof Error?error.message:String(error);
-const regionalSlugs=['tacloban','leyte','samar','biliran','s-leyte','e-samar','n-samar','cebu','davao','manila'];
+const regionalSlugs=['tacloban','leyte','samar','biliran','s-leyte','e-samar','n-samar','cebu','davao','manila','ormoc','tambay'];
 function guildArtwork<T extends {id:string;is_default?:boolean;logo_url:string;cover_url?:string}>(row:T):T{
  const region=regionalSlugs.findIndex((_,index)=>row.id===`7dcb0000-0000-4000-8000-${(index+1).toString(16).padStart(12,'0')}`);
  if(region<0)return row;
