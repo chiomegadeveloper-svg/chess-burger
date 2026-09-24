@@ -1157,18 +1157,18 @@
 .piece-side-tray button.active{border-color:#69e8f0;background:#17434b;box-shadow:0 0 0 2px #56dfe744,0 0 14px #32dbe866}
 .white-tray button{color:#fffdf2;text-shadow:0 1px 0 #607078,0 3px 3px #000}
 .black-tray button{color:#101619;text-shadow:0 1px 1px #ffffff77}
-.board-zoom-control{position:absolute;left:calc(100% + 10px);top:50%;display:flex;flex-direction:column;align-items:center;gap:6px;box-sizing:border-box;min-width:54px;padding:8px 6px;border:1px solid #35606a;border-radius:16px;background:linear-gradient(160deg,#12262d,#091419);box-shadow:0 10px 25px #0008;transform:translateY(-50%)}
+.board-zoom-control{grid-column:1/-1;display:flex;flex-direction:row;align-items:center;justify-self:center;gap:8px;box-sizing:border-box;width:min(100%,540px);padding:6px 10px;margin-bottom:10px;border:1px solid #35606a;border-radius:12px;background:linear-gradient(160deg,#12262d,#091419);box-shadow:0 8px 18px #0006}
 .board-zoom-control button{display:grid;place-items:center;width:36px;height:36px;padding:0;border:1px solid #49636b;border-radius:10px;background:#102128;color:#77e8ef}
 .board-zoom-control button:hover:not(:disabled){border-color:#f2c758;color:#ffe18b}
 .board-zoom-control button:disabled{cursor:not-allowed;opacity:.32}
 .board-zoom-control button svg{width:18px;height:18px}
-.board-zoom-control input{width:26px;height:148px;margin:0;accent-color:#3fdbe5;direction:rtl;writing-mode:vertical-lr}
+.board-zoom-control input{flex:1;min-width:80px;height:28px;margin:0;accent-color:#3fdbe5;direction:ltr;writing-mode:horizontal-tb}
 .board-zoom-control output{color:#f5cf69;font-size:10px;font-weight:900}
 .board-zoom-control .zoom-fit{display:flex;width:auto;height:30px;gap:4px;padding:0 7px;color:#f1d376;font-size:8px;font-weight:800}
 .board-zoom-control .zoom-fit svg{width:13px;height:13px}
 .master-board-panel{width:min(850px,100%)}
 @media(max-width:1250px){.teacher-toolbar{grid-template-columns:repeat(3,minmax(0,1fr))}.teacher-toolbar .piece-setup{grid-column:auto}}
-@media(max-width:1100px){.board-piece-layout{max-width:min(100%,calc(100dvh - 82px))}.board-zoom-control{position:static;grid-column:1/-1;flex-direction:row;justify-self:center;min-width:0;padding:5px 8px;transform:none}.board-zoom-control input{width:min(200px,38vw);height:26px;direction:ltr;writing-mode:horizontal-tb}.board-zoom-control button{width:32px;height:32px}.board-zoom-control .zoom-fit{height:28px}}
+@media(max-width:1100px){.board-piece-layout{max-width:min(100%,calc(100dvh - 82px))}.board-zoom-control{min-width:0;padding:5px 8px}.board-zoom-control input{height:26px}.board-zoom-control button{width:32px;height:32px}.board-zoom-control .zoom-fit{height:28px}}
 @media(max-width:760px){.teacher-toolbar{grid-template-columns:repeat(2,minmax(0,1fr))}.teacher-toolbar .piece-setup{grid-column:1/-1}.board-piece-layout{grid-template-columns:38px minmax(0,1fr) 38px;max-width:min(100%,calc(100dvh - 64px));gap:4px}.piece-side-tray{gap:4px;padding:6px 3px;border-radius:10px}.piece-side-tray small{font-size:6px}.piece-side-tray button{border-radius:7px;font-size:clamp(22px,7vw,30px)}}
 @media(max-width:760px){.piece-tray-column{gap:5px}.board-class-media-trigger{width:38px;border-radius:9px}}
 @media(max-width:420px){.board-piece-layout{grid-template-columns:34px minmax(0,1fr) 34px;gap:3px}.piece-side-tray{padding:4px 2px}.piece-side-tray small{display:none}.piece-side-tray button{border-radius:6px;font-size:22px}}
