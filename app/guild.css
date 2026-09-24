@@ -43,3 +43,11 @@
 .guild-search button,.guild-code button{padding:7px 10px;border:1px solid #a48c55;border-radius:9px;background:#40331e;color:#ffe3a6;font-size:10px}
 .guild-row-name strong{font-size:13px}
 .guild-code{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:7px;color:#edcf84;font-size:10px;font-weight:700}
+/* Seven permanent regional guilds remain discoverable above the ranked list. */
+.guild-regions{margin-bottom:19px;padding-bottom:17px;border-bottom:1px solid #465962}
+.guild-regions h2{margin:0 0 10px!important;font-size:14px!important;color:#f1dbab}
+.guild-regions>div{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+.guild-regions button{display:flex;align-items:center;gap:8px;min-width:0;padding:7px;border:1px solid #41535c;border-radius:10px;background:#1b2930;color:#e5edf0;text-align:left;font-size:10px}
+.guild-regions button.selected,.guild-regions button:hover{border-color:#d0aa5a;background:#313026}
+.guild-regions button img,.guild-regions button svg{width:32px;height:32px;flex:none;object-fit:contain;border-radius:8px}
+.guild-regions button span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

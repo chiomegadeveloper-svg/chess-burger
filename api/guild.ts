@@ -86,12 +86,14 @@ export default async function handler(req:Req,res:Res){
   if(code&&!/^CB-[0-9A-F]{8}$/.test(code))throw fail(400,'Enter a valid guild code (CB- plus 8 characters).');
   let listQuery=db.from('cb_guild_directory').select('id,name,logo_url,guild_points,created_at',{count:'exact'});
   if(search&&!me.data?.guild_id)listQuery=listQuery.ilike('name',`%${search}%`);
-  const [guilds,lookup,myRequest]=await Promise.all([
+  const [guilds,lookup,myRequest,regions]=await Promise.all([
    listQuery.order('guild_points',{ascending:false}).order('created_at',{ascending:true}).range((page-1)*10,page*10-1),
    code?db.from('cb_guilds').select('id').eq('guild_code',code).maybeSingle():Promise.resolve(null),
-   db.from('cb_guild_join_requests').select('id,guild_id,created_at').eq('user_id',userId).eq('status','pending').limit(1).maybeSingle()
+   db.from('cb_guild_join_requests').select('id,guild_id,created_at').eq('user_id',userId).eq('status','pending').limit(1).maybeSingle(),
+   db.from('cb_guilds').select('id,name,logo_url').eq('is_default',true).order('name')
   ]);
   if(guilds.error)throw guilds.error;
+  if(regions.error&&!/is_default|schema cache|does not exist/i.test(regions.error.message))throw regions.error;
   if(lookup?.error)throw lookup.error;
   const detailId=code?lookup?.data?.id:selected||me.data?.guild_id;
   const detailRow=detailId?await db.from('cb_guild_directory').select('*').eq('id',detailId).maybeSingle():null;
@@ -130,7 +132,7 @@ export default async function handler(req:Req,res:Res){
     requests=(pending?.data??[]).map(row=>({...row,profile:byUser.get(row.user_id)}));
    }
   }
-  const detail=guild?isMember?{...guild,members}:{id:guild.id,name:guild.name,logo_url:guild.logo_url,cover_url:guild.cover_url,guild_points:guild.guild_points,member_count:guild.member_count,guild_code:guild.guild_code}:null;
-  return res.status(200).json({page,total:guilds.count??0,eligible:Number(profile.data.cbr)>=177,my_guild_id:me.data?.guild_id??null,my_request:myRequest.data??null,requests,activity,kick_notice:kickNotice.data??null,guilds:(guilds.data??[]).map(row=>({id:row.id,name:row.name,logo_url:row.logo_url,guild_points:row.guild_points})),detail});
+  const detail=guild?isMember?{...guild,members}:{id:guild.id,name:guild.name,logo_url:guild.logo_url,cover_url:guild.cover_url,guild_points:guild.guild_points,member_count:guild.member_count,guild_code:guild.guild_code,is_default:guild.is_default,leader_id:guild.leader_id}:null;
+  return res.status(200).json({page,total:guilds.count??0,eligible:Number(profile.data.cbr)>=177,my_guild_id:me.data?.guild_id??null,my_request:myRequest.data??null,requests,activity,kick_notice:kickNotice.data??null,regional_guilds:regions.data??[],guilds:(guilds.data??[]).map(row=>({id:row.id,name:row.name,logo_url:row.logo_url,guild_points:row.guild_points})),detail});
  }catch(error){const status=Number((error as {status?:number}).status)||500;if(status===500)console.error('Guild request failed',error);return res.status(status).json({error:status===500?'Guild request failed. Please retry.':message(error)});}
 }
