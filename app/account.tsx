@@ -30,6 +30,7 @@ import { profileRequest } from "./profile-client";
 import { toWebpUnder1Mb, validateImageFile } from "./media";
 import { isProfileComplete } from "./profile-completion";
 import ProfilePhotoBucket from "./profile-photo-bucket";
+import Portfolio from "./portfolio";
 
 const emptyPhotos = ["", "", "", ""],
   countries = [
@@ -1029,6 +1030,7 @@ export default function Account({
           </article>
         </div>
         <ProfilePhotoBucket photos={profile.featured_photos} name={profile.display_name} busy={busy} onUpload={(file,index)=>void upload(file,"photo",index)} />
+        {!guest && <Portfolio userId={profile.user_id} owner />}
         {showPasswordSecurity && passwordSecurity}
       </section>
     );

@@ -8,6 +8,7 @@ import type { ArenaPlayer } from "./game-rules";
 import { SocialButtons } from "./social";
 import { levelFor } from "./cbr";
 import ProfilePhotoBucket from "./profile-photo-bucket";
+import Portfolio from "./portfolio";
 import Testimonials from "./testimonials";
 
 type SocialCounts = { friends: number; followers: number; following: number };
@@ -112,6 +113,7 @@ export default function PublicProfile({
         <span>{profile.win_streak} win streak</span>
       </div>
       <ProfilePhotoBucket photos={profile.featured_photos} name={profile.display_name} />
+      <Portfolio userId={profile.user_id} owner={profile.user_id === currentUserId} />
       <Testimonials profileId={profile.user_id} currentUserId={currentUserId} />
     </section>
   );

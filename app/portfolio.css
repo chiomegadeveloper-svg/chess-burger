@@ -1,0 +1,33 @@
+.profile-portfolio{margin:22px 0;padding:22px;border:1px solid #92794777;border-radius:20px;background:linear-gradient(145deg,#22282d,#182329);color:#f9f2e5}
+.profile-portfolio>header{display:flex;justify-content:space-between;gap:16px;align-items:start;margin-bottom:18px}
+.profile-portfolio header small{color:#83d8e2;letter-spacing:.14em;font-size:11px;font-weight:700}
+.profile-portfolio h2{margin:3px 0 5px;font-size:23px}
+.profile-portfolio header p{margin:0;color:#b6c3c8;font-size:13px}
+.profile-portfolio header>span{color:#e6c37d;font-weight:700;white-space:nowrap}
+.portfolio-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.portfolio-tile,.portfolio-empty{position:relative;min-width:0;border:1px solid #887b5a88;border-radius:13px;overflow:hidden;background:#293339;color:#f8f4e9}
+.portfolio-open{display:block;width:100%;padding:0;border:0;background:transparent;color:inherit;text-align:left;cursor:pointer}
+.portfolio-open img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover}
+.portfolio-open strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:10px 12px;font-size:13px}
+.portfolio-edit{position:absolute;right:7px;top:7px;border:1px solid #e6c37d;background:#1d2529dd;color:#f9da97;border-radius:7px;padding:4px 9px;cursor:pointer}
+.portfolio-empty{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;min-height:155px;border-style:dashed;cursor:pointer;color:#c5d0d3}
+.portfolio-empty svg{color:#e6c37d}
+.portfolio-backdrop{position:fixed;inset:0;z-index:2000;background:#080d11db;display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto}
+.portfolio-dialog{position:relative;width:min(700px,100%);max-height:calc(100vh - 40px);overflow:auto;border:1px solid #c9a663;border-radius:18px;background:#222a30;color:#f7f1e8;box-shadow:0 25px 70px #000a}
+.portfolio-dialog>img{display:block;width:100%;max-height:56vh;object-fit:contain;background:#151b1e}
+.portfolio-dialog>div{padding:20px 24px 26px}
+.portfolio-dialog h2{margin:0 36px 12px 0}
+.portfolio-dialog p{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.7}
+.portfolio-close{position:absolute;top:12px;right:12px;z-index:1;border:1px solid #d3b377;background:#1b2326e8;color:white;border-radius:8px;padding:7px;cursor:pointer}
+.portfolio-dialog button{cursor:pointer}
+.portfolio-form{padding:24px;display:grid;gap:13px}
+.portfolio-form>label{display:grid;gap:7px;font-size:13px;font-weight:700}
+.portfolio-form input:not([type=file]),.portfolio-form textarea{width:100%;padding:11px;border-radius:9px;border:1px solid #66747a;background:#151e22;color:white;font:inherit}
+.portfolio-photo{display:inline-flex!important;align-items:center;justify-content:center;flex-direction:row;gap:9px;padding:13px;border:1px dashed #d0ae70;border-radius:10px;cursor:pointer}
+.portfolio-photo input{position:absolute;width:1px;height:1px;opacity:0}
+.portfolio-preview{max-height:240px!important;object-fit:contain!important;border-radius:9px}
+.portfolio-form small{color:#afc3c9}
+.portfolio-actions{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:8px;padding:0!important}
+.portfolio-actions button,.portfolio-dialog>div button{display:inline-flex;align-items:center;gap:5px;padding:9px 12px;border:1px solid #a68b5d;border-radius:9px;background:#3d3425;color:#ffe5a8}
+.portfolio-error{color:#ffd19b;font-size:13px;overflow-wrap:anywhere}
+@media(max-width:650px){.portfolio-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.profile-portfolio{padding:15px}.portfolio-empty{min-height:125px}}

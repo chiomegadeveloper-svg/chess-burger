@@ -36,6 +36,7 @@ async function compressImageSource(
   width: number,
   height: number,
   initialScale = 1,
+  maxBytes = MAX_IMAGE_BYTES,
 ) {
   const canvas = document.createElement("canvas");
   let scale = initialScale;
@@ -51,7 +52,7 @@ async function compressImageSource(
 
       for (let quality = 0.86; quality >= 0.3; quality -= 0.08) {
         const blob = await canvasBlob(canvas, quality);
-        if (blob?.type === "image/webp" && blob.size <= MAX_IMAGE_BYTES)
+        if (blob?.type === "image/webp" && blob.size <= maxBytes)
           return blob;
       }
       scale *= 0.78;
@@ -65,7 +66,7 @@ async function compressImageSource(
     canvas.width = 1;
     canvas.height = 1;
   }
-  throw Error("The photo could not be reduced below 600 KB.");
+  throw Error(`The photo could not be reduced below ${Math.round(maxBytes / 1000)} KB.`);
 }
 
 export async function loadImageFile(file: File) {
@@ -105,7 +106,7 @@ export async function canvasToWebpUnder1Mb(canvas: HTMLCanvasElement) {
   return compressImageSource(canvas, canvas.width, canvas.height);
 }
 
-export async function toWebpUnder1Mb(file: File) {
+async function toWebp(file: File, maxBytes: number) {
   const loaded = await loadImageFile(file);
   try {
     await nextPaint();
@@ -118,11 +119,15 @@ export async function toWebpUnder1Mb(file: File) {
       loaded.width,
       loaded.height,
       initialScale,
+      maxBytes,
     );
   } finally {
     loaded.dispose();
   }
 }
+
+export const toWebpUnder1Mb = (file: File) => toWebp(file, MAX_IMAGE_BYTES);
+export const toWebpUnder500Kb = (file: File) => toWebp(file, 499_000);
 
 export async function uploadStaffImage(file: File, userId: string) {
   const blob = await toWebpUnder1Mb(file);
