@@ -42,6 +42,7 @@ button.gold-button,.cloud-panel button.gold-button{background:linear-gradient(14
 .promotion-picker>div button{display:grid;place-items:center;gap:2px;min-width:0;padding:7px 3px;border:1px solid #49606b;border-radius:10px;background:#19252c;color:#fff}
 .promotion-picker>div button:hover,.promotion-picker>div button:focus-visible{border-color:#4ce7f3;background:#1b3b44}
 .promotion-picker>div button span{font-family:Georgia,serif;font-size:34px;line-height:1}
+.promotion-picker>div button span.black-promotion-piece{color:#172126;background:#dce6ea;border-radius:6px;padding:2px 6px}
 .promotion-picker>div button small{font-family:Poppins,sans-serif;font-size:10px;color:#aeeaf0}
 .promotion-cancel{margin-top:12px;padding:7px 14px;border:1px solid #596873;border-radius:8px;background:#222b32;color:#c6d2d8}
 @media(prefers-reduced-motion:reduce){.search-status>svg{animation:none}}

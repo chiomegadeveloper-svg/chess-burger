@@ -428,7 +428,7 @@ export default function MatchBoard({
                           }}
                           aria-label={`Promote to ${promotionNames[piece]}`}
                         >
-                          <span aria-hidden="true">{symbols[myColor + piece]}</span>
+                          <span className={chess.get(promotion.from)?.color === "b" ? "black-promotion-piece" : undefined} aria-hidden="true">{symbols[(chess.get(promotion.from)?.color ?? myColor) + piece]}</span>
                           <small>{promotionNames[piece]}</small>
                         </button>
                       );
