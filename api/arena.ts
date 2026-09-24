@@ -901,6 +901,14 @@ export default async function handler(req: Req, res: Res) {
       if(activated.error){const message=String(activated.error.message??'Activation failed.');if(/cb_activate_feed_banner|expires_at|schema cache|function/i.test(message))fail(503,'Run supabase/0022_feed_banner_rentals.sql in Supabase, then try again.');if(/expired|not owned/i.test(message))fail(403,'This banner rental has expired. Rent it again to activate it.');fail(409,message);}
       return res.status(200).json({active:activated.data,gold:Number(account.profile.gold_points??0)});
     }
+    if(action==='tournament-gold'){
+      if(!['owner','admin'].includes(account.profile.role))fail(403,'Owner or GM access is required.');
+      const tournamentId=String(body.tournament_id??''),winners=body.winners;
+      if(!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(tournamentId)||!Array.isArray(winners)||winners.length!==3)fail(400,'Choose a valid tournament podium.');
+      const awarded=await client.rpc('cb_award_tournament_gold',{p_host_id:account.id,p_tournament_id:tournamentId,p_winners:winners});
+      if(awarded.error)fail(/cb_award_tournament_gold|schema cache|function/i.test(awarded.error.message)?503:409,awarded.error.message);
+      return res.status(200).json({ok:true});
+    }
     if(action==='grant-gold'){
       if(account.profile.role!=='owner')fail(403,'Only an Owner can grant Gold.');
       const username=cmsUsername(body.username),amount=cmsGoldAmount(body.amount),requestId=String(body.request_id??'');

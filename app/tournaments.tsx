@@ -404,6 +404,7 @@ export default function Tournaments({
         "Champion through 3rd place must be registered Chess Burger players before Gold can be awarded.",
       );
     const rewards = event.goldRewards ?? { champion: 0, second: 0, third: 0 };
+    const published = await sync(event);
     await arena("tournament-gold", {
       tournament_id: event.id,
       winners: podium.map((player, index) => ({
@@ -413,7 +414,7 @@ export default function Tournaments({
       })),
     });
     const next = persist(
-      { ...event, goldAwarded: true },
+      { ...published, goldAwarded: true },
       "Awarded Champion–3rd Gold",
     );
     if (navigator.onLine && next.revision) await sync(next);
