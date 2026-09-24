@@ -58,7 +58,7 @@ export default function PublicProfile({
   if (error) {
     return (
       <section className="public-profile cloud-panel">
-        <button className="back-button" onClick={onClose}><ArrowLeft />Community feed</button>
+        <button className="back-button" onClick={onClose}><ArrowLeft />Back</button>
         <p className="inline-error">{error}</p>
       </section>
     );
@@ -71,7 +71,7 @@ export default function PublicProfile({
 
   return (
     <section className="public-profile">
-      <button className="back-button" onClick={onClose}><ArrowLeft />Community feed</button>
+      <button className="back-button" onClick={onClose}><ArrowLeft />Back</button>
       <div className="public-profile-hero cloud-panel">
         <span className="public-avatar">
           {profile.avatar_url ? <img src={profile.avatar_url} alt={profile.display_name} /> : profile.display_name.charAt(0)}

@@ -109,6 +109,7 @@ function AppPage() {
   const [matchId, setMatchId] = useState(""),
     [target, setTarget] = useState<ArenaPlayer | null>(null),
     [viewedUserId, setViewedUserId] = useState(""),
+    [profileBackTab, setProfileBackTab] = useState("home"),
     [invites, setInvites] = useState<Invite[]>([]),
     [respondingInvite, setRespondingInvite] = useState(""),
     [activeId, setActiveId] = useState(""),
@@ -529,6 +530,7 @@ function AppPage() {
         }}
         onOpenProfile={(userId) => {
           setViewedUserId(userId);
+          setProfileBackTab("home");
           setTab("public-profile");
         }}
       />
@@ -538,7 +540,7 @@ function AppPage() {
       <PublicProfile
         currentUserId={profile?.user_id}
         userId={viewedUserId}
-        onClose={() => setTab("home")}
+        onClose={() => setTab(profileBackTab)}
         onChallenge={(player) => { setTarget(player); setTab("challenge"); }}
       />
     );
@@ -689,12 +691,13 @@ function AppPage() {
         }}
         onOpenProfile={(userId) => {
           setViewedUserId(userId);
+          setProfileBackTab("map");
           setTab("public-profile");
         }}
         onClaimed={() => void refreshProfile()}
       />
     );
-  else if (tab === "rank") content = <Rankings profile={profile} />;
+  else if (tab === "rank") content = <Rankings profile={profile} onOpenProfile={(userId) => {setViewedUserId(userId);setProfileBackTab("rank");setTab("public-profile")}} />;
   else if (tab === "channel")
     content = (
       <>
@@ -1021,6 +1024,7 @@ function AppPage() {
         profile={profile}
         onOpenProfile={(id) => {
           setViewedUserId(id);
+          setProfileBackTab(tab);
           setTab("public-profile");
         }}
       />

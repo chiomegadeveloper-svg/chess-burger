@@ -61,3 +61,4 @@
 .portfolio-comment-form>div>button{display:inline-flex;align-items:center;gap:5px;border:1px solid #cfac65;border-radius:9px;padding:8px 11px;background:#493b24;color:#ffe2a5}
 .portfolio-comment-form small{display:block;text-align:right;color:#9eafb2;font-size:11px;margin-top:5px}
 .portfolio-reply-indicator{display:flex;justify-content:space-between;gap:8px;padding:6px 0!important;color:#b9dce0;font-size:11px}
+.portfolio-no-stories{margin:0;color:#b8c5c8;font-size:13px}

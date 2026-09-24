@@ -101,11 +101,10 @@ export default function Portfolio({ userId, owner = false }: { userId: string; o
     finally { setBusy(false); }
   };
 
-  if (!owner && !loading && !entries.length) return null;
   return <section className="profile-portfolio cloud-panel" aria-label="Player portfolio">
     <header><div><small>PLAYER STORIES</small><h2>Portfolio</h2><p>Achievements, special events, and stories worth sharing.</p></div><span>{entries.length} / 8</span></header>
     {error && <p className="portfolio-error" role="alert">{error}</p>}
-    {loading ? <p>Loading portfolio…</p> : <div className="portfolio-grid">
+    {loading ? <p>Loading portfolio…</p> : !owner && !entries.length ? <p className="portfolio-no-stories">No portfolio stories published yet.</p> : <div className="portfolio-grid">
       {Array.from({ length: 8 }, (_, slot) => {
         const entry = entries.find(item => item.slot === slot);
         if (!entry && !owner) return null;
