@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { getSupabase, PlayerProfile } from "./supabase";
 import { arena } from "./arena-client";
 import QrInput from "./qr-input";
+import "./tournament-cms.css";
 import {
   Tournament,
   Result,
@@ -138,8 +139,12 @@ export default function Tournaments({
     }
   }, []);
   useEffect(() => {
-    if (window.location.hash.startsWith("#tournament="))
-      receiveInvite(window.location.href);
+    const readInvite = () => {
+      if (window.location.hash.startsWith("#tournament=")) receiveInvite(window.location.href);
+    };
+    readInvite();
+    window.addEventListener("hashchange", readInvite);
+    return () => window.removeEventListener("hashchange", readInvite);
   }, [receiveInvite]);
   function persist(next: Tournament, action: string) {
     const saved = { ...next, updatedAt: new Date().toISOString() };
@@ -434,8 +439,8 @@ export default function Tournaments({
       ? window.location.origin + "/#tournament=" + encodeURIComponent(qr)
       : "";
   return (
-    <div className="cms-panel">
-      <h2>{staff ? "Tournament host" : "Join a tournament"}</h2>
+    <div className={`cms-panel tournament-cms ${staff ? "tournament-cms-host" : ""}`}>
+      <header className="tournament-cms-header"><span>CHESS BURGER · TOURNAMENT CONTROL</span><h2>{staff ? "Tournament setup" : "Join a tournament"}</h2><p>{staff ? "Set the event, register players, run rounds and publish results." : "Scan an invitation to register for an event."}</p></header>
       {notice && (
         <p className="offline-banner" role="status">
           {notice}
@@ -443,7 +448,7 @@ export default function Tournaments({
       )}
       {staff && !event && (
         <>
-          <div className="cms-grid">
+          <section className="tournament-cms-section"><div className="tournament-cms-section-head"><span>01 · EVENT</span><h3>Create an event</h3></div><div className="cms-grid">
             <label>
               Tournament name
               <input
@@ -479,13 +484,13 @@ export default function Tournaments({
             configured API key. Have an arbiter verify pairings for rated
             events.
           </p>
-          {all
+          </section><section className="tournament-cms-section"><div className="tournament-cms-section-head"><span>EXISTING EVENTS</span><h3>Your tournaments</h3></div><div className="tournament-cms-saved">{all
             .filter((t) => t.hostId === profile?.user_id)
             .map((t) => (
               <button key={t.id} onClick={() => setEvent(t)}>
                 {t.title} · {t.history.length}/{t.rounds} rounds
               </button>
-            ))}
+            ))}{!all.some((t) => t.hostId === profile?.user_id) && <p className="cms-note">No tournaments saved on this device.</p>}</div>
           <label className="import-label">
             Restore tournament backup
             <input
@@ -506,12 +511,12 @@ export default function Tournaments({
                   });
               }}
             />
-          </label>
+          </label></section>
         </>
       )}
       {staff && event && (
         <>
-          <div className="cms-actions">
+          <div className="cms-actions tournament-cms-toolbar">
             <button onClick={() => setEvent(null)}>All tournaments</button>
             <button
               disabled={busy}
@@ -531,19 +536,19 @@ export default function Tournaments({
               Load published version
             </button>
           </div>
-          <h3>{event.title}</h3>
+          <div className="tournament-cms-summary"><span>{event.status.toUpperCase()}</span><h3>{event.title}</h3><strong>{event.players.length} players · {event.history.length}/{event.rounds} rounds</strong></div>
           <p className="tournament-state">
             Host: {event.hostName} · {event.status} ·{" "}
             {event.mode === "offline" ? "Offline club Swiss" : "Swiss REST API"}
           </p>
           <p className="cms-note">
-            Saved on this device. Export a backup after each round. Publishing
+            Saved on this device. Publish before inviting online players. Export a backup after each round. Publishing
             saves the host state online; loading the published version replaces
             local changes.
           </p>
           {editable && event.status === "registration" && (
-            <>
-              <div className="cms-grid">
+            <section className="tournament-cms-section"><div className="tournament-cms-section-head"><span>02 · REGISTRATION</span><h3>Prizes and players</h3></div>
+              <div className="cms-grid tournament-prizes">
                 {(
                   [
                     ["champion", "Champion"],
@@ -581,15 +586,13 @@ export default function Tournaments({
                   </label>
                 ))}
               </div>
-              <div className="tournament-qr">
+              <div className="tournament-cms-registration"><div className="tournament-qr">
                 <QRCodeSVG value={qrLink} size={240} />
                 <strong>{event.code}</strong>
                 <span>
-                  Players scan this invitation, then show their registration QR
-                  to the host.
+                  {event.revision ? "Players can register online or show their registration QR to the host." : "Publish this tournament first to enable online registration. Offline QR registration works now."}
                 </span>
-              </div>
-              <label>
+              </div><div className="tournament-cms-intake"><label>
                 Players · one per line
                 <textarea
                   value={names}
@@ -610,10 +613,9 @@ export default function Tournaments({
                     Accept {registrations.length} registrations
                   </button>
                 )}
-              </div>
-            </>
+              </div></div></div></section>
           )}
-          <div className="standings">
+          <section className="tournament-cms-section"><div className="tournament-cms-section-head"><span>03 · STANDINGS</span><h3>Player rankings</h3></div><div className="standings">
             <table>
               <thead>
                 <tr>
@@ -634,7 +636,7 @@ export default function Tournaments({
                 ))}
               </tbody>
             </table>
-          </div>
+          </div></section>
           {editable && event.status === "completed" && (
             <div className="cms-actions">
               <p className="cms-note">
@@ -651,7 +653,7 @@ export default function Tournaments({
               </button>
             </div>
           )}
-          {event.history.map((round, ri) => (
+          <section className="tournament-cms-section"><div className="tournament-cms-section-head"><span>04 · ROUNDS</span><h3>Pairings and results</h3></div>{event.history.map((round, ri) => (
             <div className="pair-list" key={ri}>
               <h3>Round {ri + 1}</h3>
               {round.map((g, bi) => (
@@ -716,7 +718,7 @@ export default function Tournaments({
               )}
             </div>
           )}
-          <div className="cms-actions">
+          <div className="cms-actions tournament-cms-exports">
             <button
               onClick={() =>
                 download(
@@ -741,7 +743,7 @@ export default function Tournaments({
             >
               Export TRF
             </button>
-          </div>
+          </div></section>
         </>
       )}
       {!staff && (
