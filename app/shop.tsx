@@ -526,18 +526,26 @@ export function BagPage({ onChanged }: { onChanged: () => void }) {
     if (!giftItem || busy) return;
     setBusy(`gift:${giftItem.kind}:${giftItem.id}`);
     try {
-      if(giftItem.kind==="gold") await arena("gift-gold",{username,amount:quantity,request_id:crypto.randomUUID()});
-      else if(giftItem.kind==="cbc") await classroom("gift-cbc",{username,quantity,request_id:crypto.randomUUID()});
-      else await arena("gift-bag-item", {username,item_kind: giftItem.kind,item_id: giftItem.id,quantity,request_id: crypto.randomUUID()});
-      toast.success(giftItem.kind==="gold"?`${quantity} Gold sent to ${username}.`:`${giftItem.name} sent to ${username}. 4 Gold charged.`);
+      const result = giftItem.kind === "gold"
+        ? await arena<{gifted: boolean}>("gift-gold", {username,amount:quantity,request_id:crypto.randomUUID()})
+        : giftItem.kind === "cbc"
+          ? await classroom<{cbc: number}>("gift-cbc", {username,quantity,request_id:crypto.randomUUID()})
+          : await arena<{gifted: boolean}>("gift-bag-item", {username,item_kind:giftItem.kind,item_id:giftItem.id,quantity,request_id:crypto.randomUUID()});
+      if ("gifted" in result && !result.gifted) {
+        toast.info("This gift was already sent. No items or CBG were charged again.");
+      } else {
+        toast.success(giftItem.kind === "gold"
+          ? `${quantity} CBG moved to ${username}.`
+          : `${quantity} ${giftItem.name} moved to ${username}. 4 CBG gift fee charged.`);
+      }
       setGiftItem(null);
-      await load();
       onChanged();
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Unable to send gift.",
       );
     } finally {
+      try { await load(); } catch { toast.error("Gift status changed, but Bag could not refresh. Reopen Bag to see the latest balance."); }
       setBusy("");
     }
   };
@@ -734,7 +742,11 @@ export function BagPage({ onChanged }: { onChanged: () => void }) {
                 />
               </label>
             )}
-              <p>{giftItem.kind==="gold"?"Gold transfers directly to the recipient. Gold gifts have no transaction fee.":"The item transfers directly to the recipient’s Bag. Your account is charged exactly 4 Gold for this transaction."}</p>
+              <p>{giftItem.kind==="gold"
+                ? "This CBG amount leaves your balance and goes to the recipient’s CBG balance. No gift fee."
+                : giftItem.kind==="cbc"
+                  ? "These CBC leave your balance and go to the recipient’s CBC balance. A 4 CBG fee is charged."
+                  : "This item leaves your Bag and appears in the recipient’s Bag. A 4 CBG fee is charged."}</p>
             <div>
               <button type="button" onClick={() => setGiftItem(null)}>
                 Cancel
