@@ -55,6 +55,7 @@ import Puzzles from "./puzzles";
 import GrandArena from "./grand-arena";
 import Classroom from "./classroom";
 import GuildPage from "./guild";
+import "./play-selection-tournament.css";
 
 const modes = [
   {
@@ -547,14 +548,17 @@ function AppPage() {
   else if (tab === "play-select")
     content = (
       <section className="play-select-page" aria-labelledby="play-select-title">
-        <div className="play-select-heading"><span>Choose your destination</span><h1 id="play-select-title">Play Chess Burger</h1><p>Choose matches, enter the Arena, or train with Coach Patty.</p></div>
+        <div className="play-select-heading"><span>Choose your destination</span><h1 id="play-select-title">Play Chess Burger</h1><p>Choose matches, enter the Arena, explore tournaments, or train with Coach Patty.</p></div>
         <div className="play-select-grid">
           <button className="play-destination lobby" type="button" onClick={() => setTab("play")}><img src="/play-selection/match-lobby.webp" alt="Colorful Chess Burger Match Lobby"/><span><strong>Match Lobby</strong><small>Online, CPU, nearby and offline matches</small><b>Enter Lobby <ChevronRight size={17}/></b></span></button>
           <button className="play-destination arena arena-live" type="button" onClick={() => setTab("grand-arena")}><img src="/play-selection/grand-arena.webp" alt="Chess Burger Grand Arena entrance"/><span><strong>Grand Arena</strong><small>Timed elimination battles with live standings</small><b>Enter Arena <ChevronRight size={17}/></b></span></button>
           <button className="play-destination puzzles" type="button" onClick={() => setTab("puzzles")}><img src="/play-selection/puzzle-quest.webp" alt="Chess Burger puzzle maze arena"/><span><strong>Puzzle Quest</strong><small>100 puzzles, Coach Patty and Gold rewards</small><b>Enter Puzzles <ChevronRight size={17}/></b></span></button>
+          <button className="play-destination tournament" type="button" onClick={() => setTab("tournament-preview")}><img src="/play-selection/tournament.webp" alt="Cute chess characters competing for a gold tournament trophy"/><span><strong>Tournament</strong><small>Championships, friendly competition and chess glory</small><b>Explore Tournament <ChevronRight size={17}/></b></span></button>
         </div>
       </section>
     );
+  else if (tab === "tournament-preview")
+    content = <section className="tournament-coming-page"><button className="back-button" type="button" onClick={() => setTab("play-select")}><ArrowLeft size={16}/>Play destinations</button><div className="tournament-coming-card"><img src="/play-selection/tournament.webp" alt="Cute Chess Burger tournament characters and trophy"/><div><span>CHESS BURGER TOURNAMENT</span><h1>Tournament Coming Very Soon</h1><p>Get ready to compete with fellow chess players for the championship trophy.</p><button type="button" onClick={() => setTab("play-select")}>Back to Play destinations</button></div></div></section>;
   else if (tab === "play")
     content = (
       <section className="play-page">

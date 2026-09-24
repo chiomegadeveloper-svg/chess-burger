@@ -1,0 +1,39 @@
+.play-select-grid > .play-destination.tournament {
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 38%) minmax(0, 1fr);
+  min-height: 172px;
+  border-color: #9b7945;
+  background: linear-gradient(110deg, #20252b, #172127);
+}
+.play-select-grid > .play-destination.tournament img {
+  width: 100%; height: 100%; min-height: 172px; aspect-ratio: auto; object-fit: cover; object-position: center 55%;
+}
+.play-select-grid > .play-destination.tournament > span {
+  align-content: center; padding: 22px clamp(18px, 3vw, 38px);
+}
+.play-select-grid > .play-destination.tournament strong { font-size: clamp(18px, 2vw, 23px); }
+.play-select-grid > .play-destination.tournament small { font-size: 11px; line-height: 1.5; }
+.play-select-grid > .play-destination.tournament b { background: #493a1c; color: #f4d26f; }
+.play-select-grid > .play-destination.tournament::after {
+  content: "COMING SOON"; position: absolute; top: 12px; right: 12px;
+  padding: 5px 9px; border: 1px solid #f1ce6b88; border-radius: 999px;
+  background: #14191de8; color: #ffe28b; font-size: 8px; font-weight: 800; letter-spacing: .08em;
+}
+.tournament-coming-page { width: min(100%, 1080px); box-sizing: border-box; margin: 0 auto; padding: 24px clamp(10px, 3vw, 26px) 60px; }
+.tournament-coming-card { overflow: hidden; border: 1px solid #aa8747; border-radius: 20px; background: #172127; color: #fff; box-shadow: 0 16px 35px #0006; }
+.tournament-coming-card > img { display: block; width: 100%; max-height: 430px; aspect-ratio: 16 / 7; object-fit: cover; object-position: center; }
+.tournament-coming-card > div { padding: clamp(20px, 3vw, 35px); }
+.tournament-coming-card span { color: #6be0ec; font-size: 10px; font-weight: 800; letter-spacing: .14em; }
+.tournament-coming-card h1 { margin: 6px 0; color: #f8e1a8; font-size: clamp(23px, 4vw, 38px); }
+.tournament-coming-card p { color: #c4d0d5; font-size: 13px; }
+.tournament-coming-card button { margin-top: 12px; padding: 11px 17px; border: 1px solid #d4ab58; border-radius: 10px; background: #43351e; color: #ffe0a0; cursor: pointer; }
+@media (max-width: 680px) {
+  .play-select-grid > .play-destination.tournament { grid-column: 1; grid-template-columns: 42% minmax(0, 1fr); min-height: 128px; height: clamp(128px, 20dvh, 150px); }
+  .play-select-grid > .play-destination.tournament img { min-height: 0; }
+  .play-select-grid > .play-destination.tournament > span { padding: 10px 11px; }
+  .play-select-grid > .play-destination.tournament strong { font-size: 12px; }
+  .play-select-grid > .play-destination.tournament small { font-size: 7px; }
+  .play-select-grid > .play-destination.tournament::after { top: 7px; right: 7px; padding: 4px 7px; font-size: 6px; }
+  .tournament-coming-page { padding-top: 12px; }
+  .tournament-coming-card > img { aspect-ratio: 4 / 3; }
+}
