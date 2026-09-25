@@ -53,7 +53,7 @@ function ClassroomCreditStore(){
   const [wallet,setWallet]=useState({cbc:0}),[gold,setGold]=useState(0),[price,setPrice]=useState(0),[quantity,setQuantity]=useState(1),[busy,setBusy]=useState(false);
   const load=()=>classroom<{wallet:{cbc:number};gold:number;settings:{cbc_gold_price:number}}>("state").then(r=>{setWallet(r.wallet);setGold(r.gold);setPrice(r.settings.cbc_gold_price)});
   useEffect(()=>{void load().catch(()=>{})},[]);
-  const buy=async()=>{setBusy(true);try{const result=await classroom<{cbc:number;gold:number}>("buy-cbc",{quantity,request_id:crypto.randomUUID()});setWallet({cbc:result.cbc});setGold(result.gold);toast.success(`${quantity} CBC added to your wallet.`)}catch(e){toast.error(e instanceof Error?e.message:"Unable to buy CBC.")}finally{setBusy(false)}};
+  const buy=async()=>{if(busy||price<1||!window.confirm(`Buy ${quantity} CBC for ${(price*quantity).toLocaleString()} Gold?`))return;setBusy(true);try{const result=await classroom<{cbc:number;gold:number}>("buy-cbc",{quantity,request_id:crypto.randomUUID()});setWallet({cbc:result.cbc});setGold(result.gold);toast.success(`${quantity} CBC added to your wallet.`)}catch(e){toast.error(e instanceof Error?e.message:"Unable to buy CBC.")}finally{setBusy(false)}};
   return <section className="classroom-credit-store">
     <div className="classroom-shop-heading"><div><small>CHESSBURGER CLASSROOM MARKET</small><h2>Classroom Credits</h2><p>Buy CBC, create teaching rooms, or gift credits to your students.</p></div><div className="classroom-shop-balances"><span><img src="/classroom/cbc-token.webp" alt="CBC"/><i><small>MY CBC</small><b>{wallet.cbc.toLocaleString()}</b></i></span><span><i><small>MY GOLD</small><b>{gold.toLocaleString()} CBG</b></i></span></div></div>
     <div className="cbc-product-showcase"><div className="cbc-product-art"><span className="cbc-glow"/><img src="/classroom/cbc-token.webp" alt="ChessBurger Classroom Credit token"/><b>CLASSROOM CURRENCY</b></div><div className="cbc-product-details"><small>PREMIUM LEARNING TOKEN</small><h3>ChessBurger CBC</h3><p>One token for teachers and students. Room packages add CBC to the teacher’s Bag, ready to gift by username.</p><div className={`cbc-rate ${price<1?"pending":""}`}><span>{price>0?"CURRENT RATE":"PRICE PENDING"}</span><strong>{price>0?`${price.toLocaleString()} CBG`:"Owner setup required"}</strong>{price>0&&<small>for each CBC</small>}</div><div className="cbc-quick-picks" aria-label="Choose CBC quantity">{[1,5,10,25].map(amount=><button type="button" key={amount} className={quantity===amount?"active":""} onClick={()=>setQuantity(amount)}>{amount}<small>CBC</small></button>)}</div><div className="cbc-checkout"><label><span>Custom quantity</span><input type="number" min={1} max={1000} value={quantity} onChange={e=>setQuantity(Math.max(1,Math.min(1000,Number(e.target.value)||1)))}/></label><div><small>TOTAL</small><strong>{price>0?(price*quantity).toLocaleString():"—"} CBG</strong></div><button type="button" disabled={busy||price<1||gold<price*quantity} onClick={()=>void buy()}>{busy?"Processing…":price<1?"Awaiting owner price":gold<price*quantity?"Not enough CBG":"Buy CBC"}</button></div></div></div>
@@ -287,6 +287,12 @@ export function ShopPage({
     [days, setDays] = useState<FeedBannerDuration>(7);
   const { state, setState, loading } = useShopState();
   const act = async (banner: FeedBanner) => {
+    if (busy) return;
+    const rental = rentalFor(state, banner.id);
+    const duration = isGraphicBanner(banner) ? "1 month" : days === 7 ? "1 week" : `${days} days`;
+    const basePrice = feedBannerRentalPrice(banner.tier, days, banner.price);
+    const price = rental && !isGraphicBanner(banner) ? Math.round(basePrice * 0.7) : basePrice;
+    if (!window.confirm(`${rental ? "Extend" : "Rent"} ${banner.name} Banner for ${duration} for ${price.toLocaleString()} Gold?`)) return;
     setBusy(banner.id);
     try {
       const data = (await arena("buy-feed-banner", {
