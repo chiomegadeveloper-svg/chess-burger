@@ -1164,17 +1164,21 @@ export default async function handler(req: Req, res: Res) {
       const r = await client.from('cb_profiles').select('user_id,username,display_name,avatar_url,country_code,cbr,gold_points,wins,losses,win_streak').neq('user_id', account.id).or(`username.ilike.%${query}%,display_name.ilike.%${query}%`).limit(10);
       if (r.error) fail(500, r.error.message); return res.status(200).json({ players: r.data ?? [] });
     }
-    if (action === 'gift-recipient-search') {
+    if (action === 'gift-recipient-search' || action === 'cms-gold-recipient-search') {
+      const cmsSearch = action === 'cms-gold-recipient-search';
+      if (cmsSearch && account.profile.role !== 'owner') fail(403, 'Only an Owner can search Gold recipients.');
       const query = String(body.query ?? '').trim().replace(/^@/, '').toLowerCase();
       if (!/^[a-z0-9_]{2,40}$/.test(query)) return res.status(200).json({ players: [] });
       type Recipient = { user_id: string; username: string; display_name: string | null; avatar_url: string | null };
       const fields = 'user_id,username,display_name,avatar_url';
-      const direct = await client.from('cb_profiles').select(fields).neq('user_id', account.id).ilike('username', `%${query}%`).limit(40);
+      const directQuery = client.from('cb_profiles').select(fields);
+      const direct = await (cmsSearch ? directQuery : directQuery.neq('user_id', account.id)).ilike('username', `%${query}%`).limit(40);
       if (direct.error) fail(500, direct.error.message);
       const found = new Map<string, Recipient>((direct.data ?? []).map((row: Recipient) => [row.user_id, row]));
       if (query.length >= 3) {
         const parts = [...new Set(Array.from({ length: query.length - 1 }, (_, index) => query.slice(index, index + 2)))].slice(0, 8);
-        const approximate = await client.from('cb_profiles').select(fields).neq('user_id', account.id).or(parts.map(part => `username.ilike.%${part}%`).join(',')).limit(120);
+        const approximateQuery = client.from('cb_profiles').select(fields);
+        const approximate = await (cmsSearch ? approximateQuery : approximateQuery.neq('user_id', account.id)).or(parts.map(part => `username.ilike.%${part}%`).join(',')).limit(120);
         if (approximate.error) fail(500, approximate.error.message);
         for (const row of approximate.data ?? []) found.set(row.user_id, row);
       }
