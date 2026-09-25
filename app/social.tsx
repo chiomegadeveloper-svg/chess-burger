@@ -288,8 +288,8 @@ export function SocialHub({
       seq.current++;
       setView(detail.view);
       setMode(detail.mode ?? (detail.view === "chat" ? "personal" : detail.view));
-      setTarget(detail.target ?? "");
-      setGroupId("");
+      setTarget(detail.mode === "group" ? "" : detail.target ?? "");
+      setGroupId(detail.mode === "group" ? detail.target ?? "" : "");
       setQ("");
       setPage(1);
       setBefore(undefined);

@@ -112,6 +112,7 @@ function AppPage() {
   const [matchId, setMatchId] = useState(""),
     [target, setTarget] = useState<ArenaPlayer | null>(null),
     [viewedUserId, setViewedUserId] = useState(""),
+    [portfolioNotification, setPortfolioNotification] = useState<{ slot: number; id: number } | null>(null),
     [profileBackTab, setProfileBackTab] = useState("home"),
     [invites, setInvites] = useState<Invite[]>([]),
     [respondingInvite, setRespondingInvite] = useState(""),
@@ -522,6 +523,16 @@ function AppPage() {
     setTab(next);
   };
   const openNotification = (target: string) => {
+    if (target.startsWith("chat-personal:")) return openSocial("chat", target.slice("chat-personal:".length), "personal");
+    if (target.startsWith("chat-group:")) return openSocial("chat", target.slice("chat-group:".length), "group");
+    if (target.startsWith("portfolio:")) {
+      const slot = Number(target.slice("portfolio:".length));
+      if (Number.isInteger(slot) && slot >= 0 && slot < 8) {
+        setPortfolioNotification({ slot, id: Date.now() });
+        navigate("profile");
+        return;
+      }
+    }
     if (target === "chat-personal") return openSocial("chat", undefined, "personal");
     if (target === "chat-community") return openSocial("chat", undefined, "community");
     if (target === "chat-group") return openSocial("chat", undefined, "group");
@@ -763,6 +774,7 @@ function AppPage() {
           <h1>Player profile</h1>
         </div>
         <Account
+          portfolioNotification={portfolioNotification}
           onLoaded={setProfile}
           onSaved={onSaved}
           onOpenCms={() => setTab("cms")}
@@ -952,7 +964,7 @@ function AppPage() {
           <div className="invite-inbox cloud-panel">
             {invites.map((i) => (
               <div key={i.id}>
-                <strong>{i.play_mode === "wager" ? `${i.host_name} offered a ${i.wager_gold} Gold bet` : `${i.host_name} invited you`}</strong>
+                <strong>{i.match_kind === "invasion" ? `${i.host_name} challenged your kingdom` : i.play_mode === "wager" ? `${i.host_name} offered a ${i.wager_gold} Gold bet` : `${i.host_name} invited you`}</strong>
                 <span>
                   {timeControl(i.control).group} ·{" "}
                   {timeControl(i.control).label}

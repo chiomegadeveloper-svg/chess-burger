@@ -67,3 +67,5 @@
 .guild-analytics-members>div{display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-top:1px solid #3d5054;font-size:9px}
 .guild-analytics-members span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .guild-analytics-members strong{color:#e7d5a1;text-align:right;font-weight:500}
+
+.guild-activity-pages{display:flex;align-items:center;justify-content:center;gap:12px;margin-top:12px;font-size:11px;color:#a9bdc2}.guild-activity-pages button{padding:7px 12px;border:1px solid #42545b;border-radius:8px;background:#21333a;color:#e7f4f5;cursor:pointer}.guild-activity-pages button:disabled{opacity:.45;cursor:default}

@@ -46,7 +46,7 @@ export default async function handler(req: Req, res: Res) {
       db.rpc('cb_daily_reward_status', { p_user_id: userId }),
       db.from('cb_daily_puzzle_claims').select('puzzle_id').eq('user_id', userId).eq('puzzle_day', day).limit(1),
       db.from('cb_user_items').select('product_id,expires_at').eq('user_id', userId).gt('expires_at', new Date(now).toISOString()).lte('expires_at', new Date(now + 48 * 3600_000).toISOString()).order('expires_at', { ascending: true }).limit(12),
-      db.from('cb_profile_testimonials').select('id,author_id,body,created_at').eq('profile_id', userId).neq('author_id', userId).gte('created_at', cutoff).order('created_at', { ascending: false }).limit(20),
+      db.from('cb_portfolio_comments').select('id,slot,author_id,body,created_at').eq('portfolio_user_id', userId).neq('author_id', userId).gte('created_at', cutoff).order('created_at', { ascending: false }).limit(20),
       db.from('cb_feed').select('id').eq('user_id', userId).gte('created_at', cutoff).order('created_at', { ascending: false }).limit(60),
       db.from('cb_gold_ledger').select('id,delta,kind,created_at').eq('user_id', userId).in('kind', ['shop_purchase', 'arena_ticket_purchase', 'bag_slots', 'cbc_purchase', 'classroom_room', 'seba_student_cbc', 'gold_gift', 'arena_champion']).gte('created_at', cutoff).order('created_at', { ascending: false }).limit(100),
       db.from('cb_item_gifts').select('request_id,sender_id,item_kind,item_id,quantity,created_at').eq('recipient_id', userId).gte('created_at', cutoff).order('created_at', { ascending: false }).limit(20),
@@ -85,7 +85,7 @@ export default async function handler(req: Req, res: Res) {
     if (puzzle.error) errors.push('puzzles');
     else if (!puzzle.data?.length) add({ key: `puzzles:${day}`, kind: 'puzzle', title: 'New puzzles arrived', body: 'Today’s Puzzle Quest is ready with Coach Patty.', target: 'puzzles', created_at: new Date(now).toISOString() });
     for (const row of bannerRows) add({ key: `banner:${row.product_id}:${row.expires_at}`, kind: 'banner', title: 'Your banner expires soon', body: `${productMap.get(row.product_id) ?? clean(row.product_id, 40)} expires ${new Date(row.expires_at).toLocaleDateString('en-US', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric' })}.`, target: 'bag', created_at: row.expires_at });
-    for (const row of commentRows) add({ key: `comment:${row.id}`, kind: 'comment', title: `${actor(row.author_id)} commented on your portfolio`, body: clean(row.body, 120), target: 'profile', created_at: row.created_at });
+    for (const row of commentRows) add({ key: `portfolio-comment:${row.id}`, kind: 'comment', title: `${actor(row.author_id)} commented on your portfolio`, body: clean(row.body, 120), target: `portfolio:${row.slot}`, created_at: row.created_at });
     for (const row of reactionRows) add({ key: `reaction:${row.feed_id}:${row.user_id}:${row.created_at}`, kind: 'reaction', title: `${actor(row.user_id)} reacted to your feed`, body: 'Your community post received a heart.', target: 'home', created_at: row.created_at });
     const purchaseTitles: Record<string, string> = { shop_purchase: 'Banner purchase complete', arena_ticket_purchase: 'Arena ticket purchase complete', bag_slots: 'Bag slot purchase complete', cbc_purchase: 'Classroom credits purchased', classroom_room: 'Classroom room purchase complete', seba_student_cbc: 'Student credits purchased' };
     for (const row of purchaseRows) {

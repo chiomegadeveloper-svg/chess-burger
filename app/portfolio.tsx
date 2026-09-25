@@ -19,7 +19,7 @@ function storedPath(url: string, userId: string) {
   } catch { return ""; }
 }
 
-export default function Portfolio({ userId, owner = false }: { userId: string; owner?: boolean }) {
+export default function Portfolio({ userId, owner = false, openNotification }: { userId: string; owner?: boolean; openNotification?: { slot: number; id: number } | null }) {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -46,6 +46,11 @@ export default function Portfolio({ userId, owner = false }: { userId: string; o
   }, [userId]);
 
   useEffect(() => () => { if (draft?.preview) URL.revokeObjectURL(draft.preview); }, [draft?.preview]);
+  useEffect(() => {
+    if (!openNotification || loading) return;
+    const entry = entries.find(item => item.slot === openNotification.slot);
+    if (entry) setSelected(entry);
+  }, [openNotification, loading, entries]);
   const edit = (slot: number) => {
     const entry = entries.find(item => item.slot === slot);
     setError(""); setSelected(null);

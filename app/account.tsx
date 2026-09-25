@@ -101,6 +101,7 @@ export default function Account({
   onLoaded,
   onMembershipChange,
   registrationOnly = false,
+  portfolioNotification,
 }: {
   onLoaded?: (profile: PlayerProfile) => void;
   onSaved: (profile: PlayerProfile) => void;
@@ -108,6 +109,7 @@ export default function Account({
   onOpenCms?: () => void;
   onMembershipChange?: (member: boolean) => void;
   registrationOnly?: boolean;
+  portfolioNotification?: { slot: number; id: number } | null;
 }) {
   const [client, setClient] = useState<SupabaseClient | null>(null),
     [user, setUser] = useState<User | null>(null),
@@ -1030,7 +1032,7 @@ export default function Account({
           </article>
         </div>
         <ProfilePhotoBucket photos={profile.featured_photos} name={profile.display_name} busy={busy} onUpload={(file,index)=>void upload(file,"photo",index)} />
-        {!guest && <Portfolio userId={profile.user_id} owner />}
+        {!guest && <Portfolio userId={profile.user_id} owner openNotification={portfolioNotification} />}
         {showPasswordSecurity && passwordSecurity}
       </section>
     );

@@ -114,7 +114,7 @@ export default async function handler(req:Req,res:Res){
   if(guild&&isMember){
    const [memberRows,history,pending,metrics]=await Promise.all([
     db.from('cb_guild_members').select('guild_id,user_id,joined_at,leader_vote').eq('guild_id',guild.id),
-    db.from('cb_guild_activity').select('id,actor_id,kind,detail,amount,created_at').eq('guild_id',guild.id).order('id',{ascending:false}).limit(30),
+    db.from('cb_guild_activity').select('id,actor_id,kind,detail,amount,created_at').eq('guild_id',guild.id).order('id',{ascending:false}).limit(21),
     isLeader?db.from('cb_guild_join_requests').select('id,user_id,created_at').eq('guild_id',guild.id).eq('status','pending').order('created_at',{ascending:true}).limit(18):Promise.resolve(null),
     db.rpc('cb_guild_analytics',{p_user_id:userId,p_guild_id:guild.id})
    ]);
@@ -137,7 +137,8 @@ export default async function handler(req:Req,res:Res){
    const byId=new Map((players.data??[]).map(row=>[row.user_id,row]));
    members=(memberRows.data??[]).map(row=>({...row,profile:byId.get(row.user_id)}));
    const actorNames=new Map((actorProfiles.data??[]).map(row=>[row.user_id,row.display_name||row.username]));
-   activity=(history.data??[]).map(row=>({...row,actor_name:actorNames.get(row.actor_id)||'Player'}));
+   if((history.data??[]).length>20){const oldestKept=history.data![19].id;const removed=await db.from('cb_guild_activity').delete().eq('guild_id',guild.id).lt('id',oldestKept);if(removed.error)throw removed.error;}
+   activity=(history.data??[]).slice(0,20).map(row=>({...row,actor_name:actorNames.get(row.actor_id)||'Player'}));
    if(isLeader){
     const byUser=new Map((applicants.data??[]).map(row=>[row.user_id,row]));
     requests=(pending?.data??[]).map(row=>({...row,profile:byUser.get(row.user_id)}));

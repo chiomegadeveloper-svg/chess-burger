@@ -8,9 +8,9 @@ import "./notifications.css";
 
 type Notification = { key: string; kind: string; title: string; body: string; target: string; created_at: string; sticky?: boolean };
 type Inbox = { items: Notification[]; read_entries: { notification_key: string; read_at: string }[]; unavailable: string[] };
-type ChatSummary = { personalUnread: number; communityUnread: number; groups: { id: string; name: string; unread: number }[] };
+type ChatSummary = { personalUnread: number; firstUnreadSender?: string | null; communityUnread: number; groups: { id: string; name: string; unread: number }[] };
 type ArenaWindow = { entry_open: boolean; current: { date: string; slot: number; starts_at: string } | null };
-type Invite = { id: string; host_name: string; created_at: number | string; play_mode?: string; wager_gold?: number };
+type Invite = { id: string; host_name: string; created_at: number | string; play_mode?: string; wager_gold?: number; match_kind?: string };
 
 async function request(method: "GET" | "POST", keys?: string[]): Promise<Inbox | { ok: boolean }> {
   const client = await getSupabase();
@@ -116,18 +116,17 @@ export default function NotificationBell({ userId, invites, onNavigate }: { user
   }, [open]);
 
   const dynamic: Notification[] = [];
-  if (chat?.personalUnread) dynamic.push({ key: "chat:personal", kind: "chat", title: "Unread personal messages", body: `${chat.personalUnread} message${chat.personalUnread === 1 ? "" : "s"} waiting for you.`, target: "chat-personal", created_at: new Date().toISOString(), sticky: true });
-  if (chat?.communityUnread) dynamic.push({ key: "chat:community", kind: "chat", title: "Unread community messages", body: `${chat.communityUnread} message${chat.communityUnread === 1 ? "" : "s"} in community chat.`, target: "chat-community", created_at: new Date().toISOString(), sticky: true });
-  const groupUnread = chat?.groups.reduce((total, group) => total + group.unread, 0) ?? 0;
-  if (groupUnread) dynamic.push({ key: "chat:group", kind: "chat", title: "Unread group messages", body: `${groupUnread} message${groupUnread === 1 ? "" : "s"} across your groups.`, target: "chat-group", created_at: new Date().toISOString(), sticky: true });
+  if (chat?.personalUnread) dynamic.push({ key: `chat:personal:${chat.personalUnread}`, kind: "chat", title: "Unread personal messages", body: `${chat.personalUnread} message${chat.personalUnread === 1 ? "" : "s"} waiting for you.`, target: chat.firstUnreadSender ? `chat-personal:${chat.firstUnreadSender}` : "chat-personal", created_at: new Date().toISOString(), sticky: true });
+  if (chat?.communityUnread) dynamic.push({ key: `chat:community:${chat.communityUnread}`, kind: "chat", title: "Unread community messages", body: `${chat.communityUnread} message${chat.communityUnread === 1 ? "" : "s"} in community chat.`, target: "chat-community", created_at: new Date().toISOString(), sticky: true });
+  for (const group of chat?.groups ?? []) if (group.unread) dynamic.push({ key: `chat:group:${group.id}:${group.unread}`, kind: "chat", title: `Unread messages in ${group.name}`, body: `${group.unread} message${group.unread === 1 ? "" : "s"} waiting for you.`, target: `chat-group:${group.id}`, created_at: new Date().toISOString(), sticky: true });
   if (windowState?.entry_open && windowState.current) dynamic.push({ key: `arena-open:${windowState.current.date}:${windowState.current.slot}`, kind: "arena", title: "Grand Arena is open", body: "This session is accepting players now.", target: "grand-arena", created_at: windowState.current.starts_at });
-  for (const invite of invites) dynamic.push({ key: `invite:${invite.id}`, kind: "invite", title: `${invite.host_name} invited you to play`, body: invite.play_mode === "wager" ? `A ${invite.wager_gold} Gold challenge is waiting.` : "Open the invitation to accept or decline.", target: "play-select", created_at: new Date(invite.created_at).toISOString(), sticky: true });
+  for (const invite of invites) dynamic.push({ key: `invite:${invite.id}`, kind: invite.match_kind === "invasion" ? "territory" : "invite", title: invite.match_kind === "invasion" ? `${invite.host_name} challenged your kingdom` : `${invite.host_name} invited you to play`, body: invite.match_kind === "invasion" ? "Open the map to accept or decline this territory challenge." : invite.play_mode === "wager" ? `A ${invite.wager_gold} Gold challenge is waiting.` : "Open the invitation to accept or decline.", target: invite.match_kind === "invasion" ? "map" : "play-select", created_at: new Date(invite.created_at).toISOString(), sticky: true });
 
   const now = Date.now();
   const items = [...remote, ...dynamic]
     .filter(item => item.sticky || !read[item.key] || now - Date.parse(read[item.key]) < READ_RETENTION_MS)
     .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
-  const unread = items.filter(item => item.sticky || !read[item.key]).length;
+  const unread = items.filter(item => !read[item.key]).length;
   const mark = async (keys: string[]) => {
     if (!keys.length || !userId) return;
     const at = new Date().toISOString();
@@ -139,31 +138,31 @@ export default function NotificationBell({ userId, invites, onNavigate }: { user
       for (const key of keys) next[key] ??= at;
       return next;
     });
-    try { await request("POST", keys); }
+    try { for (let start = 0; start < keys.length; start += 80) await request("POST", keys.slice(start, start + 80)); }
     catch { /* This device still remembers the read state if the optional table is unavailable. */ }
   };
   const choose = (item: Notification) => {
     setOpen(false);
-    if (!item.sticky && !read[item.key]) void mark([item.key]);
+    if (!read[item.key]) void mark([item.key]);
     onNavigate(item.target);
   };
   const unreadCount = Math.min(99, unread);
 
   return <div className="notification-container" ref={container}>
-    <button className="notification-trigger" type="button" aria-label={`Notifications${unread ? `, ${unread} unread` : ""}`} aria-expanded={open} aria-controls="cb-notification-panel" onClick={() => { setOpen(value => !value); if (!open) void refresh(); }}>
+    <button className="notification-trigger" type="button" aria-label={`Notifications${unread ? `, ${unread} unread` : ""}`} aria-expanded={open} aria-controls="cb-notification-panel" onClick={() => { setOpen(value => !value); if (!open) { void mark(items.filter(item => !read[item.key]).map(item => item.key)); void refresh(); } }}>
       <Bell size={19} aria-hidden="true" />{unread > 0 && <span className="notification-badge" aria-hidden="true">{unread > 99 ? "99+" : unreadCount}</span>}
     </button>
     {open && <section id="cb-notification-panel" className="notification-panel" aria-label="Notifications">
       <div className="notification-heading"><span><Bell size={17} /><strong>Notifications</strong></span><button className="notification-close" type="button" onClick={() => setOpen(false)} aria-label="Close notifications"><X size={17} /></button></div>
-      <div className="notification-toolbar"><span>{unread ? `${unread} unread` : "All caught up"}</span><div><button type="button" aria-label="Refresh notifications" title="Refresh" disabled={loading} onClick={() => void refresh()}><RefreshCw size={15} className={loading ? "notification-spinning" : ""} /></button><button type="button" disabled={!items.some(item => !item.sticky && !read[item.key])} onClick={() => void mark(items.filter(item => !item.sticky && !read[item.key]).map(item => item.key))}><CheckCheck size={15} /> Mark read</button></div></div>
+      <div className="notification-toolbar"><span>{unread ? `${unread} unread` : "All caught up"}</span><div><button type="button" aria-label="Refresh notifications" title="Refresh" disabled={loading} onClick={() => void refresh()}><RefreshCw size={15} className={loading ? "notification-spinning" : ""} /></button><button type="button" disabled={!unread} onClick={() => void mark(items.filter(item => !read[item.key]).map(item => item.key))}><CheckCheck size={15} /> Mark read</button></div></div>
       {error && <p className="notification-error" role="alert">{error}</p>}
       {unavailable.length > 0 && <p className="notification-error">Some activity could not load. Try refreshing.</p>}
       <div className="notification-list" aria-live="polite">
         {items.length === 0 && <div className="notification-empty">{loading ? "Checking your activity…" : error ? "Try again when notifications are available." : "No notifications yet. Your next Chess Burger update will appear here."}</div>}
-        {items.map(item => <button type="button" key={item.key} className={`notification-item${item.sticky || !read[item.key] ? " is-unread" : ""}`} onClick={() => choose(item)}>
+        {items.map(item => <button type="button" key={item.key} className={`notification-item${!read[item.key] ? " is-unread" : ""}`} onClick={() => choose(item)}>
           <span className="notification-icon">{item.kind === "chat" || item.kind === "comment" ? <MessageCircle size={17} /> : item.kind === "gift" || item.kind === "reward" || item.kind === "purchase" ? <Gift size={17} /> : <Bell size={17} />}</span>
           <span className="notification-copy"><strong>{item.title}</strong><span>{item.body}</span><small>{ago(item.created_at)}</small></span>
-          {(item.sticky || !read[item.key]) && <i className="notification-dot" aria-label="Unread" />}
+          {!read[item.key] && <i className="notification-dot" aria-label="Unread" />}
         </button>)}
       </div>
     </section>}
