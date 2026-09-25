@@ -8,10 +8,10 @@ import { levelFor } from "./cbr";
 import type { ArenaPlayer } from "./game-rules";
 import { Coins, MessageCircle, RotateCcw, ShieldBan, Swords, Trash2, Users, Volume2, VolumeX, X } from "lucide-react";
 export type SocialView = "friends" | "followers" | "chat";
-type SocialOpenDetail = { view: SocialView; target?: string };
+type SocialOpenDetail = { view: SocialView; target?: string; mode?: "personal" | "community" | "group" | "requests" };
 let socialOpenHandler: ((detail: SocialOpenDetail) => void) | null = null;
-export function openSocial(view: SocialView, target?: string) {
-  const detail = { view, target };
+export function openSocial(view: SocialView, target?: string, mode?: SocialOpenDetail["mode"]) {
+  const detail = { view, target, mode };
   if (socialOpenHandler) {
     socialOpenHandler(detail);
     return;
@@ -287,13 +287,7 @@ export function SocialHub({
       }
       seq.current++;
       setView(detail.view);
-      setMode(
-        detail.view === "chat"
-          ? detail.target
-            ? "personal"
-            : "personal"
-          : detail.view,
-      );
+      setMode(detail.mode ?? (detail.view === "chat" ? "personal" : detail.view));
       setTarget(detail.target ?? "");
       setGroupId("");
       setQ("");

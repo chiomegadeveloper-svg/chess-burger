@@ -44,7 +44,7 @@ import { useGpsPresence } from "./gps-presence";
 import { useLivePresence } from "./live-presence";
 import { type ArenaMatch, type ArenaPlayer, timeControl } from "./game-rules";
 import { profileRequest } from "./profile-client";
-import { FloatingChatButton, SocialHub, MatchResult, type MatchSummary } from "./social";
+import { FloatingChatButton, SocialHub, MatchResult, openSocial, type MatchSummary } from "./social";
 import PublicProfile from "./public-profile";
 import InstallPrompt from "./install-prompt";
 import { BagPage, ShopPage } from "./shop";
@@ -55,6 +55,7 @@ import Puzzles from "./puzzles";
 import GrandArena from "./grand-arena";
 import Classroom from "./classroom";
 import GuildPage from "./guild";
+import NotificationBell from "./notifications";
 import "./play-selection-tournament.css";
 
 const modes = [
@@ -101,6 +102,7 @@ function savedSharedBoard(userId: string) {
   } catch { return ""; }
 }
 function AppPage() {
+  const [feedTarget, setFeedTarget] = useState<"recent" | "announcement" | "rewards">("recent");
   const [tab, setTab] = useState("profile"),
     [profile, setProfile] = useState<PlayerProfile | null>(null),
     [replayGame, setReplayGame] = useState<SavedGame | null>(null),
@@ -519,10 +521,25 @@ function AppPage() {
     }
     setTab(next);
   };
+  const openNotification = (target: string) => {
+    if (target === "chat-personal") return openSocial("chat", undefined, "personal");
+    if (target === "chat-community") return openSocial("chat", undefined, "community");
+    if (target === "chat-group") return openSocial("chat", undefined, "group");
+    if (target === "friend-requests") return openSocial("friends", undefined, "requests");
+    if (target === "followers") return openSocial("followers");
+    if (target === "rewards" || target === "announcements" || target === "home") {
+      setFeedTarget(target === "rewards" ? "rewards" : target === "announcements" ? "announcement" : "recent");
+      navigate("home");
+      return;
+    }
+    navigate(target);
+  };
   let content;
   if (tab === "home")
     content = (
       <CommunityFeed
+        key={feedTarget}
+        initialTab={feedTarget}
         onMatch={openMatch}
         onArena={() => setTab("grand-arena")}
         onChallenge={(player) => {
@@ -878,7 +895,9 @@ function AppPage() {
             <GraduationCap size={17} />
             <span>Classroom</span>
           </button>
+          <NotificationBell userId={member === true && profile?.user_id !== "guest-device" ? profile?.user_id : undefined} invites={invites} onNavigate={openNotification} />
           <button
+            className="header-about-button"
             aria-label="About Chess Burger"
             onClick={() =>
               toast.info("Chess Burger", {
@@ -989,7 +1008,7 @@ function AppPage() {
               (active === key ? "active " : "") +
               (key === "play" ? "play-nav" : "")
             }
-            onClick={() => (key === "profile" ? setTab(key) : navigate(key === "play" ? "play-select" : key))}
+            onClick={() => { if (key === "home") setFeedTarget("recent"); if (key === "profile") setTab(key); else navigate(key === "play" ? "play-select" : key); }}
           >
             <span className="nav-icon-shell">
               <Icon size={20} strokeWidth={1.7} />
