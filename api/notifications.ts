@@ -42,7 +42,7 @@ export default async function handler(req: Req, res: Res) {
 
     const now = Date.now(), cutoff = new Date(now - age).toISOString(), day = phDay(now);
     const [reads, reward, puzzle, banners, comments, feed, purchases, gifts, socials, member, announcements] = await Promise.all([
-      db.from('cb_notification_reads').select('notification_key').eq('user_id', userId).gte('read_at', cutoff).order('read_at', { ascending: false }).limit(500),
+      db.from('cb_notification_reads').select('notification_key,read_at').eq('user_id', userId).gte('read_at', cutoff).order('read_at', { ascending: false }).limit(500),
       db.rpc('cb_daily_reward_status', { p_user_id: userId }),
       db.from('cb_daily_puzzle_claims').select('puzzle_id').eq('user_id', userId).eq('puzzle_day', day).limit(1),
       db.from('cb_user_items').select('product_id,expires_at').eq('user_id', userId).gt('expires_at', new Date(now).toISOString()).lte('expires_at', new Date(now + 48 * 3600_000).toISOString()).order('expires_at', { ascending: true }).limit(12),
@@ -105,7 +105,7 @@ export default async function handler(req: Req, res: Res) {
     for (const row of chestRows) add({ key: `guild-gold:${row.id}`, kind: 'guild', title: 'Guild Gold earned', body: `${actor(row.user_id)} added ${row.amount} Gold to the guild chest.`, target: 'guild', created_at: row.created_at });
     for (const row of announcementRows) if (!row.expires_at || Date.parse(row.expires_at) > now) add({ key: `announcement:${row.id}`, kind: 'announcement', title: 'New Chess Burger announcement', body: clean(row.content, 110) || 'See what is new in the community.', target: 'announcements', created_at: row.created_at });
     alerts.sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
-    return res.status(200).json({ items: alerts.slice(0, 80), read_keys: (reads.data ?? []).map(row => row.notification_key), unavailable: errors });
+    return res.status(200).json({ items: alerts.slice(0, 80), read_entries: reads.data ?? [], unavailable: errors });
   } catch (error) {
     const failure = error as Error & { status?: number };
     return res.status(failure.status ?? 500).json({ error: failure.message || 'Notifications are temporarily unavailable.' });
