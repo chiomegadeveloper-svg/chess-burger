@@ -64,14 +64,15 @@ export default async function handler(req: Req, res: Res) {
     const bannerRows = rows(banners, 'banners'), commentRows = rows(comments, 'portfolio comments'), feedRows = rows(feed, 'feed'), purchaseRows = rows(purchases, 'purchases');
     const giftRows = rows(gifts, 'gifts'), socialRows = rows(socials, 'friends'), announcementRows = rows(announcements, 'announcements');
     const ids = feedRows.map(row => row.id as string);
-    const [reactions, guild, products] = await Promise.all([
+    const [reactions, guild, chest, products] = await Promise.all([
       ids.length ? db.from('cb_feed_reactions').select('feed_id,user_id,created_at').in('feed_id', ids).neq('user_id', userId).gte('created_at', cutoff).order('created_at', { ascending: false }).limit(40) : Promise.resolve({ data: [], error: null }),
-      member.data?.guild_id ? db.from('cb_guild_activity').select('id,guild_id,actor_id,kind,amount,created_at').eq('guild_id', member.data.guild_id).in('kind', ['join', 'cbg', 'leader']).gte('created_at', member.data.joined_at > cutoff ? member.data.joined_at : cutoff).order('created_at', { ascending: false }).limit(40) : Promise.resolve({ data: [], error: null }),
+      member.data?.guild_id ? db.from('cb_guild_activity').select('id,guild_id,actor_id,kind,created_at').eq('guild_id', member.data.guild_id).in('kind', ['join', 'leader']).gte('created_at', member.data.joined_at > cutoff ? member.data.joined_at : cutoff).order('created_at', { ascending: false }).limit(40) : Promise.resolve({ data: [], error: null }),
+      member.data?.guild_id ? db.from('cb_guild_chest_ledger').select('id,user_id,amount,created_at').eq('guild_id', member.data.guild_id).gt('amount', 0).gte('created_at', member.data.joined_at > cutoff ? member.data.joined_at : cutoff).order('created_at', { ascending: false }).limit(30) : Promise.resolve({ data: [], error: null }),
       bannerRows.length || giftRows.length ? db.from('cb_shop_products').select('id,name').in('id', [...new Set([...bannerRows.map(row => row.product_id), ...giftRows.map(row => row.item_id)].filter(Boolean))]) : Promise.resolve({ data: [], error: null }),
     ]);
     if (member.error) errors.push('guild');
-    const reactionRows = rows(reactions, 'reactions'), guildRows = rows(guild, 'guild'), productRows = rows(products, 'products');
-    const actorIds = [...new Set([...commentRows.map(row => row.author_id), ...reactionRows.map(row => row.user_id), ...giftRows.map(row => row.sender_id), ...socialRows.map(row => row.user_id), ...guildRows.map(row => row.actor_id)].filter(Boolean))] as string[];
+    const reactionRows = rows(reactions, 'reactions'), guildRows = rows(guild, 'guild'), chestRows = rows(chest, 'guild Gold'), productRows = rows(products, 'products');
+    const actorIds = [...new Set([...commentRows.map(row => row.author_id), ...reactionRows.map(row => row.user_id), ...giftRows.map(row => row.sender_id), ...socialRows.map(row => row.user_id), ...guildRows.map(row => row.actor_id), ...chestRows.map(row => row.user_id)].filter(Boolean))] as string[];
     const actors = actorIds.length ? await db.from('cb_profiles').select('user_id,display_name,username').in('user_id', actorIds.slice(0, 130)) : { data: [], error: null };
     const actorMap = new Map((actors.data ?? []).map(row => [row.user_id, clean(row.display_name || row.username || 'Player', 50)]));
     const actor = (id: string) => actorMap.get(id) ?? 'A player';
@@ -99,9 +100,9 @@ export default async function handler(req: Req, res: Res) {
     }
     for (const row of guildRows) {
       if (row.kind === 'join' && row.actor_id !== userId) add({ key: `guild:${row.id}`, kind: 'guild', title: 'New guild member', body: `${actor(row.actor_id)} joined your guild.`, target: 'guild', created_at: row.created_at });
-      if (row.kind === 'cbg' && row.amount > 0) add({ key: `guild:${row.id}`, kind: 'guild', title: 'Guild Gold earned', body: `${actor(row.actor_id)} added ${row.amount} Gold to guild activity.`, target: 'guild', created_at: row.created_at });
       if (row.kind === 'leader') add({ key: `guild:${row.id}`, kind: 'guild', title: 'New guild leader', body: `${actor(row.actor_id)} became the guild leader.`, target: 'guild', created_at: row.created_at });
     }
+    for (const row of chestRows) add({ key: `guild-gold:${row.id}`, kind: 'guild', title: 'Guild Gold earned', body: `${actor(row.user_id)} added ${row.amount} Gold to the guild chest.`, target: 'guild', created_at: row.created_at });
     for (const row of announcementRows) if (!row.expires_at || Date.parse(row.expires_at) > now) add({ key: `announcement:${row.id}`, kind: 'announcement', title: 'New Chess Burger announcement', body: clean(row.content, 110) || 'See what is new in the community.', target: 'announcements', created_at: row.created_at });
     alerts.sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
     return res.status(200).json({ items: alerts.slice(0, 80), read_keys: (reads.data ?? []).map(row => row.notification_key), unavailable: errors });
