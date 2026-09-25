@@ -7,7 +7,7 @@ import { getSupabase } from "./supabase";
 import "./notifications.css";
 
 type Notification = { key: string; kind: string; title: string; body: string; target: string; created_at: string; sticky?: boolean };
-type Inbox = { items: Notification[]; read_keys: string[]; unavailable: string[] };
+type Inbox = { items: Notification[]; read_entries: { notification_key: string; read_at: string }[]; unavailable: string[] };
 type ChatSummary = { personalUnread: number; communityUnread: number; groups: { id: string; name: string; unread: number }[] };
 type ArenaWindow = { entry_open: boolean; current: { date: string; slot: number; starts_at: string } | null };
 type Invite = { id: string; host_name: string; created_at: number | string; play_mode?: string; wager_gold?: number };
@@ -35,16 +35,32 @@ const ago = (value: string) => {
   if (minutes < 1440) return `${Math.floor(minutes / 60)}h ago`;
   return `${Math.floor(minutes / 1440)}d ago`;
 };
+const READ_RETENTION_MS = 24 * 60 * 60 * 1000;
+type ReadTimes = Record<string, string>;
 const readKey = (userId: string) => `cb-notification-reads:${userId}`;
-const savedReads = (userId: string): string[] => {
-  try { const value = JSON.parse(localStorage.getItem(readKey(userId)) || "[]"); return Array.isArray(value) ? value.filter((key): key is string => typeof key === "string").slice(-500) : []; }
-  catch { return []; }
+const savedReads = (userId: string): ReadTimes => {
+  try {
+    const raw = JSON.parse(localStorage.getItem(readKey(userId)) || "{}");
+    const legacy = Array.isArray(raw);
+    const entries: [string, unknown][] = legacy ? raw.map((key: string) => [key, new Date().toISOString()]) : Object.entries(raw);
+    const valid = entries.filter(([key, at]) => typeof key === "string" && key.length < 161 && typeof at === "string" && Number.isFinite(Date.parse(at))) as [string, string][];
+    const result = Object.fromEntries(valid.slice(-500)) as ReadTimes;
+    if (legacy) localStorage.setItem(readKey(userId), JSON.stringify(result));
+    return result;
+  } catch { return {}; }
+};
+const mergeReads = (local: ReadTimes, server: Inbox["read_entries"]): ReadTimes => {
+  const merged = { ...local };
+  for (const entry of server || []) {
+    if (!merged[entry.notification_key] || Date.parse(entry.read_at) < Date.parse(merged[entry.notification_key])) merged[entry.notification_key] = entry.read_at;
+  }
+  return merged;
 };
 
 export default function NotificationBell({ userId, invites, onNavigate }: { userId?: string; invites: Invite[]; onNavigate: (target: string) => void }) {
   const [open, setOpen] = useState(false);
   const [remote, setRemote] = useState<Notification[]>([]);
-  const [read, setRead] = useState<string[]>([]);
+  const [read, setRead] = useState<ReadTimes>({});
   const [chat, setChat] = useState<ChatSummary | null>(null);
   const [windowState, setWindowState] = useState<ArenaWindow | null>(null);
   const [unavailable, setUnavailable] = useState<string[]>([]);
@@ -67,7 +83,7 @@ export default function NotificationBell({ userId, invites, onNavigate }: { user
     if (currentUser.current !== userId) return;
     if (inbox.status === "fulfilled") {
       setRemote(inbox.value.items);
-      setRead([...new Set([...savedReads(userId), ...inbox.value.read_keys])]);
+      setRead(mergeReads(savedReads(userId), inbox.value.read_entries));
       setUnavailable(inbox.value.unavailable);
       setError("");
     } else setError(inbox.reason instanceof Error ? inbox.reason.message : "Notifications are temporarily unavailable.");
@@ -78,7 +94,7 @@ export default function NotificationBell({ userId, invites, onNavigate }: { user
   }, [userId]);
 
   useEffect(() => {
-    setRemote([]); setRead(userId ? savedReads(userId) : []); setChat(null); setWindowState(null); setError(""); setOpen(false);
+    setRemote([]); setRead(userId ? savedReads(userId) : {}); setChat(null); setWindowState(null); setError(""); setOpen(false);
     if (!userId) return;
     const initial = window.setTimeout(() => void refresh(), 0);
     const timer = window.setInterval(() => { if (document.visibilityState === "visible") void refresh(); }, 60_000);
@@ -107,20 +123,28 @@ export default function NotificationBell({ userId, invites, onNavigate }: { user
   if (windowState?.entry_open && windowState.current) dynamic.push({ key: `arena-open:${windowState.current.date}:${windowState.current.slot}`, kind: "arena", title: "Grand Arena is open", body: "This session is accepting players now.", target: "grand-arena", created_at: windowState.current.starts_at });
   for (const invite of invites) dynamic.push({ key: `invite:${invite.id}`, kind: "invite", title: `${invite.host_name} invited you to play`, body: invite.play_mode === "wager" ? `A ${invite.wager_gold} Gold challenge is waiting.` : "Open the invitation to accept or decline.", target: "play-select", created_at: new Date(invite.created_at).toISOString(), sticky: true });
 
-  const items = [...remote, ...dynamic].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
-  const readSet = new Set(read);
-  const unread = items.filter(item => item.sticky || !readSet.has(item.key)).length;
+  const now = Date.now();
+  const items = [...remote, ...dynamic]
+    .filter(item => item.sticky || !read[item.key] || now - Date.parse(read[item.key]) < READ_RETENTION_MS)
+    .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+  const unread = items.filter(item => item.sticky || !read[item.key]).length;
   const mark = async (keys: string[]) => {
     if (!keys.length || !userId) return;
-    const updated = [...new Set([...savedReads(userId), ...keys])].slice(-500);
-    try { localStorage.setItem(readKey(userId), JSON.stringify(updated)); } catch {}
-    setRead(previous => [...new Set([...previous, ...keys])]);
+    const at = new Date().toISOString();
+    const updated = savedReads(userId);
+    for (const key of keys) updated[key] ??= at;
+    try { localStorage.setItem(readKey(userId), JSON.stringify(Object.fromEntries(Object.entries(updated).slice(-500)))); } catch {}
+    setRead(previous => {
+      const next = { ...previous };
+      for (const key of keys) next[key] ??= at;
+      return next;
+    });
     try { await request("POST", keys); }
     catch { /* This device still remembers the read state if the optional table is unavailable. */ }
   };
   const choose = (item: Notification) => {
     setOpen(false);
-    if (!item.sticky && !readSet.has(item.key)) void mark([item.key]);
+    if (!item.sticky && !read[item.key]) void mark([item.key]);
     onNavigate(item.target);
   };
   const unreadCount = Math.min(99, unread);
@@ -131,15 +155,15 @@ export default function NotificationBell({ userId, invites, onNavigate }: { user
     </button>
     {open && <section id="cb-notification-panel" className="notification-panel" aria-label="Notifications">
       <div className="notification-heading"><span><Bell size={17} /><strong>Notifications</strong></span><button className="notification-close" type="button" onClick={() => setOpen(false)} aria-label="Close notifications"><X size={17} /></button></div>
-      <div className="notification-toolbar"><span>{unread ? `${unread} unread` : "All caught up"}</span><div><button type="button" aria-label="Refresh notifications" title="Refresh" disabled={loading} onClick={() => void refresh()}><RefreshCw size={15} className={loading ? "notification-spinning" : ""} /></button><button type="button" disabled={!items.some(item => !item.sticky && !readSet.has(item.key))} onClick={() => void mark(items.filter(item => !item.sticky && !readSet.has(item.key)).map(item => item.key))}><CheckCheck size={15} /> Mark read</button></div></div>
+      <div className="notification-toolbar"><span>{unread ? `${unread} unread` : "All caught up"}</span><div><button type="button" aria-label="Refresh notifications" title="Refresh" disabled={loading} onClick={() => void refresh()}><RefreshCw size={15} className={loading ? "notification-spinning" : ""} /></button><button type="button" disabled={!items.some(item => !item.sticky && !read[item.key])} onClick={() => void mark(items.filter(item => !item.sticky && !read[item.key]).map(item => item.key))}><CheckCheck size={15} /> Mark read</button></div></div>
       {error && <p className="notification-error" role="alert">{error}</p>}
       {unavailable.length > 0 && <p className="notification-error">Some activity could not load. Try refreshing.</p>}
       <div className="notification-list" aria-live="polite">
         {items.length === 0 && <div className="notification-empty">{loading ? "Checking your activity…" : error ? "Try again when notifications are available." : "No notifications yet. Your next Chess Burger update will appear here."}</div>}
-        {items.map(item => <button type="button" key={item.key} className={`notification-item${item.sticky || !readSet.has(item.key) ? " is-unread" : ""}`} onClick={() => choose(item)}>
+        {items.map(item => <button type="button" key={item.key} className={`notification-item${item.sticky || !read[item.key] ? " is-unread" : ""}`} onClick={() => choose(item)}>
           <span className="notification-icon">{item.kind === "chat" || item.kind === "comment" ? <MessageCircle size={17} /> : item.kind === "gift" || item.kind === "reward" || item.kind === "purchase" ? <Gift size={17} /> : <Bell size={17} />}</span>
           <span className="notification-copy"><strong>{item.title}</strong><span>{item.body}</span><small>{ago(item.created_at)}</small></span>
-          {(item.sticky || !readSet.has(item.key)) && <i className="notification-dot" aria-label="Unread" />}
+          {(item.sticky || !read[item.key]) && <i className="notification-dot" aria-label="Unread" />}
         </button>)}
       </div>
     </section>}
