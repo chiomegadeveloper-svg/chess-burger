@@ -866,7 +866,12 @@ export default async function handler(req: Req, res: Res) {
       const username=String(body.username??'').trim(),kind=String(body.item_kind??''),itemId=String(body.item_id??''),quantity=Number(body.quantity??1),requestId=String(body.request_id??'');
       if(!/^@?[a-z0-9_]{2,40}$/i.test(username)||!/^[a-z][a-z0-9_-]{1,40}$/i.test(kind)||!/^[a-z0-9][a-z0-9_-]{1,80}$/i.test(itemId)||!Number.isInteger(quantity)||quantity<1||!/^[a-f0-9-]{36}$/i.test(requestId))fail(400,'Choose a valid item, quantity, and recipient username.');
       const gifted=await client.rpc('cb_gift_bag_item',{p_sender_id:account.id,p_username:username,p_item_kind:kind,p_item_id:itemId,p_quantity:quantity,p_request_id:requestId});
-      if(gifted.error){const message=String(gifted.error.message??'Gift failed.');if(/cb_gift_bag_item|cb_inventory_items|cb_item_gifts|schema cache|function|column .* does not exist/i.test(message))fail(503,'Run supabase/0058_repair_bag_gifting.sql in Supabase, then try again.');fail(409,message);}
+      if(gifted.error){
+        const message=String(gifted.error.message??'Gift failed.'),code=String(gifted.error.code??'');
+        console.error('arena.gift-bag-item.rpc',{code,message,project:(process.env.NEXT_PUBLIC_SUPABASE_URL||process.env.VITE_SUPABASE_URL||process.env.SUPABASE_URL||'').replace(/^https?:\/\//,'').split('/')[0]});
+        if(['PGRST202','42883','42P01','42703'].includes(code))fail(503,`Bag gifting database setup is incomplete (${code}). Confirm migration 0058 was run in the Supabase project configured for this app.`);
+        fail(409,message);
+      }
       return res.status(200).json(gifted.data);
     }
     if(action==='daily-reward-status'||action==='claim-daily-reward'){
