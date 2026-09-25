@@ -220,17 +220,19 @@ const cardStyles: Record<string, CSSProperties> = {
 };
 
 export default function CommunityFeed({
+  initialTab = "recent",
   onOpenProfile,
   onMatch,
   onChallenge,
   onArena,
 }: {
+  initialTab?: FeedTab;
   onOpenProfile: (userId: string) => void;
   onMatch: (id: string) => void;
   onChallenge: (player: ArenaPlayer) => void;
   onArena: () => void;
 }) {
-  const [tab, setTab] = useState<FeedTab>("recent"),
+  const [tab, setTab] = useState<FeedTab>(initialTab),
     [page, setPage] = useState(1),
     [events, setEvents] = useState<CommunityEvent[]>([]);
   const [challenges, setChallenges] = useState<CommunityEvent[]>([]),
