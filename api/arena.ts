@@ -1164,6 +1164,37 @@ export default async function handler(req: Req, res: Res) {
       const r = await client.from('cb_profiles').select('user_id,username,display_name,avatar_url,country_code,cbr,gold_points,wins,losses,win_streak').neq('user_id', account.id).or(`username.ilike.%${query}%,display_name.ilike.%${query}%`).limit(10);
       if (r.error) fail(500, r.error.message); return res.status(200).json({ players: r.data ?? [] });
     }
+    if (action === 'gift-recipient-search') {
+      const query = String(body.query ?? '').trim().replace(/^@/, '').toLowerCase();
+      if (!/^[a-z0-9_]{2,40}$/.test(query)) return res.status(200).json({ players: [] });
+      type Recipient = { user_id: string; username: string; display_name: string | null; avatar_url: string | null };
+      const fields = 'user_id,username,display_name,avatar_url';
+      const direct = await client.from('cb_profiles').select(fields).neq('user_id', account.id).ilike('username', `%${query}%`).limit(40);
+      if (direct.error) fail(500, direct.error.message);
+      const found = new Map<string, Recipient>((direct.data ?? []).map((row: Recipient) => [row.user_id, row]));
+      if (query.length >= 3) {
+        const parts = [...new Set(Array.from({ length: query.length - 1 }, (_, index) => query.slice(index, index + 2)))].slice(0, 8);
+        const approximate = await client.from('cb_profiles').select(fields).neq('user_id', account.id).or(parts.map(part => `username.ilike.%${part}%`).join(',')).limit(120);
+        if (approximate.error) fail(500, approximate.error.message);
+        for (const row of approximate.data ?? []) found.set(row.user_id, row);
+      }
+      const distance = (left: string, right: string) => {
+        let previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+        for (let i = 1; i <= left.length; i++) {
+          const next = [i];
+          for (let j = 1; j <= right.length; j++) next[j] = Math.min(previous[j] + 1, next[j - 1] + 1, previous[j - 1] + Number(left[i - 1] !== right[j - 1]));
+          previous = next;
+        }
+        return previous[right.length];
+      };
+      const scored = [...found.values()].map(row => {
+        const name = row.username.toLowerCase();
+        const edits = Math.min(distance(query, name), ...[query.length - 1, query.length, query.length + 1].filter(length => length > 0 && length <= name.length).flatMap(length => Array.from({ length: name.length - length + 1 }, (_, index) => distance(query, name.slice(index, index + length)))));
+        return { row, edits, score: name === query ? -3 : name.startsWith(query) ? -2 : name.includes(query) ? -1 : edits };
+      }).filter(result => result.score < 0 || result.edits <= Math.max(2, Math.ceil(query.length * .4)))
+        .sort((a, b) => a.score - b.score || a.edits - b.edits || a.row.username.localeCompare(b.row.username));
+      return res.status(200).json({ players: scored.slice(0, 8).map(result => result.row) });
+    }
     if (action === 'queue') return res.status(200).json(await queuedMatch(client, account, String(body.control ?? ''), body.play_mode, body.wager_gold));
     if (action === 'cancel-queue') {
       const removed = await client.from('cb_match_queue').delete().eq('user_id', account.id).is('match_id', null);

@@ -495,7 +495,30 @@ export function BagPage({ onChanged }: { onChanged: () => void }) {
       max: number;
     } | null>(null),
     [username, setUsername] = useState(""),
+    [recipients, setRecipients] = useState<{ user_id: string; username: string; display_name: string | null; avatar_url: string | null }[]>([]),
+    [chosenRecipient, setChosenRecipient] = useState<string | null>(null),
+    [searchingRecipient, setSearchingRecipient] = useState(false),
+    [recipientSearchError, setRecipientSearchError] = useState(false),
     [quantity, setQuantity] = useState(1),[cbc,setCbc]=useState(0),[cbcError,setCbcError]=useState(false);
+  useEffect(() => {
+    const query = username.trim().replace(/^@/, "");
+    if (!giftItem || chosenRecipient || !/^[a-z0-9_]{2,40}$/i.test(query)) {
+      setRecipients([]);
+      setSearchingRecipient(false);
+      setRecipientSearchError(false);
+      return;
+    }
+    let cancelled = false;
+    setSearchingRecipient(true);
+    setRecipientSearchError(false);
+    const timer = window.setTimeout(() => {
+      void arena<{ players: { user_id: string; username: string; display_name: string | null; avatar_url: string | null }[] }>("gift-recipient-search", { query })
+        .then(result => { if (!cancelled) setRecipients(result.players); })
+        .catch(() => { if (!cancelled) { setRecipients([]); setRecipientSearchError(true); } })
+        .finally(() => { if (!cancelled) setSearchingRecipient(false); });
+    }, 250);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [giftItem, username, chosenRecipient]);
   const load = async () => {
     const data = await arena<BagState>("bag-items");
     setState(data);
@@ -533,10 +556,12 @@ export function BagPage({ onChanged }: { onChanged: () => void }) {
   const openGift = (kind: string, id: string, name: string, max = 1) => {
     setGiftItem({ kind, id, name, max });
     setUsername("");
+    setChosenRecipient(null);
+    setRecipients([]);
     setQuantity(1);
   };
   const sendGift = async () => {
-    if (!giftItem || busy) return;
+    if (!giftItem || busy || !chosenRecipient || username !== chosenRecipient) return;
     setBusy(`gift:${giftItem.kind}:${giftItem.id}`);
     try {
       const result = giftItem.kind === "gold"
@@ -732,10 +757,24 @@ export function BagPage({ onChanged }: { onChanged: () => void }) {
                 autoFocus
                 required
                 value={username}
-                onChange={(event) => setUsername(event.target.value)}
+                onChange={(event) => { setUsername(event.target.value); setChosenRecipient(null); setRecipients([]); }}
                 placeholder="@username"
+                maxLength={41}
+                autoComplete="off"
+                role="combobox"
+                aria-autocomplete="list"
+                aria-expanded={!chosenRecipient && recipients.length > 0}
+                aria-controls="bag-gift-recipients"
               />
             </label>
+            {!chosenRecipient && recipients.length > 0 && <div className="bag-gift-recipients" id="bag-gift-recipients" role="listbox" aria-label="Matching players">
+              {recipients.map(player => <button key={player.user_id} type="button" role="option" aria-selected="false" onClick={() => { setUsername(player.username); setChosenRecipient(player.username); setRecipients([]); }}>
+                {player.avatar_url ? <img src={player.avatar_url} alt="" /> : <span className="bag-gift-avatar">{player.username.charAt(0).toUpperCase()}</span>}
+                <span><strong>@{player.username}</strong>{player.display_name && <small>{player.display_name}</small>}</span>
+              </button>)}
+            </div>}
+            {!chosenRecipient && <small className="bag-gift-search-note" aria-live="polite">{searchingRecipient ? "Searching players…" : recipientSearchError ? "Search unavailable. Try again." : username.trim().replace(/^@/, "").length < 2 ? "Type at least 2 characters to find a player." : recipients.length ? "Select the correct player to send your gift." : "No matching players yet. Check the spelling."}</small>}
+            {chosenRecipient && <small className="bag-gift-search-note">Gift recipient: @{chosenRecipient}</small>}
               {giftItem.max > 1 && (
                 <label>
                   {giftItem.kind==="gold"?"Gold amount":"Quantity"}
@@ -767,7 +806,7 @@ export function BagPage({ onChanged }: { onChanged: () => void }) {
               </button>
               <button
                 className="gold-button"
-                disabled={!!busy || !username.trim()}
+                disabled={!!busy || !chosenRecipient || username !== chosenRecipient}
               >
                 Send gift
               </button>
