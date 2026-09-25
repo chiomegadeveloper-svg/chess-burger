@@ -10,7 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ShieldCheck, Camera, Image as ImageIcon, Trophy } from "lucide-react";
+import { Camera, Image as ImageIcon, Trophy } from "lucide-react";
 import { toast } from "sonner";
 import { levelFor } from "./cbr";
 import { getSupabase, PlayerProfile } from "./supabase";
@@ -97,7 +97,6 @@ const asDataUrl = (blob: Blob) =>
 export default function Account({
   onSaved,
   cardOnly = false,
-  onOpenCms,
   onLoaded,
   onMembershipChange,
   registrationOnly = false,
@@ -106,7 +105,6 @@ export default function Account({
   onLoaded?: (profile: PlayerProfile) => void;
   onSaved: (profile: PlayerProfile) => void;
   cardOnly?: boolean;
-  onOpenCms?: () => void;
   onMembershipChange?: (member: boolean) => void;
   registrationOnly?: boolean;
   portfolioNotification?: { slot: number; id: number } | null;
@@ -951,16 +949,6 @@ export default function Account({
         <div className="account-toolbar">
           <span>Personal profile</span>
           <div className="account-controls">
-            {isStaff && !registrationOnly && (
-              <button
-                type="button"
-                className="cms-access-button"
-                onClick={onOpenCms}
-              >
-                <ShieldCheck size={17} />
-                CMS
-              </button>
-            )}
             <button className="gold-button" type="button" onClick={() => setEditing(true)}>Edit profile</button>
             {!guest && user && <button type="button" onClick={() => setShowPasswordSecurity((open) => !open)}>{showPasswordSecurity ? "Cancel password" : "Change password"}</button>}
             <button
@@ -1061,16 +1049,6 @@ export default function Account({
           Keep me logged in
         </label>
         <div className="account-controls">
-          {isStaff && !registrationOnly && (
-            <button
-              type="button"
-              className="cms-access-button"
-              onClick={onOpenCms}
-            >
-              <ShieldCheck size={17} />
-              CMS
-            </button>
-          )}
           <button
             className="signout-button"
             disabled={busy}
@@ -1109,9 +1087,9 @@ export default function Account({
             {flag(profile.country_code)} Level {level.level} · {level.name}
           </p>
           {isStaff && !registrationOnly && (
-            <button type="button" className="role-badge" onClick={onOpenCms}>
+            <span className="role-badge">
               {profile.role === "owner" ? "OWNER" : "GM ADMIN"}
-            </button>
+            </span>
           )}
           {registered !== false && (
             <div className="profile-social">

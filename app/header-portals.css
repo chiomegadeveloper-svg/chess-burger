@@ -1,0 +1,6 @@
+.header-actions .header-classroom-button,.header-actions .header-cms-button{display:inline-flex;align-items:center;justify-content:center;gap:7px;width:auto;min-height:34px;padding:0 11px;border:1px solid #957430;border-radius:999px;background:linear-gradient(140deg,#3a2d18,#201c17);color:#f5d990;font-size:11px;font-weight:700;white-space:nowrap;cursor:pointer}
+.header-actions .header-cms-button{border-color:#398294;background:linear-gradient(140deg,#173c46,#15232a);color:#9ee9f0}
+.header-actions .header-classroom-button:hover,.header-actions .header-classroom-button:focus-visible{border-color:#f2d478;background:#48371a;outline:2px solid #f2d47855}
+.header-actions .header-cms-button:hover,.header-actions .header-cms-button:focus-visible{border-color:#89e7ed;background:#20505b;outline:2px solid #89e7ed55}
+.header-actions .header-classroom-button svg,.header-actions .header-cms-button svg{flex:none}
+@media(max-width:620px){.header-actions .header-classroom-button,.header-actions .header-cms-button{width:34px;min-width:34px;height:34px;min-height:34px;padding:0}.header-actions .header-classroom-button span,.header-actions .header-cms-button span{display:none}}

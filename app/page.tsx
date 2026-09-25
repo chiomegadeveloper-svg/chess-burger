@@ -57,6 +57,7 @@ import Classroom from "./classroom";
 import GuildPage from "./guild";
 import NotificationBell from "./notifications";
 import "./play-selection-tournament.css";
+import "./header-portals.css";
 
 const modes = [
   {
@@ -513,7 +514,7 @@ function AppPage() {
       Match Lobby
     </button>
   );
-  const staff = profile && ["owner", "admin"].includes(profile.role);
+  const owner = member === true && profile?.role === "owner";
   const navigate = (next: string) => {
     if (!member) {
       setTab("profile");
@@ -765,7 +766,7 @@ function AppPage() {
   else if (tab === "shop") content = <ShopPage profile={profile} onChanged={() => void refreshProfile()} />;
   else if (tab === "bag") content = <BagPage onChanged={() => void refreshProfile()} />;
   else if (tab === "guild") content = <GuildPage profile={profile} onChanged={() => void refreshProfile()} />;
-  else if (tab === "cms" && staff)
+  else if (tab === "cms" && owner)
     content = <Cms profile={profile} onClose={() => setTab("profile")} />;
   else
     content = (
@@ -777,7 +778,6 @@ function AppPage() {
           portfolioNotification={portfolioNotification}
           onLoaded={setProfile}
           onSaved={onSaved}
-          onOpenCms={() => setTab("cms")}
           onMembershipChange={(m) => {
             setMember(m);
             if (!m) setTab("profile");
@@ -907,6 +907,15 @@ function AppPage() {
             <GraduationCap size={17} />
             <span>Classroom</span>
           </button>
+          {owner && <button
+            type="button"
+            className="header-cms-button"
+            aria-label="Open owner CMS portal"
+            onClick={() => navigate("cms")}
+          >
+            <ShieldCheck size={17} aria-hidden="true" />
+            <span>CMS</span>
+          </button>}
           <NotificationBell userId={member === true && profile?.user_id !== "guest-device" ? profile?.user_id : undefined} invites={invites} onNavigate={openNotification} />
           <button
             className="header-about-button"
