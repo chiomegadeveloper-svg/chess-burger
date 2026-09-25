@@ -489,11 +489,18 @@ export function BagPage({ onChanged }: { onChanged: () => void }) {
       max: number;
     } | null>(null),
     [username, setUsername] = useState(""),
-    [quantity, setQuantity] = useState(1),[cbc,setCbc]=useState(0);
+    [quantity, setQuantity] = useState(1),[cbc,setCbc]=useState(0),[cbcError,setCbcError]=useState(false);
   const load = async () => {
-    const [data,classData] = await Promise.all([arena<BagState>("bag-items"),classroom<{wallet:{cbc:number}}>("state")]);
+    const data = await arena<BagState>("bag-items");
     setState(data);
-    setCbc(classData.wallet.cbc);
+    try {
+      const classData = await classroom<{ wallet: { cbc: number } }>("state");
+      setCbc(classData.wallet.cbc);
+      setCbcError(false);
+    } catch {
+      // Classroom availability must not prevent players from opening their Bag.
+      setCbcError(true);
+    }
   };
   useEffect(() => {
     void load()
@@ -569,6 +576,7 @@ export function BagPage({ onChanged }: { onChanged: () => void }) {
           </span>
         </div>
       </div>
+      {cbcError && <p role="alert" className="account-note">Classroom credits are temporarily unavailable. Other Bag items can still be gifted.</p>}
       {loading ? (
         <p className="account-note">Opening your bag…</p>
       ) : (
