@@ -7,17 +7,19 @@ import { gameFromPgn, boardResult, finishClockTurn, remainingClock, TIME_CONTROL
 import MatchBoard from "./match-board";
 
 const levels = [
-  { level: 1, label: "Beginner", elo: 1320, skill: 0, think: 80 },
-  { level: 2, label: "Learner", elo: 1450, skill: 2, think: 120 },
-  { level: 3, label: "Casual", elo: 1600, skill: 4, think: 180 },
-  { level: 4, label: "Club", elo: 1750, skill: 6, think: 260 },
-  { level: 5, label: "Skilled", elo: 1900, skill: 8, think: 360 },
+  { level: 1, label: "Beginner", elo: 500, skill: 0, think: 80 },
+  { level: 2, label: "Learner", elo: 750, skill: 0, think: 100 },
+  { level: 3, label: "Casual", elo: 1000, skill: 0, think: 140 },
+  { level: 4, label: "Club", elo: 1250, skill: 0, think: 180 },
+  { level: 5, label: "Skilled", elo: 1450, skill: 2, think: 220 },
   { level: 6, label: "Advanced", elo: 2050, skill: 10, think: 480 },
   { level: 7, label: "Expert", elo: 2200, skill: 13, think: 650 },
   { level: 8, label: "Master", elo: 2400, skill: 16, think: 850 },
   { level: 9, label: "Grandmaster", elo: 2600, skill: 18, think: 1100 },
   { level: 10, label: "Maximum", elo: 2850, skill: 20, think: 1400 },
 ] as const;
+// Stockfish's UCI_Elo starts at 1320; the lower levels also need weaker move choices.
+const WEAK_MOVE_CHANCE = [0.78, 0.6, 0.42, 0.22, 0] as const;
 
 const REWARDS = { Bullet: 2, Blitz: 3, Rapid: 5 } as const;
 const LOSSES = { Bullet: 3, Blitz: 4, Rapid: 6 } as const;
@@ -49,7 +51,7 @@ export default function CpuGame({ player, onClose, onReward }: { player: ArenaPl
         const level = levelRef.current; if (!level) return;
         worker.postMessage(`setoption name Skill Level value ${level.skill}`);
         worker.postMessage("setoption name UCI_LimitStrength value true");
-        worker.postMessage(`setoption name UCI_Elo value ${level.elo}`);
+        worker.postMessage(`setoption name UCI_Elo value ${Math.max(1320, level.elo)}`);
         worker.postMessage("isready");
       } else if (line === "readyok") setEngineReady(true);
       else if (line.startsWith("bestmove ")) {
@@ -60,7 +62,12 @@ export default function CpuGame({ player, onClose, onReward }: { player: ArenaPl
         if(blackRemaining<=0){setThinking(false);return;}
         const chess = gameFromPgn(current.pgn);
         try {
-          chess.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci.slice(4, 5) || "q" });
+          const chance = WEAK_MOVE_CHANCE[(levelRef.current?.level ?? 6) - 1] ?? 0;
+          const legal = chance && Math.random() < chance ? chess.moves({ verbose: true }) : [];
+          const lessAccurate = legal.length ? legal[Math.floor(Math.random() * legal.length)] : null;
+          chess.move(lessAccurate
+            ? { from: lessAccurate.from, to: lessAccurate.to, promotion: lessAccurate.promotion || "q" }
+            : { from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci.slice(4, 5) || "q" });
           const result = boardResult(chess);
           const increment=timeControl(current.control).increment*1000;
           setMatch((value) => { if (!value||value.id!==current.id) return value; const next = { ...value, pgn: chess.pgn(), black_ms:finishClockTurn(current.black_ms,current.last_tick,movedAt,increment), version: value.version + 1, status: result ? "finished" as const : "active" as const, result, last_tick:movedAt, server_now:movedAt }; if(result){setEndReason("checkmate");setShowStats(true);} matchRef.current = next; return next; });
