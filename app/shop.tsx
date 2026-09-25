@@ -242,7 +242,7 @@ function BannerTile({
         <h3>{banner.name}</h3>
         <span className={`banner-tier-tag ${banner.tier}`}>
           {banner.tier === "metallic" && <Crown size={10} />}{" "}
-          {({ pastel: "Pastel", metallic: "Premium", cute: "Cute", warrior: "Warrior", animated: "Animated", robot: "Robot" } as const)[banner.tier]}
+          {({ pastel: "Pastel", metallic: "Premium", neon: "Neon", cute: "Cute", warrior: "Warrior", animated: "Animated", robot: "Robot" } as const)[banner.tier]}
         </span>
         {expiresAt && (
           <small className="rental-expiry">{rentalLabel(expiresAt)}</small>
@@ -335,7 +335,7 @@ export function ShopPage({
           <div>
             <span className="shop-eyebrow">Personalize your feed</span>
             <h1>Feed Banners</h1>
-            <p>Choose a color or graphic for every community post you share.</p>
+            <p>Choose a color for every community post you share.</p>
           </div>
           <span className="banner-wallet">
             <img className="gold-coin" src="/inventory/cbg-coin.webp" alt="CBG" />
@@ -344,7 +344,7 @@ export function ShopPage({
           </span>
         </div>
         <fieldset className="rental-duration">
-          <legend>Color banner duration · graphics last one month</legend>
+          <legend>Color banner duration</legend>
           {FEED_BANNER_DURATIONS.map((option) => (
             <button
               type="button"
@@ -355,7 +355,7 @@ export function ShopPage({
             >
               <strong>{option === 7 ? "1 Week" : `${option} Days`}</strong>
               <span>
-                Choose this duration for pastel and metallic colors
+                Choose this duration for pastel, metallic, and neon colors
               </span>
             </button>
           ))}
@@ -364,21 +364,21 @@ export function ShopPage({
           <p className="account-note">Loading banner collection…</p>
         ) : (
           <>
-            {(["pastel", "metallic", "cute", "warrior", "animated", "robot"] as const).map((tier) => (
+            {(["pastel", "metallic", "neon"] as const).map((tier) => (
               <section className={`banner-tier ${tier}`} key={tier}>
                 <div className="banner-tier-heading">
                   <div>
                     <span>
-                      {tier === "pastel" ? "Basic collection" : tier === "metallic" ? "Premium collection" : "Graphic collection · one month"}
+                      {tier === "pastel" ? "Basic collection" : tier === "metallic" ? "Premium collection" : "Neon collection"}
                     </span>
                     <h2>
-                      {({ pastel: "Pastel Colors", metallic: "Metallic Colors", cute: "Cute Chess", warrior: "Electric Warriors", animated: "Animated Chess", robot: "Robot Chess" } as const)[tier]}
+                      {({ pastel: "Pastel Colors", metallic: "Metallic Colors", neon: "Neon Colors" } as const)[tier]}
                     </h2>
                     <p>
-                      {({ pastel: "Soft, clean colors for a friendly feed.", metallic: "Reflective finishes for a distinctive profile.", cute: "Playful pawns, hearts and queens.", warrior: "Electric armor and powerful chess pieces.", animated: "Cheerful characters with moving effects.", robot: "Glowing chess friends from the future." } as const)[tier]}
+                      {({ pastel: "Soft, clean colors for a friendly feed.", metallic: "Reflective finishes for a distinctive profile.", neon: "Vivid glow on deep colors for a striking feed." } as const)[tier]}
                     </p>
                   </div>
-                  <b>10 {tier === "pastel" || tier === "metallic" ? "colors" : "graphics"}</b>
+                  <b>{FEED_BANNERS.filter((banner) => banner.tier === tier).length} colors</b>
                 </div>
                 <div className="banner-products">
                   {FEED_BANNERS.filter((banner) => banner.tier === tier).map(
@@ -396,7 +396,7 @@ export function ShopPage({
                               <img className="gold-coin" src="/inventory/cbg-coin.webp" alt="" />
                               {rental ? "Extend" : "Rent"}{" "}
                               {isGraphicBanner(banner) ? "1 month" : days === 7 ? "1 week" : `${days} days`} ·{" "}
-                              {feedBannerRentalPrice(banner.tier, days, banner.price)} Gold
+                              {rental ? Math.round(feedBannerRentalPrice(banner.tier, days, banner.price) * 0.7) : feedBannerRentalPrice(banner.tier, days, banner.price)} Gold
                             </>
                           }
                           onAction={() => void act(banner)}
@@ -451,7 +451,7 @@ export function ShopPage({
           </span>
           <div>
             <h2>Feed Banners</h2>
-            <p>Pastel and metallic colors for your community posts.</p>
+            <p>Pastel, metallic, and neon colors for your community posts.</p>
           </div>
           <button type="button" onClick={() => setOpen(true)}>
             View colors

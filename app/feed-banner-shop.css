@@ -499,3 +499,10 @@
     font-size: 7px;
   }
 }
+.banner-tier.neon{border-color:#42677d;background:linear-gradient(145deg,#101b28,#10151e)}
+.banner-tier.neon .banner-tier-heading{border-color:#354f61}
+.banner-tier.neon .banner-tier-heading > div > span,.banner-tier.neon .banner-tier-heading > b{color:#80eafb}
+.banner-tier.neon .banner-product{border-color:#285367!important;background:linear-gradient(155deg,#11212b,#0b121a)!important}
+.banner-tier.neon .banner-product:hover{border-color:#61def5!important}
+.banner-tier.neon .banner-swatch{border-color:#8edce5!important;box-shadow:0 0 0 3px #1b2e39,0 0 24px #24ddeb66,inset 0 0 16px #ffffff22!important}
+.banner-tier-tag.neon{border-color:#328094;color:#8aeffa;background:#112e38}
