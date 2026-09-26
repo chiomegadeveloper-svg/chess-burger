@@ -24,6 +24,7 @@ export const BOARD_THEMES: BoardTheme[] = [
   { id: "cyanotype-glass", name: "Cyanotype Glass", group: "theme", light: "#c9f2fb", dark: "#2775a8", frame: "#103b67", accent: "#7deaff" },
   { id: "dark-warlock", name: "Dark Warlock", group: "theme", light: "#a695bb", dark: "#382245", frame: "#24132f", accent: "#dc8dff" },
   { id: "emerald-glass", name: "Emerald Glass", group: "theme", light: "#c5f5dc", dark: "#197453", frame: "#0a4835", accent: "#7bf6b4" },
+  { id: "cody-ramey", name: "Cody Ramey", group: "theme", light: "#f8f5ef", dark: "#443d39", frame: "#111111", accent: "#f3c99f" },
   { id: "jungle", name: "Jungle", group: "included", light: "#e5d3a0", dark: "#45764a", frame: "#315036", accent: "#b2dc70" },
   { id: "black-white", name: "Black and White", group: "color", light: "#f5f6f7", dark: "#21272e", frame: "#30363c", accent: "#ccd6dc" },
   { id: "wood-texture", name: "Wood Texture", group: "color", light: "#efcf9e", dark: "#915734", frame: "#61361e", accent: "#dbad70" },

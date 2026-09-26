@@ -449,7 +449,7 @@ export function ShopPage({
         ))}
         <article className="shop-category-ready">
           <span className="shop-icon" aria-hidden="true">♛</span>
-          <div><h2>Board Themes</h2><p>Explore nine rentable boards. Jungle, Bubble Gum, Classic Green, and Warm Wood are free defaults.</p></div>
+          <div><h2>Board Themes & Pieces</h2><p>Explore rentable boards, including the Cody Ramey pixel chess set. Jungle, Bubble Gum, Classic Green, and Warm Wood are free defaults.</p></div>
           <button type="button" onClick={() => setOpenBoards(true)}>View boards</button>
         </article>
         <article className="shop-category-ready">
