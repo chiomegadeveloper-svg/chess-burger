@@ -837,13 +837,13 @@ export default async function handler(req: Req, res: Res) {
       const rentals=await client.from('cb_board_rentals').select('theme_id,expires_at').eq('user_id',account.id).gt('expires_at',new Date().toISOString());
       if(rentals.error)fail(503,'Run supabase/0063_board_theme_rentals.sql in Supabase, then try again.');
       const owned=rentals.data??[],saved=String(account.profile.active_board_theme??'slate');
-      const active=['slate','classic','wood','meta-blue'].includes(saved)||owned.some((item:any)=>item.theme_id===saved)?saved:'slate';
+      const active=['slate','classic','wood','meta-blue','bubble-gum','jungle'].includes(saved)||owned.some((item:any)=>item.theme_id===saved)?saved:'slate';
       return res.status(200).json({owned,active,gold:Number(account.profile.gold_points??0)});
     }
     if(action==='activate-board-theme'){
       const themeId=String(body.theme_id??'');
       if(!/^[a-z0-9-]{2,40}$/.test(themeId))fail(400,'Choose a valid board.');
-      if(!['slate','classic','wood','meta-blue'].includes(themeId)){
+      if(!['slate','classic','wood','meta-blue','bubble-gum','jungle'].includes(themeId)){
         const rental=await client.from('cb_board_rentals').select('expires_at').eq('user_id',account.id).eq('theme_id',themeId).gt('expires_at',new Date().toISOString()).maybeSingle();
         if(rental.error)fail(503,'Run supabase/0063_board_theme_rentals.sql in Supabase, then try again.');
         if(!rental.data)fail(403,'Rent this board in the Shop to use it.');
@@ -854,7 +854,7 @@ export default async function handler(req: Req, res: Res) {
     }
     if(action==='rent-board-theme'){
       const themeId=String(body.theme_id??''),days=Number(body.days),requestId=String(body.request_id??'');
-      if(!/^(bubble-gum|robotic|cyanotype-glass|dark-warlock|emerald-glass|jungle|black-white|wood-texture|maroon-pink|sunset|black-cyan)$/.test(themeId)||![7,21,30].includes(days)||!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(requestId))fail(400,'Choose a valid board rental.');
+      if(!/^(robotic|cyanotype-glass|dark-warlock|emerald-glass|black-white|wood-texture|maroon-pink|sunset|black-cyan)$/.test(themeId)||![7,21,30].includes(days)||!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(requestId))fail(400,'Choose a valid board rental.');
       const rented=await client.rpc('cb_rent_board_theme',{p_user_id:account.id,p_theme_id:themeId,p_days:days,p_request_id:requestId});
       if(rented.error){const message=String(rented.error.message??'Board rental failed.');if(/cb_rent_board_theme|cb_board_rentals|relation|schema cache|function/i.test(message))fail(503,'Run supabase/0063_board_theme_rentals.sql in Supabase, then try again.');if(/not enough gold/i.test(message))fail(409,'You do not have enough Gold for this rental.');fail(409,message);}
       return res.status(200).json(rented.data);

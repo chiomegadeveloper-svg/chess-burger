@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Square } from "chess.js";
 import { arena } from "./arena-client";
-import { BOARD_THEMES, boardTheme as findBoardTheme, boardThemeStyle } from "./board-themes";
+import { BOARD_THEMES, DEFAULT_BOARD_IDS, boardTheme as findBoardTheme, boardThemeStyle } from "./board-themes";
 import { BoardThemePreview } from "./board-theme-preview";
 import {
   Flag,
@@ -127,7 +127,7 @@ export default function MatchBoard({
     history = chess.history(),
     myColor = ownId === match.black_id ? "b" : "w";
   const availableThemes = useMemo(() => [
-    BOARD_THEMES[0],
+    ...BOARD_THEMES.filter(theme => DEFAULT_BOARD_IDS.some(id => id === theme.id)),
     ...BOARD_THEMES.filter(theme => theme.group !== "included" && boardRentals.some(rental => rental.theme_id === theme.id && new Date(rental.expires_at).getTime() > tick)),
   ], [boardRentals, tick]);
   const selectedTheme = availableThemes[previewIndex] ?? availableThemes[0];
@@ -154,7 +154,7 @@ export default function MatchBoard({
     let active = true;
     const refresh = () => {
       void arena<{active:string;owned:Array<{theme_id:string;expires_at:string}>}>("board-theme-state")
-        .then(data => { if (active) { setBoardRentals(data.owned); setBoardTheme(findBoardTheme(data.active)?.id ?? "slate"); const rented = BOARD_THEMES.filter(theme => theme.group !== "included" && data.owned.some(item => item.theme_id === theme.id && new Date(item.expires_at).getTime() > Date.now())); setPreviewIndex(Math.max(0, [BOARD_THEMES[0], ...rented].findIndex(theme => theme.id === data.active))); } })
+        .then(data => { if (active) { setBoardRentals(data.owned); setBoardTheme(findBoardTheme(data.active)?.id ?? "slate"); const defaults = BOARD_THEMES.filter(theme => DEFAULT_BOARD_IDS.some(id => id === theme.id)); const rented = BOARD_THEMES.filter(theme => theme.group !== "included" && data.owned.some(item => item.theme_id === theme.id && new Date(item.expires_at).getTime() > Date.now())); setPreviewIndex(Math.max(0, [...defaults, ...rented].findIndex(theme => theme.id === data.active))); } })
         .catch(() => { if (active) setBoardTheme("slate"); });
     };
     refresh();

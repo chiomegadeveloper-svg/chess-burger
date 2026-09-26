@@ -449,7 +449,7 @@ export function ShopPage({
         ))}
         <article className="shop-category-ready">
           <span className="shop-icon" aria-hidden="true">♛</span>
-          <div><h2>Board Themes</h2><p>11 rentable boards, from Bubble Gum to glass, jungle, and classic colors.</p></div>
+          <div><h2>Board Themes</h2><p>Explore nine rentable boards. Jungle, Bubble Gum, Classic Green, and Warm Wood are free defaults.</p></div>
           <button type="button" onClick={() => setOpenBoards(true)}>View boards</button>
         </article>
         <article className="shop-category-ready">
