@@ -1,6 +1,9 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Square } from "chess.js";
+import { arena } from "./arena-client";
+import { BOARD_THEMES, boardTheme as findBoardTheme, boardThemeStyle } from "./board-themes";
+import { BoardThemePreview } from "./board-theme-preview";
 import {
   Flag,
   RotateCw,
@@ -114,12 +117,10 @@ export default function MatchBoard({
     [reactionUntil, setReactionUntil] = useState(0),
     [reactionError, setReactionError] = useState(""),
     [dragFrom, setDragFrom] = useState<Square | null>(null),
-    [boardTheme, setBoardTheme] = useState<"slate" | "classic" | "wood" | "bubble-gum" | "meta-blue">(() => {
-      if (typeof window === "undefined") return "slate";
-      const saved = window.localStorage.getItem("cb-board-theme");
-      if (saved === "premium-walnut") return "bubble-gum";
-      return saved === "classic" || saved === "wood" || saved === "bubble-gum" || saved === "meta-blue" ? saved : "slate";
-    });
+    [boardTheme, setBoardTheme] = useState("slate"),
+    [previewIndex, setPreviewIndex] = useState(0),
+    [boardRentals, setBoardRentals] = useState<Array<{theme_id:string;expires_at:string}>>([]),
+    [boardBusy, setBoardBusy] = useState(false);
   const dragSource = useRef<Square | null>(null),
     suppressClick = useRef(false);
   const chess = useMemo(() => gameFromPgn(match.pgn), [match.pgn]),
@@ -143,6 +144,17 @@ export default function MatchBoard({
   useEffect(() => {
     const timer = setInterval(() => setTick(Date.now()), 200);
     return () => clearInterval(timer);
+  }, []);
+  useEffect(() => {
+    let active = true;
+    const refresh = () => {
+      void arena<{active:string;owned:Array<{theme_id:string;expires_at:string}>}>("board-theme-state")
+        .then(data => { if (active) { setBoardRentals(data.owned); setBoardTheme(findBoardTheme(data.active)?.id ?? "slate"); setPreviewIndex(Math.max(0, BOARD_THEMES.findIndex(theme => theme.id === data.active))); } })
+        .catch(() => { if (active) setBoardTheme("slate"); });
+    };
+    refresh();
+    window.addEventListener("cb-board-theme-changed", refresh);
+    return () => { active = false; window.removeEventListener("cb-board-theme-changed", refresh); };
   }, []);
   useEffect(() => {
     setSelected(null);
@@ -209,9 +221,18 @@ export default function MatchBoard({
                   : "Black to move"
                 : "Your move"
               : "Waiting for opponent";
-  function chooseBoardTheme(theme: "slate" | "classic" | "wood" | "bubble-gum" | "meta-blue") {
-    setBoardTheme(theme);
-    window.localStorage.setItem("cb-board-theme", theme);
+  async function chooseBoardTheme(theme: string) {
+    const selectedTheme = findBoardTheme(theme);
+    if (!selectedTheme || boardBusy) return;
+    if (selectedTheme.group !== "included" && !boardRentals.some(item => item.theme_id === theme && new Date(item.expires_at).getTime() > Date.now())) return;
+    setBoardBusy(true);
+    try {
+      const result = await arena<{active:string}>("activate-board-theme", {theme_id:theme});
+      setBoardTheme(result.active);
+      window.localStorage.setItem("cb-board-theme", result.active);
+      window.dispatchEvent(new Event("cb-board-theme-changed"));
+    } catch { /* Keep the previous board if the server rejects an expired rental. */ }
+    finally { setBoardBusy(false); }
   }
   function submitMove(from: Square, to: Square) {
     if (canPlay) {
@@ -353,6 +374,7 @@ export default function MatchBoard({
           <div className="board-stage">
             <div
               className={"interactive-board board-theme-" + boardTheme}
+              style={boardThemeStyle(findBoardTheme(boardTheme) ?? BOARD_THEMES[0])}
               role="group"
               aria-label="Chessboard"
             >
@@ -458,28 +480,18 @@ export default function MatchBoard({
             </p>
           ) : null}
           <section className="board-theme-picker" aria-label="Board color">
-            <span>Board color</span>
-            <div>
-              {[
-                ["slate", "Chess Burger"],
-                ["classic", "Classic green"],
-                ["wood", "Warm wood"],
-                ["bubble-gum", "Bubble Gum"],
-                ["meta-blue", "Meta Blue"],
-              ].map(([theme, label]) => (
-                <button
-                  key={theme}
-                  type="button"
-                  className={boardTheme === theme ? "active" : ""}
-                  aria-pressed={boardTheme === theme}
-                  onClick={() =>
-                    chooseBoardTheme(theme as "slate" | "classic" | "wood" | "bubble-gum" | "meta-blue")
-                  }
-                >
-                  <i className={"board-swatch " + theme} aria-hidden="true" />
-                  {label}
-                </button>
-              ))}
+            <div className="board-theme-carousel">
+              <strong>Board color</strong>
+              <BoardThemePreview theme={BOARD_THEMES[previewIndex]}/>
+              <div className="board-theme-controls">
+                <button type="button" aria-label="Previous board" onClick={() => setPreviewIndex((previewIndex + BOARD_THEMES.length - 1) % BOARD_THEMES.length)}>◀</button>
+                {BOARD_THEMES.map((theme,index)=><button type="button" key={theme.id} aria-label={`Preview ${theme.name}`} aria-current={index===previewIndex} onClick={()=>setPreviewIndex(index)}>•</button>)}
+                <button type="button" aria-label="Next board" onClick={() => setPreviewIndex((previewIndex + 1) % BOARD_THEMES.length)}>▶</button>
+              </div>
+              <p>{BOARD_THEMES[previewIndex].name}{boardTheme===BOARD_THEMES[previewIndex].id ? " · Active" : ""}</p>
+              {BOARD_THEMES[previewIndex].group !== "included" && !boardRentals.some(item=>item.theme_id===BOARD_THEMES[previewIndex].id && new Date(item.expires_at).getTime()>Date.now()) ?
+                <button type="button" onClick={()=>window.dispatchEvent(new Event("cb-open-shop"))}>Rent in Shop</button> :
+                <button type="button" disabled={boardBusy||boardTheme===BOARD_THEMES[previewIndex].id} onClick={()=>void chooseBoardTheme(BOARD_THEMES[previewIndex].id)}>{boardTheme===BOARD_THEMES[previewIndex].id?"Current board":"Use this board"}</button>}
             </div>
           </section>
           <div className="board-actions">

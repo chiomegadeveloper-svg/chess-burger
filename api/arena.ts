@@ -833,6 +833,32 @@ export default async function handler(req: Req, res: Res) {
       if (removed.error) fail(409, removed.error.message);
       return res.status(200).json({ ok: true });
     }
+    if(action==='board-theme-state'){
+      const rentals=await client.from('cb_board_rentals').select('theme_id,expires_at').eq('user_id',account.id).gt('expires_at',new Date().toISOString());
+      if(rentals.error)fail(503,'Run supabase/0063_board_theme_rentals.sql in Supabase, then try again.');
+      const owned=rentals.data??[],saved=String(account.profile.active_board_theme??'slate');
+      const active=['slate','classic','wood','meta-blue'].includes(saved)||owned.some((item:any)=>item.theme_id===saved)?saved:'slate';
+      return res.status(200).json({owned,active,gold:Number(account.profile.gold_points??0)});
+    }
+    if(action==='activate-board-theme'){
+      const themeId=String(body.theme_id??'');
+      if(!/^[a-z0-9-]{2,40}$/.test(themeId))fail(400,'Choose a valid board.');
+      if(!['slate','classic','wood','meta-blue'].includes(themeId)){
+        const rental=await client.from('cb_board_rentals').select('expires_at').eq('user_id',account.id).eq('theme_id',themeId).gt('expires_at',new Date().toISOString()).maybeSingle();
+        if(rental.error)fail(503,'Run supabase/0063_board_theme_rentals.sql in Supabase, then try again.');
+        if(!rental.data)fail(403,'Rent this board in the Shop to use it.');
+      }
+      const saved=await client.from('cb_profiles').update({active_board_theme:themeId}).eq('user_id',account.id);
+      if(saved.error)fail(503,'Run supabase/0063_board_theme_rentals.sql in Supabase, then try again.');
+      return res.status(200).json({active:themeId});
+    }
+    if(action==='rent-board-theme'){
+      const themeId=String(body.theme_id??''),days=Number(body.days),requestId=String(body.request_id??'');
+      if(!/^(bubble-gum|robotic|cyanotype-glass|dark-warlock|emerald-glass|jungle|black-white|wood-texture|maroon-pink|sunset|black-cyan)$/.test(themeId)||![7,21,30].includes(days)||!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(requestId))fail(400,'Choose a valid board rental.');
+      const rented=await client.rpc('cb_rent_board_theme',{p_user_id:account.id,p_theme_id:themeId,p_days:days,p_request_id:requestId});
+      if(rented.error){const message=String(rented.error.message??'Board rental failed.');if(/cb_rent_board_theme|cb_board_rentals|relation|schema cache|function/i.test(message))fail(503,'Run supabase/0063_board_theme_rentals.sql in Supabase, then try again.');if(/not enough gold/i.test(message))fail(409,'You do not have enough Gold for this rental.');fail(409,message);}
+      return res.status(200).json(rented.data);
+    }
     if(action==='shop-banners'){
       const items=await client.from('cb_user_items').select('product_id,expires_at').eq('user_id',account.id).gt('expires_at',new Date().toISOString()).order('expires_at',{ascending:true});
       if(items.error)fail(503,'Run supabase/0022_feed_banner_rentals.sql in Supabase, then try again.');
@@ -1164,17 +1190,21 @@ export default async function handler(req: Req, res: Res) {
       const r = await client.from('cb_profiles').select('user_id,username,display_name,avatar_url,country_code,cbr,gold_points,wins,losses,win_streak').neq('user_id', account.id).or(`username.ilike.%${query}%,display_name.ilike.%${query}%`).limit(10);
       if (r.error) fail(500, r.error.message); return res.status(200).json({ players: r.data ?? [] });
     }
-    if (action === 'gift-recipient-search') {
+    if (action === 'gift-recipient-search' || action === 'cms-gold-recipient-search') {
+      const cmsSearch = action === 'cms-gold-recipient-search';
+      if (cmsSearch && account.profile.role !== 'owner') fail(403, 'Only an Owner can search Gold recipients.');
       const query = String(body.query ?? '').trim().replace(/^@/, '').toLowerCase();
       if (!/^[a-z0-9_]{2,40}$/.test(query)) return res.status(200).json({ players: [] });
       type Recipient = { user_id: string; username: string; display_name: string | null; avatar_url: string | null };
       const fields = 'user_id,username,display_name,avatar_url';
-      const direct = await client.from('cb_profiles').select(fields).neq('user_id', account.id).ilike('username', `%${query}%`).limit(40);
+      const directQuery = client.from('cb_profiles').select(fields);
+      const direct = await (cmsSearch ? directQuery : directQuery.neq('user_id', account.id)).ilike('username', `%${query}%`).limit(40);
       if (direct.error) fail(500, direct.error.message);
       const found = new Map<string, Recipient>((direct.data ?? []).map((row: Recipient) => [row.user_id, row]));
       if (query.length >= 3) {
         const parts = [...new Set(Array.from({ length: query.length - 1 }, (_, index) => query.slice(index, index + 2)))].slice(0, 8);
-        const approximate = await client.from('cb_profiles').select(fields).neq('user_id', account.id).or(parts.map(part => `username.ilike.%${part}%`).join(',')).limit(120);
+        const approximateQuery = client.from('cb_profiles').select(fields);
+        const approximate = await (cmsSearch ? approximateQuery : approximateQuery.neq('user_id', account.id)).or(parts.map(part => `username.ilike.%${part}%`).join(',')).limit(120);
         if (approximate.error) fail(500, approximate.error.message);
         for (const row of approximate.data ?? []) found.set(row.user_id, row);
       }

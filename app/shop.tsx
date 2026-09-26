@@ -24,6 +24,7 @@ import {
 import type { PlayerProfile } from "./supabase";
 import { getSupabase } from "./supabase";
 import { classroom } from "./classroom-client";
+import { BoardThemeStore } from "./board-theme-store";
 import "./feed-banner-shop.css";
 import "./graphic-feed-banners.css";
 import "./shop-polish.css";
@@ -283,9 +284,11 @@ export function ShopPage({
   onChanged: () => void;
 }) {
   const [open, setOpen] = useState(false),
+    [openBoards, setOpenBoards] = useState(false),
     [busy, setBusy] = useState(""),
     [days, setDays] = useState<FeedBannerDuration>(7);
   const { state, setState, loading } = useShopState();
+  if (openBoards) return <BoardThemeStore onBack={() => setOpenBoards(false)} onChanged={onChanged}/>;
   const act = async (banner: FeedBanner) => {
     if (busy) return;
     const rental = rentalFor(state, banner.id);
@@ -433,7 +436,6 @@ export function ShopPage({
       <div className="shop-grid">
         {[
           ["♞", "Avatar frames", "Decorative player-card frames."],
-          ["♛", "Board themes", "Metallic boards and pieces."],
           ["♟", "Gold rewards", "Reward items for your collection."],
         ].map(([icon, name, desc]) => (
           <article key={name}>
@@ -445,6 +447,11 @@ export function ShopPage({
             <span className="shop-status">Coming soon</span>
           </article>
         ))}
+        <article className="shop-category-ready">
+          <span className="shop-icon" aria-hidden="true">♛</span>
+          <div><h2>Board Themes</h2><p>11 rentable boards, from Bubble Gum to glass, jungle, and classic colors.</p></div>
+          <button type="button" onClick={() => setOpenBoards(true)}>View boards</button>
+        </article>
         <article className="shop-category-ready">
           <span className="shop-icon banner-category-icon">
             <span className="category-color-circle" aria-hidden="true" />
