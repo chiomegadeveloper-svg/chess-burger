@@ -194,3 +194,9 @@
   .cms-tab-icon { flex-basis: 24px; width: 24px; height: 24px; }
   .cms-page .cms-tabs button.active::after { left: 38px; }
 }
+
+.arena-cms-times{grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
+.arena-cms-times fieldset{grid-template-columns:repeat(2,minmax(0,1fr));align-items:end}
+.arena-cms-times .arena-cms-remove{grid-column:1/-1;min-height:31px;padding:5px 8px;border:1px solid #85535b;border-radius:8px;background:#302128;color:#ffbdc4;cursor:pointer}
+.arena-cms-panel .arena-cms-add{justify-self:start;width:auto;min-height:36px;margin:0 0 10px;padding:6px 12px;border:1px solid #4aa6af;border-radius:9px;background:#18333a;color:#a9f0f3;cursor:pointer}
+.arena-cms-panel .arena-cms-add:disabled,.arena-cms-times .arena-cms-remove:disabled{opacity:.4;cursor:default}
