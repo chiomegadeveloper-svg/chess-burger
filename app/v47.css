@@ -16,12 +16,17 @@ img,svg,video,canvas{max-width:100%}
 .bottom-nav button{min-width:0;overflow:hidden}
 .bottom-nav .play-nav{overflow:visible}
 .bottom-nav button>span:last-child{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.brand .brand-name{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;min-width:0;line-height:1.1}
+.brand .brand-name strong{font-weight:700;white-space:nowrap}
+.brand .brand-name small{display:block;margin-top:3px;color:#e8c875;font-size:clamp(8px,.72vw,10px);font-weight:800;letter-spacing:.08em;text-shadow:0 1px 5px #000a}
+.brand .brand-name b{display:inline}
 
 @media(max-width:480px){
  .app-shell{grid-template-rows:52px minmax(0,1fr) calc(58px + env(safe-area-inset-bottom))}
  .app-header{padding-inline:10px}
  .brand{min-width:0;gap:6px;font-size:10px;letter-spacing:.2px}
  .brand img{width:27px;height:27px;flex:0 0 auto}
+ .brand .brand-name small{font-size:8px;letter-spacing:0}
  .header-actions{flex:0 0 auto;gap:7px}
  .scroll-area,.rank-scroll,.board-scroll{padding-left:8px!important;padding-right:8px!important}
  .page-heading{align-items:center;gap:6px}

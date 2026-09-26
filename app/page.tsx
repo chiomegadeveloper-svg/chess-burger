@@ -804,7 +804,7 @@ function AppPage() {
         <header className="app-header">
           <div className="brand">
             <img src="/cburger_logo.png" alt="Chess Burger" />
-            <span>CHESS <b>BURGER</b></span>
+            <span className="brand-name"><strong>CHESS <b>BURGER</b></strong><small>v0.9 PUBLIC BETA</small></span>
           </div>
         </header>
         <div className="scroll-area">
@@ -899,9 +899,7 @@ function AppPage() {
       <header className="app-header">
         <div className="brand">
           <img src="/cburger_logo.png" alt="Chess Burger" />
-          <span>
-            CHESS <b>BURGER</b>
-          </span>
+          <span className="brand-name"><strong>CHESS <b>BURGER</b></strong><small>v0.9 PUBLIC BETA</small></span>
         </div>
         <div className="header-actions">
           <button
