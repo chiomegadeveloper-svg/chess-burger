@@ -1,10 +1,11 @@
 "use client";
 import {useEffect,useState} from "react";
-import {Megaphone,Trophy,Coins,ScrollText,Image as ImageIcon,ShieldCheck,Clock3,GraduationCap,Gift} from "lucide-react";
+import {Megaphone,Trophy,Coins,ScrollText,Image as ImageIcon,ShieldCheck,Clock3,GraduationCap,Gift,Video} from "lucide-react";
 import {toast} from "sonner";
 import {getSupabase,PlayerProfile} from "./supabase";
 import {setCmsRole} from "./cms-role-client";
 import Tournaments from "./tournaments";
+import {OnlineTrainingCms} from "./online-training";
 import {arena} from "./arena-client";
 import StaffImageEditor from './staff-image-editor';
 import {uploadStaffImage,validateImageFile} from "./media";
@@ -31,7 +32,7 @@ export default function Cms({profile,onClose}:{profile:PlayerProfile;onClose:()=
  const [dailyRewards,setDailyRewards]=useState<LoginReward[]>([]),[dailyError,setDailyError]=useState("");
  const [crop,setCrop]=useState<{file:File;target:"announcement"|"card"}|null>(null);
  const owner=profile.role==="owner";
- const menu=[["tournament","Tournaments",Trophy],["announcement","Announcements",Megaphone],["card","App photo",ImageIcon],["gold","Gold",Coins],...(owner?[["arena","Grand Arena",Clock3],["classroom","Classroom",GraduationCap],["daily-login","Daily Login",Gift],["roles","Users",ShieldCheck]]:[]),["logs","Activity logs",ScrollText]] as const;
+ const menu=[["tournament","Tournaments",Trophy],["training","Online Trainings",Video],["announcement","Announcements",Megaphone],["card","App photo",ImageIcon],["gold","Gold",Coins],...(owner?[["arena","Grand Arena",Clock3],["classroom","Classroom",GraduationCap],["daily-login","Daily Login",Gift],["roles","Users",ShieldCheck]]:[]),["logs","Activity logs",ScrollText]] as const;
  async function run(fn:()=>Promise<void>){setBusy(true);try{await fn();}catch(e){toast.error((e as Error).message);}finally{setBusy(false);}}
  async function loadPosts(){const data=await arena<{posts:Post[]}>("cms-announcements");setPosts(data.posts);}
  // Existing CMS tabs intentionally reset their loading/error state when the active panel changes.
@@ -55,6 +56,7 @@ export default function Cms({profile,onClose}:{profile:PlayerProfile;onClose:()=
  if(!owner)return <p>Owner access is required.</p>;
  return <section className="cms-page"><div className="cms-heading"><div><span>OWNER CONTROL</span><h1>Chess Burger CMS</h1></div><button onClick={onClose}>Close</button></div><div className="cms-tabs">{menu.map(([key,label,Icon])=><button key={key as string} className={section===key?"active":""} onClick={()=>setSection(key as string)}><Icon/>{label as string}</button>)}</div>
  {section==="tournament"&&<Tournaments profile={profile} host/>}
+ {section==="training"&&<OnlineTrainingCms profile={profile}/>}
  {section==="announcement"&&<div className="cms-panel announcement-cms">
   <div className="cms-panel-heading">
    <div><span>OFFICIAL UPDATE</span><h2>{editing?"Edit announcement":"Create announcement"}</h2></div>

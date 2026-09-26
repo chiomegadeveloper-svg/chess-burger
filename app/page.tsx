@@ -33,6 +33,7 @@ import NearbyMap from "./nearby-map";
 import LocalPairing from "./local-pairing";
 import Cms from "./cms";
 import Tournaments from "./tournaments";
+import {OnlineTrainings} from "./online-training";
 import OnlinePlay, { OnlineGame } from "./online-play";
 import Rankings from "./rankings";
 import LiveChannel from "./live-channel";
@@ -103,6 +104,7 @@ function savedSharedBoard(userId: string) {
   } catch { return ""; }
 }
 function AppPage() {
+  const [trainingId,setTrainingId]=useState(""),[trainingInvite,setTrainingInvite]=useState(""),[openTrainingAccount,setOpenTrainingAccount]=useState(false);
   const [feedTarget, setFeedTarget] = useState<"recent" | "announcement" | "rewards">("recent");
   const [tab, setTab] = useState("profile"),
     [profile, setProfile] = useState<PlayerProfile | null>(null),
@@ -396,6 +398,10 @@ function AppPage() {
       .catch(() => {});
     const hash = () => {
       const params = new URLSearchParams(location.hash.slice(1));
+      const training=params.get("training")??"";
+      setTrainingId(training);
+      setTrainingInvite(params.get("invite")??"");
+      if(training)setTab("training");
       if (params.has("tournament")) setTab("tournaments");
       if (params.has("match")) {
         const code = params.get("match")!;
@@ -747,6 +753,7 @@ function AppPage() {
       </>
     );
   else if (tab === "tournaments") content = <section className="tournament-play-page"><button className="back-button" type="button" onClick={() => setTab("play-select")}><ArrowLeft size={16}/>Play destinations</button><Tournaments profile={profile} /></section>;
+  else if (tab === "training") content = <OnlineTrainings profile={profile} initialId={trainingId} invite={trainingInvite}/>;
   else if (tab === "grand-arena") content = <GrandArena onBack={() => setTab("play-select")} onMatch={openMatch} onShop={() => setTab("shop")}/>;
   else if (tab === "classroom") content = <Classroom onBack={() => setTab("play-select")} onOpenShop={() => setTab("shop")}/>;
   else if (tab === "cpu" && profile) content = <CpuGame player={profile} onClose={() => setTab("play")} onReward={() => void refreshProfile()}/>;
@@ -796,6 +803,8 @@ function AppPage() {
         )}
       </section>
     );
+  if (trainingId && (member !== true || !isProfileComplete(profile)) && !openTrainingAccount)
+    return <main className="online-training-landing"><OnlineTrainings initialId={trainingId} invite={trainingInvite} onCreateAccount={()=>setOpenTrainingAccount(true)}/><Toaster theme="light" position="top-center" richColors closeButton/></main>;
   if ((member !== true || !isProfileComplete(profile)) && !showSplash)
     return (
       <main className="app-shell registration-locked-shell">

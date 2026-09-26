@@ -26,6 +26,7 @@ import { levelFor } from "./cbr";
 import type { ArenaMatch, ArenaPlayer } from "./game-rules";
 import { feedBanner, isGraphicBanner } from "./feed-banner-catalog";
 import DailyRewards from "./daily-rewards";
+import {OnlineTrainings} from "./online-training";
 import "./arena-champion-feed.css";
 import "./guild-feed.css";
 import "./graphic-feed-banners.css";
@@ -33,14 +34,13 @@ type CommunityEvent = FeedEvent & { origin?: "arena" };
 type OnlinePlayer = ArenaPlayer & { available: boolean };
 
 type FeedTab =
-  "recent" | "popular" | "first_blood" | "announcement" | "online" | "rewards";
+  "recent" | "popular" | "training" | "announcement" | "online" | "rewards";
 const PAGE_SIZE = 10,
   ONLINE_PAGE_SIZE = 60;
 const labels: Record<string, string> = {
   profile_created: "New player",
   profile_updated: "Profile",
   win: "Win",
-  first_blood: "First blood",
   new_reward: "Reward",
   top10: "Top 10 reward",
   announcement: "Announcement",
@@ -251,7 +251,7 @@ export default function CommunityFeed({
     [reacted, setReacted] = useState<Set<string>>(new Set());
   const refresh = useCallback(async () => {
     const seq = ++request.current;
-    if (tab === "rewards") {
+    if (tab === "rewards" || tab === "training") {
       setTotal(0);
       setEvents([]);
       setStatus("");
@@ -295,7 +295,7 @@ export default function CommunityFeed({
           ? event
           : { ...event, feed_banner: ownProfile.active_feed_banner ?? "" },
       )
-      .filter((e) => !e.expires_at || Date.parse(e.expires_at) > Date.now());
+      .filter((e) => e.kind !== "first_blood" && (!e.expires_at || Date.parse(e.expires_at) > Date.now()));
     setChallenges(
       all
         .filter((e) => e.kind === "challenge")
@@ -305,8 +305,6 @@ export default function CommunityFeed({
       .filter((e) => e.kind !== "challenge")
       .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
       .slice(0, 50);
-    if (tab === "first_blood")
-      rows = rows.filter((e) => e.kind === "first_blood");
     if (tab === "announcement")
       rows = rows.filter((e) => e.kind === "announcement");
     if (tab === "popular")
@@ -492,7 +490,7 @@ export default function CommunityFeed({
     setEvents([]);
     setExpandedImage(null);
     setOnlineCard(null);
-    setStatus("Loading activity…");
+    setStatus(next === "training" ? "" : "Loading activity…");
     setTab(next);
     setPage(1);
     setOnlinePage(1);
@@ -572,12 +570,12 @@ export default function CommunityFeed({
         </button>
         <button
           role="tab"
-          aria-label="First blood"
-          aria-selected={tab === "first_blood"}
-          onClick={() => selectTab("first_blood")}
+          aria-label="Online Trainings"
+          aria-selected={tab === "training"}
+          onClick={() => selectTab("training")}
         >
-          <span className="tab-label-full">First blood</span>
-          <span className="tab-label-short">First</span>
+          <span className="tab-label-full">Online Trainings</span>
+          <span className="tab-label-short">Training</span>
         </button>
         <button
           role="tab"
@@ -598,6 +596,7 @@ export default function CommunityFeed({
         </button>
       </div>
       {tab === "rewards" && <DailyRewards />}
+      {tab === "training" && <OnlineTrainings />}
       {tab === "recent" && arenaOpen && (
         <button type="button" className="arena-feed-invite" onClick={onArena}>
           <span className="arena-feed-art">
