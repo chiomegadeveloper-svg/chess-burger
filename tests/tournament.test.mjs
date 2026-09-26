@@ -8,3 +8,8 @@ test('Malformed provider responses cannot overwrite the event',()=>{assert.throw
 test('TRF fixed fields match the FIDE TRF16 exchange positions',()=>{const t=base(5);for(let i=0;i<2;i++)t.history.push(pairOffline(t).map(g=>({...g,result:g.black?'1/2-1/2':'bye'})));for(const l of exportTrf(t).split('\r\n').filter(l=>l.startsWith('001'))){assert(Number(l.slice(4,8))>0);assert(['w','b','-'].includes(l[96]));assert(['w','b','-'].includes(l[106]));assert(['1','0','=','U'].includes(l[98]));assert.equal(l.slice(80,84).trim(),standings(t).find(p=>p.id===Number(l.slice(4,8))).score.toFixed(1));}});
 test('Duplicate identities in imported rosters are rejected',()=>{const t=base(4);t.players[1].id=1;assert.throws(()=>parseTournament(t),/Invalid player/);});
 test('The final round cannot be exceeded',()=>{const t=base(2);t.history=[[{white:1,black:2,result:'1-0'}]];assert.throws(()=>pairOffline(t),/complete/);});
+test('Tournament requires three players and waits for its scheduled start',()=>{
+ const small=base(2);assert.throws(()=>pairOffline(small),/three players/);
+ const early=base(3);early.startsAt=new Date(Date.now()+60_000).toISOString();assert.throws(()=>pairOffline(early),/scheduled start/);
+ early.startsAt=new Date(Date.now()-60_000).toISOString();assert.equal(pairOffline(early).length,2);
+});
