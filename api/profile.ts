@@ -34,6 +34,15 @@ function view(row: Record<string, unknown> | null) {
   if (!row) return null;
   return { ...row, ocbr: Number(row.ocbr ?? 88), gold_points: Number(row.gold_points ?? 88), wins: Number(row.wins ?? 0), losses: Number(row.losses ?? 0), win_streak: Number(row.win_streak ?? 0), featured_photos: list(row.featured_photos, 4), featured_badges: list(row.featured_badges, 5) };
 }
+async function framedView(client: any, row: Record<string, unknown> | null) {
+  const profile = view(row);
+  const itemId = String(row?.active_avatar_frame_item ?? '');
+  if (!profile) return null;
+  if (!/^af-(basic|premium)-(10|[1-9])-[a-f0-9]{32}$/.test(itemId)) return { ...profile, avatar_frame_id: null };
+  const item = await client.from('cb_inventory_items').select('metadata').eq('user_id',row!.user_id).eq('item_kind','avatar_frame').eq('item_id',itemId).gt('quantity',0).maybeSingle();
+  const frameId = String(item.data?.metadata?.frame_id ?? '');
+  return { ...profile, avatar_frame_id: !item.error && itemId.startsWith(`af-${frameId}-`) && Date.parse(String(item.data?.metadata?.expires_at ?? '')) > Date.now() ? frameId : null };
+}
 
 export default async function handler(req: Req, res: Res) {
   res.setHeader('Cache-Control', 'no-store');
@@ -72,7 +81,7 @@ export default async function handler(req: Req, res: Res) {
           if (!recovered.error) row = recovered.data;
         }
       }
-      return res.status(200).json({ profile: view(row) });
+      return res.status(200).json({ profile: await framedView(client,row) });
     }
 
     const input = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {};
@@ -102,7 +111,7 @@ export default async function handler(req: Req, res: Res) {
     const saved = await client.from('cb_profiles').upsert(payload, { onConflict: 'user_id' }).select('*').single();
     if (saved.error?.code === '23505') return res.status(409).json({ error: 'That username is already taken. Choose another one.', code: 'username_taken' });
     if (saved.error) throw saved.error;
-    return res.status(200).json({ profile: view(saved.data) });
+    return res.status(200).json({ profile: await framedView(client,saved.data) });
   } catch (error) {
     console.error('Chess Burger profile request failed', error);
     return res.status(500).json({ error: 'Profile could not be loaded or saved. Please retry.', code: 'profile_save_failed' });

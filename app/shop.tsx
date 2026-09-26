@@ -25,6 +25,9 @@ import type { PlayerProfile } from "./supabase";
 import { getSupabase } from "./supabase";
 import { classroom } from "./classroom-client";
 import { BoardThemeStore } from "./board-theme-store";
+import { AvatarFrameStore } from "./avatar-frame-store";
+import { avatarFrame } from "./avatar-frame-catalog";
+import { AvatarFrameArt } from "./avatar-frame-art";
 import "./feed-banner-shop.css";
 import "./graphic-feed-banners.css";
 import "./shop-polish.css";
@@ -285,10 +288,12 @@ export function ShopPage({
 }) {
   const [open, setOpen] = useState(false),
     [openBoards, setOpenBoards] = useState(false),
+    [openFrames, setOpenFrames] = useState(false),
     [busy, setBusy] = useState(""),
     [days, setDays] = useState<FeedBannerDuration>(7);
   const { state, setState, loading } = useShopState();
   if (openBoards) return <BoardThemeStore onBack={() => setOpenBoards(false)} onChanged={onChanged}/>;
+  if (openFrames) return <AvatarFrameStore onBack={() => setOpenFrames(false)} onChanged={onChanged} photo={profile?.avatar_url}/>;
   const act = async (banner: FeedBanner) => {
     if (busy) return;
     const rental = rentalFor(state, banner.id);
@@ -434,10 +439,8 @@ export function ShopPage({
         <ClassroomCreditStore />
         <BagSlotStore fallbackGold={state.gold || profile?.gold_points || 0}/>
       <div className="shop-grid">
-        {[
-          ["♞", "Avatar frames", "Decorative player-card frames."],
-          ["♟", "Gold rewards", "Reward items for your collection."],
-        ].map(([icon, name, desc]) => (
+        <article className="shop-category-ready"><span className="shop-icon">♞</span><div><h2>Avatar frames</h2><p>20 chess designs to rent, equip, or gift from your Bag.</p></div><button type="button" onClick={() => setOpenFrames(true)}>View frames</button></article>
+        {[["♟", "Gold rewards", "Reward items for your collection."]].map(([icon, name, desc]) => (
           <article key={name}>
             <span className="shop-icon">{icon}</span>
             <div>
@@ -477,9 +480,10 @@ export function BagPage({ onChanged }: { onChanged: () => void }) {
       item_kind: string;
       item_id: string;
       quantity: number;
-      metadata?: { name?: string };
+      metadata?: { name?: string; frame_id?: string; expires_at?: string };
     }>;
     active: string;
+    active_frame_item?: string | null;
     gold: number;
     bag_slots: number;
     used_slots: number;
@@ -559,6 +563,16 @@ export function BagPage({ onChanged }: { onChanged: () => void }) {
     } finally {
       setBusy("");
     }
+  };
+  const equipFrame = async (itemId: string | null) => {
+    setBusy(itemId ?? "remove-frame");
+    try {
+      await arena("equip-avatar-frame", { item_id: itemId });
+      setState(current => ({ ...current, active_frame_item: itemId }));
+      onChanged();
+      toast.success(itemId ? "Avatar frame equipped." : "Avatar frame removed.");
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Unable to change avatar frame."); }
+    finally { setBusy(""); }
   };
   const openGift = (kind: string, id: string, name: string, max = 1) => {
     setGiftItem({ kind, id, name, max });
@@ -700,7 +714,13 @@ export function BagPage({ onChanged }: { onChanged: () => void }) {
               </article>
             );
           })}
-          {state.items.map((item) => (
+          {state.items.map((item) => item.item_kind === "avatar_frame" && avatarFrame(item.metadata?.frame_id) ? (
+            <article className={`bag-inventory-card generic rare ${state.active_frame_item === item.item_id ? "active" : ""}`} key={item.item_id}>
+              <div className="rpg-item-art"><AvatarFrameArt frameId={item.metadata!.frame_id!}/>{state.active_frame_item === item.item_id && <strong>Equipped</strong>}</div>
+              <div className="rpg-item-copy"><small>{avatarFrame(item.metadata?.frame_id)?.tier} avatar frame</small><h3>{item.metadata?.name}</h3><span>{item.metadata?.expires_at ? rentalLabel(item.metadata.expires_at) : "Rental"}</span></div>
+              <div className="rpg-item-actions"><button type="button" disabled={!!busy} onClick={() => void equipFrame(state.active_frame_item === item.item_id ? null : item.item_id)}>{state.active_frame_item === item.item_id ? "Remove" : "Use"}</button><button type="button" disabled={!!busy} onClick={() => openGift("avatar_frame", item.item_id, item.metadata?.name ?? "Avatar Frame")}><Gift size={14}/>Gift</button></div>
+            </article>
+          ) : (
             <article
               className="bag-inventory-card generic rare"
               key={`${item.item_kind}:${item.item_id}`}

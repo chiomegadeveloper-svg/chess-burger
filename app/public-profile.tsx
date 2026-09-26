@@ -10,6 +10,7 @@ import { levelFor } from "./cbr";
 import ProfilePhotoBucket from "./profile-photo-bucket";
 import Portfolio from "./portfolio";
 import Testimonials from "./testimonials";
+import { AvatarFrameOverlay } from "./avatar-frame-art";
 
 type SocialCounts = { friends: number; followers: number; following: number };
 type PublicProfileResponse = {
@@ -73,8 +74,9 @@ export default function PublicProfile({
     <section className="public-profile">
       <button className="back-button" onClick={onClose}><ArrowLeft />Back</button>
       <div className="public-profile-hero cloud-panel">
-        <span className="public-avatar">
+        <span className={`public-avatar ${profile.avatar_frame_id ? "has-avatar-frame" : ""}`}>
           {profile.avatar_url ? <img src={profile.avatar_url} alt={profile.display_name} /> : profile.display_name.charAt(0)}
+          <AvatarFrameOverlay frameId={profile.avatar_frame_id}/>
         </span>
         <div>
           <p>@{profile.username}</p>
