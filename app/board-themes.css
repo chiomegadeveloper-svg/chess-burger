@@ -1,10 +1,11 @@
-.board-preview { display:grid;grid-template-columns:repeat(8,1fr);aspect-ratio:1;width:100%;max-width:250px;margin:auto;border:5px solid var(--board-frame);border-radius:7px;overflow:hidden;box-shadow:0 4px 12px #0006,0 0 0 2px var(--board-accent); }
-.board-preview>span{display:grid;place-items:center;min-width:0;font-size:clamp(11px,2vw,22px);line-height:1;background:var(--board-light)}
-.board-preview>span.dark{background:var(--board-dark)}
-.board-preview>span.white{color:#fff9ef;text-shadow:1px 1px #101820,-1px -1px #101820,-1px 1px #101820,1px -1px #101820,0 2px 2px #000}
-.board-preview>span.black{color:#14202a;text-shadow:1px 1px #eef9fc,-1px -1px #eef9fc,-1px 1px #eef9fc,1px -1px #eef9fc}
-.board-preview-black-white>span.white{color:#fff;filter:drop-shadow(0 0 1px #000)}
-.board-preview-black-white>span.black{color:#101317;filter:drop-shadow(0 0 1px #fff)}
+.board-preview { position:relative;aspect-ratio:1;width:100%;max-width:250px;margin:auto;border:5px solid var(--board-frame);border-radius:7px;overflow:hidden;box-shadow:0 4px 12px #0006,0 0 0 2px var(--board-accent); }
+.board-preview-squares{position:absolute;inset:0;display:grid;grid-template-columns:repeat(8,minmax(0,1fr));grid-template-rows:repeat(8,minmax(0,1fr))}
+.board-preview-squares>span{display:grid;place-items:center;min-width:0;min-height:0;overflow:hidden;font-size:clamp(11px,2vw,22px);line-height:1;background:var(--board-light)}
+.board-preview-squares>span.dark{background:var(--board-dark)}
+.board-preview-squares>span.white{color:#fff9ef;text-shadow:1px 1px #101820,-1px -1px #101820,-1px 1px #101820,1px -1px #101820,0 2px 2px #000}
+.board-preview-squares>span.black{color:#14202a;text-shadow:1px 1px #eef9fc,-1px -1px #eef9fc,-1px 1px #eef9fc,1px -1px #eef9fc}
+.board-preview-black-white .board-preview-squares>span.white{color:#fff;filter:drop-shadow(0 0 1px #000)}
+.board-preview-black-white .board-preview-squares>span.black{color:#101317;filter:drop-shadow(0 0 1px #fff)}
 .board-theme-carousel{padding:12px;border:1px solid #53606b;border-radius:12px;background:#f3f7f8;color:#1f333a}
 .board-theme-carousel>strong{display:block;margin-bottom:8px;font-size:11px;letter-spacing:.12em;text-transform:uppercase}
 .board-theme-controls{display:flex!important;flex-direction:row;align-items:center;justify-content:center;gap:10px;margin-top:9px;min-width:0}
