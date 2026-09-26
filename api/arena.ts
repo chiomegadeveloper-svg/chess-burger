@@ -799,6 +799,56 @@ export default async function handler(req: Req, res: Res) {
       await audit('announcement_delete', { id });
       return res.status(200).json({ ok: true });
     }
+    if (action === 'delete-online-training') {
+      if (account.profile.role !== 'owner') fail(403, 'Only an Owner can delete an online training.');
+      const id = String(body.id ?? '');
+      if (!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(id)) fail(400, 'Choose a valid online training.');
+      const removed = await client.from('cb_online_trainings').delete()
+        .eq('id', id).eq('owner_id', account.id).select('id,title').maybeSingle();
+      if (removed.error) fail(500, removed.error.message);
+      if (!removed.data) fail(404, 'Online training not found or owner access denied.');
+      await audit('training_delete', { id: removed.data.id, title: removed.data.title });
+      return res.status(200).json({ ok: true });
+    }
+    if (action === 'training-registrants' || action === 'gift-training-ticket') {
+      if (account.profile.role !== 'owner') fail(403, 'Owner access is required.');
+      const id = String(body.id ?? '');
+      if (!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(id)) fail(400, 'Choose a valid online training.');
+      const training = await client.from('cb_online_trainings').select('id')
+        .eq('id', id).eq('owner_id', account.id).eq('status', 'open').gt('starts_at', new Date().toISOString()).maybeSingle();
+      if (training.error) fail(500, training.error.message);
+      if (!training.data) fail(404, 'Active online training not found or owner access denied.');
+      if (action === 'training-registrants') {
+        const found = await client.from('cb_online_training_registrations').select('id,user_id,full_name,invited_at,created_at')
+          .eq('training_id', id).order('created_at', { ascending: true });
+        if (found.error) fail(500, found.error.message);
+        const ids = [...new Set((found.data ?? []).map((row: { user_id: string | null }) => row.user_id).filter(Boolean))] as string[];
+        const profiles = ids.length ? await client.from('cb_profiles').select('user_id,username').in('user_id', ids) : { data: [], error: null };
+        if (profiles.error) fail(500, profiles.error.message);
+        const usernames = new Map((profiles.data ?? []).map((row: { user_id: string; username: string }) => [row.user_id, row.username]));
+        return res.status(200).json({ registrants: (found.data ?? []).map((row: { id: string; user_id: string | null; full_name: string; invited_at: string | null }) => ({
+          id: row.id, full_name: row.full_name, username: row.user_id ? usernames.get(row.user_id) ?? null : null,
+          confirmed: !!row.user_id, invited: !!row.invited_at,
+        })) });
+      }
+      const registrationId = String(body.registration_id ?? ''), requestId = String(body.request_id ?? '');
+      if (!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(registrationId)
+        || !/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(requestId)) fail(400, 'Choose a valid registrant and gift.');
+      const registration = await client.from('cb_online_training_registrations').select('user_id')
+        .eq('id', registrationId).eq('training_id', id).maybeSingle();
+      if (registration.error) fail(500, registration.error.message);
+      if (!registration.data?.user_id) fail(409, 'This registrant needs a confirmed Chess Burger account before receiving a ticket.');
+      const recipient = await client.from('cb_profiles').select('username').eq('user_id', registration.data.user_id).maybeSingle();
+      if (recipient.error) fail(500, recipient.error.message);
+      if (!recipient.data?.username) fail(409, 'The registrant needs a Chess Burger username first.');
+      const gifted = await client.rpc('cb_gift_bag_item', {
+        p_sender_id: account.id, p_username: recipient.data.username, p_item_kind: 'arena_ticket',
+        p_item_id: 'arena-ticket', p_quantity: 1, p_request_id: requestId,
+      });
+      if (gifted.error) fail(['PGRST202', '42P01', '42703', '42883'].includes(String(gifted.error.code ?? '')) ? 503 : 409, gifted.error.message);
+      if (gifted.data?.gifted) await audit('training_ticket_gift', { id, registration_id: registrationId, username: recipient.data.username });
+      return res.status(200).json({ gifted: !!gifted.data?.gifted, username: recipient.data.username });
+    }
     if (action === 'set-app-feature') {
       requireStaff();
       const imageUrl = String(body.url ?? '').trim();

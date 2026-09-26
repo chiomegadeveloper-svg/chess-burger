@@ -563,6 +563,7 @@ function AppPage() {
       <CommunityFeed
         key={feedTarget}
         initialTab={feedTarget}
+        profile={profile}
         onMatch={openMatch}
         onArena={() => setTab("grand-arena")}
         onChallenge={(player) => {

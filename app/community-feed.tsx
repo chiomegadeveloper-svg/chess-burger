@@ -19,7 +19,7 @@ import {
   Crown,
 } from "lucide-react";
 import { toast } from "sonner";
-import { FeedEvent, getSupabase } from "./supabase";
+import { FeedEvent, getSupabase, type PlayerProfile } from "./supabase";
 import { arena } from "./arena-client";
 import { SocialButtons } from "./social";
 import { levelFor } from "./cbr";
@@ -221,12 +221,14 @@ const cardStyles: Record<string, CSSProperties> = {
 
 export default function CommunityFeed({
   initialTab = "recent",
+  profile,
   onOpenProfile,
   onMatch,
   onChallenge,
   onArena,
 }: {
   initialTab?: FeedTab;
+  profile?: PlayerProfile | null;
   onOpenProfile: (userId: string) => void;
   onMatch: (id: string) => void;
   onChallenge: (player: ArenaPlayer) => void;
@@ -596,7 +598,7 @@ export default function CommunityFeed({
         </button>
       </div>
       {tab === "rewards" && <DailyRewards />}
-      {tab === "training" && <OnlineTrainings />}
+      {tab === "training" && <OnlineTrainings profile={profile} />}
       {tab === "recent" && arenaOpen && (
         <button type="button" className="arena-feed-invite" onClick={onArena}>
           <span className="arena-feed-art">
