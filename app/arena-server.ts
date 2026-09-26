@@ -209,30 +209,6 @@ export async function settle(db: D1Database, id: string) {
           id,
         ),
       );
-      const firstId = "first:" + pid + ":" + m.id,
-        firstAt = now();
-      statements.push(
-        stmt(
-          db,
-          `INSERT OR IGNORE INTO arena_ledger(id,user_id,delta,kind,created_at) SELECT ?,?,0,'first_blood',? WHERE ${guard} AND NOT EXISTS(SELECT 1 FROM arena_ledger WHERE user_id=? AND kind='first_blood' AND created_at>?)`,
-          firstId,
-          pid,
-          firstAt,
-          id,
-          pid,
-          firstAt - 86340000,
-        ),
-      );
-      statements.push(
-        stmt(
-          db,
-          `INSERT OR IGNORE INTO arena_feed(id,user_id,kind,display_name,content,created_at) SELECT ?,user_id,'first_blood',display_name,'earned their first win of the day.',? FROM arena_players WHERE user_id=? AND EXISTS(SELECT 1 FROM arena_ledger WHERE id=?)`,
-          firstId,
-          firstAt,
-          pid,
-          firstId,
-        ),
-      );
     }
     statements.push(
       stmt(
