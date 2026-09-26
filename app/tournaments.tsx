@@ -58,6 +58,7 @@ function download(name: string, text: string, type = "application/json") {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 type Invite = { id: string; code: string; title: string; hostName: string };
+type PublicTournament = { id: string; title: string; host_name: string; status: Tournament["status"]; rounds: number; player_count: number; round_count: number };
 export default function Tournaments({
   profile,
   host = false,
@@ -79,7 +80,7 @@ export default function Tournaments({
     [registrations, setRegistrations] = useState<
       Array<{ user_id: string; display_name: string }>
     >([]),
-    [published, setPublished] = useState<Tournament[]>([]),
+    [published, setPublished] = useState<PublicTournament[]>([]),
     [joinedIds, setJoinedIds] = useState<string[]>([]),
     [loading, setLoading] = useState(false),
     [loadError, setLoadError] = useState("");
@@ -127,12 +128,12 @@ export default function Tournaments({
       const c = await getSupabase();
       if (!c) throw Error("Sign in to see tournaments.");
       const [sessions, entries] = await Promise.all([
-        c.from("cb_tournaments").select("state,revision").order("updated_at", { ascending: false }).limit(100),
+        c.rpc("cb_public_tournaments"),
         c.from("cb_tournament_entries").select("tournament_id").eq("user_id", profile.user_id),
       ]);
       if (sessions.error) throw Error(sessions.error.message);
       if (entries.error) throw Error(entries.error.message);
-      setPublished((sessions.data ?? []).map(row => ({ ...parseTournament(row.state), revision: row.revision })));
+      setPublished((sessions.data ?? []) as PublicTournament[]);
       setJoinedIds((entries.data ?? []).map(row => row.tournament_id));
     } catch (cause) {
       setLoadError((cause as Error).message);
@@ -406,10 +407,10 @@ export default function Tournaments({
     setNotice("Registered online. The host will add you to the roster.");
     await loadPublished();
   }
-  async function joinPublished(t: Tournament) {
+  async function joinPublished(t: PublicTournament) {
     const c = await getSupabase();
     if (!c) throw Error("Sign in to join a tournament.");
-    const { error } = await c.rpc("cb_join_tournament", { p_id: t.id, p_code: t.code });
+    const { error } = await c.rpc("cb_join_public_tournament", { p_id: t.id });
     if (error) throw Error(error.message);
     setNotice(`Joined ${t.title} for free. The host will add you to the roster.`);
     await loadPublished();
@@ -791,10 +792,9 @@ export default function Tournaments({
             <div className="tournament-public-grid">{published.map(t => <article key={t.id}>
               <span className="tournament-public-status">{t.status === "registration" ? "Registration open" : t.status === "playing" ? "In progress" : "Completed"}</span>
               <h3>{t.title}</h3>
-              <p>Host: {t.hostName} · {t.players.length} players · Round {t.history.length}/{t.rounds}</p>
+              <p>Host: {t.host_name} · {t.player_count} players · Round {t.round_count}/{t.rounds}</p>
               <strong>FREE ENTRY</strong>
               {t.status === "registration" && <button type="button" disabled={busy || joinedIds.includes(t.id)} onClick={() => void perform(() => joinPublished(t))}>{joinedIds.includes(t.id) ? "Joined" : "Join free"}</button>}
-              {t.status !== "registration" && <div className="standings"><table><thead><tr><th>Rank</th><th>Player</th><th>Score</th></tr></thead><tbody>{standings(t).slice(0, 10).map((p, index) => <tr key={p.id}><td>{index + 1}</td><td>{p.name}</td><td>{p.score}</td></tr>)}</tbody></table></div>}
             </article>)}</div>
           </section>
           <QrInput onValue={receiveInvite} />
