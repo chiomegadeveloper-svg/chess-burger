@@ -126,6 +126,11 @@ export default function MatchBoard({
   const chess = useMemo(() => gameFromPgn(match.pgn), [match.pgn]),
     history = chess.history(),
     myColor = ownId === match.black_id ? "b" : "w";
+  const availableThemes = useMemo(() => [
+    BOARD_THEMES[0],
+    ...BOARD_THEMES.filter(theme => theme.group !== "included" && boardRentals.some(rental => rental.theme_id === theme.id && new Date(rental.expires_at).getTime() > tick)),
+  ], [boardRentals, tick]);
+  const selectedTheme = availableThemes[previewIndex] ?? availableThemes[0];
   const offset = useMemo(
     () => (match.server_now ?? Date.now()) - Date.now(),
     [match.server_now],
@@ -149,7 +154,7 @@ export default function MatchBoard({
     let active = true;
     const refresh = () => {
       void arena<{active:string;owned:Array<{theme_id:string;expires_at:string}>}>("board-theme-state")
-        .then(data => { if (active) { setBoardRentals(data.owned); setBoardTheme(findBoardTheme(data.active)?.id ?? "slate"); setPreviewIndex(Math.max(0, BOARD_THEMES.findIndex(theme => theme.id === data.active))); } })
+        .then(data => { if (active) { setBoardRentals(data.owned); setBoardTheme(findBoardTheme(data.active)?.id ?? "slate"); const rented = BOARD_THEMES.filter(theme => theme.group !== "included" && data.owned.some(item => item.theme_id === theme.id && new Date(item.expires_at).getTime() > Date.now())); setPreviewIndex(Math.max(0, [BOARD_THEMES[0], ...rented].findIndex(theme => theme.id === data.active))); } })
         .catch(() => { if (active) setBoardTheme("slate"); });
     };
     refresh();
@@ -482,16 +487,14 @@ export default function MatchBoard({
           <section className="board-theme-picker" aria-label="Board color">
             <div className="board-theme-carousel">
               <strong>Board color</strong>
-              <BoardThemePreview theme={BOARD_THEMES[previewIndex]}/>
+              <BoardThemePreview theme={selectedTheme}/>
               <div className="board-theme-controls">
-                <button type="button" aria-label="Previous board" onClick={() => setPreviewIndex((previewIndex + BOARD_THEMES.length - 1) % BOARD_THEMES.length)}>◀</button>
-                {BOARD_THEMES.map((theme,index)=><button type="button" key={theme.id} aria-label={`Preview ${theme.name}`} aria-current={index===previewIndex} onClick={()=>setPreviewIndex(index)}>•</button>)}
-                <button type="button" aria-label="Next board" onClick={() => setPreviewIndex((previewIndex + 1) % BOARD_THEMES.length)}>▶</button>
+                <button type="button" aria-label="Previous available board" disabled={availableThemes.length < 2} onClick={() => setPreviewIndex((Math.min(previewIndex, availableThemes.length - 1) + availableThemes.length - 1) % availableThemes.length)}>◀</button>
+                <span className="board-theme-dots" aria-hidden="true"><i/><i/><i/><i/><i/></span>
+                <button type="button" aria-label="Next available board" disabled={availableThemes.length < 2} onClick={() => setPreviewIndex((Math.min(previewIndex, availableThemes.length - 1) + 1) % availableThemes.length)}>▶</button>
               </div>
-              <p>{BOARD_THEMES[previewIndex].name}{boardTheme===BOARD_THEMES[previewIndex].id ? " · Active" : ""}</p>
-              {BOARD_THEMES[previewIndex].group !== "included" && !boardRentals.some(item=>item.theme_id===BOARD_THEMES[previewIndex].id && new Date(item.expires_at).getTime()>Date.now()) ?
-                <button type="button" onClick={()=>window.dispatchEvent(new Event("cb-open-shop"))}>Rent in Shop</button> :
-                <button type="button" disabled={boardBusy||boardTheme===BOARD_THEMES[previewIndex].id} onClick={()=>void chooseBoardTheme(BOARD_THEMES[previewIndex].id)}>{boardTheme===BOARD_THEMES[previewIndex].id?"Current board":"Use this board"}</button>}
+              <p>{selectedTheme.name}{boardTheme===selectedTheme.id ? " · Active" : ""}</p>
+              <button type="button" disabled={boardBusy||boardTheme===selectedTheme.id} onClick={()=>void chooseBoardTheme(selectedTheme.id)}>{boardTheme===selectedTheme.id?"Current board":"Use this board"}</button>
             </div>
           </section>
           <div className="board-actions">

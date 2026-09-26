@@ -7,13 +7,14 @@
 .board-preview-black-white>span.black{color:#101317;filter:drop-shadow(0 0 1px #fff)}
 .board-theme-carousel{padding:12px;border:1px solid #53606b;border-radius:12px;background:#f3f7f8;color:#1f333a}
 .board-theme-carousel>strong{display:block;margin-bottom:8px;font-size:11px;letter-spacing:.12em;text-transform:uppercase}
-.board-theme-controls{display:flex;align-items:center;justify-content:center;gap:6px;margin-top:9px}
-.board-theme-controls button{width:24px;height:24px;min-height:24px!important;padding:0!important;border:0!important;background:transparent!important;color:#467653!important;box-shadow:none!important;font-size:17px!important}
-.board-theme-controls button[aria-current="true"]{font-size:26px!important;color:#1c693e!important}
+.board-theme-controls{display:flex!important;flex-direction:row;align-items:center;justify-content:center;gap:10px;margin-top:9px;min-width:0}
+.game-info .board-theme-controls button{display:grid;place-items:center;flex:0 0 28px;width:28px;min-width:28px;height:28px;min-height:28px;padding:0;border:0;background:transparent;color:#467653;box-shadow:none;font-size:17px;text-align:center}
+.game-info .board-theme-controls button:disabled{opacity:.35;cursor:default}
+.board-theme-dots{display:flex;align-items:center;justify-content:center;gap:6px;flex:none}
+.board-theme-dots i{width:5px;height:5px;border-radius:50%;background:#548e6b}
+.board-theme-dots i:nth-child(3){width:9px;height:9px;background:#2a734a}
+.board-theme-carousel .board-preview{max-width:190px}
 .board-theme-carousel>p{margin:7px 0 0;text-align:center;font-size:12px;font-weight:700}
-.board-theme-controls{flex-wrap:wrap;gap:1px}
-.board-theme-controls button{width:15px;min-width:15px}
-.board-theme-controls button:first-child,.board-theme-controls button:last-child{width:25px;min-width:25px}
 .board-theme-carousel>button:last-child{display:block;width:100%;margin-top:10px;padding:8px;border:1px solid #6aafb1;border-radius:7px;background:#dff6f5;color:#173b42;font-size:11px;font-weight:700;cursor:pointer}
 .board-theme-carousel>button:last-child:disabled{opacity:.6;cursor:default}
 .interactive-board.board-theme-robotic,.interactive-board.board-theme-cyanotype-glass,.interactive-board.board-theme-dark-warlock,.interactive-board.board-theme-emerald-glass,.interactive-board.board-theme-jungle,.interactive-board.board-theme-black-white,.interactive-board.board-theme-wood-texture,.interactive-board.board-theme-maroon-pink,.interactive-board.board-theme-sunset,.interactive-board.board-theme-black-cyan{border:6px solid var(--board-frame);border-radius:10px;box-shadow:0 0 0 2px var(--board-accent),0 14px 28px #0007;overflow:hidden}
