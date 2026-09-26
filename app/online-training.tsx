@@ -57,7 +57,7 @@ function TrainingInstallCard(){
 
 export function OnlineTrainings({profile,initialId="",invite="",onCreateAccount}:{profile?:PlayerProfile|null;initialId?:string;invite?:string;onCreateAccount?:()=>void}){
  const[trainings,setTrainings]=useState<Training[]>([]),[selected,setSelected]=useState(initialId),[name,setName]=useState(profile?.display_name??""),[birthdate,setBirthdate]=useState(""),[busy,setBusy]=useState(false),[status,setStatus]=useState(""),[error,setError]=useState("");
- const[roster,setRoster]=useState<{id:string;registrants:OwnerRegistrant[]}|null>(null),[rosterBusy,setRosterBusy]=useState(false),[gifting,setGifting]=useState<string|null>(null);
+ const[roster,setRoster]=useState<{id:string;registrants:OwnerRegistrant[]}|null>(null),[rosterBusy,setRosterBusy]=useState(false),[gifting,setGifting]=useState<string|null>(null),[removing,setRemoving]=useState<string|null>(null);
  const load=useCallback(async()=>{try{setError("");setTrainings(await rpc<Training[]>("cb_training_public",{p_id:initialId||null}));}catch(e){setError((e as Error).message);}},[initialId]);
  useEffect(()=>{void load();},[load]);
  useEffect(()=>{setSelected(initialId);},[initialId]);
@@ -78,6 +78,15 @@ export function OnlineTrainings({profile,initialId="",invite="",onCreateAccount}
    if(result.gifted)window.dispatchEvent(new Event("cb-profile-saved"));
   }catch(e){setError((e as Error).message);}finally{setGifting(null);}
  }
+ async function removeRegistrant(event:Training,registrant:OwnerRegistrant){
+  if(!window.confirm(`Remove ${registrant.full_name} from "${event.title}"? Their registration and invitation link will be cancelled.`))return;
+  setRemoving(registrant.id);setError("");setStatus("");
+  try{
+   await arena("remove-training-registrant",{id:event.id,registration_id:registrant.id});
+   setRoster(current=>current?.id===event.id?{...current,registrants:current.registrants.filter(item=>item.id!==registrant.id)}:current);
+   await load();setStatus(`${registrant.full_name} was removed from this training.`);
+  }catch(e){setError((e as Error).message);}finally{setRemoving(null);}
+ }
  return <section className="online-training-page">
   <header className="online-training-heading"><img src="/cburger_logo.png" alt=""/><div><small>CHESS BURGER · FREE LEARNING</small><h1>Online Trainings</h1><p>Choose a session and register for free.</p></div></header>
   {error&&<p className="online-training-error" role="alert">{error}</p>}{status&&<p className="online-training-success" role="status">{status}</p>}
@@ -89,7 +98,7 @@ export function OnlineTrainings({profile,initialId="",invite="",onCreateAccount}
    {training.poster_url&&<img className="online-training-poster" src={training.poster_url} alt={`${training.title} event poster`}/>}
    <div className="online-training-info"><small>{categoryLabels[training.category]} · FREE TRAINING</small><div className="online-training-title-row"><h2>{training.title}</h2>{profile?.role==="owner"&&<button className="online-training-roster-toggle" type="button" disabled={rosterBusy} aria-expanded={roster?.id===training.id} aria-controls="training-registrants-panel" onClick={()=>void showRegistrants(training)}>{rosterBusy?"Loading registrants…":roster?.id===training.id?"Hide registrants":`View registrants (${training.registered})`}</button>}</div><p>{training.invitation_text||"Join the Chess Burger online training session."}</p>
    <dl><div><dt>Coach</dt><dd>{training.coach_name}</dd></div><div><dt>Schedule</dt><dd>{new Date(training.starts_at).toLocaleString()}</dd></div><div><dt>Participants</dt><dd>{training.confirmed} confirmed · {training.registered}/{training.capacity} registered</dd></div></dl>
-   {profile?.role==="owner"&&roster?.id===training.id&&<section className="online-training-roster" id="training-registrants-panel" aria-label="Training registrants"><div className="online-training-roster-heading"><h3>Registered participants</h3><span>{roster.registrants.length}/{training.capacity}</span></div>{roster.registrants.length?<ul>{roster.registrants.map(reg=><li key={reg.id}><span><strong>{reg.username?`@${reg.username}`:reg.full_name}</strong><small>{reg.username?`${reg.full_name} · Confirmed account`:reg.invited?"Invited · awaiting account":"Awaiting invitation and Chess Burger account"}</small></span><button type="button" disabled={!reg.username||!!gifting} title={!reg.username?"Available after the registrant confirms a Chess Burger account":undefined} onClick={()=>void giftTicket(training,reg)}>{gifting===reg.id?"Sending…":"Gift a ticket"}</button></li>)}</ul>:<p>No one has registered yet.</p>}<p className="online-training-roster-note">A ticket moves from your Bag to a confirmed registrant. The 4 Gold gift fee applies.</p></section>}
+   {profile?.role==="owner"&&roster?.id===training.id&&<section className="online-training-roster" id="training-registrants-panel" aria-label="Training registrants"><div className="online-training-roster-heading"><h3>Registered participants</h3><span>{roster.registrants.length}/{training.capacity}</span></div>{roster.registrants.length?<ul>{roster.registrants.map(reg=><li key={reg.id}><span><strong>{reg.username?`@${reg.username}`:reg.full_name}</strong><small>{reg.username?`${reg.full_name} · Confirmed account`:reg.invited?"Invited · awaiting account":"Awaiting invitation and Chess Burger account"}</small></span><div className="online-training-registrant-actions"><button type="button" disabled={!reg.username||!!gifting||!!removing} title={!reg.username?"Available after the registrant confirms a Chess Burger account":undefined} onClick={()=>void giftTicket(training,reg)}>{gifting===reg.id?"Sending…":"Gift a ticket"}</button><button className="online-training-remove" type="button" disabled={!!removing||!!gifting} onClick={()=>void removeRegistrant(training,reg)} aria-label={`Remove ${reg.full_name} from ${training.title}`}>{removing===reg.id?"Removing…":"Remove"}</button></div></li>)}</ul>:<p>No one has registered yet.</p>}<p className="online-training-roster-note">A ticket moves from your Bag to a confirmed registrant. The 4 Gold gift fee applies.</p></section>}
    <div className="online-training-join-layout"><div className="online-training-form"><h3>{invite?"Accept your invitation":profile?"Register for free":"Request an invitation"}</h3>
     {!profile&&!invite&&<p>A Chess Burger account is required to confirm your training place. You can send a request now; the owner will invite you to complete registration.</p>}
     {invite&&!profile&&<p>Sign in or create your Chess Burger account to confirm this personal invitation.</p>}
@@ -110,6 +119,15 @@ export function OnlineTrainingCms({profile}:{profile:PlayerProfile}){
  async function save(){setBusy(true);setError("");try{const created=await rpc<string>("cb_training_save",{p_id:id,p_title:title,p_coach_name:coach,p_poster_url:poster,p_starts_at:new Date(startsAt).toISOString(),p_capacity:capacity,p_category:category,p_invitation_text:message});await load();setNotice(`Training published. Share this registration link: ${link(created)}`);await navigator.clipboard.writeText(link(created)).catch(()=>{});reset();}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
  async function upload(file:File){setBusy(true);setError("");try{validateImageFile(file);setPoster(await uploadStaffImage(file,profile.user_id));setNotice("Poster uploaded. Publish the training to make it visible.");}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
  async function inviteRegistrant(reg:Registrant,event:Managed){setBusy(true);setError("");try{const token=await rpc<string>("cb_training_invite",{p_registration_id:reg.id});const url=link(event.id,token);await navigator.clipboard.writeText(url);setNotice(`Invitation for ${reg.full_name} copied. Share this link with the registrant: ${url}`);await load();}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
+ async function removeRegistrant(reg:Registrant,event:Managed){
+  if(!window.confirm(`Remove ${reg.full_name} from "${event.title}"? Their registration and invitation link will be cancelled.`))return;
+  setBusy(true);setError("");setNotice("");
+  try{
+   await arena("remove-training-registrant",{id:event.id,registration_id:reg.id});
+   setEvents(current=>current.map(item=>item.id===event.id?{...item,registrants:item.registrants.filter(person=>person.id!==reg.id)}:item));
+   setNotice(`${reg.full_name} was removed from "${event.title}".`);
+  }catch(e){setError((e as Error).message);}finally{setBusy(false);}
+ }
  async function remove(event:Managed){
   const count=event.registrants.length;
   if(!window.confirm(`Permanently delete "${event.title}"? This will remove ${count} ${count===1?"registration":"registrations"} and make its registration and invitation links unavailable.`))return;
@@ -131,6 +149,6 @@ export function OnlineTrainingCms({profile}:{profile:PlayerProfile}){
   <label>Personal invitation text<textarea value={message} maxLength={500} onChange={e=>setMessage(e.target.value)} placeholder="Tell registrants what to expect…"/></label>
   <div className="cms-actions"><button disabled={busy||!title.trim()||!coach.trim()||!startsAt} onClick={()=>void save()}>{busy?"Saving…":id?"Update online training":"Create online training & copy link"}</button>{id&&<button onClick={reset}>Cancel edit</button>}</div>
   <div className="online-training-managed">{events.map(event=><article key={event.id}><h3>{event.title}</h3><p>{new Date(event.starts_at).toLocaleString()} · {categoryLabels[event.category]} · {event.registrants.length}/{event.capacity} registered</p><div className="cms-actions"><button type="button" disabled={busy} onClick={()=>edit(event)}>Edit</button><button type="button" disabled={busy} onClick={()=>void navigator.clipboard.writeText(link(event.id)).then(()=>setNotice(`Registration link copied: ${link(event.id)}`)).catch(()=>setError("Could not copy the link."))}>Copy registration link</button><button className="online-training-delete" type="button" disabled={busy} onClick={()=>void remove(event)} aria-label={`Delete ${event.title}`}>Delete training</button></div>
-   <h4>Registrants</h4>{event.registrants.map(reg=><div className="online-training-registrant" key={reg.id}><span><b>{reg.full_name}</b><small>{reg.confirmed?"Confirmed Chess Burger user":reg.invited_at?"Invited · awaiting account":"Awaiting invitation"}</small></span>{!reg.confirmed&&<button disabled={busy} onClick={()=>void inviteRegistrant(reg,event)}>Invite & copy link</button>}</div>)}{!event.registrants.length&&<p>No registrants yet.</p>}</article>)}</div>
+   <h4>Registrants</h4>{event.registrants.map(reg=><div className="online-training-registrant" key={reg.id}><span><b>{reg.full_name}</b><small>{reg.confirmed?"Confirmed Chess Burger user":reg.invited_at?"Invited · awaiting account":"Awaiting invitation"}</small></span><div className="online-training-registrant-actions">{!reg.confirmed&&<button disabled={busy} onClick={()=>void inviteRegistrant(reg,event)}>Invite & copy link</button>}<button className="online-training-remove" type="button" disabled={busy} onClick={()=>void removeRegistrant(reg,event)} aria-label={`Remove ${reg.full_name} from ${event.title}`}>Remove</button></div></div>)}{!event.registrants.length&&<p>No registrants yet.</p>}</article>)}</div>
  </section>;
 }
