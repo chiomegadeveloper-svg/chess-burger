@@ -908,7 +908,11 @@ export default async function handler(req: Req, res: Res) {
     }
     if(action==='rent-board-theme'){
       const themeId=String(body.theme_id??''),days=Number(body.days),requestId=String(body.request_id??'');
-      if(!/^(robotic|cyanotype-glass|dark-warlock|emerald-glass|black-white|wood-texture|maroon-pink|sunset|black-cyan)$/.test(themeId)||![7,21,30].includes(days)||!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(requestId))fail(400,'Choose a valid board rental.');
+      if(!/^(robotic|cyanotype-glass|dark-warlock|emerald-glass|cody-ramey|black-white|wood-texture|maroon-pink|sunset|black-cyan)$/.test(themeId)||![7,21,30].includes(days)||!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(requestId))fail(400,'Choose a valid board rental.');
+      if(themeId==='cody-ramey'){
+        const catalog=await client.from('cb_board_themes').upsert({id:'cody-ramey',name:'Cody Ramey',active:true},{onConflict:'id'});
+        if(catalog.error)fail(503,'Board theme catalog is unavailable.');
+      }
       const rented=await client.rpc('cb_rent_board_theme',{p_user_id:account.id,p_theme_id:themeId,p_days:days,p_request_id:requestId});
       if(rented.error){const message=String(rented.error.message??'Board rental failed.');if(/cb_rent_board_theme|cb_board_rentals|relation|schema cache|function/i.test(message))fail(503,'Run supabase/0063_board_theme_rentals.sql in Supabase, then try again.');if(/not enough gold/i.test(message))fail(409,'You do not have enough Gold for this rental.');fail(409,message);}
       return res.status(200).json(rented.data);

@@ -1,5 +1,6 @@
 "use client";
 import { boardThemeStyle, type BoardTheme } from "./board-themes";
+import { CodyPiece } from "./cody-piece";
 import "./board-themes.css";
 
 const back = "rnbqkbnr";
@@ -11,7 +12,7 @@ export function BoardThemePreview({ theme }: { theme: BoardTheme }) {
       {Array.from({ length: 64 }, (_, index) => {
         const row = Math.floor(index / 8), col = index % 8;
         const piece = row === 0 || row === 7 ? back[col] : row === 1 || row === 6 ? "p" : "";
-        return <span key={index} className={`${(row + col) % 2 ? "dark" : "light"} ${row < 2 ? "black" : "white"}`}>{piece && glyphs[piece]}</span>;
+        return <span key={index} className={`${(row + col) % 2 ? "dark" : "light"} ${row < 2 ? "black" : "white"}`}>{piece && (theme.id === "cody-ramey" ? <CodyPiece color={row < 2 ? "b" : "w"} type={piece}/> : glyphs[piece])}</span>;
       })}
     </div>
   </div>;

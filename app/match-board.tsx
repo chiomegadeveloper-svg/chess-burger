@@ -4,6 +4,7 @@ import type { Square } from "chess.js";
 import { arena } from "./arena-client";
 import { BOARD_THEMES, DEFAULT_BOARD_IDS, boardTheme as findBoardTheme, boardThemeStyle } from "./board-themes";
 import { BoardThemePreview } from "./board-theme-preview";
+import { CodyPiece } from "./cody-piece";
 import {
   Flag,
   RotateCw,
@@ -413,7 +414,9 @@ export default function MatchBoard({
                   >
                     <span className="piece" data-piece={piece ? piece.color + piece.type : undefined}>
                       {piece
-                        ? boardTheme === "bubble-gum"
+                        ? boardTheme === "cody-ramey"
+                          ? <CodyPiece color={piece.color} type={piece.type}/>
+                          : boardTheme === "bubble-gum"
                           ? <img className="bubble-gum-piece" src={`/boards/bubble-gum/${piece.color}${piece.type}.png`} alt="" draggable={false}/>
                           : symbols[piece.color + piece.type]
                         : legal.includes(square)
