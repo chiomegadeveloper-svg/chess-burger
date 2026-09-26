@@ -34,7 +34,8 @@ import "./v47.css";
 import "./grand-arena.css";
 
 export const metadata: Metadata = {
-  title: "Chess Burger",
+  title: "Chess Burger v0.9 Public Beta",
+  applicationName: "Chess Burger v0.9 Public Beta",
   description: "Competitive chess, live.",
   manifest: "/manifest.webmanifest",
   verification: {
