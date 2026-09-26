@@ -1,15 +1,18 @@
 .avatar-frame-art{display:block;position:relative;aspect-ratio:1;width:100%;max-width:150px;margin:auto;isolation:isolate}
-.avatar-frame-photo{position:absolute;inset:19%;display:grid;place-items:center;overflow:hidden;border-radius:50%;background:#173741;color:#f3dba2;font-size:34px;font-weight:800}
+.avatar-frame-photo{position:absolute;left:var(--frame-photo-left,21%);top:var(--frame-photo-top,25%);width:var(--frame-photo-size,58%);height:var(--frame-photo-size,58%);display:grid;place-items:center;overflow:hidden;border-radius:50%;background:#173741;color:#f3dba2;font-size:34px;font-weight:800}
 .avatar-frame-photo img{width:100%;height:100%;object-fit:cover}
 .avatar-frame-overlay{position:absolute;inset:0;display:block;background-size:500% 200%;background-repeat:no-repeat;pointer-events:none;z-index:2}
 .avatar-frame-basic{background-image:url('/avatar-frames/basic.webp')}
 .avatar-frame-premium{background-image:url('/avatar-frames/premium.webp')}
+:is(.avatar-frame-art,.portrait-ring,.profile-avatar-static,.public-avatar,.feed-avatar,.arena-feed-champion-avatar):has(>.avatar-frame-premium[data-frame-row="0"]){--frame-photo-left:22%;--frame-photo-top:28%;--frame-photo-size:56%}
+:is(.avatar-frame-art,.portrait-ring,.profile-avatar-static,.public-avatar,.feed-avatar,.arena-feed-champion-avatar):has(>.avatar-frame-premium[data-frame-row="1"]){--frame-photo-left:22%;--frame-photo-top:25%;--frame-photo-size:56%}
+:is(.avatar-frame-art,.portrait-ring,.profile-avatar-static,.public-avatar,.feed-avatar,.arena-feed-champion-avatar):has(>.avatar-frame-basic[data-frame-row="1"]){--frame-photo-left:21%;--frame-photo-top:21%;--frame-photo-size:58%}
 .portrait-ring,.profile-avatar-static,.public-avatar{position:relative}
 .portrait-ring>.avatar-frame-overlay,.profile-avatar-static>.avatar-frame-overlay,.public-avatar>.avatar-frame-overlay,.feed-avatar>.avatar-frame-overlay,.arena-feed-champion-avatar>.avatar-frame-overlay{inset:0;z-index:5}
 .portrait-ring:has(>.avatar-frame-overlay){padding:0;background:transparent;box-shadow:none}
-.portrait-ring:has(>.avatar-frame-overlay)>.portrait-circle{position:absolute;inset:19%;width:62%;height:62%;border:0;overflow:hidden;border-radius:50%;box-shadow:none}
+.portrait-ring:has(>.avatar-frame-overlay)>.portrait-circle{position:absolute;inset:auto;left:var(--frame-photo-left,21%);top:var(--frame-photo-top,25%);width:var(--frame-photo-size,58%);height:var(--frame-photo-size,58%);border:0;overflow:hidden;border-radius:50%;box-shadow:none}
 .profile-avatar-static:has(>.avatar-frame-overlay),.public-avatar.has-avatar-frame,.feed-avatar.has-avatar-frame,.arena-feed-champion-avatar.has-avatar-frame{position:relative;overflow:visible;border:0;background:transparent;box-shadow:none}
-.profile-avatar-static:has(>.avatar-frame-overlay)>img,.public-avatar.has-avatar-frame>img,.feed-avatar.has-avatar-frame>img,.arena-feed-champion-avatar.has-avatar-frame>img{position:absolute;inset:19%;width:62%;height:62%;border-radius:50%;object-fit:cover}
+.profile-avatar-static:has(>.avatar-frame-overlay)>img,.public-avatar.has-avatar-frame>img,.feed-avatar.has-avatar-frame>img,.arena-feed-champion-avatar.has-avatar-frame>img{position:absolute;inset:auto;left:var(--frame-photo-left,21%);top:var(--frame-photo-top,25%);width:var(--frame-photo-size,58%);height:var(--frame-photo-size,58%);border-radius:50%;object-fit:cover}
 .profile-avatar-static:has(>.avatar-frame-overlay)>span:not(.avatar-frame-overlay),.public-avatar.has-avatar-frame,.feed-avatar.has-avatar-frame,.arena-feed-champion-avatar.has-avatar-frame{color:transparent}
 .avatar-frame-store{max-width:1120px;margin:auto;padding:16px;display:grid;gap:18px;color:#e6f2f3}
 .avatar-frame-store>header{display:flex;justify-content:space-between;gap:16px;padding:20px;border:1px solid #3a6572;border-radius:16px;background:linear-gradient(135deg,#142b35,#102028)}
