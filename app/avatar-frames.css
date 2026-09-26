@@ -5,12 +5,12 @@
 .avatar-frame-basic{background-image:url('/avatar-frames/basic.webp')}
 .avatar-frame-premium{background-image:url('/avatar-frames/premium.webp')}
 .portrait-ring,.profile-avatar-static,.public-avatar{position:relative}
-.portrait-ring>.avatar-frame-overlay,.profile-avatar-static>.avatar-frame-overlay,.public-avatar>.avatar-frame-overlay{inset:-13%;z-index:5}
-.public-avatar.has-avatar-frame{overflow:visible}
-.public-avatar.has-avatar-frame img{border-radius:50%}
-.profile-avatar-static:has(>.avatar-frame-overlay){overflow:visible}
-.profile-avatar-static:has(>.avatar-frame-overlay)>img{border-radius:50%}
-.profile-avatar-static>.avatar-frame-overlay{inset:-15%}
+.portrait-ring>.avatar-frame-overlay,.profile-avatar-static>.avatar-frame-overlay,.public-avatar>.avatar-frame-overlay,.feed-avatar>.avatar-frame-overlay,.arena-feed-champion-avatar>.avatar-frame-overlay{inset:0;z-index:5}
+.portrait-ring:has(>.avatar-frame-overlay){padding:0;background:transparent;box-shadow:none}
+.portrait-ring:has(>.avatar-frame-overlay)>.portrait-circle{position:absolute;inset:19%;width:62%;height:62%;border:0;overflow:hidden;border-radius:50%;box-shadow:none}
+.profile-avatar-static:has(>.avatar-frame-overlay),.public-avatar.has-avatar-frame,.feed-avatar.has-avatar-frame,.arena-feed-champion-avatar.has-avatar-frame{position:relative;overflow:visible;border:0;background:transparent;box-shadow:none}
+.profile-avatar-static:has(>.avatar-frame-overlay)>img,.public-avatar.has-avatar-frame>img,.feed-avatar.has-avatar-frame>img,.arena-feed-champion-avatar.has-avatar-frame>img{position:absolute;inset:19%;width:62%;height:62%;border-radius:50%;object-fit:cover}
+.profile-avatar-static:has(>.avatar-frame-overlay)>span:not(.avatar-frame-overlay),.public-avatar.has-avatar-frame,.feed-avatar.has-avatar-frame,.arena-feed-champion-avatar.has-avatar-frame{color:transparent}
 .avatar-frame-store{max-width:1120px;margin:auto;padding:16px;display:grid;gap:18px;color:#e6f2f3}
 .avatar-frame-store>header{display:flex;justify-content:space-between;gap:16px;padding:20px;border:1px solid #3a6572;border-radius:16px;background:linear-gradient(135deg,#142b35,#102028)}
 .avatar-frame-store>header small{color:#6de2ed;font-size:10px;font-weight:800;letter-spacing:.14em}

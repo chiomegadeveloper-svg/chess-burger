@@ -25,6 +25,7 @@ import { SocialButtons } from "./social";
 import { levelFor } from "./cbr";
 import type { ArenaMatch, ArenaPlayer } from "./game-rules";
 import { feedBanner, isGraphicBanner } from "./feed-banner-catalog";
+import { AvatarFrameOverlay } from "./avatar-frame-art";
 import DailyRewards from "./daily-rewards";
 import {OnlineTrainings} from "./online-training";
 import "./arena-champion-feed.css";
@@ -978,12 +979,13 @@ export default function CommunityFeed({
                     : `Open ${event.display_name}'s profile`
                 }
               >
-                <span className="feed-avatar">
+                <span className={`feed-avatar${!announcement && event.avatar_frame_id ? " has-avatar-frame" : ""}`}>
                   {avatarUrl ? (
                     <img src={avatarUrl} alt="" />
                   ) : (
                     event.display_name.charAt(0)
                   )}
+                  {!announcement && <AvatarFrameOverlay frameId={event.avatar_frame_id} />}
                 </span>
               </button>
               {!announcement && (
@@ -1102,12 +1104,13 @@ export default function CommunityFeed({
                   aria-label={`Open Grand Arena Champion ${event.display_name}'s profile`}
                 >
                   <Crown size={20} />
-                  <span className="arena-feed-champion-avatar">
+                  <span className={`arena-feed-champion-avatar${event.avatar_frame_id ? " has-avatar-frame" : ""}`}>
                     {event.avatar_url ? (
                       <img src={event.avatar_url} alt="" />
                     ) : (
                       event.display_name.charAt(0)
                     )}
+                    <AvatarFrameOverlay frameId={event.avatar_frame_id} />
                   </span>
                   <span>
                     <strong>{event.display_name}</strong>
