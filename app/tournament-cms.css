@@ -38,3 +38,10 @@
 .tournament-public-grid article strong{display:block;margin:10px 0;color:#72dce8;font-size:11px;letter-spacing:.08em}
 .tournament-public-grid article button{width:100%}
 .tournament-public-status{font-size:10px;font-weight:800;text-transform:uppercase;color:#e8c875}
+.tournament-player-list{margin-top:14px;border-top:1px solid #374650;padding-top:10px}
+.tournament-player-list h4{margin:0 0 8px;color:#f0d29c;font-size:12px}
+.tournament-player-list p{display:flex;justify-content:space-between;gap:10px;margin:0;padding:7px 0;border-bottom:1px solid #273b45}
+.tournament-player-list p span{color:#72dce8;text-align:right}
+.tournament-winner-board article{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:10px 0;border-bottom:1px solid #33434b;font-size:12px;color:#dce5ea}
+.tournament-winner-board article b{color:#f8e1a8}
+.tournament-winner-board article strong{color:#72dce8}

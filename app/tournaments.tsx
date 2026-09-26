@@ -58,7 +58,8 @@ function download(name: string, text: string, type = "application/json") {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 type Invite = { id: string; code: string; title: string; hostName: string };
-type PublicTournament = { id: string; title: string; host_name: string; status: Tournament["status"]; rounds: number; player_count: number; round_count: number };
+type PublicTournament = { id: string; title: string; host_name: string; status: Tournament["status"]; starts_at: string | null; rounds: number; player_count: number; round_count: number; players: Array<{ id: number; name: string }>; registrations: string[]; pairings: Array<{ white: number; black: number; result: Result }> };
+type Winner = { username: string; title: string; finished_at: string; cbg_gain: number; cbr_gain: number; rank: number };
 export default function Tournaments({
   profile,
   host = false,
@@ -70,6 +71,7 @@ export default function Tournaments({
     [event, setEvent] = useState<Tournament | null>(null),
     [title, setTitle] = useState(""),
     [rounds, setRounds] = useState(5),
+    [startsAt, setStartsAt] = useState(""),
     [mode, setMode] = useState<"offline" | "api">("offline"),
     [names, setNames] = useState(""),
     [busy, setBusy] = useState(false),
@@ -81,6 +83,8 @@ export default function Tournaments({
       Array<{ user_id: string; display_name: string }>
     >([]),
     [published, setPublished] = useState<PublicTournament[]>([]),
+    [weeklyWinners, setWeeklyWinners] = useState<Winner[]>([]),
+    [featuredWinners, setFeaturedWinners] = useState<Winner[]>([]),
     [joinedIds, setJoinedIds] = useState<string[]>([]),
     [loading, setLoading] = useState(false),
     [loadError, setLoadError] = useState("");
@@ -127,14 +131,18 @@ export default function Tournaments({
     try {
       const c = await getSupabase();
       if (!c) throw Error("Sign in to see tournaments.");
-      const [sessions, entries] = await Promise.all([
+      const [sessions, entries, winners] = await Promise.all([
         c.rpc("cb_public_tournaments"),
         c.from("cb_tournament_entries").select("tournament_id").eq("user_id", profile.user_id),
+        c.rpc("cb_tournament_winner_boards"),
       ]);
       if (sessions.error) throw Error(sessions.error.message);
       if (entries.error) throw Error(entries.error.message);
       setPublished((sessions.data ?? []) as PublicTournament[]);
       setJoinedIds((entries.data ?? []).map(row => row.tournament_id));
+      if (winners.error) throw Error(winners.error.message);
+      setWeeklyWinners((winners.data?.weekly ?? []) as Winner[]);
+      setFeaturedWinners((winners.data?.featured ?? []) as Winner[]);
     } catch (cause) {
       setLoadError((cause as Error).message);
     } finally {
@@ -209,7 +217,7 @@ export default function Tournaments({
       setBusy(false);
     }
   }
-  function create() {
+  async function create() {
     if (!staff || !profile) return;
     if (
       !title.trim() ||
@@ -220,6 +228,7 @@ export default function Tournaments({
       setNotice("Enter a title and 1–23 rounds.");
       return;
     }
+    if (!startsAt || new Date(startsAt).getTime() <= Date.now()) throw Error("Choose a future tournament start time.");
     const t: Tournament = {
       id: crypto.randomUUID(),
       code: crypto.randomUUID().replaceAll("-", "").slice(0, 8).toUpperCase(),
@@ -227,15 +236,18 @@ export default function Tournaments({
       hostId: profile.user_id,
       hostName: profile.display_name,
       rounds,
+      startsAt: new Date(startsAt).toISOString(),
       mode,
       players: [],
       history: [],
       status: "registration",
       goldRewards: { champion: 100, second: 50, third: 25 },
+      cbrRewards: { champion: 20, second: 10, third: 5 },
       updatedAt: new Date().toISOString(),
     };
-    persist(t, "Created offline tournament");
-    setNotice("Registration is open. Add players or share the host QR.");
+    const saved = persist(t, "Created tournament");
+    await sync(saved);
+    setNotice("Tournament published. Free registration is open until the owner starts pairing.");
   }
   function addNames() {
     if (!event || !editable || event.status !== "registration") return;
@@ -306,12 +318,21 @@ export default function Tournaments({
   );
   async function nextRound() {
     if (!event || !editable) return;
-    assertReady(event);
+    const c = await getSupabase();
+    if (!c) throw Error("Connect to load all registered players before pairing.");
+    const { data: entries, error: registrationError } = await c.from("cb_tournament_entries").select("user_id,display_name").eq("tournament_id", event.id);
+    if (registrationError) throw Error(registrationError.message);
+    const players = [...event.players];
+    for (const entry of entries ?? []) if (!players.some(p => p.userId === entry.user_id)) {
+      if (players.length >= 100) throw Error("Maximum 100 players per tournament.");
+      players.push({ id: players.length + 1, name: entry.display_name, userId: entry.user_id, rating: 0 });
+    }
+    const current = { ...event, players };
+    assertReady(current);
     let pairs;
     if (event.mode === "offline") {
-      pairs = pairOffline(event);
+      pairs = pairOffline(current);
     } else {
-      const c = await getSupabase();
       const session = await c?.auth.getSession();
       const token = session?.data.session?.access_token;
       if (!token)
@@ -324,7 +345,7 @@ export default function Tournaments({
           "Content-Type": "application/json",
           Authorization: "Bearer " + token,
         },
-        body: JSON.stringify({ trf: exportTrf(event) }),
+        body: JSON.stringify({ trf: exportTrf(current) }),
       });
       const data = (await r.json()) as {
         error?: string;
@@ -337,19 +358,13 @@ export default function Tournaments({
         Number(data.round) !== event.history.length + 1
       )
         throw Error("The provider returned the wrong round number.");
-      pairs = validatePairs(event, data.pairings);
+      pairs = validatePairs(current, data.pairings);
     }
     const next = persist(
-      { ...event, status: "playing", history: [...event.history, pairs] },
+      { ...current, status: "playing", history: [...event.history, pairs] },
       "Paired round " + (event.history.length + 1),
     );
-    if (navigator.onLine && next.revision) {
-      try {
-        await sync(next);
-      } catch (e) {
-        setNotice("Saved on this device. " + (e as Error).message);
-      }
-    }
+    await sync(next);
   }
   function result(board: number, value: Result) {
     if (!event || !editable || event.status === "completed") return;
@@ -503,6 +518,10 @@ export default function Tournaments({
                 onChange={(e) => setRounds(Number(e.target.value))}
               />
             </label>
+            <label>
+              Tournament starts
+              <input type="datetime-local" value={startsAt} onChange={e => setStartsAt(e.target.value)} />
+            </label>
           </div>
           <label>
             Pairing engine
@@ -514,7 +533,7 @@ export default function Tournaments({
               <option value="api">Online Swiss REST API</option>
             </select>
           </label>
-          <button onClick={create}>Create tournament</button>
+          <button disabled={busy} onClick={() => void perform(create)}>Create and publish tournament</button>
           <p className="cms-note">
             Offline club pairings work on this device. The online engine needs a
             configured API key. Have an arbiter verify pairings for rated
@@ -572,7 +591,7 @@ export default function Tournaments({
               Load published version
             </button>
           </div>
-          <div className="tournament-cms-summary"><span>{event.status.toUpperCase()}</span><h3>{event.title}</h3><strong>{event.players.length} players · {event.history.length}/{event.rounds} rounds</strong></div>
+          <div className="tournament-cms-summary"><span>{event.status.toUpperCase()}</span><h3>{event.title}</h3><strong>{event.players.length} players · {event.history.length}/{event.rounds} rounds</strong><p>Starts {event.startsAt ? new Date(event.startsAt).toLocaleString() : "when the host begins"}</p></div>
           <p className="tournament-state">
             Host: {event.hostName} · {event.status} ·{" "}
             {event.mode === "offline" ? "Offline club Swiss" : "Swiss REST API"}
@@ -621,6 +640,11 @@ export default function Tournaments({
                     />
                   </label>
                 ))}
+              </div>
+              <div className="cms-grid tournament-prizes">
+                {([ ["champion", "Champion"], ["second", "2nd place"], ["third", "3rd place"] ] as const).map(([key, label]) => <label key={key}>{label} CBR
+                  <input type="number" min={0} max={1000} value={event.cbrRewards?.[key] ?? 0} onChange={e => persist({ ...event, cbrRewards: { ...(event.cbrRewards ?? { champion: 0, second: 0, third: 0 }), [key]: Math.max(0, Math.min(1000, Number(e.target.value) || 0)) } }, `Set ${label} CBR`)} />
+                </label>)}
               </div>
               <div className="tournament-cms-registration"><div className="tournament-qr">
                 <QRCodeSVG value={qrLink} size={240} />
@@ -679,7 +703,7 @@ export default function Tournaments({
                 Gold rewards: Champion {event.goldRewards?.champion ?? 0}, 2nd{" "}
                 {event.goldRewards?.second ?? 0}, 3rd{" "}
                 {event.goldRewards?.third ?? 0}. Only registered Chess Burger
-                players can receive Gold.
+                players can receive Gold and CBR. Guild members also contribute CBG to their guild chest.
               </p>
               <button
                 disabled={busy || event.goldAwarded}
@@ -731,8 +755,7 @@ export default function Tournaments({
               {event.history.length < event.rounds ? (
                 <button
                   disabled={
-                    busy ||
-                    event.players.length < 2 ||
+                  busy ||
                     event.history.at(-1)?.some((g) => !g.result)
                   }
                   onClick={() => void perform(nextRound)}
@@ -742,12 +765,11 @@ export default function Tournaments({
               ) : (
                 <button
                   disabled={event.history.at(-1)?.some((g) => !g.result)}
-                  onClick={() =>
-                    persist(
-                      { ...event, status: "completed" },
-                      "Completed tournament",
-                    )
-                  }
+                  onClick={() => void perform(async () => {
+                    const finished = persist({ ...event, status: "completed", finishedAt: new Date().toISOString() }, "Completed tournament");
+                    await sync(finished);
+                    setNotice("Tournament completed. Award the podium to publish winners in the Community Feed.");
+                  })}
                 >
                   Complete tournament
                 </button>
@@ -793,9 +815,22 @@ export default function Tournaments({
               <span className="tournament-public-status">{t.status === "registration" ? "Registration open" : t.status === "playing" ? "In progress" : "Completed"}</span>
               <h3>{t.title}</h3>
               <p>Host: {t.host_name} · {t.player_count} players · Round {t.round_count}/{t.rounds}</p>
+              {t.starts_at && <p>Starts {new Date(t.starts_at).toLocaleString()}</p>}
               <strong>FREE ENTRY</strong>
               {t.status === "registration" && <button type="button" disabled={busy || joinedIds.includes(t.id)} onClick={() => void perform(() => joinPublished(t))}>{joinedIds.includes(t.id) ? "Joined" : "Join free"}</button>}
+              <div className="tournament-player-list"><h4>Players and pairings</h4>{t.players?.length ? t.players.map(p => {
+                const pairing = t.pairings?.find(pair => pair.white === p.id || pair.black === p.id);
+                const opponentId = pairing?.white === p.id ? pairing.black : pairing?.white;
+                const opponent = t.players.find(other => other.id === opponentId);
+                return <p key={p.id}><b>{p.name}</b><span>{opponent ? `vs ${opponent.name}` : pairing?.black === 0 ? "Bye" : "Standby · awaiting opponent"}</span></p>;
+              }) : null}{t.registrations?.map((name, index) => <p key={`pending-${index}`}><b>{name}</b><span>Standby · awaiting opponent</span></p>)}{!t.players?.length && !t.registrations?.length && <p>No players yet.</p>}</div>
             </article>)}</div>
+          </section>
+          <section className="tournament-cms-section tournament-winner-board"><div className="tournament-cms-section-head"><span>THIS WEEK</span><h3>Top 10 tournament champions</h3></div>
+            {weeklyWinners.length ? weeklyWinners.map((winner, i) => <article key={`${winner.username}-${winner.finished_at}`}><b>#{i + 1} {winner.username}</b><span>{winner.title} · {new Date(winner.finished_at).toLocaleString()}</span><strong>+{winner.cbg_gain} CBG · +{winner.cbr_gain} CBR</strong></article>) : <p className="cms-note">No champions recorded this week.</p>}
+          </section>
+          <section className="tournament-cms-section tournament-winner-board"><div className="tournament-cms-section-head"><span>ALL TIME</span><h3>Featured top 3 champions</h3></div>
+            {featuredWinners.length ? featuredWinners.map((winner, i) => <article key={winner.username}><b>#{i + 1} {winner.username}</b><span>{winner.title} · {new Date(winner.finished_at).toLocaleString()}</span><strong>+{winner.cbg_gain} CBG · +{winner.cbr_gain} CBR</strong></article>) : <p className="cms-note">The first tournament champion will appear here.</p>}
           </section>
           <QrInput onValue={receiveInvite} />
           {invite && (

@@ -24,6 +24,9 @@ export type Tournament = {
   status: "registration" | "playing" | "completed";
   updatedAt: string;
   goldRewards?: TournamentRewards;
+  cbrRewards?: TournamentRewards;
+  startsAt?: string;
+  finishedAt?: string;
   goldAwarded?: boolean;
   revision?: number;
 };
@@ -77,8 +80,10 @@ export function standings(t: Tournament) {
 export function assertReady(t: Tournament) {
   if (t.status === "completed" || t.history.length >= t.rounds)
     throw new Error("All rounds are complete.");
-  if (t.players.length < 2)
-    throw new Error("At least two players are required.");
+  if (t.players.length < 3)
+    throw new Error("At least three players are required to start a tournament.");
+  if (t.startsAt && Date.now() < new Date(t.startsAt).getTime())
+    throw new Error("The tournament has not reached its scheduled start time.");
   if (t.history.at(-1)?.some((g) => !g.result))
     throw new Error("Record every result before pairing the next round.");
 }
@@ -258,6 +263,11 @@ export function parseTournament(value: unknown): Tournament {
   )
     throw new Error("Invalid Gold rewards.");
   t.goldRewards = rewards;
+  const cbrRewards = t.cbrRewards ?? { champion: 0, second: 0, third: 0 };
+  if (![cbrRewards.champion, cbrRewards.second, cbrRewards.third].every(amount => Number.isInteger(amount) && amount >= 0 && amount <= 1000))
+    throw new Error("Invalid CBR rewards.");
+  t.cbrRewards = cbrRewards;
+  if (t.startsAt && !Number.isFinite(new Date(t.startsAt).getTime())) throw new Error("Invalid tournament start time.");
   t.goldAwarded = !!t.goldAwarded;
   const ids = new Set<number>();
   for (const p of t.players) {
