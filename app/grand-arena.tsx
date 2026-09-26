@@ -31,18 +31,19 @@ type ArenaStanding = {
   player?: ArenaPlayer;
 };
 type ArenaChampion = {
-  id?: string;
-  slot: number;
-  session_date?: string;
-  ends_at?: string;
-  prize_gold?: number;
+  period: "daily" | "weekly";
+  period_start: string;
+  user_id: string | null;
+  opponents_defeated: number;
+  arena_cbr_gain: number;
+  gold_paid: number;
   player?: ArenaPlayer;
 };
 type WindowState = {
   open: boolean;
   entry_open: boolean;
   current: ArenaSlot | null;
-  next: ArenaSlot;
+  next: ArenaSlot | null;
   server_now: string;
   settings: {
     prize_mode: "fixed" | "auto";
@@ -63,7 +64,8 @@ type ArenaState = {
   leaderboard: ArenaStanding[];
   tickets: number;
   gold: number;
-  champions: ArenaChampion[];
+  dailyChampion: ArenaChampion | null;
+  weeklyChampion: ArenaChampion | null;
   history: ArenaChampion[];
   server_now: string;
 };
@@ -87,21 +89,20 @@ async function request<T>(action: string, body: Record<string, unknown> = {}) {
 }
 const sessionLabel = (slot: ArenaSlot) =>
   `${new Date(slot.starts_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", timeZone: "Asia/Manila" })}–${new Date(slot.ends_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", timeZone: "Asia/Manila" })}`;
-function Champions({ champions }: { champions: ArenaChampion[] }) {
+function Champions({ daily, weekly }: { daily: ArenaChampion | null; weekly: ArenaChampion | null }) {
   return (
     <section className="arena-champions arena-champions-featured">
       <div className="arena-section-title">
         <div>
-          <span>CHAMPIONS OF THE DAY</span>
-          <h2>Grand Arena winners</h2>
+          <span>ARENA HONORS</span>
+          <h2>Daily and weekly champions</h2>
         </div>
-        <small>Eliminated players are never eligible</small>
+        <small>Defeated opponents, then Arena CBR gained</small>
       </div>
       <div>
-        {[1, 2].map((slot) => {
-          const champion = champions.find((item) => Number(item.slot) === slot);
+        {([['Day',daily],['Week',weekly]] as const).map(([period,champion]) => {
           return (
-            <article key={slot} className={!champion ? "awaiting" : ""}>
+            <article key={period} className={!champion?.user_id ? "awaiting" : ""}>
               <Crown />
               <img
                 src={champion?.player?.avatar_url || "/cburger_logo.png"}
@@ -109,9 +110,9 @@ function Champions({ champions }: { champions: ArenaChampion[] }) {
               />
               <span>
                 <strong>
-                  {champion?.player?.display_name || "Awaiting Champion"}
+                  {champion?.user_id ? champion.player?.display_name || "Grand Champion" : `Awaiting ${period.toLowerCase()} winner`}
                 </strong>
-                <small>Session {slot}</small>
+                <small>{period} · {champion?.opponents_defeated ?? 0} opponents · +{champion?.arena_cbr_gain ?? 0} CBR</small>
               </span>
             </article>
           );
@@ -198,7 +199,7 @@ export default function GrandArena({
           </p>
         </div>
       </header>
-      <Champions champions={state?.champions ?? []} />
+      <Champions daily={state?.dailyChampion ?? null} weekly={state?.weeklyChampion ?? null} />
       <section
         className={`arena-clock-card ${state?.window.open ? "open" : ""}`}
       >
@@ -288,7 +289,7 @@ export default function GrandArena({
           <div>
             <span>
               <Sparkles />
-              <b>Champion pot</b>
+              <b>This session adds to daily pot</b>
               {prize}
             </span>
             <span>
@@ -344,21 +345,21 @@ export default function GrandArena({
         <div className="arena-section-title">
           <div>
             <span>HALL OF CHAMPIONS</span>
-            <h2>This week’s Grand Arena winners</h2>
+            <h2>Daily Grand Arena champions</h2>
           </div>
-          <small>Latest 20 sessions</small>
+          <small>One winner per completed day · latest 20</small>
         </div>
         {!state?.history?.length ? (
           <div className="arena-empty">
             <Crown />
             <p>
-              Champion history will appear after the first completed session.
+              Champion history will appear after the first completed day.
             </p>
           </div>
         ) : (
           <ol>
             {state.history.slice(0, 20).map((winner, index) => (
-              <li key={winner.id ?? `${winner.session_date}-${winner.slot}`}>
+              <li key={winner.period_start}>
                 <b>{index + 1}</b>
                 <img
                   src={winner.player?.avatar_url || "/cburger_logo.png"}
@@ -366,24 +367,24 @@ export default function GrandArena({
                 />
                 <span>
                   <strong>
-                    {winner.player?.display_name || "Grand Champion"}
+                    {winner.user_id ? winner.player?.display_name || "Grand Champion" : "No winning matches"}
                   </strong>
                   <small>
-                    {winner.session_date
+                    {winner.period_start
                       ? new Date(
-                          `${winner.session_date}T12:00:00+08:00`,
+                          `${winner.period_start}T12:00:00+08:00`,
                         ).toLocaleDateString([], {
                           month: "short",
                           day: "numeric",
                           year: "numeric",
                         })
                       : "Grand Arena"}{" "}
-                    · Session {winner.slot}
+                    · {winner.opponents_defeated} opponents · +{winner.arena_cbr_gain} CBR
                   </small>
                 </span>
                 <em>
                   <Crown size={12} />
-                  {winner.prize_gold ?? 0} Gold
+                  {winner.gold_paid ?? 0} Gold
                 </em>
               </li>
             ))}
