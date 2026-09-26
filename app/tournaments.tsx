@@ -78,7 +78,11 @@ export default function Tournaments({
     [joinName, setJoinName] = useState(profile?.display_name ?? ""),
     [registrations, setRegistrations] = useState<
       Array<{ user_id: string; display_name: string }>
-    >([]);
+    >([]),
+    [published, setPublished] = useState<Tournament[]>([]),
+    [joinedIds, setJoinedIds] = useState<string[]>([]),
+    [loading, setLoading] = useState(false),
+    [loadError, setLoadError] = useState("");
   const staff = host && !!profile && ["owner", "admin"].includes(profile.role),
     editable = staff && event?.hostId === profile?.user_id;
   useEffect(() => {
@@ -115,6 +119,28 @@ export default function Tournaments({
       live = false;
     };
   }, [host, profile?.user_id]);
+  const loadPublished = useCallback(async () => {
+    if (host || !profile) return;
+    setLoading(true);
+    setLoadError("");
+    try {
+      const c = await getSupabase();
+      if (!c) throw Error("Sign in to see tournaments.");
+      const [sessions, entries] = await Promise.all([
+        c.from("cb_tournaments").select("state,revision").order("updated_at", { ascending: false }).limit(100),
+        c.from("cb_tournament_entries").select("tournament_id").eq("user_id", profile.user_id),
+      ]);
+      if (sessions.error) throw Error(sessions.error.message);
+      if (entries.error) throw Error(entries.error.message);
+      setPublished((sessions.data ?? []).map(row => ({ ...parseTournament(row.state), revision: row.revision })));
+      setJoinedIds((entries.data ?? []).map(row => row.tournament_id));
+    } catch (cause) {
+      setLoadError((cause as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }, [host, profile?.user_id]);
+  useEffect(() => { void loadPublished(); }, [loadPublished]);
   const receiveInvite = useCallback((raw: string) => {
     try {
       let data: unknown;
@@ -378,6 +404,15 @@ export default function Tournaments({
     });
     if (error) throw Error(error.message);
     setNotice("Registered online. The host will add you to the roster.");
+    await loadPublished();
+  }
+  async function joinPublished(t: Tournament) {
+    const c = await getSupabase();
+    if (!c) throw Error("Sign in to join a tournament.");
+    const { error } = await c.rpc("cb_join_tournament", { p_id: t.id, p_code: t.code });
+    if (error) throw Error(error.message);
+    setNotice(`Joined ${t.title} for free. The host will add you to the roster.`);
+    await loadPublished();
   }
   async function refreshOnline() {
     if (!event) return;
@@ -440,7 +475,7 @@ export default function Tournaments({
       : "";
   return (
     <div className={`cms-panel tournament-cms ${staff ? "tournament-cms-host" : ""}`}>
-      <header className="tournament-cms-header"><span>CHESS BURGER · TOURNAMENT CONTROL</span><h2>{staff ? "Tournament setup" : "Join a tournament"}</h2><p>{staff ? "Set the event, register players, run rounds and publish results." : "Scan an invitation to register for an event."}</p></header>
+      <header className="tournament-cms-header"><span>CHESS BURGER · TOURNAMENT</span><h2>{staff ? "Tournament setup" : "Tournaments"}</h2><p>{staff ? "Set the event, register players, run rounds and publish results." : "Join an owner-hosted tournament for free. Published rounds and standings appear here."}</p></header>
       {notice && (
         <p className="offline-banner" role="status">
           {notice}
@@ -748,6 +783,20 @@ export default function Tournaments({
       )}
       {!staff && (
         <>
+          <section className="tournament-cms-section tournament-public-list">
+            <div className="tournament-cms-section-head"><span>AVAILABLE SESSIONS</span><h3>Published tournaments</h3></div>
+            <button type="button" disabled={loading} onClick={() => void loadPublished()}>{loading ? "Loading…" : "Refresh sessions"}</button>
+            {loadError && <p role="alert" className="offline-banner">{loadError}</p>}
+            {!loading && !loadError && published.length === 0 && <p className="cms-note">No tournaments published yet. Check back after an owner creates a session in CMS.</p>}
+            <div className="tournament-public-grid">{published.map(t => <article key={t.id}>
+              <span className="tournament-public-status">{t.status === "registration" ? "Registration open" : t.status === "playing" ? "In progress" : "Completed"}</span>
+              <h3>{t.title}</h3>
+              <p>Host: {t.hostName} · {t.players.length} players · Round {t.history.length}/{t.rounds}</p>
+              <strong>FREE ENTRY</strong>
+              {t.status === "registration" && <button type="button" disabled={busy || joinedIds.includes(t.id)} onClick={() => void perform(() => joinPublished(t))}>{joinedIds.includes(t.id) ? "Joined" : "Join free"}</button>}
+              {t.status !== "registration" && <div className="standings"><table><thead><tr><th>Rank</th><th>Player</th><th>Score</th></tr></thead><tbody>{standings(t).slice(0, 10).map((p, index) => <tr key={p.id}><td>{index + 1}</td><td>{p.name}</td><td>{p.score}</td></tr>)}</tbody></table></div>}
+            </article>)}</div>
+          </section>
           <QrInput onValue={receiveInvite} />
           {invite && (
             <>
