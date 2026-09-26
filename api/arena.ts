@@ -499,6 +499,21 @@ async function publicFeed(client: Db) {
       : Promise.resolve({ data: [], error: null }),
   ]);
   if (waiting.error) fail(500, waiting.error.message);
+  const frameByUser = new Map<string, string>();
+  if (actorIds.length) {
+    // Only display equipped rentals that are still owned and unexpired.
+    const equipped = await client.from('cb_profiles').select('user_id,active_avatar_frame_item').in('user_id', actorIds);
+    if (!equipped.error) {
+      const selected = new Map<string, string>((equipped.data ?? []).map((row: any) => [row.user_id, String(row.active_avatar_frame_item ?? '')]).filter((entry: string[]) => entry[1]));
+      if (selected.size) {
+        const inventory = await client.from('cb_inventory_items').select('user_id,item_id,metadata').in('user_id', [...selected.keys()]).eq('item_kind', 'avatar_frame').gt('quantity', 0);
+        if (!inventory.error) for (const item of inventory.data ?? []) {
+          const frameId = String(item.metadata?.frame_id ?? '');
+          if (item.item_id === selected.get(item.user_id) && item.item_id.startsWith(`af-${frameId}-`) && Date.parse(String(item.metadata?.expires_at ?? '')) > Date.now()) frameByUser.set(item.user_id, frameId);
+        }
+      }
+    }
+  }
   // Older databases can still show their feed before the guild migration is applied.
   if (memberships.error && !['42P01', 'PGRST205'].includes(memberships.error.code)) fail(500, memberships.error.message);
   const guildByUser = new Map<string, { name: string; logo_url: string | null }>();
@@ -517,6 +532,7 @@ async function publicFeed(client: Db) {
       content: modernCpuFeedContent(e.content), image_url: e.image_url ?? '', expires_at: e.expires_at,
       cbr_delta: e.cbr_delta ?? 0, gold_delta: e.gold_delta ?? 0, heart_count: e.heart_count ?? 0, created_at: e.created_at,
       avatar_url: announcement ? '/cburger_logo.png' : people.get(e.user_id)?.avatar_url ?? '', cbr: people.get(e.user_id)?.cbr ?? 88,
+      avatar_frame_id: announcement ? null : frameByUser.get(e.user_id) ?? null,
       feed_banner: announcement ? '' : people.get(e.user_id)?.active_feed_banner ?? '',
       guild_name: guild?.name ?? '', guild_logo_url: guild?.logo_url ?? '',
       play_mode: match?.play_mode ?? 'normal', wager_gold: Number(match?.wager_gold ?? 0),
