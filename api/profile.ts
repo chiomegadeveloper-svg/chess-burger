@@ -7,6 +7,13 @@ function cleanUrl(value: unknown) {
   const url = String(value ?? '').trim();
   return !url || /^https:\/\//i.test(url) ? url : '';
 }
+function avatarPath(client: any, userId: string, value: unknown) {
+  const url = cleanUrl(value);
+  const match = url.match(/\/cb-profile-media\/([^/?#]+)\/([^/?#]+)$/);
+  if (!match || match[1] !== userId || !/^avatar-[a-z0-9-]+\.webp$/i.test(match[2])) return '';
+  const path = `${userId}/${match[2]}`;
+  return client.storage.from('cb-profile-media').getPublicUrl(path).data.publicUrl === url ? path : '';
+}
 function list(value: unknown, limit: number) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string').slice(0, limit) : [];
 }
@@ -18,7 +25,7 @@ async function recoverStoredAvatar(client: any, userId: string) {
     sortBy: { column: 'created_at', order: 'desc' },
   });
   if (files.error) return '';
-  const avatar = (files.data ?? []).find((file: any) => /^avatar-/i.test(String(file.name ?? '')));
+  const avatar = (files.data ?? []).find((file: any) => /^avatar-[a-z0-9-]+\.webp$/i.test(String(file.name ?? '')));
   if (!avatar) return '';
   return cleanUrl(client.storage.from('cb-profile-media').getPublicUrl(`${userId}/${avatar.name}`).data.publicUrl);
 }
@@ -47,11 +54,11 @@ export default async function handler(req: Req, res: Res) {
       let row = existing.data;
       if (row) {
         const patch: Record<string, unknown> = {};
-        if (!String(row.avatar_url ?? '').trim()) {
+        const currentPath = avatarPath(client, user.id, row.avatar_url);
+        const verified = currentPath ? await client.storage.from('cb-profile-media').download(currentPath) : null;
+        if (!verified?.data || verified.error) {
           const storedAvatar = await recoverStoredAvatar(client, user.id);
-          const providerAvatar = cleanUrl(user.user_metadata?.avatar_url ?? user.user_metadata?.picture);
-          const recoveredAvatar = storedAvatar || providerAvatar;
-          if (recoveredAvatar) patch.avatar_url = recoveredAvatar;
+          patch.avatar_url = storedAvatar;
         }
         if (user.id === BOBBIE_OWNER_ID) {
           patch.role = 'owner';
@@ -75,12 +82,17 @@ export default async function handler(req: Req, res: Res) {
     if (!/^[a-z0-9_]{3,24}$/.test(username)) return res.status(400).json({ error: 'Username must use 3–24 lowercase letters, numbers, or underscores.', code: 'username_format' });
     if (!displayName || displayName.length > 60) return res.status(400).json({ error: 'Enter your name (up to 60 characters).', code: 'name_required' });
     const country = String(input.country_code ?? 'PH');
+    const avatar = cleanUrl(input.avatar_url);
+    const path = avatarPath(client, user.id, avatar);
+    if (!path) return res.status(400).json({ error: 'Upload your profile picture before saving your profile.', code: 'avatar_required' });
+    const stored = await client.storage.from('cb-profile-media').download(path);
+    if (stored.error || !stored.data || stored.data.type !== 'image/webp') return res.status(400).json({ error: 'Upload your profile picture before saving your profile.', code: 'avatar_required' });
     const payload = {
       user_id: user.id,
       username,
       display_name: displayName,
       bio: String(input.bio ?? '').trim().slice(0, 240),
-      avatar_url: cleanUrl(input.avatar_url),
+      avatar_url: avatar,
       country_code: /^[A-Z]{2}$/.test(country) ? country : 'PH',
       featured_photos: list(input.featured_photos, 4).map(cleanUrl),
       featured_badges: list(input.featured_badges, 5),

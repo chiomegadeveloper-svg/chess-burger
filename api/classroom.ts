@@ -18,6 +18,9 @@ export default async function handler(req:Req,res:Res){
     const auth=await client.auth.getUser(token);
     if(auth.error||!auth.data.user)fail(401,"Please sign in again.");
     const userId=auth.data.user.id,body=req.body||{},action=String(body.action||"");
+    const gate=await client.from("cb_profiles").select("avatar_url").eq("user_id",userId).maybeSingle();
+    if(gate.error)fail(500,gate.error.message);
+    if(!String(gate.data?.avatar_url??"").includes(`/storage/v1/object/public/cb-profile-media/${userId}/avatar-`))fail(403,"Complete registration and save a profile picture to unlock Chess Burger.");
     if(action==="voice-token"){
       const roomId=String(body.room_id||""),now=new Date().toISOString();
       if(!roomId)fail(400,"Classroom is required.");

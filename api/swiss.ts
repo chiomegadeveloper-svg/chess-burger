@@ -16,8 +16,9 @@ export default async function handler(req:Req,res:Res) {
     const client=createClient(url,key,{auth:{autoRefreshToken:false,persistSession:false}});
     const {data:{user},error}=await client.auth.getUser(token);
     if(error||!user) return res.status(401).json({error:'Sign in again.'});
-    const profile=await client.from('cb_profiles').select('role').eq('user_id',user.id).maybeSingle();
+    const profile=await client.from('cb_profiles').select('role,avatar_url').eq('user_id',user.id).maybeSingle();
     if(profile.error||!['owner','admin'].includes(profile.data?.role)) return res.status(403).json({error:'Owner or GM access required.'});
+    if(!String(profile.data?.avatar_url??'').includes(`/storage/v1/object/public/cb-profile-media/${user.id}/avatar-`))return res.status(403).json({error:'Complete registration and save a profile picture to unlock Chess Burger.'});
     const trf=(req.body as {trf?:unknown}|undefined)?.trf;
     if(typeof trf!=='string'||trf.length>90000||!trf.includes('001')) return res.status(400).json({error:'Valid TRF data is required.'});
     const endpoint=process.env.SWISS_API_URL,apiKey=process.env.SWISS_API_KEY;

@@ -28,6 +28,9 @@ export default async function handler(req: Req, res: Res) {
     const auth = await db.auth.getUser(token);
     if (auth.error || !auth.data.user) throw err(401, 'Your session expired. Sign in again.');
     const userId = auth.data.user.id;
+    const gate = await db.from('cb_profiles').select('avatar_url').eq('user_id', userId).maybeSingle();
+    if (gate.error) throw err(500, gate.error.message);
+    if (!String(gate.data?.avatar_url ?? '').includes(`/storage/v1/object/public/cb-profile-media/${userId}/avatar-`)) throw err(403, 'Complete registration and save a profile picture to unlock Chess Burger.');
 
     if (req.method === 'POST') {
       const body = req.body && typeof req.body === 'object' ? req.body as { keys?: unknown } : {};
