@@ -354,6 +354,14 @@ async function signedIn(client: Db, req: Req) {
   const profile = one<any>(profileResult);
   return { id: user.id, profile };
 }
+async function activeAvatarFrame(client: Db, profile: any) {
+  const itemId = String(profile.active_avatar_frame_item ?? '');
+  if (!/^af-(basic|premium)-(10|[1-9])-[a-f0-9]{32}$/.test(itemId)) return null;
+  const owned = await client.from('cb_inventory_items').select('metadata').eq('user_id',profile.user_id).eq('item_kind','avatar_frame').eq('item_id',itemId).gt('quantity',0).maybeSingle();
+  if (owned.error) fail(500,owned.error.message);
+  const frameId = String(owned.data?.metadata?.frame_id ?? '');
+  return itemId.startsWith(`af-${frameId}-`) && Date.parse(String(owned.data?.metadata?.expires_at ?? '')) > Date.now() ? frameId : null;
+}
 async function playerMap(client: Db, ids: string[]) {
   const unique = [...new Set(ids.filter(Boolean))];
   if (!unique.length) return new Map<string, any>();
@@ -716,7 +724,7 @@ export default async function handler(req: Req, res: Res) {
     // The app refreshes this on sign-in to obtain the authoritative profile.
     // Keep it as a first-class migration action rather than falling through to
     // a 404 on every page load.
-    if (action === 'me') return res.status(200).json({ profile: { ...account.profile, ocbr: Number(account.profile.ocbr ?? 88) }, rank: await playerRank(client, account.profile) });
+    if (action === 'me') return res.status(200).json({ profile: { ...account.profile, ocbr: Number(account.profile.ocbr ?? 88), avatar_frame_id: await activeAvatarFrame(client,account.profile) }, rank: await playerRank(client, account.profile) });
     const photo = String(account.profile.avatar_url ?? '');
     const avatarPath = `${account.id}/`;
     const avatarName = photo.split('/').pop() ?? '';
@@ -931,7 +939,33 @@ export default async function handler(req: Req, res: Res) {
         client.rpc('cb_bag_slots_used',{p_user_id:account.id})
       ]);
       const error=banners.error??tickets.error??items.error??used.error;if(error)fail(503,'Run Supabase migrations through 0034, then reopen your Bag.');
-      return res.status(200).json({banners:banners.data??[],tickets:Number(tickets.data?.quantity??0),items:items.data??[],active:account.profile.active_feed_banner??'',gold:Number(account.profile.gold_points??0),bag_slots:Number(account.profile.bag_slots??10),used_slots:Number(used.data??0),server_now:now});
+      const available=(items.data??[]).filter((item:any)=>item.item_kind!=='avatar_frame'||Date.parse(String(item.metadata?.expires_at??''))>Date.now());
+      const activeItem=String(account.profile.active_avatar_frame_item??'');
+      return res.status(200).json({banners:banners.data??[],tickets:Number(tickets.data?.quantity??0),items:available,active:account.profile.active_feed_banner??'',active_frame_item:available.some((item:any)=>item.item_kind==='avatar_frame'&&item.item_id===activeItem)?activeItem:null,gold:Number(account.profile.gold_points??0),bag_slots:Number(account.profile.bag_slots??10),used_slots:Number(used.data??0),server_now:now});
+    }
+    if(action==='avatar-frame-state'){
+      const configured=await client.from('cb_profiles').select('active_avatar_frame_item').eq('user_id',account.id).maybeSingle();
+      if(configured.error)fail(503,'Apply supabase/0065_avatar_frame_rentals.sql to enable avatar frames.');
+      const found=await client.from('cb_inventory_items').select('item_id,metadata').eq('user_id',account.id).eq('item_kind','avatar_frame').gt('quantity',0);
+      if(found.error)fail(503,'Apply supabase/0065_avatar_frame_rentals.sql to enable avatar frames.');
+      const owned=(found.data??[]).map((item:any)=>({item_id:item.item_id,frame_id:item.metadata?.frame_id,expires_at:item.metadata?.expires_at})).filter((item:any)=>Date.parse(String(item.expires_at??''))>Date.now());
+      const active=owned.some((item:any)=>item.item_id===configured.data?.active_avatar_frame_item)?configured.data?.active_avatar_frame_item:null;
+      return res.status(200).json({owned,active,gold:Number(account.profile.gold_points??0)});
+    }
+    if(action==='rent-avatar-frame'){
+      const frameId=String(body.frame_id??''),days=Number(body.days),requestId=String(body.request_id??'');
+      if(!/^(basic|premium)-(10|[1-9])$/.test(frameId)||![7,21,30].includes(days)||!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(requestId))fail(400,'Choose a valid frame and rental period.');
+      const rented=await client.rpc('cb_rent_avatar_frame',{p_user_id:account.id,p_frame_id:frameId,p_days:days,p_request_id:requestId});
+      if(rented.error){const message=String(rented.error.message??'Avatar frame rental failed.');if(/cb_rent_avatar_frame|schema cache|function|relation/i.test(message))fail(503,'Apply supabase/0065_avatar_frame_rentals.sql to enable avatar frame rentals.');fail(409,message);}
+      return res.status(200).json(rented.data);
+    }
+    if(action==='equip-avatar-frame'){
+      const itemId=body.item_id===null?null:String(body.item_id??'');
+      if(itemId && !/^af-(basic|premium)-(10|[1-9])-[a-f0-9]{32}$/.test(itemId))fail(400,'Choose a valid avatar frame.');
+      if(itemId){const item=await client.from('cb_inventory_items').select('metadata').eq('user_id',account.id).eq('item_kind','avatar_frame').eq('item_id',itemId).gt('quantity',0).maybeSingle();if(item.error)fail(500,item.error.message);if(!item.data||!(Date.parse(String(item.data.metadata?.expires_at??''))>Date.now()))fail(403,'This frame has expired or is not in your Bag.');}
+      const saved=await client.from('cb_profiles').update({active_avatar_frame_item:itemId}).eq('user_id',account.id);
+      if(saved.error)fail(503,'Apply supabase/0065_avatar_frame_rentals.sql to enable avatar frames.');
+      return res.status(200).json({active:itemId});
     }
     if(action==='buy-bag-slots'){
       const requestId=String(body.request_id??'');if(!/^[a-f0-9-]{36}$/i.test(requestId))fail(400,'Invalid Bag upgrade request.');
@@ -949,6 +983,12 @@ export default async function handler(req: Req, res: Res) {
     if(action==='gift-bag-item'){
       const username=String(body.username??'').trim(),kind=String(body.item_kind??''),itemId=String(body.item_id??''),quantity=Number(body.quantity??1),requestId=String(body.request_id??'');
       if(!/^@?[a-z0-9_]{2,40}$/i.test(username)||!/^[a-z][a-z0-9_-]{1,40}$/i.test(kind)||!/^[a-z0-9][a-z0-9_-]{1,80}$/i.test(itemId)||!Number.isInteger(quantity)||quantity<1||!/^[a-f0-9-]{36}$/i.test(requestId))fail(400,'Choose a valid item, quantity, and recipient username.');
+      if(kind==='avatar_frame'){
+        if(quantity!==1)fail(400,'Gift one avatar frame rental at a time.');
+        const owned=await client.from('cb_inventory_items').select('metadata').eq('user_id',account.id).eq('item_kind',kind).eq('item_id',itemId).gt('quantity',0).maybeSingle();
+        if(owned.error)fail(500,owned.error.message);
+        if(!owned.data||!(Date.parse(String(owned.data.metadata?.expires_at??''))>Date.now()))fail(409,'This avatar frame has expired or is not in your Bag.');
+      }
       const gifted=await client.rpc('cb_gift_bag_item',{p_sender_id:account.id,p_username:username,p_item_kind:kind,p_item_id:itemId,p_quantity:quantity,p_request_id:requestId});
       if(gifted.error){
         const message=String(gifted.error.message??'Gift failed.');
@@ -957,6 +997,7 @@ export default async function handler(req: Req, res: Res) {
         if(['PGRST202','42P01','42703','42883'].includes(code))fail(503,`${detail} Run supabase/0058_repair_bag_gifting.sql in the Chess Burger Supabase project.`);
         fail(409,detail);
       }
+      if(kind==='avatar_frame'&&gifted.data?.gifted&&account.profile.active_avatar_frame_item===itemId){const removed=await client.from('cb_profiles').update({active_avatar_frame_item:null}).eq('user_id',account.id);if(removed.error)console.warn('arena.frame-unequip-failed',{itemId});}
       return res.status(200).json(gifted.data);
     }
     if(action==='daily-reward-status'||action==='claim-daily-reward'){
@@ -1177,7 +1218,7 @@ export default async function handler(req: Req, res: Res) {
         playerRank(client,profile),
       ]);
       if(friends.error||followers.error||following.error)fail(500,friends.error?.message??followers.error?.message??following.error?.message??'Unable to load social totals.');
-      return res.status(200).json({ profile: { ...profile, ocbr: Number(profile.ocbr ?? 88) }, rank, social:{friends:friends.count??0,followers:followers.count??0,following:following.count??0} });
+      return res.status(200).json({ profile: { ...profile, ocbr: Number(profile.ocbr ?? 88), avatar_frame_id: await activeAvatarFrame(client,profile) }, rank, social:{friends:friends.count??0,followers:followers.count??0,following:following.count??0} });
     }
     if (action === 'presence') return res.status(200).json(await savePresence(client, account, body));
     if (action === 'nearby') return res.status(200).json(await nearbyPlayers(client, account));

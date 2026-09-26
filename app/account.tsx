@@ -28,6 +28,7 @@ import RewardEmblems, {
 import { arena } from "./arena-client";
 import { profileRequest } from "./profile-client";
 import { toWebpUnder1Mb, toWebpUnder500Kb, validateImageFile } from "./media";
+import { AvatarFrameOverlay } from "./avatar-frame-art";
 import { isProfileComplete } from "./profile-completion";
 import ProfilePhotoBucket from "./profile-photo-bucket";
 import Portfolio from "./portfolio";
@@ -768,6 +769,7 @@ export default function Account({
                 profile.display_name.charAt(0)
               )}
             </div>
+            <AvatarFrameOverlay frameId={profile.avatar_frame_id}/>
           </div>
           <div className="card-identity">
             <div className="card-identity-heading">
@@ -967,6 +969,7 @@ export default function Account({
             ) : (
               <span>{profile.display_name.charAt(0)}</span>
             )}
+            <AvatarFrameOverlay frameId={profile.avatar_frame_id}/>
           </div>
           <div>
             <h2>{profile.display_name}</h2>
