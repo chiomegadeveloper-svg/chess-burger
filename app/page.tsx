@@ -124,6 +124,11 @@ function AppPage() {
     [offlineControl, setOfflineControl] = useState("10+0");
   const [summary, setSummary] = useState<MatchSummary | null>(null);
   const shownResults = useRef(new Set<string>());
+  useEffect(() => {
+    const openShop = () => setTab("shop");
+    window.addEventListener("cb-open-shop", openShop);
+    return () => window.removeEventListener("cb-open-shop", openShop);
+  }, []);
   const welcomeDecision = useRef(false);
   const finishWelcome = (nextTab?:string) => {
     setShowWelcome(false);

@@ -1,0 +1,18 @@
+.board-store{display:grid;gap:18px;max-width:1120px;margin:0 auto;padding:16px;color:#e9f0f1}
+.board-store>header{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:20px;border:1px solid #315766;border-radius:15px;background:linear-gradient(135deg,#142b35,#102028)}
+.board-store>header small,.board-store-title small{color:#69dce5;font-size:10px;font-weight:800;letter-spacing:.13em}
+.board-store h1{margin:3px 0;font-size:25px}.board-store h2{margin:3px 0 10px;font-size:19px}.board-store header p{margin:0;color:#b4c4c9;font-size:12px}.board-store header strong{flex:none;color:#f2ce80;font-size:14px}
+.board-store-duration{display:flex;flex-wrap:wrap;gap:8px;margin:0;padding:14px;border:1px solid #315766;border-radius:12px}
+.board-store-duration legend{padding:0 6px;color:#82e4ee;font-size:11px;font-weight:800;text-transform:uppercase}
+.board-store-duration button{flex:1;min-width:95px;display:grid;gap:3px;padding:9px;border:1px solid #45606c;border-radius:8px;background:#172630;color:#dce8ec;cursor:pointer;text-transform:capitalize}
+.board-store-duration button[aria-pressed="true"]{border-color:#e9c16a;background:#3b3323;color:#f6d68a}
+.board-store-duration button span{font-size:11px}
+.board-store-section{min-width:0;padding:17px;border:1px solid #315766;border-radius:14px;background:#101f26}
+.board-store-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}
+.board-store-card{position:relative;display:grid;align-content:start;gap:6px;padding:12px;border:1px solid #345567;border-radius:12px;background:#152932;text-align:center}
+.board-store-card .board-preview{max-width:185px;border-width:4px}
+.board-store-card h3{margin:5px 0 0;font-size:13px}.board-store-card>small{color:#a9c0c7;font-size:10px}
+.board-store-active{position:absolute;top:15px;right:15px;padding:4px 6px;border-radius:5px;background:#0c3540;color:#87eaf0;font-size:10px}
+.board-store-actions{display:grid;gap:5px;margin-top:5px}.board-store-actions button{min-height:32px;padding:6px;border:1px solid #b59251;border-radius:8px;background:#443823;color:#ffda8d;font-size:11px;font-weight:700;cursor:pointer}.board-store-actions button+button{border-color:#4b97a5;background:#153943;color:#96e8ed}.board-store-actions button:disabled{opacity:.5;cursor:not-allowed}
+.board-store-error{padding:12px;border:1px solid #bb5c53;border-radius:8px;background:#422726;color:#ffdddb}
+@media(max-width:480px){.board-store{padding:9px}.board-store-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.board-store-card{padding:8px}.board-store-section{padding:10px}.board-store>header{padding:14px}.board-store h1{font-size:20px}}
