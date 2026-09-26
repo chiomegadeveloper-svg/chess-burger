@@ -199,8 +199,7 @@ function profileSeed(user: any) {
   const rawName = String(meta.full_name ?? meta.name ?? meta.display_name ?? user.email?.split('@')[0] ?? 'Chess Burger Player').trim();
   const base = String(meta.username ?? user.email?.split('@')[0] ?? rawName).toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/^_+|_+$/g, '').slice(0, 15) || 'player';
   const username = `${base.length < 3 ? `player_${base}` : base}_${String(user.id).replace(/-/g, '').slice(0, 6)}`.slice(0, 24);
-  const candidateAvatar = String(meta.avatar_url ?? meta.picture ?? '').trim();
-  return { user_id: user.id, username, display_name: rawName.slice(0, 60) || 'Chess Burger Player', avatar_url: /^https:\/\//i.test(candidateAvatar) ? candidateAvatar : '', country_code: /^[A-Z]{2}$/.test(String(meta.country_code ?? '')) ? meta.country_code : 'PH' };
+  return { user_id: user.id, username, display_name: rawName.slice(0, 60) || 'Chess Burger Player', avatar_url: '', country_code: /^[A-Z]{2}$/.test(String(meta.country_code ?? '')) ? meta.country_code : 'PH' };
 }
 
 async function reconcileAuthProfiles(client: Db) {
@@ -713,13 +712,17 @@ export default async function handler(req: Req, res: Res) {
       }
       fail(404, 'Unknown game request.');
     }
-    if (MatchEngine.actions.has(action)) return res.status(200).json(await MatchEngine.run(client, req, action, body, settle));
     const account = await signedIn(client, req);
     // The app refreshes this on sign-in to obtain the authoritative profile.
     // Keep it as a first-class migration action rather than falling through to
     // a 404 on every page load.
     if (action === 'me') return res.status(200).json({ profile: { ...account.profile, ocbr: Number(account.profile.ocbr ?? 88) }, rank: await playerRank(client, account.profile) });
-    if(!String(account.profile.avatar_url??'').trim())fail(403,'Complete registration and save a profile picture to unlock Chess Burger.');
+    const photo = String(account.profile.avatar_url ?? '');
+    const avatarPath = `${account.id}/`;
+    const avatarName = photo.split('/').pop() ?? '';
+    const expectedPhoto = client.storage.from('cb-profile-media').getPublicUrl(`${avatarPath}${avatarName}`).data.publicUrl;
+    if (!/^avatar-[a-z0-9-]+\.webp$/i.test(avatarName) || photo !== expectedPhoto) fail(403,'Complete registration and save a profile picture to unlock Chess Burger.');
+    if (MatchEngine.actions.has(action)) return res.status(200).json(await MatchEngine.run(client, req, action, body, settle));
     if(action==='puzzle-state'){
       const day=puzzleDay(),daily_tracks=dailyPuzzleTracks(day),daily_puzzle_ids=daily_tracks.random;
       const profileReady=await client.from('cb_puzzle_profiles').upsert({user_id:account.id},{onConflict:'user_id',ignoreDuplicates:true});
@@ -814,10 +817,10 @@ export default async function handler(req: Req, res: Res) {
       if (account.profile.role !== 'owner') fail(403, 'Owner access is required.');
       const id = String(body.id ?? '');
       if (!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(id)) fail(400, 'Choose a valid online training.');
-      const training = await client.from('cb_online_trainings').select('id')
-        .eq('id', id).eq('owner_id', account.id).eq('status', 'open').gt('starts_at', new Date().toISOString()).maybeSingle();
+      const training = await client.from('cb_online_trainings').select('id,status,starts_at')
+        .eq('id', id).maybeSingle();
       if (training.error) fail(500, training.error.message);
-      if (!training.data) fail(404, 'Active online training not found or owner access denied.');
+      if (!training.data) fail(404, 'Online training not found.');
       if (action === 'training-registrants') {
         const found = await client.from('cb_online_training_registrations').select('id,user_id,full_name,invited_at,created_at')
           .eq('training_id', id).order('created_at', { ascending: true });
@@ -831,6 +834,7 @@ export default async function handler(req: Req, res: Res) {
           confirmed: !!row.user_id, invited: !!row.invited_at,
         })) });
       }
+      if (training.data.status !== 'open' || Date.parse(training.data.starts_at) <= Date.now()) fail(409, 'Ticket gifts are available while this training is active.');
       const registrationId = String(body.registration_id ?? ''), requestId = String(body.request_id ?? '');
       if (!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(registrationId)
         || !/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(requestId)) fail(400, 'Choose a valid registrant and gift.');
