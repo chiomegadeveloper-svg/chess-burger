@@ -27,7 +27,7 @@ import RewardEmblems, {
 } from "./reward-emblems";
 import { arena } from "./arena-client";
 import { profileRequest } from "./profile-client";
-import { toWebpUnder1Mb, validateImageFile } from "./media";
+import { toWebpUnder1Mb, toWebpUnder500Kb, validateImageFile } from "./media";
 import { isProfileComplete } from "./profile-completion";
 import ProfilePhotoBucket from "./profile-photo-bucket";
 import Portfolio from "./portfolio";
@@ -460,7 +460,7 @@ export default function Account({
         session = refreshed.data.session;
       }
       if (!session || session.user.id !== user.id) throw new Error("session");
-      const blob = await toWebpUnder1Mb(file),
+      const blob = await (kind === "avatar" ? toWebpUnder500Kb(file) : toWebpUnder1Mb(file)),
         path =
           user.id +
           "/" +
@@ -532,14 +532,14 @@ export default function Account({
       const code = e instanceof Error ? e.message : String(e);
       setError(
         code === "image-size"
-          ? "Photo could not be reduced below 600 KB. Choose a smaller image."
+          ? "Photo could not be converted. Try another photo."
           : code === "session"
             ? "Your login expired. Sign in again before uploading."
             : code === "bucket"
               ? "Profile photo storage is not configured yet. Run supabase/profile-media-storage.sql once."
               : code === "policy"
                 ? "Supabase blocked this upload. Apply the profile media storage policies, then retry."
-                : code.includes("photo") || code.includes("JPEG") || code.includes("PNG") || code.includes("WebP") || code.includes("pixels") || code.includes("15 MB")
+                : code.includes("photo") || code.includes("JPEG") || code.includes("PNG") || code.includes("WebP")
                   ? code
                   : `Photo upload failed: ${code || "Connection interrupted"}. Please retry.`,
       );
@@ -1071,7 +1071,7 @@ export default function Account({
           </i>
           <input
             type="file"
-            accept="image/jpeg,image/png,image/webp"
+            accept="image/*,.heic,.heif,.avif,.jxl,.tif,.tiff"
             disabled={busy}
             onChange={(e) => {
               const input = e.currentTarget;

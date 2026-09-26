@@ -1,19 +1,12 @@
 import { getSupabase } from "./supabase";
 
 export const MAX_IMAGE_BYTES = 600_000;
-export const MAX_SOURCE_IMAGE_BYTES = 15_000_000;
 const MAX_IMAGE_EDGE = 1600;
-const SUPPORTED_IMAGE_TYPES = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-]);
 
 export function validateImageFile(file: File) {
-  if (!SUPPORTED_IMAGE_TYPES.has(file.type))
-    throw Error("Choose a JPEG, PNG, or WebP photo.");
-  if (file.size > MAX_SOURCE_IMAGE_BYTES)
-    throw Error("Choose a photo smaller than 15 MB.");
+  if (!file.size) throw Error("This photo is empty or damaged.");
+  if (!file.type.startsWith("image/") && !/\.(heic|heif|avif|jxl|tif|tiff|bmp|gif|jpe?g|png|webp)$/i.test(file.name))
+    throw Error("Choose a photo file.");
 }
 
 function canvasBlob(
@@ -79,13 +72,11 @@ export async function loadImageFile(file: File) {
     await new Promise<void>((resolve, reject) => {
       image.onload = () => resolve();
       image.onerror = () =>
-        reject(Error("This photo cannot be opened. Use JPEG, PNG, or WebP."));
+        reject(Error("This browser cannot open that photo format. Export it as JPEG or PNG and try again."));
       image.src = url;
     });
     if (!image.naturalWidth || !image.naturalHeight)
       throw Error("This photo is empty or damaged.");
-    if (image.naturalWidth * image.naturalHeight > 40_000_000)
-      throw Error("This photo has too many pixels. Choose a smaller photo.");
     return {
       image,
       width: image.naturalWidth,
