@@ -29,3 +29,12 @@
 .tournament-cms .pair-list h3 { color: #e9cb86; }
 .tournament-cms .offline-banner { background: #3e321d; border-color: #bd994e; color: #f7e8c5; }
 @media (max-width: 680px) { .tournament-cms-registration,.tournament-cms .cms-grid { grid-template-columns: 1fr; } .tournament-cms-toolbar button { flex: 1 1 135px; } .tournament-cms .tournament-qr { width: 100%; box-sizing: border-box; } }
+.tournament-play-page{width:min(100%,1080px);margin:0 auto;padding:20px clamp(10px,3vw,26px) 60px;box-sizing:border-box}
+.tournament-play-page>.back-button{margin-bottom:14px}
+.tournament-public-list>.tournament-public-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:12px}
+.tournament-public-grid article{min-width:0;padding:16px;border:1px solid #425563;border-radius:12px;background:#101b22}
+.tournament-public-grid article h3{margin:9px 0 5px;color:#f8e1a8;font-size:17px}
+.tournament-public-grid article p{color:#b8c9d2;font-size:12px;line-height:1.5}
+.tournament-public-grid article strong{display:block;margin:10px 0;color:#72dce8;font-size:11px;letter-spacing:.08em}
+.tournament-public-grid article button{width:100%}
+.tournament-public-status{font-size:10px;font-weight:800;text-transform:uppercase;color:#e8c875}

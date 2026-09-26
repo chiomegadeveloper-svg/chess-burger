@@ -587,12 +587,10 @@ function AppPage() {
           <button className="play-destination lobby" type="button" onClick={() => setTab("play")}><img src="/play-selection/match-lobby.webp" alt="Colorful Chess Burger Match Lobby"/><span><strong>Match Lobby</strong><small>Online, CPU, nearby and offline matches</small><b>Enter Lobby <ChevronRight size={17}/></b></span></button>
           <button className="play-destination arena arena-live" type="button" onClick={() => setTab("grand-arena")}><img src="/play-selection/grand-arena.webp" alt="Chess Burger Grand Arena entrance"/><span><strong>Grand Arena</strong><small>Timed elimination battles with live standings</small><b>Enter Arena <ChevronRight size={17}/></b></span></button>
           <button className="play-destination puzzles" type="button" onClick={() => setTab("puzzles")}><img src="/play-selection/puzzle-quest.webp" alt="Chess Burger puzzle maze arena"/><span><strong>Puzzle Quest</strong><small>100 puzzles, Coach Patty and Gold rewards</small><b>Enter Puzzles <ChevronRight size={17}/></b></span></button>
-          <button className="play-destination tournament" type="button" onClick={() => setTab("tournament-preview")}><img src="/play-selection/tournament.webp" alt="Cute chess characters competing for a gold tournament trophy"/><span><strong>Tournament</strong><small>Championships, friendly competition and chess glory</small><b>Explore Tournament <ChevronRight size={17}/></b></span></button>
+          <button className="play-destination tournament" type="button" onClick={() => setTab("tournaments")}><img src="/play-selection/tournament.webp" alt="Cute chess characters competing for a gold tournament trophy"/><span><strong>Tournament</strong><small>Owner hosted sessions · free entry</small><b>Explore Tournament <ChevronRight size={17}/></b></span></button>
         </div>
       </section>
     );
-  else if (tab === "tournament-preview")
-    content = <section className="tournament-coming-page"><button className="back-button" type="button" onClick={() => setTab("play-select")}><ArrowLeft size={16}/>Play destinations</button><div className="tournament-coming-card"><img src="/play-selection/tournament.webp" alt="Cute Chess Burger tournament characters and trophy"/><div><span>CHESS BURGER TOURNAMENT</span><h1>Tournament Coming Very Soon</h1><p>Get ready to compete with fellow chess players for the championship trophy.</p><button type="button" onClick={() => setTab("play-select")}>Back to Play destinations</button></div></div></section>;
   else if (tab === "play")
     content = (
       <section className="play-page">
@@ -748,7 +746,7 @@ function AppPage() {
         />
       </>
     );
-  else if (tab === "tournaments") content = <Tournaments profile={profile} />;
+  else if (tab === "tournaments") content = <section className="tournament-play-page"><button className="back-button" type="button" onClick={() => setTab("play-select")}><ArrowLeft size={16}/>Play destinations</button><Tournaments profile={profile} /></section>;
   else if (tab === "grand-arena") content = <GrandArena onBack={() => setTab("play-select")} onMatch={openMatch} onShop={() => setTab("shop")}/>;
   else if (tab === "classroom") content = <Classroom onBack={() => setTab("play-select")} onOpenShop={() => setTab("shop")}/>;
   else if (tab === "cpu" && profile) content = <CpuGame player={profile} onClose={() => setTab("play")} onReward={() => void refreshProfile()}/>;
