@@ -8,6 +8,7 @@ type Category="u12"|"u15"|"u20"|"all";
 type Training={id:string;title:string;coach_name:string;poster_url:string;starts_at:string;capacity:number;category:Category;invitation_text:string;registered:number;confirmed:number};
 type Registrant={id:string;full_name:string;birthdate:string;confirmed:boolean;invited_at:string|null;invite_token:string};
 type Managed=Training&{status:string;registrants:Registrant[]};
+type InstallEvent=Event&{prompt:()=>Promise<void>;userChoice:Promise<{outcome:"accepted"|"dismissed"}>};
 const categoryLabels:Record<Category,string>={u12:"Under 12",u15:"Under 15",u20:"Under 20",all:"All ages"};
 const link=(id:string,token?:string)=>`${location.origin}/#training=${encodeURIComponent(id)}${token?`&invite=${encodeURIComponent(token)}`:""}`;
 async function rpc<T>(name:string,args:Record<string,unknown>={}){
@@ -16,6 +17,41 @@ async function rpc<T>(name:string,args:Record<string,unknown>={}){
 }
 function ageAt(date:string,birthdate:string){const start=new Date(date),birth=new Date(`${birthdate}T12:00:00`);let age=start.getFullYear()-birth.getFullYear();if(start.getMonth()<birth.getMonth()||(start.getMonth()===birth.getMonth()&&start.getDate()<birth.getDate()))age--;return age;}
 function validateAge(training:Training,birthdate:string){const age=ageAt(training.starts_at,birthdate),limit=training.category==="u12"?12:training.category==="u15"?15:training.category==="u20"?20:Infinity;if(!birthdate||!Number.isFinite(age)||age<0||age>=limit)throw Error(`Birthdate does not meet the ${categoryLabels[training.category]} category.`);}
+
+function TrainingInstallCard(){
+ const [installEvent,setInstallEvent]=useState<InstallEvent|null>(null),[installed,setInstalled]=useState(false),[busy,setBusy]=useState(false),[instructions,setInstructions]=useState("");
+ useEffect(()=>{
+  setInstalled(window.matchMedia("(display-mode: standalone)").matches||Boolean((navigator as Navigator&{standalone?:boolean}).standalone));
+  const capture=(event:Event)=>{event.preventDefault();setInstallEvent(event as InstallEvent);};
+  const complete=()=>{setInstalled(true);setInstallEvent(null);};
+  window.addEventListener("beforeinstallprompt",capture);
+  window.addEventListener("appinstalled",complete);
+  return()=>{window.removeEventListener("beforeinstallprompt",capture);window.removeEventListener("appinstalled",complete);};
+ },[]);
+ async function install(){
+  setInstructions("");
+  if(!installEvent){
+   setInstructions(/iphone|ipad|ipod/i.test(navigator.userAgent)?"Tap Share in Safari, then Add to Home Screen.":"Open your browser menu and choose Install app or Add to Home screen.");
+   return;
+  }
+  setBusy(true);
+  try{
+   await installEvent.prompt();
+   const choice=await installEvent.userChoice;
+   setInstructions(choice.outcome==="accepted"?"Installation started. Find Chess Burger on your home screen.":"You can install Chess Burger from your browser menu anytime.");
+  }catch{setInstructions("Open your browser menu and choose Install app or Add to Home screen.");}
+  finally{setInstallEvent(null);setBusy(false);}
+ }
+ if(installed)return null;
+ return <aside className="online-training-install" aria-labelledby="online-training-install-title">
+  <img src="/chess-burger-installer.webp" alt="Chess Burger app and download icon" width={176} height={176}/>
+  <small>YOUR CHESS APP, ONE TAP AWAY</small>
+  <h3 id="online-training-install-title">Install <span>CHESS BURGER</span></h3>
+  <p>Keep your training and games close. Add Chess Burger to your device.</p>
+  <button type="button" onClick={()=>void install()} disabled={busy}>{busy?"Opening installer…":"Install app"}</button>
+  {instructions&&<p className="online-training-install-help" role="status">{instructions}</p>}
+ </aside>;
+}
 
 export function OnlineTrainings({profile,initialId="",invite="",onCreateAccount}:{profile?:PlayerProfile|null;initialId?:string;invite?:string;onCreateAccount?:()=>void}){
  const[trainings,setTrainings]=useState<Training[]>([]),[selected,setSelected]=useState(initialId),[name,setName]=useState(profile?.display_name??""),[birthdate,setBirthdate]=useState(""),[busy,setBusy]=useState(false),[status,setStatus]=useState(""),[error,setError]=useState("");
@@ -35,14 +71,14 @@ export function OnlineTrainings({profile,initialId="",invite="",onCreateAccount}
    {training.poster_url&&<img className="online-training-poster" src={training.poster_url} alt={`${training.title} event poster`}/>}
    <div className="online-training-info"><small>{categoryLabels[training.category]} · FREE TRAINING</small><h2>{training.title}</h2><p>{training.invitation_text||"Join the Chess Burger online training session."}</p>
    <dl><div><dt>Coach</dt><dd>{training.coach_name}</dd></div><div><dt>Schedule</dt><dd>{new Date(training.starts_at).toLocaleString()}</dd></div><div><dt>Participants</dt><dd>{training.confirmed} confirmed · {training.registered}/{training.capacity} registered</dd></div></dl>
-   <div className="online-training-form"><h3>{invite?"Accept your invitation":profile?"Register for free":"Request an invitation"}</h3>
+   <div className="online-training-join-layout"><div className="online-training-form"><h3>{invite?"Accept your invitation":profile?"Register for free":"Request an invitation"}</h3>
     {!profile&&!invite&&<p>A Chess Burger account is required to confirm your training place. You can send a request now; the owner will invite you to complete registration.</p>}
     {invite&&!profile&&<p>Sign in or create your Chess Burger account to confirm this personal invitation.</p>}
     <label>Complete name<input autoComplete="name" maxLength={80} value={name} onChange={e=>setName(e.target.value)} required/></label>
     <label>Birthdate<input type="date" value={birthdate} max={new Date().toISOString().slice(0,10)} onChange={e=>setBirthdate(e.target.value)} required/></label>
     <button type="button" disabled={busy||!name.trim()||!birthdate||(!!invite&&!profile)||!!status} onClick={()=>void join()}>{busy?"Submitting…":invite?"Confirm invitation":profile?"Join training":"Request invitation"}</button>
     {!profile&&onCreateAccount&&<button className="online-training-secondary" type="button" onClick={onCreateAccount}>Open Chess Burger and create an account</button>}
-   </div></div></article>}
+   </div><TrainingInstallCard/></div></div></article>}
  </section>;
 }
 
