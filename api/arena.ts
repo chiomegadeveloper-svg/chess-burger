@@ -365,8 +365,8 @@ async function activeAvatarFrame(client: Db, profile: any) {
 async function playerMap(client: Db, ids: string[]) {
   const unique = [...new Set(ids.filter(Boolean))];
   if (!unique.length) return new Map<string, any>();
-  let r = await client.from('cb_profiles').select('user_id,username,display_name,avatar_url,country_code,cbr,gold_points,wins,losses,win_streak,active_feed_banner').in('user_id', unique);
-  if (r.error && /active_feed_banner|schema cache/i.test(r.error.message)) r = await client.from('cb_profiles').select('user_id,username,display_name,avatar_url,country_code,cbr,gold_points,wins,losses,win_streak').in('user_id', unique);
+  let r = await client.from('cb_profiles').select('user_id,username,display_name,avatar_url,country_code,cbr,gold_points,wins,losses,win_streak,active_feed_banner,active_avatar_frame_item').in('user_id', unique);
+  if (r.error && /active_feed_banner|active_avatar_frame_item|schema cache/i.test(r.error.message)) r = await client.from('cb_profiles').select('user_id,username,display_name,avatar_url,country_code,cbr,gold_points,wins,losses,win_streak').in('user_id', unique);
   if (r.error) fail(500, r.error.message);
   const players = r.data ?? [];
   const activeIds = players.filter((p:any)=>p.active_feed_banner).map((p:any)=>p.user_id);
@@ -381,6 +381,8 @@ async function playerMap(client: Db, ids: string[]) {
 }
 async function matchView(client: Db, row: any) {
   const players = await playerMap(client, [row.white_id, row.black_id]);
+  const frameProfiles = [...players.values()].filter((player: any) => player.active_avatar_frame_item);
+  await Promise.all(frameProfiles.map(async (player: any) => { player.avatar_frame_id = await activeAvatarFrame(client, player); }));
   let gold_changes:Record<string,number>|undefined,gold_payouts:Record<string,number>|undefined;
   if(row.status==='finished'){
     const ledger=await client.from('cb_gold_ledger').select('user_id,delta,kind').eq('reference_id',row.id);
