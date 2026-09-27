@@ -41,9 +41,9 @@ test("AI reader exposes a 10 teacher and 10 student move principal variation",()
   assert.match(workshop,/index%2===0\?"Teacher":"Student"/);
 });
 
-test("student pieces obey movement rules without becoming stuck on turn state",()=>{
-  assert.match(workshop,/fixedColorTurns/);
+test("teacher controls free movement and locked students use chess turns",()=>{
   assert.match(workshop,/movementBoard/);
-  assert.match(workshop,/allowedColor="w" fixedColorTurns/);
+  assert.match(workshop,/freeMove=\{own\.board\.free_movement===true\}/);
+  assert.match(workshop,/allowedColor=\{own\.board\.free_movement\?"both":"w"\}/);
   assert.match(workshop,/moves\(\{square:sq,verbose:true\}\)/);
 });
