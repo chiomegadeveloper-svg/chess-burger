@@ -1,5 +1,7 @@
 -- Owner controlled global CBC admission for free classroom sessions.
 -- Existing paid expiration timestamps are kept, so paid mode resumes normally.
+begin;
+
 alter table public.cb_classroom_settings add column if not exists cbc_enabled boolean not null default true;
 alter table public.cb_classroom_student_boards add column if not exists free_movement boolean not null default false;
 
@@ -203,3 +205,5 @@ drop trigger if exists cb_classroom_student_role_guard on public.cb_classroom_en
 create trigger cb_classroom_student_role_guard
 before insert or update of student_id,access_expires_at on public.cb_classroom_enrollments
 for each row execute function public.cb_enforce_classroom_student_role();
+
+commit;
