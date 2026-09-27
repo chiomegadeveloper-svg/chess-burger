@@ -440,7 +440,7 @@ export function ShopPage({
         <BagSlotStore fallbackGold={state.gold || profile?.gold_points || 0}/>
       <div className="shop-grid">
         <article className="shop-category-ready"><span className="shop-icon">♞</span><div><h2>Avatar frames</h2><p>20 chess designs to rent, equip, or gift from your Bag.</p></div><button type="button" onClick={() => setOpenFrames(true)}>View frames</button></article>
-        {[["♟", "Gold rewards", "Reward items for your collection."]].map(([icon, name, desc]) => (
+        {[["♟", "Purchase CBG (ChessBurger Gold) Coins", "CBG coin packs for your Chess Burger wallet."]].map(([icon, name, desc]) => (
           <article key={name}>
             <span className="shop-icon">{icon}</span>
             <div>
