@@ -6,6 +6,7 @@ import {getSupabase,PlayerProfile} from "./supabase";
 import {setCmsRole} from "./cms-role-client";
 import Tournaments from "./tournaments";
 import {OnlineTrainingCms} from "./online-training";
+import ReportTickets from "./report-tickets";
 import {arena} from "./arena-client";
 import StaffImageEditor from './staff-image-editor';
 import {uploadStaffImage,validateImageFile} from "./media";
@@ -26,13 +27,13 @@ type LoginReward={day:number;kind:"gold"|"banner"|"arena_ticket"|"bag_slot";amou
 async function arenaCms<T>(action:string,body:Record<string,unknown>={}){const client=await getSupabase(),session=client?(await client.auth.getSession()).data.session:null;if(!session)throw Error('Sign in again.');const response=await fetch('/api/grand-arena',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${session.access_token}`},body:JSON.stringify({action,...body}),cache:'no-store'}),data=await response.json() as T&{error?:string};if(!response.ok)throw Error(data.error??'Arena settings are unavailable.');return data;}
 const logLabels:Record<string,string>={announcement_create:"Announcement published",announcement_update:"Announcement updated",announcement_delete:"Announcement deleted",training_delete:"Online training deleted",training_ticket_gift:"Arena ticket gifted to registrant",set_app_feature:"App photo updated",grant_gold:"Gold granted",set_role:"User role changed",offline_result:"Offline result recorded",delete_user:"User deleted"};
 function logSummary(log:Log){const d=log.details??{},parts:string[]=[];if(typeof d.title==='string')parts.push(d.title);if(typeof d.amount==='number')parts.push(`${d.amount} Gold`);if(typeof d.username==='string')parts.push(`@${d.username}`);if(typeof d.role==='string')parts.push(`Role: ${d.role}`);if(typeof d.result==='string')parts.push(`Result: ${d.result}`);if(typeof d.expires_at==='string')parts.push(`Ends ${new Date(d.expires_at).toLocaleString()}`);if(typeof d.image_url==='string')parts.push(d.image_url?'Photo added':'Photo cleared');return parts.join(' · ')||'Completed successfully';}
-export default function Cms({profile,onClose}:{profile:PlayerProfile;onClose:()=>void}){
- const[section,setSection]=useState("tournament"),[busy,setBusy]=useState(false),[text,setText]=useState(""),[image,setImage]=useState(""),[deadline,setDeadline]=useState(""),[editing,setEditing]=useState<string|null>(null),[posts,setPosts]=useState<Post[]>([]),[username,setUsername]=useState(""),[gold,setGold]=useState(10),[cardUrl,setCardUrl]=useState(""),[role,setRole]=useState("admin"),[deleteUsername,setDeleteUsername]=useState(""),[deleteConfirmation,setDeleteConfirmation]=useState(""),[logs,setLogs]=useState<Log[]>([]),[page,setPage]=useState(0),[logError,setLogError]=useState(""),[localLogs,setLocalLogs]=useState<Array<{at:string;actor:string;action:string;tournament:string}>>([]),[arenaSettings,setArenaSettings]=useState(defaultArenaSettings),[classroomSettings,setClassroomSettings]=useState(defaultClassroomSettings);
+export default function Cms({profile,onClose,initialSection="tournament"}:{profile:PlayerProfile;onClose:()=>void;initialSection?:string}){
+ const[section,setSection]=useState(initialSection),[busy,setBusy]=useState(false),[text,setText]=useState(""),[image,setImage]=useState(""),[deadline,setDeadline]=useState(""),[editing,setEditing]=useState<string|null>(null),[posts,setPosts]=useState<Post[]>([]),[username,setUsername]=useState(""),[gold,setGold]=useState(10),[cardUrl,setCardUrl]=useState(""),[role,setRole]=useState("admin"),[deleteUsername,setDeleteUsername]=useState(""),[deleteConfirmation,setDeleteConfirmation]=useState(""),[logs,setLogs]=useState<Log[]>([]),[page,setPage]=useState(0),[logError,setLogError]=useState(""),[localLogs,setLocalLogs]=useState<Array<{at:string;actor:string;action:string;tournament:string}>>([]),[arenaSettings,setArenaSettings]=useState(defaultArenaSettings),[classroomSettings,setClassroomSettings]=useState(defaultClassroomSettings);
  const [featureLoaded,setFeatureLoaded]=useState(false);
  const [dailyRewards,setDailyRewards]=useState<LoginReward[]>([]),[dailyError,setDailyError]=useState("");
  const [crop,setCrop]=useState<{file:File;target:"announcement"|"card"}|null>(null);
  const owner=profile.role==="owner";
- const menu=[["tournament","Tournaments",Trophy],["training","Online Trainings",Video],["announcement","Announcements",Megaphone],["card","App photo",ImageIcon],["gold","Gold",Coins],...(owner?[["arena","Grand Arena",Clock3],["classroom","Classroom",GraduationCap],["daily-login","Daily Login",Gift],["roles","Users",ShieldCheck]]:[]),["logs","Activity logs",ScrollText]] as const;
+ const menu=[["tournament","Tournaments",Trophy],["training","Online Trainings",Video],["reports","Report Tickets",ScrollText],["announcement","Announcements",Megaphone],["card","App photo",ImageIcon],["gold","Gold",Coins],...(owner?[["arena","Grand Arena",Clock3],["classroom","Classroom",GraduationCap],["daily-login","Daily Login",Gift],["roles","Users",ShieldCheck]]:[]),["logs","Activity logs",ScrollText]] as const;
  async function run(fn:()=>Promise<void>){setBusy(true);try{await fn();}catch(e){toast.error((e as Error).message);}finally{setBusy(false);}}
  async function loadPosts(){const data=await arena<{posts:Post[]}>("cms-announcements");setPosts(data.posts);}
  // Existing CMS tabs intentionally reset their loading/error state when the active panel changes.
@@ -57,6 +58,7 @@ export default function Cms({profile,onClose}:{profile:PlayerProfile;onClose:()=
  return <section className="cms-page"><div className="cms-heading"><div><span>OWNER CONTROL</span><h1>Chess Burger CMS</h1></div><button onClick={onClose}>Close</button></div><div className="cms-tabs">{menu.map(([key,label,Icon])=><button key={key as string} className={section===key?"active":""} onClick={()=>setSection(key as string)}><Icon/>{label as string}</button>)}</div>
  {section==="tournament"&&<Tournaments profile={profile} host/>}
  {section==="training"&&<OnlineTrainingCms profile={profile}/>}
+ {section==="reports"&&<ReportTickets owner/>}
  {section==="announcement"&&<div className="cms-panel announcement-cms">
   <div className="cms-panel-heading">
    <div><span>OFFICIAL UPDATE</span><h2>{editing?"Edit announcement":"Create announcement"}</h2></div>

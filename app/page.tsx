@@ -21,6 +21,7 @@ import {
   Castle,
   Bot,
   GraduationCap,
+  Flag,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
@@ -32,6 +33,7 @@ import RecentPlays from "./recent-plays";
 import NearbyMap from "./nearby-map";
 import LocalPairing from "./local-pairing";
 import Cms from "./cms";
+import ReportTickets from "./report-tickets";
 import Tournaments from "./tournaments";
 import {OnlineTrainings} from "./online-training";
 import OnlinePlay, { OnlineGame } from "./online-play";
@@ -516,7 +518,7 @@ function AppPage() {
     "classroom",
   ].includes(tab)
     ? "play"
-    : tab === "cms"
+    : tab === "cms" || tab === "cms-reports" || tab === "reports"
       ? "profile"
       : tab;
   const back = (
@@ -777,8 +779,9 @@ function AppPage() {
   else if (tab === "shop") content = <ShopPage profile={profile} onChanged={() => void refreshProfile()} />;
   else if (tab === "bag") content = <BagPage onChanged={() => void refreshProfile()} />;
   else if (tab === "guild") content = <GuildPage profile={profile} onChanged={() => void refreshProfile()} />;
-  else if (tab === "cms" && owner)
-    content = <Cms profile={profile} onClose={() => setTab("profile")} />;
+  else if (tab === "reports") content = <ReportTickets onBack={() => setTab("home")}/>;
+  else if ((tab === "cms" || tab === "cms-reports") && owner)
+    content = <Cms key={tab} profile={profile} initialSection={tab === "cms-reports" ? "reports" : "tournament"} onClose={() => setTab("profile")} />;
   else
     content = (
       <section className="profile-page">
@@ -917,6 +920,9 @@ function AppPage() {
           >
             <GraduationCap size={17} />
             <span>Classroom</span>
+          </button>
+          <button type="button" className="header-report-button" aria-label={owner ? "Open owner report tickets" : "Open report form"} onClick={() => navigate(owner ? "cms-reports" : "reports")}>
+            <Flag size={16} aria-hidden="true"/><span>Report</span>
           </button>
           {owner && <button
             type="button"
