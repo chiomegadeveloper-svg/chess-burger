@@ -166,7 +166,10 @@ export default async function handler(req:Req,res:Res){
           if(!lastPuzzle.data)fail(409,"Assign a puzzle before resetting student boards.");
           assignedFen=lastPuzzle.data.fen;
         }
-        const enrollments=await client.from("cb_classroom_enrollments").select("student_id").eq("room_id",roomId).gt("access_expires_at",now);
+        const targetStudentId=kind==="reset-puzzle"?String(body.student_id||""):"";
+        if(targetStudentId&&!/^[a-f0-9-]{36}$/i.test(targetStudentId))fail(400,"Choose a valid student.");
+        const enrollmentQuery=client.from("cb_classroom_enrollments").select("student_id").eq("room_id",roomId).gt("access_expires_at",now);
+        const enrollments=await (targetStudentId?enrollmentQuery.eq("student_id",targetStudentId):enrollmentQuery);
         if(enrollments.error)fail(500,enrollments.error.message);
         const assignments=(enrollments.data||[]).map(row=>({room_id:roomId,student_id:row.student_id,fen:assignedFen,annotations:[],updated_by:userId,updated_at:now}));
         if(assignments.length){
