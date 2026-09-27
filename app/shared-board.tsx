@@ -10,9 +10,9 @@ export default function SharedBoard({profile,control,onResult}:{profile:PlayerPr
  const current=useRef<ArenaMatch|null>(null),done=useRef(false),callback=useRef(onResult);callback.current=onResult;
  const ownId=profile?.user_id??'guest-device',key='cb-shared-board:'+ownId;
  function fresh(){
-  const own:ArenaPlayer={user_id:ownId,display_name:profile?.display_name??'White player',username:profile?.username??'white',avatar_url:profile?.avatar_url??'',country_code:profile?.country_code??'',cbr:profile?.cbr??88,gold_points:0,wins:0,losses:0,win_streak:0};
+  const own:ArenaPlayer={user_id:ownId,display_name:profile?.display_name??'White player',username:profile?.username??'white',avatar_url:profile?.avatar_url??'',avatar_frame_id:profile?.avatar_frame_id??null,country_code:profile?.country_code??'',cbr:profile?.cbr??88,gold_points:0,wins:0,losses:0,win_streak:0};
   const tc=timeControl(control),t=Date.now();done.current=false;
-  commit({id:crypto.randomUUID(),host_id:ownId,white_id:ownId,black_id:'shared-black',invite_to:null,code:'',control,status:'active',pgn:'',white_ms:tc.seconds*1000,black_ms:tc.seconds*1000,last_tick:t,version:0,result:null,white_cbr:own.cbr,black_cbr:88,rating_applied:0,created_at:t,white:own,black:{...own,user_id:'shared-black',display_name:'Black player',username:'black',avatar_url:'',cbr:88}});
+  commit({id:crypto.randomUUID(),host_id:ownId,white_id:ownId,black_id:'shared-black',invite_to:null,code:'',control,status:'active',pgn:'',white_ms:tc.seconds*1000,black_ms:tc.seconds*1000,last_tick:t,version:0,result:null,white_cbr:own.cbr,black_cbr:88,rating_applied:0,created_at:t,white:own,black:{...own,user_id:'shared-black',display_name:'Black player',username:'black',avatar_url:'',avatar_frame_id:null,cbr:88}});
  }
  function commit(next:ArenaMatch){
   current.current=next;setMatch({...next,server_now:Date.now()});

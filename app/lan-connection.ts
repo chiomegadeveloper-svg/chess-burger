@@ -1,3 +1,4 @@
+import {avatarFrame} from './avatar-frame-catalog';
 import {boardResult,gameFromPgn,timeControl,type ArenaMatch,type ArenaPlayer} from './game-rules.ts';
 export type Signal={v:1;room:string;description:RTCSessionDescriptionInit};
 export async function encodeSignal(signal:Signal){
@@ -16,7 +17,7 @@ export class LanConnection {
  pc:RTCPeerConnection;channel:RTCDataChannel|null=null;host:boolean;room:string;own:ArenaPlayer;control:string;match:ArenaMatch|null=null;guest:ArenaPlayer|null=null;peer:ArenaPlayer|null=null;guestReady=false;closed=false;timer:ReturnType<typeof setInterval>|null=null;
  onState:(match:ArenaMatch)=>void;onStatus:(status:string)=>void;
  constructor(host:boolean,own:ArenaPlayer,control:string,onState:(match:ArenaMatch)=>void,onStatus:(s:string)=>void,room=crypto.randomUUID()){
-  this.host=host;this.own={user_id:own.user_id,display_name:own.display_name,username:own.username,avatar_url:/^https:\/\//.test(own.avatar_url)?own.avatar_url.slice(0,500):"",country_code:own.country_code,cbr:own.cbr,gold_points:0,wins:own.wins,losses:own.losses,win_streak:own.win_streak};this.control=control;this.room=room;this.onState=onState;this.onStatus=onStatus;
+  this.host=host;this.own={user_id:own.user_id,display_name:own.display_name,username:own.username,avatar_url:/^https:\/\//.test(own.avatar_url)?own.avatar_url.slice(0,500):"",avatar_frame_id:avatarFrame(own.avatar_frame_id)?.id??null,country_code:own.country_code,cbr:own.cbr,gold_points:0,wins:own.wins,losses:own.losses,win_streak:own.win_streak};this.control=control;this.room=room;this.onState=onState;this.onStatus=onStatus;
   this.pc=new RTCPeerConnection({iceServers:[]});
   this.pc.onconnectionstatechange=()=>{const state=this.pc.connectionState;onStatus(state==='connected'?'Connected over local Wi-Fi':state==='failed'?'Connection failed. Check that your hotspot allows devices to communicate.':state==='disconnected'?'Disconnected. Reconnect to the same Wi-Fi network.':state);};
   this.pc.ondatachannel=e=>this.attach(e.channel);if(host)this.attach(this.pc.createDataChannel('chess-burger',{ordered:true}));
@@ -25,7 +26,7 @@ export class LanConnection {
  send(value:unknown){if(this.channel?.readyState==='open')this.channel.send(JSON.stringify(value));}
  receive(message:any){
   if(message.type==='hello'&&!this.match){const p=message.player;if(!p||typeof p.user_id!=='string'||p.user_id===this.own.user_id||typeof p.display_name!=='string')return;
-   const player={user_id:p.user_id.slice(0,80),display_name:p.display_name.slice(0,60),username:String(p.username??'player').slice(0,24),avatar_url:typeof p.avatar_url==='string'&&/^https:\/\//.test(p.avatar_url)?p.avatar_url.slice(0,500):'',country_code:String(p.country_code??'').slice(0,3),cbr:Number.isFinite(p.cbr)?Math.max(0,Math.min(100000,p.cbr)):88,gold_points:0,wins:0,losses:0,win_streak:0};
+   const player={user_id:p.user_id.slice(0,80),display_name:p.display_name.slice(0,60),username:String(p.username??'player').slice(0,24),avatar_url:typeof p.avatar_url==='string'&&/^https:\/\//.test(p.avatar_url)?p.avatar_url.slice(0,500):'',avatar_frame_id:avatarFrame(p.avatar_frame_id)?.id??null,country_code:String(p.country_code??'').slice(0,3),cbr:Number.isFinite(p.cbr)?Math.max(0,Math.min(100000,p.cbr)):88,gold_points:0,wins:0,losses:0,win_streak:0};
    this.peer=player;if(this.host){this.guest=player;this.onStatus(`${player.display_name} connected. Waiting for Ready.`);}else this.onStatus(`Connected to ${player.display_name}. Press Ready to play.`);
   }else if(message.type==='ready'&&this.host&&this.guest&&!this.match){this.guestReady=true;this.onStatus(`${this.guest.display_name} is ready. Press Start game.`);}
   else if(message.type==='action'&&this.host)this.apply(message.move,message.resign,this.match?.black_id??'',message.version);

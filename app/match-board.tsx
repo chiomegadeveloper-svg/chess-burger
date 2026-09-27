@@ -2,6 +2,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Square } from "chess.js";
 import { arena } from "./arena-client";
+import { AvatarFrameOverlay } from "./avatar-frame-art";
+import { avatarFrame } from "./avatar-frame-catalog";
 import { BOARD_THEMES, DEFAULT_BOARD_IDS, boardTheme as findBoardTheme, boardThemeStyle } from "./board-themes";
 import { BoardThemePreview } from "./board-theme-preview";
 import { CodyPiece } from "./cody-piece";
@@ -62,15 +64,17 @@ const emotes = [
 export function Avatar({
   player,
 }: {
-  player?: Pick<ArenaPlayer, "display_name" | "avatar_url">;
+  player?: Pick<ArenaPlayer, "display_name" | "avatar_url" | "avatar_frame_id">;
 }) {
+  const framed = !!avatarFrame(player?.avatar_frame_id);
   return (
-    <span className="player-avatar">
+    <span className={`player-avatar${framed ? " has-avatar-frame" : ""}`}>
       {player?.avatar_url ? (
         <img src={player.avatar_url} alt="" />
       ) : (
         (player?.display_name?.[0] ?? "?").toUpperCase()
       )}
+      {framed && <AvatarFrameOverlay frameId={player?.avatar_frame_id} />}
     </span>
   );
 }

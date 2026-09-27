@@ -93,6 +93,7 @@ export type ArenaPlayer = {
   username: string;
   display_name: string;
   avatar_url: string;
+  avatar_frame_id?: string | null;
   country_code: string;
   cbr: number;
   ocbr?: number;
