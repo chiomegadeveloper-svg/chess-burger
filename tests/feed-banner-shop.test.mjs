@@ -6,16 +6,17 @@ const catalog = readFileSync(new URL("../app/feed-banner-catalog.ts", import.met
 const api = readFileSync(new URL("../api/arena.ts", import.meta.url), "utf8");
 const sql = readFileSync(new URL("../supabase/0021_feed_banner_shop.sql", import.meta.url), "utf8");
 const rentalSql = readFileSync(new URL("../supabase/0062_color_banner_collections.sql", import.meta.url), "utf8");
+const moreNeonSql = readFileSync(new URL("../supabase/0069_more_neon_color_banners.sql", import.meta.url), "utf8");
 const shop = readFileSync(new URL("../app/shop.tsx", import.meta.url), "utf8");
 const page = readFileSync(new URL("../app/page.tsx", import.meta.url), "utf8");
 
-test("shop lists 25 pastel, 25 metallic, and 15 neon colors with matching database prices", () => {
+test("shop lists 25 pastel, 25 metallic, and 30 neon colors with matching database prices", () => {
   const current = catalog.split("const LEGACY_FEED_BANNERS")[0];
   const products = [...current.matchAll(/\{ id: "([^"]+)", name: "([^"]+)", tier: "(pastel|metallic|neon)", price: (\d+),/g)];
-  for (const [tier, count] of [["pastel", 25], ["metallic", 25], ["neon", 15]])
+  for (const [tier, count] of [["pastel", 25], ["metallic", 25], ["neon", 30]])
     assert.equal(products.filter(product => product[3] === tier).length, count);
   for (const [, id, name, tier, price] of products.slice(20))
-    assert.ok(rentalSql.includes(`('${id}','feed_banner','${name}','${tier}',${price})`), `${id} missing from SQL`);
+    assert.ok((rentalSql + moreNeonSql).includes(`('${id}','feed_banner','${name}','${tier}',${price})`), `${id} missing from SQL`);
   assert.match(shop, /\(\["pastel", "metallic", "neon"\] as const\)/);
   assert.doesNotMatch(shop, /Cute Chess|Electric Warriors|Animated Chess|Robot Chess/);
 });
