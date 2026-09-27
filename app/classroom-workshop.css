@@ -328,6 +328,14 @@
 .teach-square.selected {
   box-shadow: inset 0 0 0 5px #f2c84e;
 }
+.teach-square.last-move {
+  z-index: 1;
+  animation: classroom-last-move-blink 1s ease-in-out infinite;
+}
+@keyframes classroom-last-move-blink {
+  0%, 100% { box-shadow: inset 0 0 0 5px #f13a48, inset 0 0 22px #e72d4666; }
+  50% { box-shadow: inset 0 0 0 2px #f13a4855, inset 0 0 8px #e72d4622; }
+}
 .teach-square.legal:after {
   content: "";
   position: absolute;
