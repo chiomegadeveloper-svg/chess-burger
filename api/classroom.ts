@@ -157,18 +157,26 @@ export default async function handler(req:Req,res:Res){
       const teacher=room.data.teacher_id===userId;
       if(!teacher){const access=await client.from("cb_classroom_enrollments").select("student_id").eq("room_id",roomId).eq("student_id",userId).gt("access_expires_at",now).maybeSingle();if(!access.data)fail(403,"Your paid classroom time has expired.");}
       const fen=String(body.fen||"start");if(fen.length>160)fail(400,"Invalid board position.");
-      if(kind==="assign-puzzle"){
-        if(!teacher)fail(403,"Only the teacher can assign puzzles.");
+      if(["assign-puzzle","reset-puzzle","assign-board"].includes(kind)){
+        if(!teacher)fail(403,"Only the teacher can assign student boards.");
+        let assignedFen=fen;
+        if(kind==="reset-puzzle"){
+          const lastPuzzle=await client.from("cb_classroom_lesson_events").select("fen").eq("room_id",roomId).eq("scope","assignment").like("label","Puzzle assigned to%").order("created_at",{ascending:false}).limit(1).maybeSingle();
+          if(lastPuzzle.error)fail(500,lastPuzzle.error.message);
+          if(!lastPuzzle.data)fail(409,"Assign a puzzle before resetting student boards.");
+          assignedFen=lastPuzzle.data.fen;
+        }
         const enrollments=await client.from("cb_classroom_enrollments").select("student_id").eq("room_id",roomId).gt("access_expires_at",now);
         if(enrollments.error)fail(500,enrollments.error.message);
-        const assignments=(enrollments.data||[]).map(row=>({room_id:roomId,student_id:row.student_id,fen,annotations:[],updated_by:userId,updated_at:now}));
+        const assignments=(enrollments.data||[]).map(row=>({room_id:roomId,student_id:row.student_id,fen:assignedFen,annotations:[],updated_by:userId,updated_at:now}));
         if(assignments.length){
           const saved=await client.from("cb_classroom_student_boards").upsert(assignments,{onConflict:"room_id,student_id"});
           if(saved.error)fail(500,saved.error.message);
         }
-        const logged=await client.from("cb_classroom_lesson_events").insert({room_id:roomId,actor_id:userId,scope:"assignment",fen,annotations:[],label:`Puzzle assigned to ${assignments.length} student${assignments.length===1?"":"s"}`});
+        const label=kind==="assign-puzzle"?`Puzzle assigned to ${assignments.length} student${assignments.length===1?"":"s"}`:kind==="reset-puzzle"?`Puzzle reset for ${assignments.length} student${assignments.length===1?"":"s"}`:`Teacher board sent to ${assignments.length} student${assignments.length===1?"":"s"}`;
+        const logged=await client.from("cb_classroom_lesson_events").insert({room_id:roomId,actor_id:userId,scope:"assignment",fen:assignedFen,annotations:[],label});
         if(logged.error)fail(500,logged.error.message);
-        return res.status(200).json({assigned:assignments.length});
+        return res.status(200).json({assigned:assignments.length,fen:assignedFen});
       }
       if(kind==="master"){
         if(!teacher)fail(403,"Only the teacher can control the lesson board.");
