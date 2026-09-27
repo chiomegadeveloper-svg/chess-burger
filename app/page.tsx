@@ -41,7 +41,8 @@ import Rankings from "./rankings";
 import LiveChannel from "./live-channel";
 import { SavedGame, saveGame } from "./game-history";
 import { getSupabase, PlayerProfile } from "./supabase";
-import { authStorage } from "./auth-storage";
+import { authStorage, clearAccountCache } from "./auth-storage";
+import { EndUserAgreement, AGREEMENT_VERSION } from "./end-user-agreement";
 import { arena } from "./arena-client";
 import { useGpsPresence } from "./gps-presence";
 import { useLivePresence } from "./live-presence";
@@ -114,6 +115,7 @@ function AppPage() {
     [showSplash, setShowSplash] = useState(true),
     [showWelcome, setShowWelcome] = useState(false),
     [member, setMember] = useState<boolean | null>(null);
+  const [agreementChecked,setAgreementChecked]=useState(false), [agreementExpanded,setAgreementExpanded]=useState(false), [agreementSaving,setAgreementSaving]=useState(false);
   const [matchId, setMatchId] = useState(""),
     [target, setTarget] = useState<ArenaPlayer | null>(null),
     [viewedUserId, setViewedUserId] = useState(""),
@@ -133,7 +135,25 @@ function AppPage() {
     window.addEventListener("cb-open-shop", openShop);
     return () => window.removeEventListener("cb-open-shop", openShop);
   }, []);
+  const needsAgreement=member===true && profile?.agreement_version===null;
   const welcomeDecision = useRef(false);
+  const acceptAgreement=async()=>{
+    if(!agreementChecked || agreementSaving)return;
+    setAgreementSaving(true);
+    try {
+      const result=await arena<{profile:PlayerProfile}>("agreement-accept",{version:AGREEMENT_VERSION});
+      setProfile(result.profile);
+      setAgreementChecked(false);
+      toast.success("Agreement saved. Choose where to go.");
+    }catch(error){toast.error((error as Error).message)}
+    finally{setAgreementSaving(false)}
+  };
+  const exitAgreement=async()=>{
+    try {const client=await getSupabase();await client?.auth.signOut({scope:"local"})}catch{}
+    clearAccountCache();
+    setMember(false);setProfile(null);setShowWelcome(false);setTab("profile");
+    window.close();
+  };
   const finishWelcome = (nextTab?:string) => {
     setShowWelcome(false);
     if(nextTab)setTab(nextTab);
@@ -438,7 +458,9 @@ function AppPage() {
     };
   }, [refreshProfile]);
   useEffect(() => {
-    if (showSplash || member === null || welcomeDecision.current) return;
+    if (showSplash || member === null) return;
+    if (needsAgreement && isProfileComplete(profile)) {setShowWelcome(true);return;}
+    if (welcomeDecision.current) return;
     welcomeDecision.current = true;
     if (member && isProfileComplete(profile)) {
       setShowWelcome(true);
@@ -446,7 +468,7 @@ function AppPage() {
     }
     setShowWelcome(false);
     setTab("profile");
-  }, [showSplash, member, profile]);
+  }, [showSplash, member, profile, needsAgreement]);
   useEffect(() => {
     if (!profile || profile.user_id === "guest-device") return;
     const userId = profile.user_id;
@@ -534,6 +556,7 @@ function AppPage() {
       toast.info("Register and save your profile to unlock Chess Burger.");
       return;
     }
+    if(needsAgreement){setShowWelcome(true);return;}
     setTab(next);
   };
   const openNotification = (target: string) => {
@@ -855,7 +878,7 @@ function AppPage() {
           <small>CHESS BURGER ALL RIGHTS RESERVED 2026</small>
         </div>
       )}
-      {showWelcome && !showSplash && (
+      {(showWelcome || needsAgreement) && !showSplash && member === true && isProfileComplete(profile) && (
         <div className="welcome-menu-backdrop">
           <section
             className="welcome-menu"
@@ -871,7 +894,7 @@ function AppPage() {
             </header>
             <div className="welcome-menu-options">
               <button
-                className="welcome-card invasion"
+                disabled={needsAgreement} className="welcome-card invasion"
                 onClick={() => {
                   finishWelcome("map");
                 }}
@@ -880,7 +903,7 @@ function AppPage() {
                 <strong>INVASION</strong>
               </button>
               <button
-                className="welcome-card online"
+                disabled={needsAgreement} className="welcome-card online"
                 onClick={() => {
                   finishWelcome("play-select");
                 }}
@@ -889,20 +912,33 @@ function AppPage() {
                 <strong>PLAY ONLINE</strong>
               </button>
               <button
-                className="welcome-card classroom"
+                disabled={needsAgreement} className="welcome-card classroom"
                 onClick={() => finishWelcome("classroom")}
               >
                 <img src="/welcome/classroom.webp" alt="Chess classroom" />
                 <strong>CLASS ROOM</strong>
               </button>
-              <button className="welcome-card guild" onClick={() => finishWelcome("guild")}>
+              <button disabled={needsAgreement} className="welcome-card guild" onClick={() => finishWelcome("guild")}>
                 <img src="/welcome/guild.webp" alt="Chess Burger guild tavern" />
                 <strong>GUILD</strong>
               </button>
-              <button className="welcome-card home" onClick={() => finishWelcome("home")}>
+              <button disabled={needsAgreement} className="welcome-card home" onClick={() => finishWelcome("home")}>
                 <img src="/welcome/home.webp" alt="Chess Burger kingdom" />
                 <strong>HOME</strong>
               </button>
+            </div>
+            <div className="welcome-agreement">
+              <button type="button" className="agreement-toggle" aria-expanded={agreementExpanded} aria-controls="chess-burger-agreement" onClick={()=>setAgreementExpanded(v=>!v)}>
+                End User Agreement {agreementExpanded ? "−" : "+"}
+              </button>
+              {agreementExpanded && <div id="chess-burger-agreement"><EndUserAgreement/></div>}
+              {needsAgreement && <>
+                <label className="agreement-checkbox"><input type="checkbox" checked={agreementChecked} onChange={event=>setAgreementChecked(event.target.checked)}/><span>I have read and agree to the Chess Burger End User Agreement.</span></label>
+                <div className="agreement-actions">
+                  <button type="button" disabled={!agreementChecked || agreementSaving} onClick={()=>void acceptAgreement()}>{agreementSaving ? "Saving…" : "Agree and continue"}</button>
+                  <button type="button" onClick={()=>void exitAgreement()}>Exit app</button>
+                </div>
+              </>}
             </div>
           </section>
         </div>

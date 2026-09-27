@@ -36,9 +36,10 @@ export default async function handler(req:Req,res:Res){
   const auth=await db.auth.getUser(token);
   if(auth.error||!auth.data.user)throw fail(401,'Your session expired. Sign in again.');
   const userId=auth.data.user.id;
-  const gate=await db.from('cb_profiles').select('avatar_url').eq('user_id',userId).maybeSingle();
+  const gate=await db.from('cb_profiles').select('*').eq('user_id',userId).maybeSingle();
   if(gate.error)throw fail(500,gate.error.message);
   if(!String(gate.data?.avatar_url??'').includes(`/storage/v1/object/public/cb-profile-media/${userId}/avatar-`))throw fail(403,'Complete registration and save a profile picture to unlock Chess Burger.');
+  if(gate.data?.agreement_version===null)throw fail(403,"Review and accept the End User Agreement to continue.");
   const body=(req.body&&typeof req.body==='object'?req.body:{}) as Record<string,unknown>;
   if(JSON.stringify(body).length>3000)throw fail(413,'Guild request is too large.');
   if(req.method==='POST'){
