@@ -4,7 +4,8 @@
 .cbg-checkout{display:grid;justify-items:center;gap:12px;max-width:440px;margin:auto;padding:16px;border:1px solid #5c777a;border-radius:16px;background:#16272d;text-align:center}.cbg-checkout>img{width:min(100%,280px);aspect-ratio:1;object-fit:contain;background:white;border:8px solid white;border-radius:12px}.cbg-checkout label{display:grid;gap:7px;width:100%;text-align:left;font-size:13px}.cbg-checkout input{width:100%;min-height:44px;padding:10px;border:1px solid #75959a;border-radius:9px;background:#101a1f;color:white;font-size:19px;letter-spacing:4px}.cbg-checkout button,.cbg-orders>button{min-height:42px;padding:8px 15px;border:1px solid #d7b255;border-radius:9px;background:#e0bb62;color:#1b241f;font-weight:750;cursor:pointer}.cbg-checkout button:disabled{opacity:.5;cursor:not-allowed}.cbg-checkout .cbg-cancel{min-height:35px;background:transparent;color:#d5e1df;border-color:#72878a}.cbg-orders{display:grid;gap:9px}.cbg-orders>button{justify-self:start}.cbg-orders article{display:flex;flex-wrap:wrap;justify-content:space-between;gap:5px;padding:11px;border:1px solid #3f555a;border-radius:10px;background:#1b2b31}.cbg-orders article span{color:#c9d2d1}.cbg-orders article small{width:100%}.cbg-store-error{color:#ffc3c3!important}
 @media(max-width:480px){.cbg-store header img{width:52px;height:52px}.cbg-pack-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.cbg-pack-grid strong{font-size:15px}}
 
-.shop-grid>.cbg-store{grid-column:1/-1}
+.shop-home>.cbg-store{margin:0 0 12px}
+.cbg-checkout-actions{display:flex;flex-wrap:wrap;justify-content:center;gap:8px}
 
 /* The parent Shop grid styles its direct category icons; reset nested order rows. */
 .shop-grid>.cbg-store .cbg-orders article{display:flex;grid-template-columns:none;align-items:center;justify-content:space-between;flex-wrap:wrap;min-width:0;gap:8px;padding:12px;border:1px solid #405860;border-radius:11px;background:#1b2b31;box-shadow:none;font-family:Poppins,sans-serif}

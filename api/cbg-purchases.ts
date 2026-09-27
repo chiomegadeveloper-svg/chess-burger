@@ -29,7 +29,20 @@ export default async function handler(req:Req,res:Res){
         db.from('cb_cbg_orders').select('id,cbg_amount,amount_php,promo_percent,reference_last6,status,created_at,expires_at,reviewed_at,reject_reason').eq('buyer_id',userId).order('created_at',{ascending:false}).limit(20),
       ]);
       if(packs.error||orders.error)fail(503,schemaHint);
-      return res.status(200).json({packages:owner?packs.data:packs.data?.filter(p=>p.active),orders:orders.data,qr_url:'/shop/chess-burger-qrph.png'});
+      const now=new Date();
+      const priced=await Promise.all((packs.data||[]).map(async pack=>{
+        let rate=0;
+        if(pack.promo_percent>0&&pack.promo_start_at&&now>=new Date(pack.promo_start_at)){
+          const [submitted,reserved]=await Promise.all([
+            db.from('cb_cbg_orders').select('id',{count:'exact',head:true}).eq('package_slot',pack.slot).gt('promo_percent',0).gte('created_at',pack.promo_start_at).in('status',['pending','approved']),
+            db.from('cb_cbg_orders').select('id',{count:'exact',head:true}).eq('package_slot',pack.slot).gt('promo_percent',0).gte('created_at',pack.promo_start_at).eq('status','awaiting_payment').gt('expires_at',now.toISOString()),
+          ]);
+          if(submitted.error||reserved.error)fail(503,submitted.error?.message||reserved.error?.message||schemaHint);
+          if((submitted.count||0)+(reserved.count||0)<pack.promo_first_n)rate=pack.promo_percent;
+        }
+        return {...pack,checkout_price_php:Math.round(Number(pack.price_php)*(100-rate))/100,applied_promo_percent:rate};
+      }));
+      return res.status(200).json({packages:owner?priced:priced.filter(p=>p.active),orders:orders.data,qr_url:'/shop/chess-burger-qrph.png'});
     }
     if(action==='reserve'){
       const slot=Number(body.slot),id=String(body.id||'');
@@ -45,6 +58,13 @@ export default async function handler(req:Req,res:Res){
       if(submitted.error)fail(/schema cache|function|relation/i.test(submitted.error.message)?503:400,/schema cache|function|relation/i.test(submitted.error.message)?schemaHint:submitted.error.message);
       return res.status(200).json({order:submitted.data});
     }
+    if(action==='cancel'){
+      const id=String(body.id||'');if(!uuid.test(id))fail(400,'Choose a payment reservation to cancel.');
+      const cancelled=await db.from('cb_cbg_orders').delete().eq('id',id).eq('buyer_id',userId).eq('status','awaiting_payment').select('id').maybeSingle();
+      if(cancelled.error)fail(503,cancelled.error.message);
+      if(!cancelled.data)fail(409,'This payment has already been submitted or cancelled. Refresh your orders.');
+      return res.status(200).json({cancelled:true});
+    }
     if(!owner)fail(403,'Owner access required.');
     if(action==='pending'){
       const rows=await db.from('cb_cbg_orders').select('id,buyer_id,cbg_amount,amount_php,promo_percent,reference_last6,created_at').eq('status','pending').order('created_at',{ascending:true}).limit(100);
@@ -54,6 +74,35 @@ export default async function handler(req:Req,res:Res){
       if(people.error)fail(500,people.error.message);
       const names=new Map((people.data||[]).map(p=>[p.user_id,p]));
       return res.status(200).json({orders:(rows.data||[]).map(row=>({...row,buyer:names.get(row.buyer_id)||null}))});
+    }
+    if(action==='sales'){
+      const page=Math.max(1,Math.min(100000,Number.parseInt(String(body.page||1),10)||1));
+      const reference=String(body.reference||'').trim(),date=String(body.date||'').trim(),amount=String(body.amount||'').trim(),username=String(body.user||'').trim().replace(/^@/,'').slice(0,80),cbg=String(body.cbg||'').trim();
+      if(reference&&!/^[0-9]{1,6}$/.test(reference))fail(400,'Search the last six reference digits.');
+      if(date&&!/^\d{4}-\d{2}-\d{2}$/.test(date))fail(400,'Enter a valid sale date.');
+      if(amount&&(!/^\d+(\.\d{1,2})?$/.test(amount)||Number(amount)>10000000))fail(400,'Enter a valid peso amount.');
+      if(cbg&&(!/^\d+$/.test(cbg)||Number(cbg)>1000000))fail(400,'Enter a valid CBG amount.');
+      if(username&&!/^[\p{L}\p{N} .-]+$/u.test(username))fail(400,'Search a buyer by name or username.');
+      let ids:string[]|null=null;
+      if(username){
+        const people=await db.from('cb_profiles').select('user_id').or(`username.ilike.%${username}%,display_name.ilike.%${username}%`).limit(1000);
+        if(people.error)fail(500,people.error.message);
+        ids=(people.data||[]).map(p=>p.user_id);
+        if(!ids.length)return res.status(200).json({orders:[],page,count:0});
+      }
+      let query=db.from('cb_cbg_orders').select('id,buyer_id,cbg_amount,amount_php,promo_percent,reference_last6,status,created_at,reviewed_at',{count:'exact'}).eq('status','approved');
+      if(reference)query=query.like('reference_last6',`%${reference}%`);
+      if(date)query=query.gte('reviewed_at',`${date}T00:00:00Z`).lt('reviewed_at',`${date}T23:59:59.999Z`);
+      if(amount)query=query.eq('amount_php',Number(amount));
+      if(cbg)query=query.eq('cbg_amount',Number(cbg));
+      if(ids)query=query.in('buyer_id',ids);
+      const sales=await query.order('reviewed_at',{ascending:false}).range((page-1)*10,page*10-1);
+      if(sales.error)fail(503,sales.error.message);
+      const buyerIds=[...new Set((sales.data||[]).map(row=>row.buyer_id))];
+      const people=buyerIds.length?await db.from('cb_profiles').select('user_id,username,display_name').in('user_id',buyerIds):{data:[],error:null};
+      if(people.error)fail(500,people.error.message);
+      const names=new Map((people.data||[]).map(p=>[p.user_id,p]));
+      return res.status(200).json({orders:(sales.data||[]).map(row=>({...row,buyer:names.get(row.buyer_id)||null})),page,count:sales.count||0});
     }
     if(action==='save-package'){
       const slot=Number(body.slot),amount=Number(body.cbg_amount),price=Number(body.price_php),percent=Number(body.promo_percent||0),first=Number(body.promo_first_n||0),start=body.promo_start_at?new Date(String(body.promo_start_at)):null;

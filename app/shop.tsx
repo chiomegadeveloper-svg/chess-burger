@@ -434,6 +434,7 @@ export function ShopPage({
           <small>Gold balance</small>
         </span>
       </div>
+    <CbgShop />
     <ArenaTicketStore
           fallbackGold={state.gold || profile?.gold_points || 0}
         />
@@ -441,7 +442,6 @@ export function ShopPage({
         <BagSlotStore fallbackGold={state.gold || profile?.gold_points || 0}/>
       <div className="shop-grid">
         <article className="shop-category-ready"><span className="shop-icon">♞</span><div><h2>Avatar frames</h2><p>20 chess designs to rent, equip, or gift from your Bag.</p></div><button type="button" onClick={() => setOpenFrames(true)}>View frames</button></article>
-        <CbgShop />
         <article className="shop-category-ready">
           <span className="shop-icon" aria-hidden="true">♛</span>
           <div><h2>Board Themes & Pieces</h2><p>Explore rentable boards, including the Cody Ramey pixel chess set. Jungle, Bubble Gum, Classic Green, and Warm Wood are free defaults.</p></div>
