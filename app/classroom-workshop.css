@@ -269,6 +269,10 @@
   font-size: 9px;
   text-align: center;
 }
+.focus-transfer-actions{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px}
+.focus-transfer-actions button{display:inline-flex;align-items:center;gap:5px;padding:8px 10px;border:1px solid #507784;border-radius:9px;background:#18343e;color:#e9f7f7;font:600 10px Poppins,sans-serif;cursor:pointer}
+.focus-transfer-actions button:hover,.focus-transfer-actions button:focus-visible{border-color:#efc765;background:#26434b}
+.focus-transfer-actions button svg{width:14px;height:14px}
 .teaching-board {
   position: relative;
   display: grid;
