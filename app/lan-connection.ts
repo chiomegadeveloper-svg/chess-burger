@@ -1,4 +1,4 @@
-import {avatarFrame} from './avatar-frame-catalog';
+import {avatarFrame} from './avatar-frame-catalog.ts';
 import {boardResult,gameFromPgn,timeControl,type ArenaMatch,type ArenaPlayer} from './game-rules.ts';
 export type Signal={v:1;room:string;description:RTCSessionDescriptionInit};
 export async function encodeSignal(signal:Signal){
