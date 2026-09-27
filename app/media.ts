@@ -13,15 +13,28 @@ function canvasBlob(
   canvas: HTMLCanvasElement,
   quality: number,
 ): Promise<Blob | null> {
-  return new Promise((resolve) =>
-    canvas.toBlob(resolve, "image/webp", quality),
-  );
+  return new Promise((resolve, reject) => {
+    const timeout = window.setTimeout(() => reject(Error("Photo conversion timed out. Try a smaller photo.")), 15000);
+    try {
+      canvas.toBlob((blob) => {
+        window.clearTimeout(timeout);
+        resolve(blob);
+      }, "image/webp", quality);
+    } catch (error) {
+      window.clearTimeout(timeout);
+      reject(error);
+    }
+  });
 }
 
 async function nextPaint() {
-  await new Promise<void>((resolve) =>
-    requestAnimationFrame(() => resolve()),
-  );
+  await new Promise<void>((resolve) => {
+    const timeout = window.setTimeout(resolve, 100);
+    requestAnimationFrame(() => {
+      window.clearTimeout(timeout);
+      resolve();
+    });
+  });
 }
 
 async function compressImageSource(

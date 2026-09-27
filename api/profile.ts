@@ -95,7 +95,11 @@ export default async function handler(req: Req, res: Res) {
     const path = avatarPath(client, user.id, avatar);
     if (!path) return res.status(400).json({ error: 'Upload your profile picture before saving your profile.', code: 'avatar_required' });
     const stored = await client.storage.from('cb-profile-media').download(path);
-    if (stored.error || !stored.data || stored.data.type !== 'image/webp') return res.status(400).json({ error: 'Upload your profile picture before saving your profile.', code: 'avatar_required' });
+    if (stored.error || !stored.data) return res.status(400).json({ error: 'Uploaded profile picture could not be read. Upload it again.', code: 'avatar_required' });
+    // Storage downloads may return application/octet-stream even for WebP objects.
+    const header = new Uint8Array(await stored.data.slice(0, 12).arrayBuffer());
+    const webp = header.length === 12 && String.fromCharCode(...header.slice(0, 4)) === 'RIFF' && String.fromCharCode(...header.slice(8, 12)) === 'WEBP';
+    if (!webp) return res.status(400).json({ error: 'Profile picture must be a valid WebP image. Upload it again.', code: 'avatar_required' });
     const payload = {
       user_id: user.id,
       username,
