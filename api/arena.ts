@@ -837,7 +837,7 @@ export default async function handler(req: Req, res: Res) {
       await audit('training_delete', { id: removed.data.id, title: removed.data.title });
       return res.status(200).json({ ok: true });
     }
-    if (action === 'training-registrants' || action === 'gift-training-ticket' || action === 'remove-training-registrant') {
+    if (action === 'training-registrants' || action === 'gift-training-cbc' || action === 'remove-training-registrant') {
       if (account.profile.role !== 'owner') fail(403, 'Owner access is required.');
       const id = String(body.id ?? '');
       if (!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(id)) fail(400, 'Choose a valid online training.');
@@ -869,24 +869,24 @@ export default async function handler(req: Req, res: Res) {
           confirmed: !!row.user_id, invited: !!row.invited_at,
         })) });
       }
-      if (training.data.status !== 'open' || Date.parse(training.data.starts_at) <= Date.now()) fail(409, 'Ticket gifts are available while this training is active.');
+      if (training.data.owner_id !== account.id) fail(403, 'Only the training owner can gift CB Credits.');
+      if (training.data.status !== 'open' || Date.parse(training.data.starts_at) <= Date.now()) fail(409, 'CB Credit gifts are available while this training is active.');
       const registrationId = String(body.registration_id ?? ''), requestId = String(body.request_id ?? '');
       if (!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(registrationId)
         || !/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(requestId)) fail(400, 'Choose a valid registrant and gift.');
       const registration = await client.from('cb_online_training_registrations').select('user_id')
         .eq('id', registrationId).eq('training_id', id).maybeSingle();
       if (registration.error) fail(500, registration.error.message);
-      if (!registration.data?.user_id) fail(409, 'This registrant needs a confirmed Chess Burger account before receiving a ticket.');
+      if (!registration.data?.user_id) fail(409, 'This registrant must join with a Chess Burger account before receiving CB Credits.');
       const recipient = await client.from('cb_profiles').select('username').eq('user_id', registration.data.user_id).maybeSingle();
       if (recipient.error) fail(500, recipient.error.message);
       if (!recipient.data?.username) fail(409, 'The registrant needs a Chess Burger username first.');
-      const gifted = await client.rpc('cb_gift_bag_item', {
-        p_sender_id: account.id, p_username: recipient.data.username, p_item_kind: 'arena_ticket',
-        p_item_id: 'arena-ticket', p_quantity: 1, p_request_id: requestId,
+      const gifted = await client.rpc('cb_gift_cbc', {
+        p_sender_id: account.id, p_username: recipient.data.username, p_quantity: 1, p_request_id: requestId,
       });
       if (gifted.error) fail(['PGRST202', '42P01', '42703', '42883'].includes(String(gifted.error.code ?? '')) ? 503 : 409, gifted.error.message);
-      if (gifted.data?.gifted) await audit('training_ticket_gift', { id, registration_id: registrationId, username: recipient.data.username });
-      return res.status(200).json({ gifted: !!gifted.data?.gifted, username: recipient.data.username });
+      await audit('training_cbc_gift', { id, registration_id: registrationId, username: recipient.data.username, request_id: requestId });
+      return res.status(200).json({ gifted: true, username: recipient.data.username });
     }
     if (action === 'set-app-feature') {
       requireStaff();
