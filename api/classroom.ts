@@ -97,8 +97,12 @@ export default async function handler(req:Req,res:Res){
       const profile=await client.from("cb_profiles").select("role").eq("user_id",userId).single();if(profile.data?.role!=="owner")fail(403,"Owner access required.");
       const keys=["cbc_gold_price","pawn_cbg","pawn_cbc","bishop_cbg","bishop_cbc","knight_cbg","knight_cbc","rook_cbg","rook_cbc","queen_cbg","queen_cbc","king_cbg","king_cbc"];
       if(typeof body.cbc_enabled!=="boolean")fail(400,"Choose whether CBC is enabled.");
-      const patch:Record<string,number|boolean|string>={id:true,cbc_enabled:body.cbc_enabled as boolean,updated_at:new Date().toISOString()};for(const key of keys){const value=Number(body[key]);if(!Number.isInteger(value)||value<0||value>1000000)fail(400,`Invalid ${key}.`);patch[key]=value;}
-      const saved=await client.from("cb_classroom_settings").upsert(patch).select("*").single();if(saved.error)fail(500,saved.error.message);return res.status(200).json({settings:saved.data});
+      const existing=await client.from("cb_classroom_settings").select("*").eq("id",true).single();if(existing.error)fail(500,existing.error.message);
+      const schemaReady=Object.hasOwn(existing.data||{},"cbc_enabled");
+      if(!schemaReady&&body.cbc_enabled===false)fail(409,"Apply the classroom database update before enabling free access.");
+      const patch:Record<string,number|boolean|string>={id:true,updated_at:new Date().toISOString()};if(schemaReady)patch.cbc_enabled=body.cbc_enabled as boolean;
+      for(const key of keys){const value=Number(body[key]);if(!Number.isInteger(value)||value<0||value>1000000)fail(400,`Invalid ${key}.`);patch[key]=value;}
+      const saved=await client.from("cb_classroom_settings").upsert(patch).select("*").single();if(saved.error)fail(500,saved.error.message);return res.status(200).json({settings:{...saved.data,cbc_enabled:saved.data.cbc_enabled!==false}});
     }
     if(action==="create"){
       const result=await client.rpc("cb_create_classroom",{p_user_id:userId,p_package:String(body.package||""),p_name:String(body.name||""),p_request_id:String(body.request_id||"")});
@@ -149,7 +153,7 @@ export default async function handler(req:Req,res:Res){
       const profileMap=new Map((profiles.data||[]).map((p:any)=>[p.user_id,p]));
       const boardMap=new Map((boards.data||[]).map((b:any)=>[b.student_id,b]));
       const students=admitted.map((e:any)=>({...(profileMap.get(e.student_id)||{user_id:e.student_id,display_name:"Student"}),access_expires_at:e.access_expires_at,board:boardMap.get(e.student_id)||{room_id:roomId,student_id:e.student_id,fen:"start",free_movement:false,version:0}}));
-      return res.status(200).json({role:teacher?"teacher":"student",room:room.data,workspace:workspace.data,students,lesson_log:(lessonLog.data||[]).filter((event:any)=>event.label!=="Student move starting position"),own_student_id:teacher?null:userId,wallet:{cbc:wallet.data?.cbc||0},economy:{gold:profile.data?.gold_points||0,cbc_gold_price:economy.data?.cbc_gold_price||0,cbc_enabled:economy.data?.cbc_enabled!==false}});
+      return res.status(200).json({role:teacher?"teacher":"student",room:room.data,workspace:workspace.data,students,lesson_log:(lessonLog.data||[]).filter((event:any)=>event.label!=="Student move starting position"),own_student_id:teacher?null:userId,wallet:{cbc:wallet.data?.cbc||0},economy:{gold:profile.data?.gold_points||0,cbc_gold_price:economy.data?.cbc_gold_price||0,cbc_enabled:economy.data?.cbc_enabled!==false,classroom_features_ready:Object.hasOwn(economy.data||{},"cbc_enabled")}});
     }
     if(action==="set-student-movement"){
       const roomId=String(body.room_id||""),studentId=String(body.student_id||""),now=new Date().toISOString();
