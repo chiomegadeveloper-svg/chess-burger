@@ -821,13 +821,24 @@ export default async function handler(req: Req, res: Res) {
       const day=puzzleDay(),daily_tracks=dailyPuzzleTracks(day),daily_puzzle_ids=daily_tracks.random;
       const profileReady=await client.from('cb_puzzle_profiles').upsert({user_id:account.id},{onConflict:'user_id',ignoreDuplicates:true});
       if(profileReady.error)fail(/cb_puzzle_profiles|schema cache|relation/i.test(profileReady.error.message)?503:500,/cb_puzzle_profiles|schema cache|relation/i.test(profileReady.error.message)?'Run supabase/0043_daily_puzzle_rating.sql in Supabase, then try again.':profileReady.error.message);
-      const [claims,stats,leaders]=await Promise.all([client.from('cb_daily_puzzle_claims').select('puzzle_id').eq('user_id',account.id).eq('puzzle_day',day),client.from('cb_puzzle_profiles').select('puzzle_rating,solved_total,correct_streak,best_streak').eq('user_id',account.id).single(),client.rpc('cb_puzzle_leaders',{p_day:day})]);
+      const [claims,stats,leaders,misses]=await Promise.all([client.from('cb_daily_puzzle_claims').select('puzzle_id').eq('user_id',account.id).eq('puzzle_day',day),client.from('cb_puzzle_profiles').select('puzzle_rating,solved_total,correct_streak,best_streak').eq('user_id',account.id).single(),client.rpc('cb_puzzle_leaders',{p_day:day}),client.from('cb_daily_puzzle_misses').select('puzzle_id').eq('user_id',account.id).eq('puzzle_day',day)]);
       if(claims.error)fail(/cb_daily_puzzle_claims|schema cache|relation/i.test(claims.error.message)?503:500,/cb_daily_puzzle_claims|schema cache|relation/i.test(claims.error.message)?'Run supabase/0028_daily_puzzles.sql in Supabase, then try again.':claims.error.message);
       if(stats.error)fail(500,stats.error.message);
       if(leaders.error)fail(/cb_puzzle_leaders|schema cache|function/i.test(leaders.error.message)?503:500,/cb_puzzle_leaders|schema cache|function/i.test(leaders.error.message)?'Run supabase/0045_puzzle_leaderboard.sql in Supabase, then try again.':leaders.error.message);
+      if(misses.error && !/cb_daily_puzzle_misses|schema cache|relation/i.test(misses.error.message))fail(500,misses.error.message);
       const available=new Set(Object.values(daily_tracks).flat());
       const completed=(claims.data??[]).map((row:any)=>String(row.puzzle_id)).filter((id:string)=>available.has(id));
-      return res.status(200).json({completed,gold:Number(account.profile.gold_points??0),bonus_claimed:completed.filter((id:string)=>daily_puzzle_ids.includes(id)).length===500,day,daily_puzzle_ids,daily_tracks,leaders:leaders.data,...stats.data});
+      const missed=(misses.data??[]).map((row:any)=>String(row.puzzle_id)).filter((id:string)=>available.has(id));
+      return res.status(200).json({completed,missed,gold:Number(account.profile.gold_points??0),bonus_claimed:completed.filter((id:string)=>daily_puzzle_ids.includes(id)).length===500,day,daily_puzzle_ids,daily_tracks,leaders:leaders.data,...stats.data});
+    }
+    if(action==='puzzle-wrong'){
+      const puzzleId=String(body.puzzle_id??''),step=Number(body.step),move=String(body.move??'').toLowerCase(),puzzle=PUZZLE_BANK_PROOFS[puzzleId]?{moves:PUZZLE_BANK_PROOFS[puzzleId].moves.split(' ')}:DAILY_PUZZLES.find(item=>item.id===puzzleId);
+      if(!puzzle||!Number.isInteger(step)||step<0||step>=puzzle.moves.length||step%2!==0||!(/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(move))||move===puzzle.moves[step])fail(400,'Choose a different legal move to record a missed attempt.');
+      const day=puzzleDay(),daily_tracks=dailyPuzzleTracks(day);
+      if(!Object.values(daily_tracks).flat().includes(puzzleId))fail(409,"This puzzle is not in today's quest. Refresh Puzzle Quest.");
+      const missed=await client.rpc('cb_record_puzzle_miss',{p_user_id:account.id,p_day:day,p_puzzle_id:puzzleId,p_puzzle_rating:puzzleRating(puzzleId)});
+      if(missed.error)fail(/cb_record_puzzle_miss|cb_daily_puzzle_misses|schema cache|function/i.test(missed.error.message)?503:500,/cb_record_puzzle_miss|cb_daily_puzzle_misses|schema cache|function/i.test(missed.error.message)?'Run supabase/0072_puzzle_wrong_move_rating.sql in Supabase, then try again.':missed.error.message);
+      return res.status(200).json(missed.data);
     }
     if(action==='claim-puzzle'){
       const puzzleId=String(body.puzzle_id??''),proof=String(body.proof??'').toLowerCase().trim(),puzzle=PUZZLE_BANK_PROOFS[puzzleId]?{moves:PUZZLE_BANK_PROOFS[puzzleId].moves.split(' ')}:DAILY_PUZZLES.find(item=>item.id===puzzleId);
@@ -840,8 +851,9 @@ export default async function handler(req: Req, res: Res) {
       const claimed=await client.rpc('cb_claim_daily_puzzle',{p_user_id:account.id,p_day:day,p_puzzle_id:puzzleId,p_is_final:true,p_puzzle_rating:puzzleRating(puzzleId),p_gold_reward:puzzleReward(puzzleId)});
       if(claimed.error)fail(/cb_claim_daily_puzzle|schema cache|function/i.test(claimed.error.message)?503:500,/cb_claim_daily_puzzle|schema cache|function/i.test(claimed.error.message)?'Run supabase/0028_daily_puzzles.sql in Supabase, then try again.':claimed.error.message);
       const result=claimed.data??{},allCompleted=Array.from(new Set([...completed,puzzleId]));
-      const leaders=await client.rpc('cb_puzzle_leaders',{p_day:day});
-      return res.status(200).json({...result,completed:allCompleted,bonus_claimed:allCompleted.filter((id:string)=>daily_puzzle_ids.includes(id)).length===500,day,daily_puzzle_ids,daily_tracks,leaders:leaders.data});
+      const [leaders,misses]=await Promise.all([client.rpc('cb_puzzle_leaders',{p_day:day}),client.from('cb_daily_puzzle_misses').select('puzzle_id').eq('user_id',account.id).eq('puzzle_day',day)]);
+      if(misses.error && !/cb_daily_puzzle_misses|schema cache|relation/i.test(misses.error.message))fail(500,misses.error.message);
+      return res.status(200).json({...result,completed:allCompleted,missed:(misses.data??[]).map((row:any)=>String(row.puzzle_id)),bonus_claimed:allCompleted.filter((id:string)=>daily_puzzle_ids.includes(id)).length===500,day,daily_puzzle_ids,daily_tracks,leaders:leaders.data});
     }
     if(action==='claim-cpu-reward'){
       const gameId=String(body.game_id??''),control=String(body.control??''),level=Number(body.level),pgn=String(body.pgn??''),outcome=String(body.outcome??'');
