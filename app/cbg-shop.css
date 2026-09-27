@@ -5,3 +5,11 @@
 @media(max-width:480px){.cbg-store header img{width:52px;height:52px}.cbg-pack-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.cbg-pack-grid strong{font-size:15px}}
 
 .shop-grid>.cbg-store{grid-column:1/-1}
+
+/* The parent Shop grid styles its direct category icons; reset nested order rows. */
+.shop-grid>.cbg-store .cbg-orders article{display:flex;grid-template-columns:none;align-items:center;justify-content:space-between;flex-wrap:wrap;min-width:0;gap:8px;padding:12px;border:1px solid #405860;border-radius:11px;background:#1b2b31;box-shadow:none;font-family:Poppins,sans-serif}
+.shop-grid>.cbg-store .cbg-orders article>b{flex:1 1 175px;color:#f2f5ed;font-size:14px;line-height:1.4}
+.shop-grid>.cbg-store .cbg-orders article>span{display:block;flex:1 1 200px;width:auto;height:auto;min-width:0;max-width:none;padding:0;border:0;border-radius:0;background:none;color:#b9d0d2;font-family:Poppins,sans-serif;font-size:12px;font-weight:500;line-height:1.45;text-align:left;overflow-wrap:anywhere;box-shadow:none}
+.shop-grid>.cbg-store .cbg-orders article>button{flex:0 0 auto;min-height:36px;font-size:11px}
+.shop-grid>.cbg-store .cbg-orders article>small{flex:1 1 100%;width:auto;height:auto;font-size:11px}
+@media(max-width:550px){.shop-grid>.cbg-store .cbg-orders article>button{width:100%}}
