@@ -1,4 +1,4 @@
-import { boardResult, gameFromPgn, timeControl, type ArenaMatch } from './game-rules';
+import { boardResult, gameFromPgn, timeControl, type ArenaMatch } from './game-rules.ts';
 
 export const REQUEST_LIMIT = 3;
 export const OFFER_LIFETIME_MS = 30_000;
@@ -10,6 +10,7 @@ export type MatchOffer = {
   white_ms?: number; black_ms?: number;
 };
 export type GameMeta = {
+  abort_closed?: boolean;
   requests?: Record<string, { takeback: number; draw: number }>;
   pending?: MatchOffer | null;
   last?: { id?: string; kind: OfferKind | 'abort'; by: string; outcome: 'accepted' | 'declined' | 'expired' | 'position-changed' | 'cancelled'; at?: number };
@@ -53,7 +54,7 @@ function flag(match: ArenaMatch, at: number): ArenaMatch | null {
 /** Pure server rules, shared by the local tests. Never trust clocks, PGN, or counters from clients. */
 export function applyMatchAction(match: ArenaMatch, actor: string, action: string, input: Record<string, unknown>, at: number): ArenaMatch {
   requirePlayer(match, actor);
-  const meta = match.game_meta ?? {};
+  const meta = { ...(match.game_meta ?? {}), abort_closed: match.game_meta?.abort_closed === true || gameFromPgn(match.pgn).history().length >= 4 };
   if (action === 'move' && typeof input.request_id === 'string' && meta.move_ids?.includes(input.request_id)) return match;
   if (action === 'offer' && typeof input.request_id === 'string' && meta.request_ids?.includes(input.request_id)) return match;
   active(match);
@@ -82,8 +83,10 @@ export function applyMatchAction(match: ArenaMatch, actor: string, action: strin
     return { ...next, pgn: c.game.pgn(), white_ms: c.white_ms + (c.whiteTurn ? increment : 0),
       black_ms: c.black_ms + (c.whiteTurn ? 0 : increment), last_tick: at,
       status: result ? 'finished' : 'active', result,
-      game_meta: { ...moveMeta, move_ids: moveIds } };
+      game_meta: { ...moveMeta, move_ids: moveIds, abort_closed: meta.abort_closed === true || c.game.history().length >= 4 } };
   }
+  if (action === 'abort' && (meta.abort_closed || c.game.history().length >= 4))
+    reject('Abort is available only before both players finish their second move. Resign instead.');
   if (action === 'resign' || action === 'abort') return { ...next, white_ms: c.white_ms, black_ms: c.black_ms,
     last_tick: at, status: action === 'abort' ? 'cancelled' : 'finished',
     result: action === 'abort' ? null : actor === match.white_id ? 'black' : 'white',

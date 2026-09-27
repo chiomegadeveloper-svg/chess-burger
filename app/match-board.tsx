@@ -201,6 +201,7 @@ export default function MatchBoard({
     !busy &&
     !bothSides &&
     chess.turn() !== myColor;
+  const canAbort = !!onAbort && match.status === "active" && history.length < 4 && !match.game_meta?.abort_closed;
   const legal =
     selected && canPlay
       ? chess.moves({ square: selected, verbose: true }).map((move) => move.to)
@@ -515,14 +516,14 @@ export default function MatchBoard({
                 Resign
               </button>
             )}
-            {onAbort && match.status === "active" && (
+            {canAbort && (
               <button className="abort-match-button" onClick={() => setConfirmAbort((value) => !value)}>
                 <Flag size={15} />
                 Abort match
               </button>
             )}
           </div>
-          {confirmAbort && (
+          {confirmAbort && canAbort && (
             <div className="resign-confirm abort-confirm" role="alertdialog" aria-label="Abort match">
               <p>Abort this match?</p>
               <small>Both players receive no CBR, Gold, or EXP. Your third abort triggers a 2-minute cooldown before you can play again.</small>

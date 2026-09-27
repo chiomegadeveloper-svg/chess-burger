@@ -45,7 +45,7 @@ namespace MatchEngine {
   }
   function apply(row: Row, actor: string, action: string, input: Record<string, unknown>, at: number): Row {
     if (![row.white_id, row.black_id].includes(actor)) reject('Only the two players may update this match.', 403);
-    const meta: Meta = row.game_meta ?? {};
+    const meta: Meta = { ...(row.game_meta ?? {}), abort_closed: row.game_meta?.abort_closed === true || game(row).history().length >= 4 };
     if (action === 'move' && typeof input.request_id === 'string' && meta.move_ids?.includes(input.request_id)) return row;
     if (action === 'offer' && typeof input.request_id === 'string' && meta.request_ids?.includes(input.request_id)) return row;
     if (row.status !== 'active') reject('This match is no longer active.');
@@ -68,8 +68,9 @@ namespace MatchEngine {
       const ids = [...(meta.move_ids ?? [])];
       if (typeof input.request_id === 'string') ids.push(input.request_id.slice(0, 80));
       const moveMeta = pending?.kind === 'takeback' && pending.by !== actor ? currentMeta : clear(currentMeta, 'position-changed');
-      return { ...next, pgn: c.chess.pgn(), white_ms: c.white_ms + (c.white ? increment : 0), black_ms: c.black_ms + (c.white ? 0 : increment), last_tick: at, status: ended ? 'finished' : 'active', result: ended, game_meta: { ...moveMeta, move_ids: ids } };
+      return { ...next, pgn: c.chess.pgn(), white_ms: c.white_ms + (c.white ? increment : 0), black_ms: c.black_ms + (c.white ? 0 : increment), last_tick: at, status: ended ? 'finished' : 'active', result: ended, game_meta: { ...moveMeta, move_ids: ids, abort_closed: meta.abort_closed === true || c.chess.history().length >= 4 } };
     }
+    if (action === 'abort' && (meta.abort_closed || c.chess.history().length >= 4)) reject('Abort is available only before both players finish their second move. Resign instead.');
     if (action === 'resign' || action === 'abort') return { ...next, white_ms: c.white_ms, black_ms: c.black_ms, last_tick: at, status: action === 'abort' ? 'cancelled' : 'finished', result: action === 'abort' ? null : actor === row.white_id ? 'black' : 'white', game_meta: action === 'abort' ? { ...clear(currentMeta, 'position-changed'), last: { kind: 'abort', by: actor, outcome: 'cancelled', at } } : clear(currentMeta, 'position-changed') };
     if (action === 'offer') {
       const kind = input.kind as 'takeback' | 'draw', id = input.request_id;
@@ -1524,7 +1525,11 @@ export default async function handler(req: Req, res: Res) {
       const actionAt = now();
       let patch: Record<string, unknown> = { version: Number(match.version) + 1, last_tick: new Date(actionAt).toISOString() };
       if (match.status !== 'active') fail(409, 'This match is no longer active.');
-      if (action === 'abort') patch = { ...patch, status: 'cancelled', result: null }; else if (action === 'resign') patch = { ...patch, status: 'finished', result: account.id === match.white_id ? 'black' : 'white' }; else {
+      if (action === 'abort') {
+        const game = new Chess(); if (match.pgn) game.loadPgn(match.pgn);
+        if (match.game_meta?.abort_closed || game.history().length >= 4) fail(409, 'Abort is available only before both players finish their second move. Resign instead.');
+        patch = { ...patch, status: 'cancelled', result: null };
+      } else if (action === 'resign') patch = { ...patch, status: 'finished', result: account.id === match.white_id ? 'black' : 'white' }; else {
         const game = new Chess(); if (match.pgn) game.loadPgn(match.pgn);
         const whiteTurn = game.turn() === 'w';
         if ((whiteTurn ? match.white_id : match.black_id) !== account.id) fail(409, 'Wait for your opponent.');
