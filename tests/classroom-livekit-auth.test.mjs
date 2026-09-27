@@ -11,7 +11,8 @@ test("LiveKit tokens require authenticated Supabase classroom access",()=>{
   assert.match(api,/action==="voice-token"/);
   assert.match(api,/cb_classroom_rooms/);
   assert.match(api,/cb_classroom_enrollments/);
-  assert.match(api,/gt\("access_expires_at",now\)/);
+  assert.match(api,/enrollment\.data\.access_expires_at<=now/);
+  assert.match(api,/freeClassroom\(\)/);
 });
 
 test("LiveKit credentials are server-only, short-lived and classroom media-scoped",()=>{
