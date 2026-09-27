@@ -25,6 +25,7 @@ import type { PlayerProfile } from "./supabase";
 import { getSupabase } from "./supabase";
 import { classroom } from "./classroom-client";
 import { BoardThemeStore } from "./board-theme-store";
+import CbgShop from "./cbg-shop";
 import { AvatarFrameStore } from "./avatar-frame-store";
 import { avatarFrame } from "./avatar-frame-catalog";
 import { AvatarFrameArt } from "./avatar-frame-art";
@@ -440,16 +441,7 @@ export function ShopPage({
         <BagSlotStore fallbackGold={state.gold || profile?.gold_points || 0}/>
       <div className="shop-grid">
         <article className="shop-category-ready"><span className="shop-icon">♞</span><div><h2>Avatar frames</h2><p>20 chess designs to rent, equip, or gift from your Bag.</p></div><button type="button" onClick={() => setOpenFrames(true)}>View frames</button></article>
-        {[["♟", "Purchase CBG (ChessBurger Gold) Coins", "CBG coin packs for your Chess Burger wallet."]].map(([icon, name, desc]) => (
-          <article key={name}>
-            <span className="shop-icon">{icon}</span>
-            <div>
-              <h2>{name}</h2>
-              <p>{desc}</p>
-            </div>
-            <span className="shop-status">Coming soon</span>
-          </article>
-        ))}
+        <CbgShop />
         <article className="shop-category-ready">
           <span className="shop-icon" aria-hidden="true">♛</span>
           <div><h2>Board Themes & Pieces</h2><p>Explore rentable boards, including the Cody Ramey pixel chess set. Jungle, Bubble Gum, Classic Green, and Warm Wood are free defaults.</p></div>
