@@ -145,6 +145,11 @@ export default function Account({
     setRemember(keepLogin());
     let live = true,
       unsubscribe = () => {};
+    const watchdog = window.setTimeout(() => {
+      if (!live) return;
+      setLoading(false);
+      setError("Account loading is taking too long. Check your connection and try again.");
+    }, 18000);
     if (!navigator.onLine) {
       try {
         const raw =
@@ -190,9 +195,15 @@ export default function Account({
       try {
         data = await profileRequest(c);
       } catch (e) {
-        setError((e as Error).message);
+        if (!live) return;
+        setError((e as Error).name === "TimeoutError"
+          ? "Profile loading timed out. Please try again."
+          : (e as Error).message);
+        setLoading(false);
+        return;
       }
       if (!live) return;
+      setError("");
       const loaded = data
         ? { ...blankProfile(u.id), ...data }
         : newAccountProfile(u);
@@ -259,6 +270,7 @@ export default function Account({
       });
     return () => {
       live = false;
+      window.clearTimeout(watchdog);
       unsubscribe();
     };
   }, []);
@@ -744,7 +756,7 @@ export default function Account({
         {error && <p className="auth-error" role="alert">{error}</p>}
       </section>
     );
-  if (!profile) return null;
+  if (!profile) return <section className="account-panel auth-card"><p className="auth-error" role="alert">{error || "Your profile could not be loaded."}</p><button className="auth-primary" type="button" onClick={() => window.location.reload()}>Retry loading profile</button></section>;
   const level = levelFor(profile.cbr),
     winRate =
       profile.wins + profile.losses
