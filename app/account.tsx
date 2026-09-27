@@ -518,7 +518,7 @@ export default function Account({
               ),
             };
       setProfile(next);
-      if (kind === "photo" && registered === true && !editing) {
+      if (registered === true && !editing) {
         const data = await profileRequest(client, "PUT", {
           user_id: next.user_id,
           username: next.username,
@@ -535,13 +535,15 @@ export default function Account({
         authStorage.setItem("cb-staff-profile", JSON.stringify(saved));
         onLoaded?.(saved);
         window.dispatchEvent(new Event("cb-profile-saved"));
-        toast.success("Featured photo uploaded and saved.");
+        onSaved(saved);
+        toast.success(kind === "avatar" ? "Profile picture updated." : "Featured photo uploaded and saved.");
       } else {
         toast.success("Photo uploaded to Supabase.", {
           description: "Save your profile to keep this photo.",
         });
       }
     } catch (e) {
+      setProfile(profile);
       const code = e instanceof Error ? e.message : String(e);
       setError(
         code === "image-size"
@@ -975,14 +977,16 @@ export default function Account({
           </div>
         </div>
         <div className="profile-hero">
-          <div className="avatar-upload profile-avatar-static">
+          <label className="avatar-upload profile-avatar-static profile-avatar-change" title="Change profile picture">
             {profile.avatar_url ? (
               <img src={profile.avatar_url} alt={profile.display_name} />
             ) : (
               <span>{profile.display_name.charAt(0)}</span>
             )}
             <AvatarFrameOverlay frameId={profile.avatar_frame_id}/>
-          </div>
+            <i><Camera/>Change photo</i>
+            <input type="file" accept="image/*,.heic,.heif,.avif,.jxl,.tif,.tiff" disabled={busy} onChange={e=>{const input=e.currentTarget,selected=input.files?.[0];input.value="";if(selected)void upload(selected,"avatar")}}/>
+          </label>
           <div>
             <h2>{profile.display_name}</h2>
             <p>
