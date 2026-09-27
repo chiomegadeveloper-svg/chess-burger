@@ -148,7 +148,39 @@ export default async function handler(req:Req,res:Res){
       const profileMap=new Map((profiles.data||[]).map((p:any)=>[p.user_id,p]));
       const boardMap=new Map((boards.data||[]).map((b:any)=>[b.student_id,b]));
       const students=(enrollments.data||[]).map((e:any)=>({...(profileMap.get(e.student_id)||{user_id:e.student_id,display_name:"Student"}),access_expires_at:e.access_expires_at,board:boardMap.get(e.student_id)||{room_id:roomId,student_id:e.student_id,fen:"start",version:0}}));
-      return res.status(200).json({role:teacher?"teacher":"student",room:room.data,workspace:workspace.data,students,lesson_log:lessonLog.data||[],own_student_id:teacher?null:userId,wallet:{cbc:wallet.data?.cbc||0},economy:{gold:profile.data?.gold_points||0,cbc_gold_price:economy.data?.cbc_gold_price||0}});
+      return res.status(200).json({role:teacher?"teacher":"student",room:room.data,workspace:workspace.data,students,lesson_log:(lessonLog.data||[]).filter((event:any)=>event.label!=="Student move starting position"),own_student_id:teacher?null:userId,wallet:{cbc:wallet.data?.cbc||0},economy:{gold:profile.data?.gold_points||0,cbc_gold_price:economy.data?.cbc_gold_price||0}});
+    }
+    if(action==="takeback-student"){
+      const roomId=String(body.room_id||""),studentId=String(body.student_id||""),shared=body.shared===true,now=new Date().toISOString();
+      if(!/^[a-f0-9-]{36}$/i.test(roomId)||!/^[a-f0-9-]{36}$/i.test(studentId))fail(400,"Choose a valid student and room.");
+      const room=await client.from("cb_classroom_rooms").select("id").eq("id",roomId).eq("teacher_id",userId).eq("status","active").gt("expires_at",now).maybeSingle();
+      if(room.error)fail(500,room.error.message);if(!room.data)fail(403,"Only the active teacher can take back student moves.");
+      const enrollment=await client.from("cb_classroom_enrollments").select("student_id").eq("room_id",roomId).eq("student_id",studentId).gt("access_expires_at",now).maybeSingle();
+      if(enrollment.error)fail(500,enrollment.error.message);if(!enrollment.data)fail(404,"Student is no longer active in this classroom.");
+      if(shared){const active=await client.from("cb_classroom_enrollments").select("student_id",{count:"exact",head:true}).eq("room_id",roomId).gt("access_expires_at",now);if(active.error)fail(500,active.error.message);if(active.count!==1)fail(409,"Shared takeback requires a one-on-one session.");}
+      const table=shared?"cb_classroom_workspaces":"cb_classroom_student_boards";
+      const board=await client.from(table).select("fen").eq("room_id",roomId).eq(shared?"room_id":"student_id",shared?roomId:studentId).maybeSingle();
+      if(board.error)fail(500,board.error.message);const currentFen=board.data?.fen;if(!currentFen)fail(409,"Student board has not been created yet.");
+      const history=await client.from("cb_classroom_lesson_events").select("scope,student_id,fen,label").eq("room_id",roomId).order("id",{ascending:false}).limit(500);
+      if(history.error)fail(500,history.error.message);
+      const scope=shared?"shared":"student",moves:{before:string;after:string}[]=[];let before="";
+      for(const event of (history.data||[]).reverse()){
+        if(event.scope==="assignment"&&(!event.student_id||event.student_id===studentId)&&(!shared||event.label.startsWith("Puzzle assigned"))) {moves.length=0;before="";continue;}
+        if(shared&&event.scope==="master"){moves.length=0;before="";continue;}
+        if(event.scope!==scope||event.student_id!==studentId)continue;
+        if(event.label==="Student move starting position"){before=event.fen;continue;}
+        if(event.label==="Student moved a piece"){
+          if(before&&before!==event.fen)moves.push({before,after:event.fen});before="";
+        }else if(event.label==="Teacher took back student move"){moves.pop();before="";}
+        else {moves.length=0;before="";}
+      }
+      const last=moves.at(-1),beforeFen=last?.before,afterFen=last?.after;
+      if(!beforeFen||!afterFen||currentFen!==afterFen)fail(409,"No student move is available to take back from this position.");
+      const updated=await client.from(table).update({fen:beforeFen,updated_by:userId,updated_at:now}).eq("room_id",roomId).eq("fen",afterFen).select("fen").maybeSingle();
+      if(updated.error)fail(500,updated.error.message);if(!updated.data)fail(409,"The board changed. Try again after it syncs.");
+      const logged=await client.from("cb_classroom_lesson_events").insert({room_id:roomId,actor_id:userId,scope,student_id:studentId,fen:beforeFen,annotations:[],label:"Teacher took back student move"});
+      if(logged.error)fail(500,logged.error.message);
+      return res.status(200).json({fen:beforeFen,shared});
     }
     if(action==="workshop-update"){
       const roomId=String(body.room_id||""),kind=String(body.kind||""),now=new Date().toISOString();
@@ -177,7 +209,7 @@ export default async function handler(req:Req,res:Res){
           if(saved.error)fail(500,saved.error.message);
         }
         const label=kind==="assign-puzzle"?`Puzzle assigned to ${assignments.length} student${assignments.length===1?"":"s"}`:kind==="reset-puzzle"?`Puzzle reset for ${assignments.length} student${assignments.length===1?"":"s"}`:`Teacher board sent to ${assignments.length} student${assignments.length===1?"":"s"}`;
-        const logged=await client.from("cb_classroom_lesson_events").insert({room_id:roomId,actor_id:userId,scope:"assignment",fen:assignedFen,annotations:[],label});
+        const logged=await client.from("cb_classroom_lesson_events").insert({room_id:roomId,actor_id:userId,scope:"assignment",student_id:targetStudentId||null,fen:assignedFen,annotations:[],label});
         if(logged.error)fail(500,logged.error.message);
         return res.status(200).json({assigned:assignments.length,fen:assignedFen});
       }
@@ -192,6 +224,8 @@ export default async function handler(req:Req,res:Res){
         if(teacher)fail(400,"Teacher updates use the lesson board control.");
         const activeCount=await client.from("cb_classroom_enrollments").select("student_id",{count:"exact",head:true}).eq("room_id",roomId).gt("access_expires_at",now);
         if(activeCount.error)fail(500,activeCount.error.message);if(activeCount.count!==1)fail(409,"Shared board is available only for one-on-one sessions.");
+        const previous=await client.from("cb_classroom_workspaces").select("fen").eq("room_id",roomId).single();if(previous.error)fail(500,previous.error.message);
+        if(previous.data?.fen!==fen){const snapshot=await client.from("cb_classroom_lesson_events").insert({room_id:roomId,actor_id:userId,scope:"shared",student_id:userId,fen:previous.data?.fen||"start",annotations:[],label:"Student move starting position"});if(snapshot.error)fail(500,snapshot.error.message);}
         const saved=await client.from("cb_classroom_workspaces").update({fen,updated_by:userId,updated_at:now}).eq("room_id",roomId).select("*").single();
         if(saved.error)fail(500,saved.error.message);const logged=await client.from("cb_classroom_lesson_events").insert({room_id:roomId,actor_id:userId,scope:"shared",student_id:userId,fen,annotations:saved.data.annotations||[],label:"Student moved on the shared board"});if(logged.error)fail(500,logged.error.message);return res.status(200).json({workspace:saved.data});
       }
@@ -201,6 +235,7 @@ export default async function handler(req:Req,res:Res){
         if(!enrollment.data)fail(403,"Student classroom access is not active.");
         const boardPatch:Record<string,unknown>={room_id:roomId,student_id:studentId,fen,updated_by:userId,updated_at:now};
         if(teacher&&Array.isArray(body.annotations))boardPatch.annotations=body.annotations.slice(0,80);
+        if(!teacher){const previous=await client.from("cb_classroom_student_boards").select("fen").eq("room_id",roomId).eq("student_id",studentId).maybeSingle();if(previous.error)fail(500,previous.error.message);if((previous.data?.fen||"start")!==fen){const snapshot=await client.from("cb_classroom_lesson_events").insert({room_id:roomId,actor_id:userId,scope:"student",student_id:studentId,fen:previous.data?.fen||"start",annotations:[],label:"Student move starting position"});if(snapshot.error)fail(500,snapshot.error.message);}}
         const saved=await client.from("cb_classroom_student_boards").upsert(boardPatch,{onConflict:"room_id,student_id"}).select("*").single();
         if(saved.error)fail(500,saved.error.message);const logged=await client.from("cb_classroom_lesson_events").insert({room_id:roomId,actor_id:userId,scope:"student",student_id:studentId,fen,annotations:saved.data.annotations||[],label:teacher?"Teacher updated a student board":"Student moved a piece"});if(logged.error)fail(500,logged.error.message);return res.status(200).json({board:saved.data});
       }
