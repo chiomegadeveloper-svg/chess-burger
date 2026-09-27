@@ -1739,3 +1739,13 @@
 @media(min-width:1050px){.classroom-workshop:not(.board-maximized) .workshop-stage.teacher-view.group-view{grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);align-items:start;width:min(1600px,100%)}.workshop-stage.teacher-view.group-view .master-board-panel{width:100%;max-width:none;justify-self:stretch}.workshop-stage.teacher-view.group-view .student-monitor{min-width:0;max-height:calc(100dvh - 180px);overflow-y:auto}.workshop-stage.teacher-view.group-view .student-monitor>div{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.workshop-stage.teacher-view.group-view .student-monitor article{min-width:0;padding:6px}}
 @media(min-width:750px) and (max-width:1049px){.workshop-stage.teacher-view.group-view{grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start}.workshop-stage.teacher-view.group-view .master-board-panel{width:100%}.workshop-stage.teacher-view.group-view .student-monitor>div{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:749px){.workshop-stage.teacher-view.group-view{grid-template-columns:1fr}.workshop-stage.teacher-view.group-view .student-monitor>div{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Live classroom board feedback and explicit pawn promotion. */
+.classroom-checkmate{position:absolute;z-index:8;left:50%;top:12%;transform:translateX(-50%);max-width:90%;padding:9px 16px;border:1px solid #efc968;border-radius:12px;background:#14252df2;color:#ffe08c;font:800 clamp(12px,3.5cqw,22px) Poppins,sans-serif;text-align:center;white-space:nowrap;box-shadow:0 10px 28px #0009;pointer-events:none}
+.classroom-promotion{position:absolute;z-index:12;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:12px;background:#071116dc;color:#f5f6ee;text-align:center}
+.classroom-promotion>strong{font:700 clamp(13px,3.6cqw,22px) Poppins,sans-serif}
+.classroom-promotion>div{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;width:min(92%,350px)}
+.classroom-promotion button{display:grid;place-items:center;gap:2px;min-width:0;min-height:66px;padding:6px;border:1px solid #6b8e96;border-radius:10px;background:#20333b;color:#f8f1db;font:700 clamp(24px,8cqw,42px) Georgia,serif;cursor:pointer}
+.classroom-promotion button span{font:600 clamp(9px,2.3cqw,13px) Poppins,sans-serif}
+.classroom-promotion button:hover,.classroom-promotion button:focus-visible{border-color:#ffda72;background:#32515a;outline:2px solid #ffda7280}
+.classroom-promotion .promotion-cancel{min-height:35px;padding:5px 15px;font:600 12px Poppins,sans-serif}

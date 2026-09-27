@@ -204,7 +204,7 @@ export function FloatingChatButton({ visible }: { visible: boolean }) {
     window.addEventListener("orientationchange",restore);
     return()=>{window.removeEventListener("resize",restore);window.removeEventListener("orientationchange",restore);};
   },[visible,clampPosition]);
-  useEffect(()=>{if(!visible)return;let active=true;const load=()=>void arena<ChatSummary>("chat-summary").then(data=>{if(active)setUnread(data.unread);}).catch(()=>{});load();const timer=setInterval(load,15000);window.addEventListener("cb-chat-changed",load);return()=>{active=false;clearInterval(timer);window.removeEventListener("cb-chat-changed",load);};},[visible]);
+  useEffect(()=>{if(!visible)return;let active=true;const load=()=>void arena<ChatSummary>("chat-summary").then(data=>{if(active)setUnread(data.unread);}).catch(()=>{});load();const timer=setInterval(()=>{if(document.visibilityState==="visible")load();},45000);window.addEventListener("cb-chat-changed",load);document.addEventListener("visibilitychange",load);return()=>{active=false;clearInterval(timer);window.removeEventListener("cb-chat-changed",load);document.removeEventListener("visibilitychange",load);};},[visible]);
   if (!visible) return null;
   return (
     <button
@@ -274,6 +274,7 @@ export function SocialHub({
     body: string;
     id: string;
   } | null>(null);
+  const chatPollBusy = useRef(false);
   const seq = useRef(0),
     drafts = useRef<Record<string, string>>({}),
     draftKey = useRef(""),
@@ -375,8 +376,6 @@ export function SocialHub({
     } catch (e) {
       if (ticket === seq.current) {
         setError((e as Error).message);
-        setMessages([]);
-        setList(null);
       }
     } finally {
       if (ticket === seq.current) setLoading(false);
@@ -391,15 +390,38 @@ export function SocialHub({
       return;
     }
     setLoading(true);
-    const timeout = setTimeout(() => void refresh(), 200),
-      timer = setInterval(() => void refresh(), 15000);
+    const timeout = setTimeout(() => void refresh(), 200);
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") void refresh();
+    }, chat ? 45000 : 60000);
+    const pollMessages = async () => {
+      if (!chat || (!target && mode === "personal") || (mode === "group" && !groupId) || before || chatPollBusy.current || document.visibilityState !== "visible") return;
+      chatPollBusy.current = true;
+      const ticket = seq.current;
+      try {
+        const data = await arena<{ messages: Message[]; hasMore: boolean }>("chat-read", {
+          target: mode === "personal" ? target : "",
+          group_id: mode === "group" ? groupId : "",
+        });
+        if (ticket === seq.current) {
+          setMessages(previous => previous.length === data.messages.length && previous.every((message, index) => message.id === data.messages[index].id && message.body === data.messages[index].body) ? previous : data.messages);
+          setHasMore(data.hasMore);
+        }
+      } catch { /* The full refresh will show connection errors. */ }
+      finally { chatPollBusy.current = false; }
+    };
+    const messageTimer = chat ? setInterval(() => void pollMessages(), 8000) : undefined;
     const changed = () => void refresh();
+    const visible = () => { if (document.visibilityState === "visible") void refresh(); };
     window.addEventListener("cb-social-changed", changed);
+    document.addEventListener("visibilitychange", visible);
     return () => {
       seq.current++;
       clearTimeout(timeout);
       clearInterval(timer);
+      if (messageTimer) clearInterval(messageTimer);
       window.removeEventListener("cb-social-changed", changed);
+      document.removeEventListener("visibilitychange", visible);
     };
   }, [open, refresh]);
   function select(next: string) {

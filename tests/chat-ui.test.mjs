@@ -18,7 +18,8 @@ test("chat buttons use the mounted popup bridge and a normal click", () => {
 
 test("chat popup stays visible, polls gently, and retries one expired session", () => {
   assert.match(css, /\.social-dialog-overlay\{position:fixed;inset:0;/);
-  assert.match(social, /setInterval\(\(\) => void refresh\(\), 15000\)/);
+  assert.match(social, /const messageTimer = chat \? setInterval\(\(\) => void pollMessages\(\), 8000\)/);
+  assert.match(social, /document.visibilityState === "visible"/);
   assert.match(client, /response\.status === 401/);
   assert.match(client, /client\.auth\.refreshSession\(\)/);
 });
