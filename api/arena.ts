@@ -749,6 +749,66 @@ export default async function handler(req: Req, res: Res) {
     const avatarName = photo.split('/').pop() ?? '';
     const expectedPhoto = client.storage.from('cb-profile-media').getPublicUrl(`${avatarPath}${avatarName}`).data.publicUrl;
     if (!/^avatar-[a-z0-9-]+\.webp$/i.test(avatarName) || photo !== expectedPhoto) fail(403,'Complete registration and save a profile picture to unlock Chess Burger.');
+    if (action === 'report-list') {
+      const owner = account.profile.role === 'owner';
+      if (body.scope === 'owner' && !owner) fail(403, 'Owner access is required.');
+      const inbox = body.scope === 'owner' && owner;
+      const page = Math.min(1000, Math.max(0, Number.parseInt(String(body.page ?? '0'), 10) || 0));
+      let query = client.from('cb_report_tickets').select('id,reporter_id,category,target_username,description,status,owner_reply,replied_at,created_at,updated_at').order('created_at', { ascending: false }).range(page * 50, page * 50 + 49);
+      if (!inbox) query = query.eq('reporter_id', account.id);
+      const tickets = await query;
+      if (tickets.error) fail(/cb_report_tickets|schema cache|relation/i.test(tickets.error.message) ? 503 : 500, /cb_report_tickets|schema cache|relation/i.test(tickets.error.message) ? 'Report tickets are temporarily unavailable. Please try again later.' : tickets.error.message);
+      let reporters = new Map<string, any>();
+      if (inbox && tickets.data?.length) {
+        const profiles = await client.from('cb_profiles').select('user_id,username,display_name').in('user_id', [...new Set(tickets.data.map((ticket: any) => ticket.reporter_id))]);
+        if (profiles.error) fail(500, profiles.error.message);
+        reporters = new Map((profiles.data ?? []).map((profile: any) => [profile.user_id, profile]));
+      }
+      return res.status(200).json({ tickets: (tickets.data ?? []).map((ticket: any) => ({ ...ticket, reporter: inbox ? reporters.get(ticket.reporter_id) ?? null : undefined })) });
+    }
+    if (action === 'report-create') {
+      const category = String(body.category ?? ''), description = String(body.description ?? '').trim();
+      if (!['bug','gameplay','account','shop','payment','classroom','user','other'].includes(category)) fail(400, 'Choose a problem category.');
+      if (description.length < 10 || description.length > 2000) fail(400, 'Describe the problem in 10–2000 characters.');
+      let target: any = null;
+      if (category === 'user') {
+        const username = String(body.username ?? '').trim().replace(/^@/, '').toLowerCase();
+        if (!/^[a-z0-9_]{2,40}$/.test(username)) fail(400, 'Search and select a valid username.');
+        const found = await client.from('cb_profiles').select('user_id,username').ilike('username', username).maybeSingle();
+        if (found.error) fail(500, found.error.message);
+        if (!found.data || found.data.user_id === account.id) fail(400, 'Select another Chess Burger user to report.');
+        target = found.data;
+      }
+      const created = await client.from('cb_report_tickets').insert({ reporter_id: account.id, category, target_user_id: target?.user_id ?? null, target_username: target?.username ?? null, description }).select('id').single();
+      if (created.error) fail(/cb_report_tickets|schema cache|relation/i.test(created.error.message) ? 503 : 500, /cb_report_tickets|schema cache|relation/i.test(created.error.message) ? 'Report tickets are temporarily unavailable. Please try again later.' : created.error.message);
+      return res.status(200).json({ id: created.data.id });
+    }
+    if (action === 'report-withdraw' || action === 'report-delete' || action === 'report-reply') {
+      const id = String(body.id ?? ''); if (!/^[a-f0-9-]{36}$/i.test(id)) fail(400, 'Choose a valid report ticket.');
+      const owner = account.profile.role === 'owner';
+      if (action === 'report-reply' && !owner) fail(403, 'Only the owner can reply.');
+      const existing = await client.from('cb_report_tickets').select('reporter_id,status').eq('id', id).maybeSingle();
+      if (existing.error) fail(500, existing.error.message);
+      if (!existing.data) fail(404, 'This report no longer exists.');
+      if (!owner && existing.data.reporter_id !== account.id) fail(403, 'This is not your report.');
+      if (action === 'report-delete') {
+        const removed = await client.from('cb_report_tickets').delete().eq('id', id).select('id').maybeSingle();
+        if (removed.error) fail(500, removed.error.message);
+      } else if (action === 'report-withdraw') {
+        if (existing.data.reporter_id !== account.id) fail(403, 'Only the reporter can withdraw this ticket.');
+        if (existing.data.status === 'withdrawn') fail(409, 'This report was already withdrawn.');
+        const updated = await client.from('cb_report_tickets').update({ status: 'withdrawn', updated_at: new Date().toISOString() }).eq('id', id).neq('status', 'withdrawn').select('id').maybeSingle();
+        if (updated.error) fail(500, updated.error.message);
+        if (!updated.data) fail(409, 'This report was already withdrawn.');
+      } else {
+        if (existing.data.status === 'withdrawn') fail(409, 'A withdrawn report cannot receive a reply.');
+        const reply = String(body.reply ?? '').trim(); if (!reply || reply.length > 2000) fail(400, 'Write a reply of up to 2000 characters.');
+        const updated = await client.from('cb_report_tickets').update({ owner_reply: reply, status: 'replied', replied_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', id).neq('status', 'withdrawn').select('id').maybeSingle();
+        if (updated.error) fail(500, updated.error.message);
+        if (!updated.data) fail(409, 'This report was withdrawn.');
+      }
+      return res.status(200).json({ ok: true });
+    }
     if (MatchEngine.actions.has(action)) return res.status(200).json(await MatchEngine.run(client, req, action, body, settle));
     if(action==='puzzle-state'){
       const day=puzzleDay(),daily_tracks=dailyPuzzleTracks(day),daily_puzzle_ids=daily_tracks.random;
