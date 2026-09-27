@@ -744,6 +744,13 @@ export default async function handler(req: Req, res: Res) {
     // Keep it as a first-class migration action rather than falling through to
     // a 404 on every page load.
     if (action === 'me') return res.status(200).json({ profile: { ...account.profile, ocbr: Number(account.profile.ocbr ?? 88), avatar_frame_id: await activeAvatarFrame(client,account.profile) }, rank: await playerRank(client, account.profile) });
+    if (action === 'agreement-accept') {
+      if (body.version !== '2026-09-27') fail(400, 'Please review the current End User Agreement.');
+      const accepted = await client.from('cb_profiles').update({agreement_version:'2026-09-27',agreement_accepted_at:new Date().toISOString()}).eq('user_id',account.id).select('*').single();
+      if (accepted.error) fail(500, /agreement_version|agreement_accepted_at|schema cache/i.test(accepted.error.message) ? 'The agreement database update is pending. Please try again later.' : accepted.error.message);
+      return res.status(200).json({profile:accepted.data});
+    }
+    if (account.profile.agreement_version === null) fail(403, 'Review and accept the End User Agreement to continue.');
     const photo = String(account.profile.avatar_url ?? '');
     const avatarPath = `${account.id}/`;
     const avatarName = photo.split('/').pop() ?? '';
