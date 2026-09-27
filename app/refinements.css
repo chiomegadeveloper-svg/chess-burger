@@ -847,12 +847,15 @@ textarea:focus-visible {
 .welcome-card:hover,.welcome-card:focus-visible{transform:translateY(-2px);border-color:#72eff8;box-shadow:0 14px 34px #0009,0 0 0 3px #36ddec45;outline:0}.welcome-card:hover img{transform:scale(1.025)}
 .welcome-menu:has(.agreement-checkbox) .welcome-menu-options{height:220px;min-height:180px}
 .welcome-card:disabled{opacity:.52;cursor:not-allowed;transform:none;box-shadow:none}
-.welcome-agreement{display:grid;gap:10px;padding:12px;border:1px solid #ffffff3a;border-radius:15px;background:#171d25}
-.agreement-toggle{justify-self:start;padding:5px 2px;border:0;background:none;color:#a4e7ff;font-weight:700;text-decoration:underline;cursor:pointer}
+.welcome-agreement{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"link actions" "checkbox checkbox";align-items:center;gap:3px 8px;padding:5px 9px;border:1px solid #ffffff3a;border-radius:10px;background:#171d25}
+.agreement-toggle{grid-area:link;justify-self:start;padding:3px 0;border:0;background:none;color:#a4e7ff;font-size:11px;font-weight:700;text-decoration:underline;cursor:pointer}
+.welcome-agreement>#chess-burger-agreement{grid-area:copy;grid-column:1/-1}
+.welcome-agreement:has(#chess-burger-agreement){grid-template-areas:"link actions" "copy copy" "checkbox checkbox"}
 .agreement-copy{max-height:190px;overflow-y:auto;padding:9px 12px;border:1px solid #ffffff28;border-radius:10px;background:#0e151d;color:#ecf2f6;font-size:13px;line-height:1.55}
 .agreement-copy p{margin:0 0 9px}.agreement-copy h3{margin:12px 0 4px;color:#a4e7ff;font-size:14px}
-.agreement-checkbox{display:flex;align-items:flex-start;gap:9px;font-size:13px;line-height:1.4;cursor:pointer}.agreement-checkbox input{width:19px;height:19px;flex:none;accent-color:#40c995}
-.agreement-actions{display:flex;flex-wrap:wrap;gap:9px}.agreement-actions button{padding:9px 13px;border:1px solid #76d6be;border-radius:9px;background:#155e52;color:white;font-weight:700;cursor:pointer}.agreement-actions button:last-child{border-color:#aaa;background:#343944}.agreement-actions button:disabled{opacity:.5;cursor:not-allowed}
+.agreement-checkbox{grid-area:checkbox;display:flex;align-items:center;gap:6px;font-size:11px;line-height:1.25;cursor:pointer}.agreement-checkbox input{width:15px;height:15px;flex:none;accent-color:#40c995}
+.agreement-actions{grid-area:actions;display:flex;gap:5px}.agreement-actions button{padding:5px 8px;border:1px solid #76d6be;border-radius:7px;background:#155e52;color:white;font-size:11px;font-weight:700;white-space:nowrap;cursor:pointer}.agreement-actions button:last-child{border-color:#aaa;background:#343944}.agreement-actions button:disabled{opacity:.5;cursor:not-allowed}
+@media(max-width:430px){.welcome-agreement{grid-template-columns:1fr;grid-template-areas:"link" "checkbox" "actions"}.welcome-agreement:has(#chess-burger-agreement){grid-template-areas:"link" "copy" "checkbox" "actions"}.agreement-actions{justify-self:end}}
 @media(max-width:560px){.welcome-menu{gap:12px;padding:12px;border-radius:20px}.welcome-menu-brand{min-height:78px;gap:8px}.welcome-menu-brand img{width:70px;height:70px}.welcome-menu-brand h1{font-size:clamp(27px,8vw,42px)}.welcome-menu-options{gap:7px;height:min(420px,calc(100dvh - 130px));min-height:250px}.welcome-card{border-radius:12px}.welcome-card strong{font-size:clamp(13px,5.5vw,26px)}.welcome-card.guild strong,.welcome-card.home strong{font-size:clamp(13px,4vw,22px)}}
 @media(max-height:520px){.welcome-menu-options{height:300px}.welcome-menu-brand{min-height:60px}.welcome-menu-brand img{width:56px;height:56px}}
 @media(prefers-reduced-motion:reduce){.welcome-card,.welcome-card img{transition:none}}
