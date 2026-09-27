@@ -1,6 +1,19 @@
 import { createClient } from "@supabase/supabase-js";
 import { AccessToken, DataPacket_Kind, RoomServiceClient, TrackSource } from "livekit-server-sdk";
-import { legalStudentMove } from "./_classroom-movement";
+import { Chess } from "chess.js";
+
+/** Locked student boards accept one legal White chess move per update. */
+function legalStudentMove(before:string,after:string){
+  try{
+    const position=new Chess(before==="start"?new Chess().fen():before,{skipValidation:true});
+    if(position.turn()!=="w")return false;
+    return position.moves({verbose:true}).some(move=>{
+      const next=new Chess(position.fen(),{skipValidation:true});
+      next.move(move);
+      return next.fen()===after;
+    });
+  }catch{return false;}
+}
 
 type Req={method?:string;headers:{authorization?:string|string[]};body?:Record<string,unknown>};
 type Res={status:(n:number)=>Res;json:(v:unknown)=>void;setHeader:(k:string,v:string)=>void};
