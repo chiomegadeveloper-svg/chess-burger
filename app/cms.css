@@ -200,3 +200,5 @@
 .arena-cms-times .arena-cms-remove{grid-column:1/-1;min-height:31px;padding:5px 8px;border:1px solid #85535b;border-radius:8px;background:#302128;color:#ffbdc4;cursor:pointer}
 .arena-cms-panel .arena-cms-add{justify-self:start;width:auto;min-height:36px;margin:0 0 10px;padding:6px 12px;border:1px solid #4aa6af;border-radius:9px;background:#18333a;color:#a9f0f3;cursor:pointer}
 .arena-cms-panel .arena-cms-add:disabled,.arena-cms-times .arena-cms-remove:disabled{opacity:.4;cursor:default}
+
+.classroom-free-control{margin:14px 20px;padding:15px;border:1px solid #5b806f;border-radius:14px;background:#123029}.classroom-free-control label{display:flex;align-items:center;gap:12px;color:#f1f7ed;cursor:pointer}.classroom-free-control input{width:20px;height:20px;accent-color:#53d6ad}.classroom-free-control label span{display:grid;gap:3px}.classroom-free-control small,.classroom-free-control p{color:#b3d3c6;font-size:12px}.classroom-free-control p{margin:8px 0 0}
