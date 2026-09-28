@@ -588,7 +588,17 @@ async function publicOnlineUsers(client: Db) {
   ]);
   if(presence.error)fail(500,presence.error.message);
   if(total.error)console.warn('arena.online-users.count-unavailable',total.error.message);
-  const recent=presence.data??[],ids=recent.map((row:any)=>row.user_id);
+  let recent=presence.data??[];
+  // A legacy production table can expose more than one timestamp column.
+  // Match the field used for the count whenever the first read disagrees.
+  if(!recent.length){
+    for(const candidate of ['seen_at','last_seen_at','updated_at','last_seen']){
+      if(candidate===field)continue;
+      const retry=await client.from('cb_live_presence').select(`user_id,${candidate}`).gt(candidate,cutoff).order(candidate,{ascending:false}).limit(100);
+      if(!retry.error&&retry.data?.length){recent=retry.data;cachedPresenceTimestampField=candidate;break;}
+    }
+  }
+  const ids=recent.map((row:any)=>row.user_id);
   const [white,black]=ids.length?await Promise.all([
     client.from('cb_matches').select('white_id').eq('status','active').in('white_id',ids),
     client.from('cb_matches').select('black_id').eq('status','active').in('black_id',ids),
@@ -602,11 +612,16 @@ async function publicOnlineUsers(client: Db) {
     if(fallback.error)fail(500,fallback.error.message);
     people=new Map((fallback.data??[]).map((person:any)=>[person.user_id,person]));
   }
+  if(ids.length && people.size<ids.length){
+    const missing=ids.filter((id:string)=>!people.has(id));
+    const fallback=await client.from('cb_profiles').select('user_id,username,display_name,avatar_url,cbr,wins,losses,gold_points').in('user_id',missing);
+    if(!fallback.error)for(const profile of fallback.data??[])people.set(profile.user_id,profile);
+  }
   const users = recent.map((row: any) => {
     const player = people.get(row.user_id);
     return player ? { ...player, cbr: Number(player.cbr ?? 88), available: !playing.has(row.user_id) } : null;
   }).filter(Boolean).sort((a: any, b: any) => b.cbr - a.cbr);
-  return { users, count: total.error?users.length:total.count??users.length };
+  return { users, count: Math.max(users.length,total.error?0:total.count??0) };
 }
 
 async function activeMatchFor(client: Db, userId: string) {

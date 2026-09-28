@@ -244,6 +244,7 @@ export default function CommunityFeed({
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
   const [onlineUsers, setOnlineUsers] = useState<OnlinePlayer[]>([]),
     [onlineStatus,setOnlineStatus]=useState(""),
+    [onlineCount,setOnlineCount]=useState(0),
     [onlineSearch, setOnlineSearch] = useState(""),
     [onlineCard, setOnlineCard] = useState<string | null>(null),
     [onlinePage, setOnlinePage] = useState(1);
@@ -391,17 +392,20 @@ export default function CommunityFeed({
     };
   }, [refresh]);
   useEffect(()=>{
-    let active=true;
+    let active=true,pending=false;
     const update=async()=>{
+      if(pending||document.visibilityState==="hidden")return;
+      pending=true;
       try{
         const result=await arena<{users:OnlinePlayer[];count:number}>("online-users",{},true);
         if(!active)return;
         setOnlineUsers(result.users);
+        setOnlineCount(result.count);
         setOnlineStatus("");
       }catch(error){
         if(!active)return;
         setOnlineStatus(error instanceof Error?error.message:"Online players are temporarily unavailable.");
-      }
+      }finally{pending=false}
     };
     void update();
     const timer=window.setInterval(()=>void update(),tab==="online"?5000:20000);
@@ -531,7 +535,7 @@ export default function CommunityFeed({
           {tab === "announcement"
             ? "Official updates"
             : tab === "online"
-              ? `${onlineUsers.length} online`
+              ? `${onlineCount} online`
               : tab === "rewards"
                 ? "7-day login streak"
                 : "Latest 50"}
@@ -560,9 +564,9 @@ export default function CommunityFeed({
           Online{" "}
           <span
             className="online-count-badge"
-            aria-label={`${onlineUsers.length} users online`}
+            aria-label={`${onlineCount} users online`}
           >
-            {onlineUsers.length}
+            {onlineCount}
           </span>
         </button>
         <button
@@ -913,7 +917,7 @@ export default function CommunityFeed({
           )}
           {!onlineStatus && shownOnline.length === 0 && (
             <p className="account-note">
-              No online player matches that search.
+              {onlineSearch.trim()?"No online player matches that search.":onlineCount?`${onlineCount} users are online, but their player cards are still loading.`:"No players are online right now."}
             </p>
           )}
           {onlinePages > 1 && (
