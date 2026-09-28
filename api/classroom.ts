@@ -38,6 +38,51 @@ export default async function handler(req:Req,res:Res){
     if(gate.error)fail(500,gate.error.message);
     if(!String(gate.data?.avatar_url??"").includes(`/storage/v1/object/public/cb-profile-media/${userId}/avatar-`))fail(403,"Complete registration and save a profile picture to unlock Chess Burger.");
     if(gate.data?.agreement_version===null)fail(403,"Review and accept the End User Agreement to continue.");
+    if(action.startsWith("library-")){
+      const q=async(query:any)=>{const result=await query;if(result.error){const message=String(result.error.message||"");if(result.error.code==="42P01"||result.error.code==="PGRST205"||/relation .*cb_seba_(folders|materials).* does not exist|schema cache/i.test(message))fail(503,"Teacher library is not ready. Run supabase/0078_seba_teacher_library.sql in Supabase SQL Editor.");fail(500,message)}return result.data};
+      const validId=(value:unknown)=>/^[a-f0-9]{8}-[a-f0-9-]{27}$/i.test(String(value||""));
+      if(action==="library-list"){
+        const [folders,materials]=await Promise.all([
+          q(client.from("cb_seba_folders").select("id,name,created_at").eq("teacher_id",userId).order("created_at")),
+          q(client.from("cb_seba_materials").select("id,folder_id,name,fen,annotations,source_puzzle_id,hint,solution,updated_at").eq("teacher_id",userId).order("updated_at",{ascending:false}).limit(300))
+        ]);
+        return res.status(200).json({folders,materials});
+      }
+      const roomId=String(body.room_id||"");
+      if(!validId(roomId))fail(400,"Choose an active classroom.");
+      const room=await q(client.from("cb_classroom_rooms").select("id").eq("id",roomId).eq("teacher_id",userId).eq("status","active").gt("expires_at",new Date().toISOString()).maybeSingle());
+      if(!room)fail(403,"Only the active teacher can edit teaching materials.");
+      if(action==="library-folder-create"){
+        const name=String(body.name||"").trim().slice(0,60);if(!name)fail(400,"Name your folder.");
+        const folder=await q(client.from("cb_seba_folders").insert({teacher_id:userId,name}).select("id,name").single());
+        return res.status(200).json({folder});
+      }
+      if(action==="library-folder-rename"){
+        if(!validId(body.folder_id))fail(400,"Choose a folder.");
+        const name=String(body.name||"").trim().slice(0,60);if(!name)fail(400,"Name your folder.");
+        const folder=await q(client.from("cb_seba_folders").update({name}).eq("teacher_id",userId).eq("id",String(body.folder_id)).select("id,name").maybeSingle());
+        if(!folder)fail(404,"Folder not found.");return res.status(200).json({folder});
+      }
+      if(action==="library-save"){
+        const folderId=String(body.folder_id||"");if(!validId(folderId))fail(400,"Choose a folder.");
+        const folder=await q(client.from("cb_seba_folders").select("id").eq("id",folderId).eq("teacher_id",userId).maybeSingle());
+        if(!folder)fail(403,"This is not your folder.");
+        const name=String(body.name||"").trim().slice(0,90);if(!name)fail(400,"Name the material.");
+        let fen=String(body.fen||"");try{fen=new Chess(fen==="start"?undefined:fen,{skipValidation:true}).fen()}catch{fail(400,"Invalid board position.")}
+        const material=await q(client.from("cb_seba_materials").insert({teacher_id:userId,folder_id:folderId,name,fen,
+          annotations:Array.isArray(body.annotations)?body.annotations.slice(0,120):[],
+          source_puzzle_id:String(body.source_puzzle_id||"").slice(0,90)||null,
+          hint:String(body.hint||"").slice(0,500),solution:Array.isArray(body.solution)?body.solution.slice(0,30).map((move:unknown)=>String(move).slice(0,5)):[]
+        }).select("id").single());
+        return res.status(200).json({material});
+      }
+      if(action==="library-rename"){
+        const id=String(body.material_id||""),name=String(body.name||"").trim().slice(0,90);if(!validId(id)||!name)fail(400,"Choose and name a material.");
+        const material=await q(client.from("cb_seba_materials").update({name,updated_at:new Date().toISOString()}).eq("id",id).eq("teacher_id",userId).select("id").maybeSingle());
+        if(!material)fail(404,"Material not found.");return res.status(200).json({material});
+      }
+      fail(400,"Unknown material action.");
+    }
     if(action==="voice-token"){
       const roomId=String(body.room_id||""),now=new Date().toISOString();
       if(!roomId)fail(400,"Classroom is required.");
@@ -155,7 +200,7 @@ export default async function handler(req:Req,res:Res){
         client.from("cb_classroom_student_boards").select("*").eq("room_id",roomId),
         client.from("cb_classroom_wallets").select("cbc").eq("user_id",userId).maybeSingle(),
         client.from("cb_classroom_settings").select("*").eq("id",true).single(),
-        client.from("cb_profiles").select("gold_points").eq("user_id",userId).single(),
+        client.from("cb_profiles").select("gold_points,display_name,username").eq("user_id",userId).single(),
         teacher?client.from("cb_classroom_lesson_events").select("id,scope,student_id,fen,annotations,label,created_at").eq("room_id",roomId).order("created_at",{ascending:false}).limit(100):Promise.resolve({data:[],error:null})
       ]);
       for(const result of [workspace,enrollments,boards,wallet,economy,profile,lessonLog])if(result.error)fail(500,result.error.message);
@@ -166,7 +211,7 @@ export default async function handler(req:Req,res:Res){
       const profileMap=new Map((profiles.data||[]).map((p:any)=>[p.user_id,p]));
       const boardMap=new Map((boards.data||[]).map((b:any)=>[b.student_id,b]));
       const students=admitted.map((e:any)=>({...(profileMap.get(e.student_id)||{user_id:e.student_id,display_name:"Student"}),access_expires_at:e.access_expires_at,board:boardMap.get(e.student_id)||{room_id:roomId,student_id:e.student_id,fen:"start",free_movement:false,version:0}}));
-      return res.status(200).json({role:teacher?"teacher":"student",room:room.data,workspace:workspace.data,students,lesson_log:(lessonLog.data||[]).filter((event:any)=>event.label!=="Student move starting position"),own_student_id:teacher?null:userId,wallet:{cbc:wallet.data?.cbc||0},economy:{gold:profile.data?.gold_points||0,cbc_gold_price:economy.data?.cbc_gold_price||0,cbc_enabled:economy.data?.cbc_enabled!==false,classroom_features_ready:Object.hasOwn(economy.data||{},"cbc_enabled")}});
+      return res.status(200).json({role:teacher?"teacher":"student",room:room.data,workspace:workspace.data,students,lesson_log:(lessonLog.data||[]).filter((event:any)=>event.label!=="Student move starting position"),own_student_id:teacher?null:userId,coach_name:teacher?(profile.data?.display_name||profile.data?.username||"Coach"):null,wallet:{cbc:wallet.data?.cbc||0},economy:{gold:profile.data?.gold_points||0,cbc_gold_price:economy.data?.cbc_gold_price||0,cbc_enabled:economy.data?.cbc_enabled!==false,classroom_features_ready:Object.hasOwn(economy.data||{},"cbc_enabled")}});
     }
     if(action==="set-student-movement"){
       const roomId=String(body.room_id||""),studentId=String(body.student_id||""),now=new Date().toISOString();
