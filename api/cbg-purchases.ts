@@ -1,10 +1,29 @@
 import {createClient} from '@supabase/supabase-js';
-import {emailOwnersAboutCbgOrder} from './_cbg-owner-email';
 type Req={method?:string;headers:{authorization?:string|string[]};body?:Record<string,unknown>};
 type Res={status:(code:number)=>Res;json:(body:unknown)=>void;setHeader:(key:string,value:string)=>void};
 const fail=(status:number,message:string):never=>{const error=Error(message) as Error&{status:number};error.status=status;throw error;};
 const schemaHint='Apply supabase/0074_cbg_qrph_purchases.sql before using CBG purchases.';
 const uuid=/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i;
+
+async function emailOwnersAboutCbgOrder(order:{id:string;cbg_amount:number;amount_php:number;reference_last6:string;created_at:string},buyer:{username?:string|null;display_name?:string|null}){
+  const apiKey=process.env.RESEND_API_KEY,from=process.env.CBG_ALERT_FROM_EMAIL;
+  if(!apiKey||!from)throw Error('Set RESEND_API_KEY and CBG_ALERT_FROM_EMAIL to enable owner sale alerts.');
+  const response=await fetch('https://api.resend.com/emails',{
+    method:'POST',headers:{Authorization:`Bearer ${apiKey}`,'Content-Type':'application/json','Idempotency-Key':`cbg-order-${order.id}-pending`},
+    body:JSON.stringify({from,to:['alota.bobbie.2026@gmail.com','chiomegadeveloper@gmail.com'],subject:'SALE @ Chess Burger App - URGENT',text:[
+      'A buyer submitted a CBG payment for your review.','',
+      `Buyer: ${buyer.display_name||'Chess Burger player'}${buyer.username?` (@${buyer.username})`:''}`,
+      `CBG ordered: ${Number(order.cbg_amount).toLocaleString('en-US')}`,
+      `Amount to verify: PHP ${Number(order.amount_php).toFixed(2)}`,
+      `Payment reference ending: ${order.reference_last6}`,
+      `Order ID: ${order.id}`,
+      `Submitted: ${order.created_at}`,'',
+      'Open Chess Burger > Owner CMS > CBG Editor > Pending payment verification.',
+      'Verify the complete payment in your QRPh/GCash account before approving. A reference number alone is not proof of payment.',
+    ].join('\n')}),signal:AbortSignal.timeout(6000),
+  });
+  if(!response.ok)throw Error(`Resend rejected the owner sale alert (${response.status}).`);
+}
 
 export default async function handler(req:Req,res:Res){
   res.setHeader('Cache-Control','no-store');

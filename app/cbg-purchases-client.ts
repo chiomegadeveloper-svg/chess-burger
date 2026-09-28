@@ -5,7 +5,10 @@ export async function cbgPurchases<T>(action:string,body:Record<string,unknown>=
  const client=await getSupabase(),session=client?(await client.auth.getSession()).data.session:null;
  if(!session)throw Error('Sign in to purchase CBG.');
  const response=await fetch('/api/cbg-purchases',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${session.access_token}`},body:JSON.stringify({action,...body}),cache:'no-store'});
- const data=await response.json() as T&{error?:string};
+ const raw=await response.text();
+ let data:T&{error?:string};
+ try{data=JSON.parse(raw) as T&{error?:string}}
+ catch{throw Error(response.ok?'The CBG server returned an invalid response.':'CBG purchases are temporarily unavailable. Please try again shortly.');}
  if(!response.ok)throw Error(data.error||'CBG purchases are unavailable.');
  return data;
 }
