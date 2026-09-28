@@ -59,6 +59,10 @@ export default async function handler(req: Req, res: Res) {
       db.from('cb_feed').select('id,content,created_at,expires_at').eq('kind', 'announcement').gte('created_at', new Date(now - 7 * 86400_000).toISOString()).order('created_at', { ascending: false }).limit(5),
       db.from('cb_cbg_orders').select('id,status,cbg_amount,reviewed_at').eq('buyer_id',userId).in('status',['approved','rejected']).gte('reviewed_at',cutoff).order('reviewed_at',{ascending:false}).limit(12),
     ]);
+    // The service-role client bypasses RLS: gate this query by the authenticated profile role.
+    const ownerSales = gate.data?.role === 'owner'
+      ? await db.from('cb_cbg_orders').select('id,cbg_amount,amount_php,reference_last6,created_at').eq('status','pending').order('created_at',{ascending:false}).limit(30)
+      : { data: [], error: null };
     if (reads.error && !/cb_notification_reads|schema cache|does not exist/i.test(reads.error.message)) throw err(500, reads.error.message);
     // Older installations may lack an optional source. Keep the rest of the inbox available.
     const errors: string[] = [];
@@ -99,6 +103,7 @@ export default async function handler(req: Req, res: Res) {
       if (row.delta > 0 && row.kind === 'arena_champion') add({ key: `champion:${row.id}`, kind: 'arena', title: 'Grand Arena champion!', body: `Your prize of ${row.delta} Gold has arrived.`, target: 'grand-arena', created_at: row.created_at });
     }
     for (const order of rows(cbgOrders, 'CBG purchases')) add({ key: `cbg-order:${order.id}:${order.status}`, kind: 'purchase', title: order.status === 'approved' ? 'CBG payment approved' : 'CBG payment not verified', body: order.status === 'approved' ? `${order.cbg_amount} CBG has been added to your wallet.` : 'Review your CBG order in Shop or contact the owner.', target: 'shop', created_at: order.reviewed_at });
+    for (const order of rows(ownerSales, 'pending CBG sales')) add({ key: `owner-sale:${order.id}`, kind: 'owner-sale', title: 'NEW SALE', body: `${Number(order.cbg_amount).toLocaleString('en-US')} CBG · ₱${Number(order.amount_php).toFixed(2)} · Ref ending ${order.reference_last6}. Verify payment before approval.`, target: 'cms-cbg-editor', created_at: order.created_at, sticky: true });
     for (const row of giftRows) add({ key: `item-gift:${row.request_id}`, kind: 'gift', title: `${actor(row.sender_id)} sent you a gift`, body: `${row.quantity ?? 1} × ${productMap.get(row.item_id) ?? clean(row.item_id || row.item_kind, 45)} is in your Bag.`, target: 'bag', created_at: row.created_at });
     for (const row of socialRows) {
       if (row.kind === 'friend' && row.status === 'pending') add({ key: `friend:${row.id}`, kind: 'friend', title: `${actor(row.user_id)} wants to be friends`, body: 'Review this friend request.', target: 'friend-requests', created_at: row.created_at, sticky: true });

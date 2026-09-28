@@ -560,6 +560,7 @@ function AppPage() {
     setTab(next);
   };
   const openNotification = (target: string) => {
+    if (target === "cms-cbg-editor") { if (owner) navigate("cms-cbg-editor"); return; }
     if (target.startsWith("chat-personal:")) return openSocial("chat", target.slice("chat-personal:".length), "personal");
     if (target.startsWith("chat-group:")) return openSocial("chat", target.slice("chat-group:".length), "group");
     if (target.startsWith("portfolio:")) {
@@ -803,8 +804,8 @@ function AppPage() {
   else if (tab === "bag") content = <BagPage onChanged={() => void refreshProfile()} />;
   else if (tab === "guild") content = <GuildPage profile={profile} onChanged={() => void refreshProfile()} />;
   else if (tab === "reports") content = <ReportTickets onBack={() => setTab("home")}/>;
-  else if ((tab === "cms" || tab === "cms-reports") && owner)
-    content = <Cms key={tab} profile={profile} initialSection={tab === "cms-reports" ? "reports" : "tournament"} onClose={() => setTab("profile")} />;
+  else if ((tab === "cms" || tab === "cms-reports" || tab === "cms-cbg-editor") && owner)
+    content = <Cms key={tab} profile={profile} initialSection={tab === "cms-reports" ? "reports" : tab === "cms-cbg-editor" ? "cbg-editor" : "tournament"} onClose={() => setTab("profile")} />;
   else
     content = (
       <section className="profile-page">
@@ -969,7 +970,7 @@ function AppPage() {
             <ShieldCheck size={17} aria-hidden="true" />
             <span>CMS</span>
           </button>}
-          <NotificationBell userId={member === true && profile?.user_id !== "guest-device" ? profile?.user_id : undefined} invites={invites} onNavigate={openNotification} />
+          <NotificationBell userId={member === true && profile?.user_id !== "guest-device" ? profile?.user_id : undefined} isOwner={owner} invites={invites} onNavigate={openNotification} />
           <button
             className="header-about-button"
             aria-label="About Chess Burger"

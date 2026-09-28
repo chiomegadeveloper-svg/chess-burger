@@ -57,7 +57,7 @@ const mergeReads = (local: ReadTimes, server: Inbox["read_entries"]): ReadTimes 
   return merged;
 };
 
-export default function NotificationBell({ userId, invites, onNavigate }: { userId?: string; invites: Invite[]; onNavigate: (target: string) => void }) {
+export default function NotificationBell({ userId, isOwner, invites, onNavigate }: { userId?: string; isOwner?: boolean; invites: Invite[]; onNavigate: (target: string) => void }) {
   const [open, setOpen] = useState(false);
   const [remote, setRemote] = useState<Notification[]>([]);
   const [read, setRead] = useState<ReadTimes>({});
@@ -97,14 +97,14 @@ export default function NotificationBell({ userId, invites, onNavigate }: { user
     setRemote([]); setRead(userId ? savedReads(userId) : {}); setChat(null); setWindowState(null); setError(""); setOpen(false);
     if (!userId) return;
     const initial = window.setTimeout(() => void refresh(), 0);
-    const timer = window.setInterval(() => { if (document.visibilityState === "visible") void refresh(); }, 60_000);
+    const timer = window.setInterval(() => { if (document.visibilityState === "visible") void refresh(); }, isOwner ? 30_000 : 60_000);
     const visible = () => { if (document.visibilityState === "visible") void refresh(); };
     window.addEventListener("focus", visible);
     window.addEventListener("online", visible);
     window.addEventListener("cb-profile-saved", visible);
     document.addEventListener("visibilitychange", visible);
     return () => { window.clearTimeout(initial); window.clearInterval(timer); window.removeEventListener("focus", visible); window.removeEventListener("online", visible); window.removeEventListener("cb-profile-saved", visible); document.removeEventListener("visibilitychange", visible); };
-  }, [userId, refresh]);
+  }, [userId, isOwner, refresh]);
 
   useEffect(() => {
     if (!open) return;
@@ -159,7 +159,7 @@ export default function NotificationBell({ userId, invites, onNavigate }: { user
       {unavailable.length > 0 && <p className="notification-error">Some activity could not load. Try refreshing.</p>}
       <div className="notification-list" aria-live="polite">
         {items.length === 0 && <div className="notification-empty">{loading ? "Checking your activity…" : error ? "Try again when notifications are available." : "No notifications yet. Your next Chess Burger update will appear here."}</div>}
-        {items.map(item => <button type="button" key={item.key} className={`notification-item${!read[item.key] ? " is-unread" : ""}`} onClick={() => choose(item)}>
+        {items.map(item => <button type="button" key={item.key} className={`notification-item${!read[item.key] ? " is-unread" : ""}${item.kind === "owner-sale" ? " owner-sale-alert" : ""}`} onClick={() => choose(item)}>
           <span className="notification-icon">{item.kind === "chat" || item.kind === "comment" ? <MessageCircle size={17} /> : item.kind === "gift" || item.kind === "reward" || item.kind === "purchase" ? <Gift size={17} /> : <Bell size={17} />}</span>
           <span className="notification-copy"><strong>{item.title}</strong><span>{item.body}</span><small>{ago(item.created_at)}</small></span>
           {!read[item.key] && <i className="notification-dot" aria-label="Unread" />}
