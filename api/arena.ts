@@ -560,7 +560,8 @@ let cachedPresenceTimestampField:string|undefined;
 async function livePresenceTimestampField(client:Db):Promise<string>{
   if(cachedPresenceTimestampField)return cachedPresenceTimestampField;
   for(const field of ['seen_at','last_seen_at','updated_at','last_seen']){
-    const probe=await client.from('cb_live_presence').select(field).limit(0);
+    // A zero-length range can return 416 from PostgREST even when the column exists.
+    const probe=await client.from('cb_live_presence').select(field,{head:true}).limit(1);
     if(!probe.error){cachedPresenceTimestampField=field;return field;}
     if(!/column .* does not exist|schema cache/i.test(String(probe.error.message??'')))fail(500,probe.error.message);
   }
@@ -1186,22 +1187,31 @@ export default async function handler(req: Req, res: Res) {
     }
     if (action === 'heartbeat') return res.status(200).json(await saveLiveHeartbeat(client, account.id));
     if (action === 'map-stats') {
-      const field=await livePresenceTimestampField(client);
+      let field:string|null=null;
+      try{field=await livePresenceTimestampField(client);}catch(error){
+        console.warn('arena.map-stats.presence-unavailable',error instanceof Error?error.message:String(error));
+      }
+      const cutoff=new Date(now()-60_000).toISOString();
       const [registered, online, matches, gps, leader] = await Promise.all([
         registeredProfileCount(client),
-        client.from('cb_live_presence').select('user_id',{count:'exact',head:true}).gt(field,new Date(now()-60_000).toISOString()),
+        field?client.from('cb_live_presence').select('user_id',{count:'exact',head:true}).gt(field,cutoff):Promise.resolve({count:null,error:null}),
         client.from('cb_matches').select('id', { count: 'exact', head: true }).eq('status', 'active'),
         client.from('cb_presence').select('user_id', { count: 'exact', head: true }).eq('gps_enabled', true).gt('seen_at', gpsCutoff()),
-        client.from('cb_live_presence').select('user_id').gt(field,new Date(now()-60_000).toISOString()).order(field,{ascending:false}).limit(100),
+        field?client.from('cb_live_presence').select('user_id').gt(field,cutoff).order(field,{ascending:false}).limit(100):Promise.resolve({data:[],error:null}),
       ]);
-      if (online.error||matches.error||gps.error||leader.error) fail(500,online.error?.message??matches.error?.message??gps.error?.message??leader.error?.message??'Unable to load activity totals.');
-      const recentPlayers=leader.data?.length?await playerMap(client,leader.data.map((row:any)=>row.user_id)):new Map<string,any>();
+      for(const [metric,error] of [['online',online.error],['matches',matches.error],['gps',gps.error],['leader',leader.error]] as const)
+        if(error)console.warn('arena.map-stats.metric-unavailable',{metric,message:error.message});
+      let recentPlayers=new Map<string,any>();
+      if(!leader.error&&leader.data?.length){
+        try{recentPlayers=await playerMap(client,leader.data.map((row:any)=>row.user_id));}
+        catch(error){console.warn('arena.map-stats.leader-unavailable',error instanceof Error?error.message:String(error));}
+      }
       const leaderProfile=[...recentPlayers.values()].sort((a:any,b:any)=>Number(b.cbr??88)-Number(a.cbr??88))[0]??null;
       return res.status(200).json({
-        online_users: online.count??0,
+        online_users: field&&!online.error?online.count??0:null,
         registered_users: registered,
-        active_matches: matches.count ?? 0,
-        gps_online: gps.count ?? 0,
+        active_matches: matches.error?null:matches.count??0,
+        gps_online: gps.error?null:gps.count??0,
         highest_online: leaderProfile ? { user_id: leaderProfile.user_id, display_name: leaderProfile.display_name, cbr: Number(leaderProfile.cbr ?? 88) } : null,
         updated_at: new Date().toISOString()
       });
@@ -1661,4 +1671,13 @@ export default async function handler(req: Req, res: Res) {
     }
     fail(404, 'This game action is not available during the migration.');
   } catch (error) {
-    const matchFailure = error instanceof Error && error.name === 'MatchActionError' && typeof (
+    const matchFailure = error instanceof Error && error.name === 'MatchActionError' && typeof (error as any).status === 'number';
+    const known = error instanceof ApiError
+      ? error
+      : matchFailure
+        ? new ApiError((error as any).status, error.message)
+        : new ApiError(500, 'The game service could not complete this request. Please try again.');
+    console.error('arena.failed', { action, status: known.status, message: known.message, stack: error instanceof Error ? error.stack : String(error) });
+    return res.status(known.status).json({ error: known.message });
+  }
+}
