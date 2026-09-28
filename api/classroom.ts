@@ -189,21 +189,22 @@ export default async function handler(req:Req,res:Res){
       const table=shared?"cb_classroom_workspaces":"cb_classroom_student_boards";
       const board=await client.from(table).select("fen").eq("room_id",roomId).eq(shared?"room_id":"student_id",shared?roomId:studentId).maybeSingle();
       if(board.error)fail(500,board.error.message);const currentFen=board.data?.fen;if(!currentFen)fail(409,"Student board has not been created yet.");
-      const history=await client.from("cb_classroom_lesson_events").select("scope,student_id,fen,label").eq("room_id",roomId).order("id",{ascending:false}).limit(500);
+      const history=await client.from("cb_classroom_lesson_events").select("id,scope,student_id,fen,label,created_at").eq("room_id",roomId).order("id",{ascending:false}).limit(500);
       if(history.error)fail(500,history.error.message);
-      const scope=shared?"shared":"student",moves:{before:string;after:string}[]=[];let before="";
+      const scope=shared?"shared":"student",moves:{id:number;before:string;after:string;created_at:string}[]=[];let before="",beforeId=0,beforeAt="";
       for(const event of (history.data||[]).reverse()){
         if(event.scope==="assignment"&&(!event.student_id||event.student_id===studentId)&&(!shared||event.label.startsWith("Puzzle assigned"))) {moves.length=0;before="";continue;}
         if(shared&&event.scope==="master"){moves.length=0;before="";continue;}
         if(event.scope!==scope||event.student_id!==studentId)continue;
-        if(event.label==="Student move starting position"){before=event.fen;continue;}
-        if(event.label==="Student moved a piece"){
-          if(before&&before!==event.fen)moves.push({before,after:event.fen});before="";
-        }else if(event.label==="Teacher took back student move"){moves.pop();before="";}
+        if(event.label==="Student move starting position"){before=event.fen;beforeId=event.id;beforeAt=event.created_at;continue;}
+        if(event.label==="Student moved a piece"||shared&&event.label==="Student moved on the shared board"){
+          if(before&&before!==event.fen)moves.push({id:beforeId,before,after:event.fen,created_at:beforeAt});before="";
+        }else if(event.label==="Teacher took back student move"){while(moves.length&&moves.at(-1)?.after!==event.fen)moves.pop();before="";}
         else {moves.length=0;before="";}
       }
-      const last=moves.at(-1),beforeFen=last?.before,afterFen=last?.after;
-      if(!beforeFen||!afterFen||currentFen!==afterFen)fail(409,"No student move is available to take back from this position.");
+      if(body.list===true)return res.status(200).json({positions:currentFen===moves.at(-1)?.after?moves.map((move,index)=>({id:move.id,fen:move.before,created_at:move.created_at,move_number:index+1})).reverse():[]});
+      const last=moves.at(-1),targetId=body.target_event_id===undefined?last?.id:Number(body.target_event_id),target=moves.find(move=>move.id===targetId),beforeFen=target?.before,afterFen=last?.after;
+      if(!beforeFen||!afterFen||currentFen!==afterFen)fail(409,"This move position is no longer available. Refresh the history.");
       const updated=await client.from(table).update({fen:beforeFen,updated_by:userId,updated_at:now}).eq("room_id",roomId).eq("fen",afterFen).select("fen").maybeSingle();
       if(updated.error)fail(500,updated.error.message);if(!updated.data)fail(409,"The board changed. Try again after it syncs.");
       const logged=await client.from("cb_classroom_lesson_events").insert({room_id:roomId,actor_id:userId,scope,student_id:studentId,fen:beforeFen,annotations:[],label:"Teacher took back student move"});
