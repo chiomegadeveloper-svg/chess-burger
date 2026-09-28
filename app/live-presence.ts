@@ -16,7 +16,8 @@ export function useLivePresence(userId?:string, gpsEnabled=false, activeMatchId=
       finally{sending=false;}
     };
     void heartbeat();
-    const timer=window.setInterval(()=>void heartbeat(),15000);
+    // Spread heartbeat writes across the minute instead of synchronizing tabs.
+    const timer=window.setInterval(()=>void heartbeat(),19000+Math.floor(Math.random()*4000));
     const resumed=()=>void heartbeat();
     document.addEventListener('visibilitychange',resumed);
     window.addEventListener('online',resumed);
@@ -26,5 +27,5 @@ export function useLivePresence(userId?:string, gpsEnabled=false, activeMatchId=
       document.removeEventListener('visibilitychange',resumed);
       window.removeEventListener('online',resumed);
     };
-  },[userId,gpsEnabled,activeMatchId,cbr]);
+  },[userId]);
 }

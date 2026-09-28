@@ -177,21 +177,14 @@ const gpsCutoff = () => new Date(now() - 45_000).toISOString();
 const CLAIM_ACCURACY_METRES = 250;
 
 async function publicRanks(client: Db) {
-  await reconcileAuthProfiles(client);
-  const [r, presence] = await Promise.all([
-    client.from('cb_profiles')
-      .select('user_id,username,display_name,avatar_url,country_code,cbr,gold_points,wins,losses,win_streak')
-      .order('cbr', { ascending: false }).order('wins', { ascending: false }).order('user_id', { ascending: true }).limit(10),
-    client.from('cb_live_presence').select('*').limit(500),
-  ]);
+  const r = await client.from('cb_profiles')
+    .select('user_id,username,display_name,avatar_url,country_code,cbr,gold_points,wins,losses,win_streak')
+    .order('cbr', { ascending: false }).order('wins', { ascending: false }).order('user_id', { ascending: true }).limit(10);
   if (r.error) fail(500, r.error.message);
-  const cutoff = now() - 60_000;
-  const onlineIds = new Set((presence.error ? [] : presence.data ?? [])
-    .filter((row: any) => {
-      const timestamp = liveAt(row);
-      return timestamp === null ? row.online !== false && row.is_online !== false : timestamp > cutoff;
-    })
-    .map((row: any) => row.user_id));
+  const ids=(r.data??[]).map((row:any)=>row.user_id);
+  const presence=ids.length?await client.from('cb_live_presence').select('user_id').in('user_id',ids).gt('seen_at',new Date(now()-60_000).toISOString()):{data:[],error:null};
+  if(presence.error)fail(500,presence.error.message);
+  const onlineIds=new Set((presence.data??[]).map((row:any)=>row.user_id));
   return { players: (r.data ?? []).map((player: any) => ({ ...player, online: onlineIds.has(player.user_id) })) };
 }
 
@@ -203,18 +196,10 @@ function profileSeed(user: any) {
   return { user_id: user.id, username, display_name: rawName.slice(0, 60) || 'Chess Burger Player', avatar_url: '', country_code: /^[A-Z]{2}$/.test(String(meta.country_code ?? '')) ? meta.country_code : 'PH' };
 }
 
-async function reconcileAuthProfiles(client: Db) {
-  const [accounts, profiles] = await Promise.all([client.auth.admin.listUsers({ page: 1, perPage: 1000 }), client.from('cb_profiles').select('user_id')]);
-  if (accounts.error) fail(500, accounts.error.message);
-  if (profiles.error) fail(500, profiles.error.message);
-  const existing = new Set((profiles.data ?? []).map((row: any) => row.user_id));
-  const missing = (accounts.data?.users ?? []).filter((user: any) => !existing.has(user.id)).map(profileSeed);
-  if (missing.length) {
-    const inserted = await client.from('cb_profiles').upsert(missing, { onConflict: 'user_id', ignoreDuplicates: true });
-    if (inserted.error) fail(500, inserted.error.message);
-    console.info('arena.profiles-reconciled', { created: missing.length, totalAuthUsers: accounts.data?.total ?? accounts.data?.users?.length ?? 0 });
-  }
-  return Number(accounts.data?.total ?? accounts.data?.users?.length ?? 0);
+async function registeredProfileCount(client: Db) {
+  const result=await client.from('cb_profiles').select('user_id',{count:'exact',head:true});
+  if(result.error)fail(500,result.error.message);
+  return result.count??0;
 }
 async function playerRank(client: Db, profile: any) {
   const cbr = Number(profile.cbr ?? 0), wins = Number(profile.wins ?? 0);
@@ -275,11 +260,18 @@ async function nearbyPlayers(client: Db, account: any) {
   const own = await client.from('cb_presence').select('*').eq('user_id', account.id).eq('gps_enabled', true).gt('seen_at', gpsCutoff()).maybeSingle();
   if (own.error) fail(500, 'GPS presence is temporarily unavailable.');
   if (!own.data) return { players: [], territories: [] };
-  const presence = await client.from('cb_presence').select('*').neq('user_id', account.id).eq('gps_enabled', true).gt('seen_at', gpsCutoff());
+  const latitude=Number(own.data.latitude),longitude=Number(own.data.longitude);
+  const latDelta=10_000/111_000,lngDelta=10_000/(111_000*Math.max(.1,Math.cos(latitude*Math.PI/180)));
+  const presence = await client.from('cb_presence').select('user_id,latitude,longitude,accuracy,seen_at').neq('user_id', account.id).eq('gps_enabled', true).gt('seen_at', gpsCutoff())
+    .gte('latitude',latitude-latDelta).lte('latitude',latitude+latDelta).gte('longitude',longitude-lngDelta).lte('longitude',longitude+lngDelta).limit(500);
   if (presence.error) fail(500, presence.error.message);
-  const active = await client.from('cb_matches').select('white_id,black_id').eq('status', 'active');
-  if (active.error) fail(500, active.error.message);
-  const playing = new Set((active.data ?? []).flatMap((m: any) => [m.white_id, m.black_id]).filter(Boolean));
+  const candidateIds=(presence.data??[]).map((row:any)=>row.user_id);
+  const [white,black]=candidateIds.length?await Promise.all([
+    client.from('cb_matches').select('white_id').eq('status','active').in('white_id',candidateIds),
+    client.from('cb_matches').select('black_id').eq('status','active').in('black_id',candidateIds),
+  ]):[{data:[],error:null},{data:[],error:null}];
+  if(white.error||black.error)fail(500,white.error?.message??black.error?.message??'Nearby matches are temporarily unavailable.');
+  const playing=new Set([...(white.data??[]).map((row:any)=>row.white_id),...(black.data??[]).map((row:any)=>row.black_id)]);
   const available = (presence.data ?? []).filter((p: any) => !playing.has(p.user_id));
   const people = await playerMap(client, available.map((p: any) => p.user_id));
   const players = available.map((p: any) => {
@@ -296,7 +288,11 @@ async function nearbyPlayers(client: Db, account: any) {
   const merged=[...(nearbyZones.data??[]),...(ownedZones.data??[])].filter((zone:any,index:number,rows:any[])=>rows.findIndex(other=>other.id===zone.id)===index);
   const ownerIds=merged.map((zone:any)=>zone.user_id).filter(Boolean);
   const owners=ownerIds.length?await playerMap(client,ownerIds):new Map();
-  const liveLocations=new Map([[account.id,own.data],...(presence.data??[]).map((row:any)=>[row.user_id,row])]);
+  const nearbyIds=new Set(candidateIds);
+  const distantOwners=ownerIds.filter((id:string)=>id!==account.id&&!nearbyIds.has(id));
+  const otherOwners=distantOwners.length?await client.from('cb_presence').select('user_id,latitude,longitude').in('user_id',distantOwners).eq('gps_enabled',true).gt('seen_at',gpsCutoff()):{data:[],error:null};
+  if(otherOwners.error)fail(500,otherOwners.error.message);
+  const liveLocations=new Map<string,{latitude:number;longitude:number}>([[account.id,own.data],...(presence.data??[]).map((row:any):[string,{latitude:number;longitude:number}]=>[row.user_id,row]),...(otherOwners.data??[]).map((row:any):[string,{latitude:number;longitude:number}]=>[row.user_id,row])]);
   const territories=merged.map((zone:any)=>{
     const abandoned=!zone.user_id||Number(zone.defense_points??10)<=0;
     const owner=owners.get(zone.user_id);
@@ -560,23 +556,25 @@ function liveAt(row: any) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 async function publicOnlineUsers(client: Db) {
-  const [presence, active] = await Promise.all([
-    client.from('cb_live_presence').select('*').limit(100),
-    client.from('cb_matches').select('white_id,black_id').eq('status', 'active'),
+  const cutoff=new Date(now()-60_000).toISOString();
+  const [presence,total]=await Promise.all([
+    client.from('cb_live_presence').select('user_id,cbr,seen_at').gt('seen_at',cutoff).order('seen_at',{ascending:false}).limit(100),
+    client.from('cb_live_presence').select('user_id',{count:'exact',head:true}).gt('seen_at',cutoff),
   ]);
-  if (presence.error || active.error) fail(500, presence.error?.message ?? active.error?.message ?? 'Online players are temporarily unavailable.');
-  const cutoff = now() - 60_000;
-  const recent = (presence.data ?? []).filter((row: any) => {
-    const timestamp = liveAt(row);
-    return timestamp === null ? row.online !== false && row.is_online !== false : timestamp > cutoff;
-  });
-  const playing = new Set((active.data ?? []).flatMap((match: any) => [match.white_id, match.black_id]).filter(Boolean));
+  if(presence.error||total.error)fail(500,presence.error?.message??total.error?.message??'Online players are temporarily unavailable.');
+  const recent=presence.data??[],ids=recent.map((row:any)=>row.user_id);
+  const [white,black]=ids.length?await Promise.all([
+    client.from('cb_matches').select('white_id').eq('status','active').in('white_id',ids),
+    client.from('cb_matches').select('black_id').eq('status','active').in('black_id',ids),
+  ]):[{data:[],error:null},{data:[],error:null}];
+  if(white.error||black.error)fail(500,white.error?.message??black.error?.message??'Online players are temporarily unavailable.');
+  const playing=new Set([...(white.data??[]).map((row:any)=>row.white_id),...(black.data??[]).map((row:any)=>row.black_id)]);
   const people = await playerMap(client, recent.map((row: any) => row.user_id));
   const users = recent.map((row: any) => {
     const player = people.get(row.user_id);
     return player ? { ...player, cbr: Number(player.cbr ?? 88), available: !playing.has(row.user_id) } : null;
   }).filter(Boolean).sort((a: any, b: any) => b.cbr - a.cbr);
-  return { users, count: users.length };
+  return { users, count: total.count??0 };
 }
 
 async function activeMatchFor(client: Db, userId: string) {
@@ -716,7 +714,9 @@ export default async function handler(req: Req, res: Res) {
   try {
     const client = db(), body = (req.body && typeof req.body === 'object' ? req.body : {}) as Record<string, any>;
     action = String(req.method === 'GET' ? req.query?.action ?? '' : body.action ?? '');
-    console.info('arena.request', { action, method: req.method });
+    // Polls and heartbeats are frequent; logging every request overwhelms logs at scale.
+    if (!['heartbeat','presence','nearby','map-stats','queue','match','feed','online-users','ranks'].includes(action))
+      console.info('arena.request', { action, method: req.method });
     if (req.method === 'GET') {
       if (action === 'feed') return res.status(200).json(await publicFeed(client));
       if (action === 'online-users') return res.status(200).json(await publicOnlineUsers(client));
@@ -1174,20 +1174,21 @@ export default async function handler(req: Req, res: Res) {
     }
     if (action === 'heartbeat') return res.status(200).json(await saveLiveHeartbeat(client, account.id));
     if (action === 'map-stats') {
-      const registered = await reconcileAuthProfiles(client);
-      const [online, matches, gps] = await Promise.all([
-        publicOnlineUsers(client),
+      const [registered, online, matches, gps, leader] = await Promise.all([
+        registeredProfileCount(client),
+        client.from('cb_live_presence').select('user_id',{count:'exact',head:true}).gt('seen_at',new Date(now()-60_000).toISOString()),
         client.from('cb_matches').select('id', { count: 'exact', head: true }).eq('status', 'active'),
         client.from('cb_presence').select('user_id', { count: 'exact', head: true }).eq('gps_enabled', true).gt('seen_at', gpsCutoff()),
+        client.from('cb_live_presence').select('user_id,cbr').gt('seen_at',new Date(now()-60_000).toISOString()).order('cbr',{ascending:false}).limit(1).maybeSingle(),
       ]);
-      if (matches.error || gps.error) fail(500, matches.error?.message ?? gps.error?.message ?? 'Unable to load activity totals.');
-      const leaderProfile = online.users[0] ?? null;
+      if (online.error||matches.error||gps.error||leader.error) fail(500,online.error?.message??matches.error?.message??gps.error?.message??leader.error?.message??'Unable to load activity totals.');
+      const leaderProfile=leader.data?(await playerMap(client,[leader.data.user_id])).get(leader.data.user_id):null;
       return res.status(200).json({
-        online_users: online.count,
+        online_users: online.count??0,
         registered_users: registered,
         active_matches: matches.count ?? 0,
         gps_online: gps.count ?? 0,
-        highest_online: leaderProfile ? { user_id: leaderProfile.user_id, display_name: leaderProfile.display_name, cbr: Number(leaderProfile.cbr ?? 88) } : null,
+        highest_online: leaderProfile ? { user_id: leaderProfile.user_id, display_name: leaderProfile.display_name, cbr: Number(leader.data?.cbr ?? leaderProfile.cbr ?? 88) } : null,
         updated_at: new Date().toISOString()
       });
     }

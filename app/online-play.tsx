@@ -53,34 +53,25 @@ export default function OnlinePlay({
   useEffect(() => {
     if (!searching) return;
     cancelled.current = false;
-    const category = timeControl(control).group;
-    const queueControls = [
-      control,
-      ...TIME_CONTROLS.filter(
-        (candidate) => candidate.group === category && candidate.id !== control,
-      ).map((candidate) => candidate.id),
-    ];
     let pending = false;
     const poll = async () => {
-      if (pending) return;
+      if (pending || !navigator.onLine || document.visibilityState === "hidden") return;
       pending = true;
       try {
-        for (const candidateControl of queueControls) {
-          const r = await arena<{ match: ArenaMatch | null }>("queue", {
-            control: candidateControl,
-            play_mode: playMode,
-            wager_gold: playMode === "wager" ? wagerGold : 0,
-          });
-          if (cancelled.current) {
-            await arena("cancel-queue");
-            return;
-          }
-          if (r.match) {
-            setSearching(false);
-            if (r.match.status === "active") callback.current(r.match.id);
-            else setRoom(r.match);
-            return;
-          }
+        // The server already searches every compatible control in this category.
+        const r = await arena<{ match: ArenaMatch | null }>("queue", {
+          control,
+          play_mode: playMode,
+          wager_gold: playMode === "wager" ? wagerGold : 0,
+        });
+        if (cancelled.current) {
+          await arena("cancel-queue");
+          return;
+        }
+        if (r.match) {
+          setSearching(false);
+          if (r.match.status === "active") callback.current(r.match.id);
+          else setRoom(r.match);
         }
       } catch (e) {
         setError((e as Error).message);
@@ -90,7 +81,7 @@ export default function OnlinePlay({
       }
     };
     void poll();
-    const timer = setInterval(poll, 2000);
+    const timer = setInterval(poll, 2500 + Math.floor(Math.random() * 500));
     return () => {
       cancelled.current = true;
       clearInterval(timer);
