@@ -177,12 +177,13 @@ const gpsCutoff = () => new Date(now() - 45_000).toISOString();
 const CLAIM_ACCURACY_METRES = 250;
 
 async function publicRanks(client: Db) {
+  const field=await livePresenceTimestampField(client);
   const r = await client.from('cb_profiles')
     .select('user_id,username,display_name,avatar_url,country_code,cbr,gold_points,wins,losses,win_streak')
     .order('cbr', { ascending: false }).order('wins', { ascending: false }).order('user_id', { ascending: true }).limit(10);
   if (r.error) fail(500, r.error.message);
   const ids=(r.data??[]).map((row:any)=>row.user_id);
-  const presence=ids.length?await client.from('cb_live_presence').select('user_id').in('user_id',ids).gt('seen_at',new Date(now()-60_000).toISOString()):{data:[],error:null};
+  const presence=ids.length?await client.from('cb_live_presence').select('user_id').in('user_id',ids).gt(field,new Date(now()-60_000).toISOString()):{data:[],error:null};
   if(presence.error)fail(500,presence.error.message);
   const onlineIds=new Set((presence.data??[]).map((row:any)=>row.user_id));
   return { players: (r.data ?? []).map((player: any) => ({ ...player, online: onlineIds.has(player.user_id) })) };
@@ -555,11 +556,22 @@ function liveAt(row: any) {
   const parsed = value ? Date.parse(String(value)) : NaN;
   return Number.isFinite(parsed) ? parsed : null;
 }
+let cachedPresenceTimestampField:string|undefined;
+async function livePresenceTimestampField(client:Db):Promise<string>{
+  if(cachedPresenceTimestampField)return cachedPresenceTimestampField;
+  for(const field of ['seen_at','last_seen_at','updated_at','last_seen']){
+    const probe=await client.from('cb_live_presence').select(field).limit(0);
+    if(!probe.error){cachedPresenceTimestampField=field;return field;}
+    if(!/column .* does not exist|schema cache/i.test(String(probe.error.message??'')))fail(500,probe.error.message);
+  }
+  fail(503,'Live presence has no supported timestamp. Apply supabase/0075_concurrent_user_indexes.sql.');
+}
 async function publicOnlineUsers(client: Db) {
+  const field=await livePresenceTimestampField(client);
   const cutoff=new Date(now()-60_000).toISOString();
   const [presence,total]=await Promise.all([
-    client.from('cb_live_presence').select('user_id,seen_at').gt('seen_at',cutoff).order('seen_at',{ascending:false}).limit(100),
-    client.from('cb_live_presence').select('user_id',{count:'exact',head:true}).gt('seen_at',cutoff),
+    client.from('cb_live_presence').select(`user_id,${field}`).gt(field,cutoff).order(field,{ascending:false}).limit(100),
+    client.from('cb_live_presence').select('user_id',{count:'exact',head:true}).gt(field,cutoff),
   ]);
   if(presence.error||total.error)fail(500,presence.error?.message??total.error?.message??'Online players are temporarily unavailable.');
   const recent=presence.data??[],ids=recent.map((row:any)=>row.user_id);
@@ -1174,12 +1186,13 @@ export default async function handler(req: Req, res: Res) {
     }
     if (action === 'heartbeat') return res.status(200).json(await saveLiveHeartbeat(client, account.id));
     if (action === 'map-stats') {
+      const field=await livePresenceTimestampField(client);
       const [registered, online, matches, gps, leader] = await Promise.all([
         registeredProfileCount(client),
-        client.from('cb_live_presence').select('user_id',{count:'exact',head:true}).gt('seen_at',new Date(now()-60_000).toISOString()),
+        client.from('cb_live_presence').select('user_id',{count:'exact',head:true}).gt(field,new Date(now()-60_000).toISOString()),
         client.from('cb_matches').select('id', { count: 'exact', head: true }).eq('status', 'active'),
         client.from('cb_presence').select('user_id', { count: 'exact', head: true }).eq('gps_enabled', true).gt('seen_at', gpsCutoff()),
-        client.from('cb_live_presence').select('user_id').gt('seen_at',new Date(now()-60_000).toISOString()).order('seen_at',{ascending:false}).limit(100),
+        client.from('cb_live_presence').select('user_id').gt(field,new Date(now()-60_000).toISOString()).order(field,{ascending:false}).limit(100),
       ]);
       if (online.error||matches.error||gps.error||leader.error) fail(500,online.error?.message??matches.error?.message??gps.error?.message??leader.error?.message??'Unable to load activity totals.');
       const recentPlayers=leader.data?.length?await playerMap(client,leader.data.map((row:any)=>row.user_id)):new Map<string,any>();
@@ -1648,13 +1661,4 @@ export default async function handler(req: Req, res: Res) {
     }
     fail(404, 'This game action is not available during the migration.');
   } catch (error) {
-    const matchFailure = error instanceof Error && error.name === 'MatchActionError' && typeof (error as any).status === 'number';
-    const known = error instanceof ApiError
-      ? error
-      : matchFailure
-        ? new ApiError((error as any).status, error.message)
-        : new ApiError(500, 'The game service could not complete this request. Please try again.');
-    console.error('arena.failed', { action, status: known.status, message: known.message, stack: error instanceof Error ? error.stack : String(error) });
-    return res.status(known.status).json({ error: known.message });
-  }
-}
+    const matchFailure = error instanceof Error && error.name === 'MatchActionError' && typeof (
