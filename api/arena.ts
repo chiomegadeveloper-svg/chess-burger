@@ -558,7 +558,7 @@ function liveAt(row: any) {
 async function publicOnlineUsers(client: Db) {
   const cutoff=new Date(now()-60_000).toISOString();
   const [presence,total]=await Promise.all([
-    client.from('cb_live_presence').select('user_id,cbr,seen_at').gt('seen_at',cutoff).order('seen_at',{ascending:false}).limit(100),
+    client.from('cb_live_presence').select('user_id,seen_at').gt('seen_at',cutoff).order('seen_at',{ascending:false}).limit(100),
     client.from('cb_live_presence').select('user_id',{count:'exact',head:true}).gt('seen_at',cutoff),
   ]);
   if(presence.error||total.error)fail(500,presence.error?.message??total.error?.message??'Online players are temporarily unavailable.');
@@ -1179,16 +1179,17 @@ export default async function handler(req: Req, res: Res) {
         client.from('cb_live_presence').select('user_id',{count:'exact',head:true}).gt('seen_at',new Date(now()-60_000).toISOString()),
         client.from('cb_matches').select('id', { count: 'exact', head: true }).eq('status', 'active'),
         client.from('cb_presence').select('user_id', { count: 'exact', head: true }).eq('gps_enabled', true).gt('seen_at', gpsCutoff()),
-        client.from('cb_live_presence').select('user_id,cbr').gt('seen_at',new Date(now()-60_000).toISOString()).order('cbr',{ascending:false}).limit(1).maybeSingle(),
+        client.from('cb_live_presence').select('user_id').gt('seen_at',new Date(now()-60_000).toISOString()).order('seen_at',{ascending:false}).limit(100),
       ]);
       if (online.error||matches.error||gps.error||leader.error) fail(500,online.error?.message??matches.error?.message??gps.error?.message??leader.error?.message??'Unable to load activity totals.');
-      const leaderProfile=leader.data?(await playerMap(client,[leader.data.user_id])).get(leader.data.user_id):null;
+      const recentPlayers=leader.data?.length?await playerMap(client,leader.data.map((row:any)=>row.user_id)):new Map<string,any>();
+      const leaderProfile=[...recentPlayers.values()].sort((a:any,b:any)=>Number(b.cbr??88)-Number(a.cbr??88))[0]??null;
       return res.status(200).json({
         online_users: online.count??0,
         registered_users: registered,
         active_matches: matches.count ?? 0,
         gps_online: gps.count ?? 0,
-        highest_online: leaderProfile ? { user_id: leaderProfile.user_id, display_name: leaderProfile.display_name, cbr: Number(leader.data?.cbr ?? leaderProfile.cbr ?? 88) } : null,
+        highest_online: leaderProfile ? { user_id: leaderProfile.user_id, display_name: leaderProfile.display_name, cbr: Number(leaderProfile.cbr ?? 88) } : null,
         updated_at: new Date().toISOString()
       });
     }
