@@ -243,6 +243,7 @@ export default function CommunityFeed({
   const [arenaOpen, setArenaOpen] = useState<{ content: string } | null>(null);
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
   const [onlineUsers, setOnlineUsers] = useState<OnlinePlayer[]>([]),
+    [onlineStatus,setOnlineStatus]=useState(""),
     [onlineSearch, setOnlineSearch] = useState(""),
     [onlineCard, setOnlineCard] = useState<string | null>(null),
     [onlinePage, setOnlinePage] = useState(1);
@@ -260,25 +261,14 @@ export default function CommunityFeed({
       setStatus("");
       return;
     }
-    const [localFeed, online, me, arenaWindow] = await Promise.allSettled([
+    const [localFeed, me, arenaWindow] = await Promise.allSettled([
       arena<{ events: CommunityEvent[] }>("feed", {}, true),
-      arena<{ users: OnlinePlayer[]; count: number }>("online-users", {}, true),
       arena<{ profile: ArenaPlayer }>("me"),
       fetch("/api/grand-arena?action=window", { cache: "no-store" }).then(
         (response) => response.json(),
       ),
     ]);
     if (seq !== request.current) return;
-    const users: OnlinePlayer[] =
-      online.status === "fulfilled" ? [...online.value.users] : [];
-    if (
-      me.status === "fulfilled" &&
-      me.value.profile?.user_id &&
-      !users.some((player) => player.user_id === me.value.profile.user_id)
-    ) {
-      users.unshift({ ...me.value.profile, available: true });
-    }
-    setOnlineUsers(users);
     setArenaOpen(
       arenaWindow.status === "fulfilled" && arenaWindow.value?.open
         ? {
@@ -324,15 +314,9 @@ export default function CommunityFeed({
           Date.parse(b.created_at) - Date.parse(a.created_at),
       );
     if (tab === "online") {
-      setTotal(users.length);
+      setTotal(0);
       setEvents([]);
-      setStatus(
-        users.length
-          ? ""
-          : online.status === "rejected"
-            ? "Online players are temporarily unavailable."
-            : "No players are online right now.",
-      );
+      setStatus("");
     } else {
       setTotal(rows.length);
       const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
@@ -406,6 +390,23 @@ export default function CommunityFeed({
       window.removeEventListener("cb-profile-saved", load);
     };
   }, [refresh]);
+  useEffect(()=>{
+    let active=true;
+    const update=async()=>{
+      try{
+        const result=await arena<{users:OnlinePlayer[];count:number}>("online-users",{},true);
+        if(!active)return;
+        setOnlineUsers(result.users);
+        setOnlineStatus("");
+      }catch(error){
+        if(!active)return;
+        setOnlineStatus(error instanceof Error?error.message:"Online players are temporarily unavailable.");
+      }
+    };
+    void update();
+    const timer=window.setInterval(()=>void update(),tab==="online"?5000:20000);
+    return()=>{active=false;window.clearInterval(timer)};
+  },[tab]);
   const pendingHearts = useRef(new Set<string>());
   async function toggleHeart(event: CommunityEvent) {
     if (!userId) {
@@ -704,6 +705,7 @@ export default function CommunityFeed({
               <X size={14} />
             </button>
           </label>
+          {onlineStatus&&<p className="account-note" role="status">Online list unavailable: {onlineStatus}</p>}
           {visibleOnline.length > 0 && (
             <div
               className="online-avatars"
@@ -909,7 +911,7 @@ export default function CommunityFeed({
               })}
             </div>
           )}
-          {!status && shownOnline.length === 0 && (
+          {!onlineStatus && shownOnline.length === 0 && (
             <p className="account-note">
               No online player matches that search.
             </p>

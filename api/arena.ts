@@ -586,20 +586,27 @@ async function publicOnlineUsers(client: Db) {
     client.from('cb_live_presence').select(`user_id,${field}`).gt(field,cutoff).order(field,{ascending:false}).limit(100),
     client.from('cb_live_presence').select('user_id',{count:'exact',head:true}).gt(field,cutoff),
   ]);
-  if(presence.error||total.error)fail(500,presence.error?.message??total.error?.message??'Online players are temporarily unavailable.');
+  if(presence.error)fail(500,presence.error.message);
+  if(total.error)console.warn('arena.online-users.count-unavailable',total.error.message);
   const recent=presence.data??[],ids=recent.map((row:any)=>row.user_id);
   const [white,black]=ids.length?await Promise.all([
     client.from('cb_matches').select('white_id').eq('status','active').in('white_id',ids),
     client.from('cb_matches').select('black_id').eq('status','active').in('black_id',ids),
   ]):[{data:[],error:null},{data:[],error:null}];
-  if(white.error||black.error)fail(500,white.error?.message??black.error?.message??'Online players are temporarily unavailable.');
+  if(white.error||black.error)console.warn('arena.online-users.match-status-unavailable',white.error?.message??black.error?.message);
   const playing=new Set([...(white.data??[]).map((row:any)=>row.white_id),...(black.data??[]).map((row:any)=>row.black_id)]);
-  const people = await playerMap(client, recent.map((row: any) => row.user_id));
+  let people:Map<string,any>;
+  try{people=await playerMap(client,ids) as Map<string,any>}catch(error){
+    console.warn('arena.online-users.profile-fallback',error instanceof Error?error.message:String(error));
+    const fallback=await client.from('cb_profiles').select('user_id,username,display_name,avatar_url,cbr,wins,losses,gold_points').in('user_id',ids);
+    if(fallback.error)fail(500,fallback.error.message);
+    people=new Map((fallback.data??[]).map((person:any)=>[person.user_id,person]));
+  }
   const users = recent.map((row: any) => {
     const player = people.get(row.user_id);
     return player ? { ...player, cbr: Number(player.cbr ?? 88), available: !playing.has(row.user_id) } : null;
   }).filter(Boolean).sort((a: any, b: any) => b.cbr - a.cbr);
-  return { users, count: total.count??0 };
+  return { users, count: total.error?users.length:total.count??users.length };
 }
 
 async function activeMatchFor(client: Db, userId: string) {
