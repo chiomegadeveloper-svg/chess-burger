@@ -36,3 +36,28 @@
 .seba-certificate-overlay .seba-certificate-border img{mix-blend-mode:normal;display:block;max-width:85%}.seba-certificate-overlay .seba-certificate-brand{position:relative;z-index:1;display:block;color:#9d1719;font-size:clamp(20px,3.5vw,34px);font-weight:1000;line-height:1.15;letter-spacing:.05em;text-shadow:0 1px 0 #fff;margin-top:5px}.seba-certificate-overlay .seba-certificate-border small{display:block;color:#6b4b17;margin-top:6px}
 
 .seba-certificate-overlay .seba-certificate-border .seba-certificate-disclaimer{display:block;position:relative;z-index:1;margin-top:28px;color:#515a4c;font-size:10px;font-weight:500;letter-spacing:0;text-align:center;line-height:1.4}
+
+/* A solid black wordmark and a faint central seal keep certificate text legible. */
+.seba-certificate-overlay .seba-certificate-border img.seba-certificate-logo{position:relative;z-index:1;display:block;width:clamp(230px,48%,430px);height:auto;max-width:85%;max-height:180px;margin:0 auto 12px;object-fit:contain;mix-blend-mode:normal}
+.seba-certificate-overlay .seba-certificate-border .seba-certificate-watermark{position:absolute;z-index:0;top:54%;left:50%;width:min(62%,430px);aspect-ratio:1;transform:translate(-50%,-50%);background:url('/seba-certificate-logo-dark.png') left center/235% auto no-repeat;opacity:.06;pointer-events:none}
+.seba-certificate-overlay .seba-certificate-border>small,.seba-certificate-overlay .seba-certificate-border>h2,.seba-certificate-overlay .seba-certificate-border>h3,.seba-certificate-overlay .seba-certificate-border>p,.seba-certificate-overlay .seba-certificate-border>strong{position:relative;z-index:1}
+
+/* A student receives this prompt when a teacher requests a certificate. */
+.seba-name-overlay{position:fixed;inset:0;z-index:10002;display:grid;place-items:center;overflow:auto;padding:16px;background:#031014d9;backdrop-filter:blur(6px)}
+.seba-name-dialog{width:min(460px,100%);max-height:calc(100dvh - 32px);overflow:auto;padding:25px;border:1px solid #b69d69;border-radius:18px;background:#fdf9ed;color:#20302c;box-shadow:0 24px 75px #0009}
+.seba-name-dialog .seba-name-eyebrow{color:#806026;font-size:10px;font-weight:900;letter-spacing:.12em}
+.seba-name-dialog h2{margin:6px 0 8px;font-family:Georgia,serif;font-size:clamp(23px,4vw,29px);color:#1b372f}
+.seba-name-dialog p{margin:0 0 17px;color:#4b5750;font-size:13px;line-height:1.55}
+.seba-name-dialog>label:not(.seba-name-confirm){display:block;margin-bottom:6px;font-size:12px;font-weight:800}
+.seba-name-dialog>input{display:block;width:100%;min-height:44px;padding:10px 12px;border:1px solid #a6aea3;border-radius:9px;background:#fff;color:#1b2824;font:inherit;font-size:14px}
+.seba-name-dialog>input:focus-visible{outline:2px solid #159bb0;outline-offset:2px}
+.seba-name-preview{display:grid;gap:3px;min-height:75px;margin:12px 0;padding:13px;border:1px solid #dbccaa;border-radius:10px;background:#f4eddb;text-align:center}
+.seba-name-preview small{color:#715728;font-size:10px;font-weight:800;letter-spacing:.08em}
+.seba-name-preview strong{overflow-wrap:anywhere;font-family:Georgia,serif;font-size:20px;color:#17352a}
+.seba-name-confirm{display:flex;align-items:flex-start;gap:9px;font-size:12px;line-height:1.45;cursor:pointer}
+.seba-name-confirm input{flex:none;width:18px;height:18px;margin:1px 0;accent-color:#175747}
+.seba-name-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:20px}
+.seba-tournament .seba-name-actions button{min-height:38px;padding:8px 12px;border:1px solid #b5a98e;border-radius:8px;background:#fff;color:#263832;font-size:12px;font-weight:800}
+.seba-tournament .seba-name-actions button[type=submit]{border-color:#144537;background:#175747;color:#fff}
+.seba-tournament .seba-certificate-pending small{color:#f2d692}
+@media(max-width:580px){.seba-certificate-overlay .seba-certificate-border img.seba-certificate-logo{width:min(83%,330px);height:auto;max-height:125px}.seba-certificate-overlay .seba-certificate-border .seba-certificate-watermark{width:72%}.seba-name-dialog{padding:19px}}
