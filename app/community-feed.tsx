@@ -397,7 +397,7 @@ export default function CommunityFeed({
       if(pending||document.visibilityState==="hidden")return;
       pending=true;
       try{
-        const result=await arena<{users:OnlinePlayer[];count:number}>("online-users",{},true);
+        const result=await arena<{users:OnlinePlayer[];count:number}>("online-users");
         if(!active)return;
         setOnlineUsers(result.users);
         setOnlineCount(result.count);

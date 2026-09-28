@@ -598,6 +598,17 @@ async function publicOnlineUsers(client: Db) {
       if(!retry.error&&retry.data?.length){recent=retry.data;cachedPresenceTimestampField=candidate;break;}
     }
   }
+  if(!recent.length){
+    // GET/count can disagree on production gateways. Read a bounded set of
+    // presence records and apply the same 60-second cutoff in this function.
+    const fallback=await client.from('cb_live_presence').select('*',{count:'exact'}).limit(1000);
+    if(!fallback.error)recent=(fallback.data??[]).filter((row:any)=>
+      ['seen_at','last_seen_at','updated_at','last_seen'].some(field=>
+        Number.isFinite(Date.parse(String(row[field]??'')))&&Date.parse(String(row[field]))>Date.parse(cutoff)
+      )
+    ).slice(0,100);
+  }
+  if(!recent.length&&(total.count??0)>0)fail(503,'Presence is active, but the player list could not be read. Please try again.');
   const ids=recent.map((row:any)=>row.user_id);
   const [white,black]=ids.length?await Promise.all([
     client.from('cb_matches').select('white_id').eq('status','active').in('white_id',ids),
@@ -616,11 +627,16 @@ async function publicOnlineUsers(client: Db) {
     const missing=ids.filter((id:string)=>!people.has(id));
     const fallback=await client.from('cb_profiles').select('user_id,username,display_name,avatar_url,cbr,wins,losses,gold_points').in('user_id',missing);
     if(!fallback.error)for(const profile of fallback.data??[])people.set(profile.user_id,profile);
+    if(people.size<ids.length){
+      const all=await client.from('cb_profiles').select('user_id,username,display_name,avatar_url,cbr,wins,losses,gold_points').limit(1000);
+      if(!all.error)for(const profile of all.data??[])if(missing.includes(profile.user_id))people.set(profile.user_id,profile);
+    }
   }
   const users = recent.map((row: any) => {
     const player = people.get(row.user_id);
     return player ? { ...player, cbr: Number(player.cbr ?? 88), available: !playing.has(row.user_id) } : null;
   }).filter(Boolean).sort((a: any, b: any) => b.cbr - a.cbr);
+  if(recent.length&&!users.length){console.warn('arena.online-users.profiles-missing',{presence:recent.length,profiles:people.size});fail(503,'Online players are active, but their profiles could not be loaded. Please try again.');}
   return { users, count: Math.max(users.length,total.error?0:total.count??0) };
 }
 
@@ -1220,6 +1236,7 @@ export default async function handler(req: Req, res: Res) {
       return res.status(200).json(report.data);
     }
     if (action === 'heartbeat') return res.status(200).json(await saveLiveHeartbeat(client, account.id));
+    if (action === 'online-users') return res.status(200).json(await publicOnlineUsers(client));
     if (action === 'map-stats') {
       let field:string|null=null;
       try{field=await livePresenceTimestampField(client);}catch(error){
