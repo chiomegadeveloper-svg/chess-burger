@@ -177,15 +177,20 @@ const gpsCutoff = () => new Date(now() - 45_000).toISOString();
 const CLAIM_ACCURACY_METRES = 250;
 
 async function publicRanks(client: Db) {
-  const field=await livePresenceTimestampField(client);
   const r = await client.from('cb_profiles')
     .select('user_id,username,display_name,avatar_url,country_code,cbr,gold_points,wins,losses,win_streak')
     .order('cbr', { ascending: false }).order('wins', { ascending: false }).order('user_id', { ascending: true }).limit(10);
   if (r.error) fail(500, r.error.message);
+  if (!r.data?.length && await registeredProfileCount(client)>0) fail(503,'CBR rankings could not load. Please try again.');
   const ids=(r.data??[]).map((row:any)=>row.user_id);
-  const presence=ids.length?await client.from('cb_live_presence').select('user_id').in('user_id',ids).gt(field,new Date(now()-60_000).toISOString()):{data:[],error:null};
-  if(presence.error)fail(500,presence.error.message);
-  const onlineIds=new Set((presence.data??[]).map((row:any)=>row.user_id));
+  // Ratings belong to profiles. A presence outage must not hide the Top 10.
+  let onlineIds=new Set<string>();
+  if(ids.length)try{
+    const field=await livePresenceTimestampField(client);
+    const presence=await client.from('cb_live_presence').select('user_id').in('user_id',ids).gt(field,new Date(now()-60_000).toISOString());
+    if(presence.error)throw presence.error;
+    onlineIds=new Set((presence.data??[]).map((row:any)=>row.user_id));
+  }catch(error){console.warn('arena.ranks.presence-unavailable',error instanceof Error?error.message:String(error));}
   return { players: (r.data ?? []).map((player: any) => ({ ...player, online: onlineIds.has(player.user_id) })) };
 }
 
@@ -206,8 +211,15 @@ async function playerRank(client: Db, profile: any) {
   const cbr = Number(profile.cbr ?? 0), wins = Number(profile.wins ?? 0);
   const ahead = [`cbr.gt.${cbr}`, `and(cbr.eq.${cbr},wins.gt.${wins})`, `and(cbr.eq.${cbr},wins.eq.${wins},user_id.lt.${profile.user_id})`].join(',');
   const r = await client.from('cb_profiles').select('user_id', { count: 'exact', head: true }).or(ahead);
-  if (r.error) fail(500, r.error.message);
-  return (r.count ?? 0) + 1;
+  if (!r.error) return (r.count ?? 0) + 1;
+  // Older PostgREST versions can reject a nested OR count. Preserve the same tie break.
+  const [higher,richer,tied]=await Promise.all([
+    client.from('cb_profiles').select('user_id',{count:'exact',head:true}).gt('cbr',cbr),
+    client.from('cb_profiles').select('user_id',{count:'exact',head:true}).eq('cbr',cbr).gt('wins',wins),
+    client.from('cb_profiles').select('user_id',{count:'exact',head:true}).eq('cbr',cbr).eq('wins',wins).lt('user_id',profile.user_id)
+  ]);
+  if(higher.error||richer.error||tied.error)fail(500,higher.error?.message??richer.error?.message??tied.error?.message??r.error.message);
+  return (higher.count??0)+(richer.count??0)+(tied.count??0)+1;
 }
 function metres(aLat: number, aLng: number, bLat: number, bLng: number) {
   const rad = Math.PI / 180, dLat = (bLat - aLat) * rad, dLng = (bLng - aLng) * rad;
@@ -1206,9 +1218,27 @@ export default async function handler(req: Req, res: Res) {
         try{recentPlayers=await playerMap(client,leader.data.map((row:any)=>row.user_id));}
         catch(error){console.warn('arena.map-stats.leader-unavailable',error instanceof Error?error.message:String(error));}
       }
-      const leaderProfile=[...recentPlayers.values()].sort((a:any,b:any)=>Number(b.cbr??88)-Number(a.cbr??88))[0]??null;
+      let leaderProfile=[...recentPlayers.values()].sort((a:any,b:any)=>Number(b.cbr??88)-Number(a.cbr??88))[0]??null;
+      let onlineCount=field&&!online.error?online.count:null;
+      let workingField=field;
+      if(onlineCount==null){
+        // Retry a small GET: exact totals come from Content-Range. Probe legacy
+        // timestamp columns too, since older production schemas differ.
+        for(const candidate of [...new Set([field,'seen_at','last_seen_at','updated_at','last_seen'].filter(Boolean))] as string[]){
+          const retry=await client.from('cb_live_presence').select('user_id',{count:'exact'}).gt(candidate,cutoff).limit(1);
+          if(!retry.error&&retry.count!=null){onlineCount=retry.count;workingField=candidate;break;}
+          if(retry.error)console.warn('arena.map-stats.online-count-unavailable',{candidate,message:retry.error.message});
+        }
+      }
+      if(!leaderProfile&&workingField&&onlineCount){
+        const recent=await client.from('cb_live_presence').select('user_id').gt(workingField,cutoff).order(workingField,{ascending:false}).limit(100);
+        if(!recent.error&&recent.data?.length){
+          try{const people=await playerMap(client,recent.data.map((row:any)=>row.user_id));leaderProfile=[...people.values()].sort((a:any,b:any)=>Number(b.cbr??88)-Number(a.cbr??88))[0]??null;}
+          catch(error){console.warn('arena.map-stats.leader-retry-unavailable',error instanceof Error?error.message:String(error));}
+        }
+      }
       return res.status(200).json({
-        online_users: field&&!online.error?online.count??0:null,
+        online_users: onlineCount,
         registered_users: registered,
         active_matches: matches.error?null:matches.count??0,
         gps_online: gps.error?null:gps.count??0,
