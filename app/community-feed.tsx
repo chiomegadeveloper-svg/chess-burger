@@ -256,7 +256,7 @@ export default function CommunityFeed({
     [reacted, setReacted] = useState<Set<string>>(new Set());
   const refresh = useCallback(async () => {
     const seq = ++request.current;
-    if (tab === "rewards" || tab === "training") {
+    if (tab === "rewards" || tab === "training" || tab === "online") {
       setTotal(0);
       setEvents([]);
       setStatus("");
@@ -314,26 +314,20 @@ export default function CommunityFeed({
             Number(a.kind === "announcement") ||
           Date.parse(b.created_at) - Date.parse(a.created_at),
       );
-    if (tab === "online") {
-      setTotal(0);
-      setEvents([]);
-      setStatus("");
-    } else {
-      setTotal(rows.length);
-      const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
-      if (page > pages) {
-        setPage(pages);
-        return;
-      }
-      setEvents(rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE));
-      setStatus(
-        rows.length || all.some((e) => e.kind === "challenge")
-          ? ""
-          : localFeed.status === "rejected"
-            ? "Community activity is temporarily unavailable."
-            : "No activity in this view yet.",
-      );
+    setTotal(rows.length);
+    const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+    if (page > pages) {
+      setPage(pages);
+      return;
     }
+    setEvents(rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE));
+    setStatus(
+      rows.length || all.some((e) => e.kind === "challenge")
+        ? ""
+        : localFeed.status === "rejected"
+          ? "Community activity is temporarily unavailable."
+          : "No activity in this view yet.",
+    );
     try {
       const c = await getSupabase(),
         session = c ? (await c.auth.getSession()).data.session : null;
@@ -363,13 +357,16 @@ export default function CommunityFeed({
     } catch {}
   }, [page, tab]);
   useEffect(() => {
-    let active = true;
-    const load = () =>
+    let active = true, pending = false;
+    const load = () => {
+      if(pending || document.visibilityState==="hidden" || !navigator.onLine)return;
+      pending = true;
       void refresh().catch(() => {
         if (active) setStatus("Community activity is temporarily unavailable.");
-      });
+      }).finally(() => { pending = false; });
+    };
     load();
-    const timer = setInterval(load, tab === "online" ? 5000 : 10000);
+    const timer = setInterval(load, 30000 + Math.floor(Math.random() * 4000));
     const expiry = setInterval(() => {
       setEvents((rows) =>
         rows.filter(
@@ -383,18 +380,22 @@ export default function CommunityFeed({
       );
     }, 1000);
     window.addEventListener("cb-profile-saved", load);
+    document.addEventListener("visibilitychange",load);
+    window.addEventListener("online",load);
     return () => {
       active = false;
       request.current++;
       clearInterval(timer);
       clearInterval(expiry);
       window.removeEventListener("cb-profile-saved", load);
+      document.removeEventListener("visibilitychange",load);
+      window.removeEventListener("online",load);
     };
   }, [refresh]);
   useEffect(()=>{
     let active=true,pending=false;
     const update=async()=>{
-      if(pending||document.visibilityState==="hidden")return;
+      if(pending||!navigator.onLine||document.visibilityState==="hidden")return;
       pending=true;
       try{
         const result=await arena<{users:OnlinePlayer[];count:number}>("online-users");
@@ -408,8 +409,11 @@ export default function CommunityFeed({
       }finally{pending=false}
     };
     void update();
-    const timer=window.setInterval(()=>void update(),tab==="online"?5000:20000);
-    return()=>{active=false;window.clearInterval(timer)};
+    const timer=window.setInterval(()=>void update(),tab==="online"?10000:60000);
+    const resumed=()=>{if(document.visibilityState==="visible")void update()};
+    document.addEventListener("visibilitychange",resumed);
+    window.addEventListener("online",resumed);
+    return()=>{active=false;window.clearInterval(timer);document.removeEventListener("visibilitychange",resumed);window.removeEventListener("online",resumed)};
   },[tab]);
   const pendingHearts = useRef(new Set<string>());
   async function toggleHeart(event: CommunityEvent) {

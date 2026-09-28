@@ -478,7 +478,7 @@ function AppPage() {
       pending = false,
       channel: RealtimeChannel | null = null;
     const refreshState = async () => {
-      if (pending || !navigator.onLine) return;
+      if (!live || pending || !navigator.onLine || document.visibilityState === "hidden") return;
       pending = true;
       try {
         const d = await arena<{ invites: Invite[]; match: ArenaMatch | null }>(
@@ -500,13 +500,14 @@ function AppPage() {
     void getSupabase().then((client) => {
       if (!client || !live) return;
       channel = client.channel(`cb-user-state:${userId}`)
-        .on("postgres_changes", { event: "*", schema: "public", table: "cb_matches" }, () => void refreshState())
+        .on("postgres_changes", { event: "*", schema: "public", table: "cb_matches", filter: `white_id=eq.${userId}` }, () => void refreshState())
+        .on("postgres_changes", { event: "*", schema: "public", table: "cb_matches", filter: `black_id=eq.${userId}` }, () => void refreshState())
         .subscribe((status) => { if (status === "SUBSCRIBED") void refreshState(); });
     });
     // Realtime delivery can be delayed or unavailable on some mobile sessions.
-    // Keep a lightweight inbox poll so targeted and KING challenges arrive
-    // without requiring the recipient to restart the app.
-    const stateTimer = window.setInterval(() => void refreshState(), 2000);
+    // Invites may not be visible to the recipient's match-row subscription.
+    // Keep a foreground fallback without polling every hidden tab twice a second.
+    const stateTimer = window.setInterval(() => void refreshState(), 8000 + Math.floor(Math.random() * 2000));
     const onVisible = () => { if (document.visibilityState === "visible") void refreshState(); };
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onVisible);

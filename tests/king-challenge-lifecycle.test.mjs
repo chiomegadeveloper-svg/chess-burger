@@ -7,7 +7,9 @@ const api = readFileSync(new URL("../api/arena.ts", import.meta.url), "utf8");
 const online = readFileSync(new URL("../app/online-play.tsx", import.meta.url), "utf8");
 
 test("targeted and KING invitations refresh without restarting the app", () => {
-  assert.match(page, /setInterval\(\(\) => void refreshState\(\), 2000\)/);
+  assert.match(page, /setInterval\(\(\) => void refreshState\(\), 8000 \+ Math\.floor\(Math\.random\(\) \* 2000\)\)/);
+  assert.match(page, /document\.visibilityState === "hidden"/);
+  assert.match(page, /visibilitychange", onVisible/);
   assert.match(page, /clearInterval\(stateTimer\)/);
 });
 
