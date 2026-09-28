@@ -1,4 +1,5 @@
 import {createClient} from '@supabase/supabase-js';
+import {emailOwnersAboutCbgOrder} from './_cbg-owner-email';
 type Req={method?:string;headers:{authorization?:string|string[]};body?:Record<string,unknown>};
 type Res={status:(code:number)=>Res;json:(body:unknown)=>void;setHeader:(key:string,value:string)=>void};
 const fail=(status:number,message:string):never=>{const error=Error(message) as Error&{status:number};error.status=status;throw error;};
@@ -18,7 +19,7 @@ export default async function handler(req:Req,res:Res){
     const auth=await db.auth.getUser(token);
     if(auth.error||!auth.data.user)fail(401,'Please sign in again.');
     const userId=auth.data.user!.id,body=req.body||{},action=String(body.action||'');
-    const profile=await db.from('cb_profiles').select('role,avatar_url,agreement_version').eq('user_id',userId).single();
+    const profile=await db.from('cb_profiles').select('role,avatar_url,agreement_version,username,display_name').eq('user_id',userId).single();
     if(profile.error)fail(403,'Complete your profile before purchasing CBG.');
     if(profile.data!.agreement_version===null)fail(403,'Accept the End User Agreement first.');
     if(!String(profile.data!.avatar_url||'').includes(`/storage/v1/object/public/cb-profile-media/${userId}/avatar-`))fail(403,'Save a profile picture first.');
@@ -56,6 +57,8 @@ export default async function handler(req:Req,res:Res){
       if(!uuid.test(id)||!/^[0-9]{6}$/.test(reference))fail(400,'Enter the last 6 digits of your payment reference.');
       const submitted=await db.rpc('cb_submit_cbg_order',{p_id:id,p_buyer_id:userId,p_reference:reference});
       if(submitted.error)fail(/schema cache|function|relation/i.test(submitted.error.message)?503:400,/schema cache|function|relation/i.test(submitted.error.message)?schemaHint:submitted.error.message);
+      try{await emailOwnersAboutCbgOrder(submitted.data,profile.data!);}
+      catch(error){console.error('cbg.owner-alert.failed',{orderId:id,message:error instanceof Error?error.message:String(error)});}
       return res.status(200).json({order:submitted.data});
     }
     if(action==='cancel'){
