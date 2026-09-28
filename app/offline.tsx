@@ -1,6 +1,7 @@
 "use client";
 import {useEffect,useState} from 'react';
 import {Chess, Square} from 'chess.js';
+import {castlingDestination} from './castling';
 import {loadCurrent,newRecord,saveGame,scoreOf,SavedGame} from './game-history';
 const symbols:Record<string,string>={wk:'♚',wq:'♛',wr:'♜',wb:'♝',wn:'♞',wp:'♟',bk:'♚',bq:'♛',br:'♜',bb:'♝',bn:'♞',bp:'♟'};
 export default function Offline({replayGame,playerName,onClose,onRated}:{replayGame?:SavedGame|null;playerName?:string;onClose?:()=>void;onRated?:(result:"win"|"loss"|"draw",gameId:string)=>number}){
@@ -22,7 +23,7 @@ export default function Offline({replayGame,playerName,onClose,onRated}:{replayG
  }
  function click(square:Square){
   if(!ready||replay!==null||game.isGameOver()||promotion)return;
-  if(selected&&legal.includes(square)){if(game.get(selected)?.type==='p'&&(square[1]==='8'||square[1]==='1')){setPromotion({from:selected,to:square});return;}move(selected,square);}
+  if(selected&&legal.includes(castlingDestination(game,selected,square))){square=castlingDestination(game,selected,square);if(game.get(selected)?.type==='p'&&(square[1]==='8'||square[1]==='1')){setPromotion({from:selected,to:square});return;}move(selected,square);}
   else if(game.get(square)?.color===game.turn())select(square);else select(null);
  }
  function rename(side:'white'|'black',value:string){if(record)setRecord({...record,[side]:value.slice(0,32)});}

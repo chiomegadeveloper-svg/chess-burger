@@ -1,4 +1,5 @@
 "use client";
+import {castlingDestination} from "./castling";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Square } from "chess.js";
 import { arena } from "./arena-client";
@@ -245,7 +246,8 @@ export default function MatchBoard({
     } catch { /* Keep the previous board if the server rejects an expired rental. */ }
     finally { setBoardBusy(false); }
   }
-  function submitMove(from: Square, to: Square) {
+  function submitMove(from: Square, target: Square) {
+    const to=canPlay?castlingDestination(chess,from,target):target;
     if (canPlay) {
       const isLegal = chess
         .moves({ square: from, verbose: true })
@@ -265,7 +267,7 @@ export default function MatchBoard({
   function click(square: Square) {
     if (suppressClick.current) return;
     if ((!canPlay && !canPremove) || promotion) return;
-    if (selected && legal.includes(square)) {
+    if (selected && canPlay && legal.includes(castlingDestination(chess,selected,square))) {
       submitMove(selected, square);
       setSelected(null);
     } else if (selected && canPremove && chess.get(square)?.color !== myColor) {
