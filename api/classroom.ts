@@ -23,7 +23,8 @@ const fail=(status:number,message:string):never=>{const e=Error(message) as Erro
 export default async function handler(req:Req,res:Res){
   const action=req.body?.action;
   if(typeof action==="string"&&["chess-math-state","chess-math-start","chess-math-finish"].includes(action)){
-    return chessMathHandler({...req,body:{...req.body,action:action.slice("chess-math-".length)}},res);
+    // Vercel's request properties can be non-enumerable, so spreading req drops headers.
+    return chessMathHandler({method:req.method,headers:req.headers,body:{...req.body,action:action.slice("chess-math-".length)}},res);
   }
   res.setHeader("Cache-Control","no-store");
   try{
