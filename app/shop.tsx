@@ -481,6 +481,7 @@ export function BagPage({ onChanged }: { onChanged: () => void }) {
     active: string;
     active_frame_item?: string | null;
     gold: number;
+    cbr: number;
     bag_slots: number;
     used_slots: number;
   };
@@ -490,6 +491,7 @@ export function BagPage({ onChanged }: { onChanged: () => void }) {
       items: [],
       active: "",
       gold: 0,
+      cbr: 0,
       bag_slots: 10,
       used_slots: 0,
     }),
@@ -629,7 +631,7 @@ export function BagPage({ onChanged }: { onChanged: () => void }) {
         <p className="account-note">Opening your bag…</p>
       ) : (
         <div className="bag-tiles unified-bag-grid">
-          <article className="bag-inventory-card gold legendary"><div className="rpg-item-art rpg-gold-art"><img src="/inventory/cbg-coin.webp" alt="ChessBurger CBG coin"/><strong>{state.gold}</strong></div><div className="rpg-item-copy"><small>PLAYER CURRENCY</small><h3>Gold Coins</h3><span>Gift Gold directly to another player.</span></div><div className="rpg-item-actions"><button type="button" disabled={state.gold<1} onClick={()=>openGift("gold","gold-coins","Gold Coins",state.gold)}><Gift size={14}/>Gift Gold</button></div></article>
+          <article className="bag-inventory-card gold legendary"><div className="rpg-item-art rpg-gold-art"><img src="/inventory/cbg-coin.webp" alt="ChessBurger CBG coin"/><strong>{state.gold}</strong></div><div className="rpg-item-copy"><small>PLAYER CURRENCY</small><h3>Gold Coins</h3><span>{state.cbr<177?"Reach Level 3 to activate CBG gifting.":state.gold<188?"Hold at least 188 CBG to activate gifting.":"Gift CBG directly to another player."}</span></div><div className="rpg-item-actions"><button type="button" disabled={state.cbr<177||state.gold<188} title={state.cbr<177?"Reach Player Level 3 first":state.gold<188?"A minimum balance of 188 CBG is required":"Gift CBG"} onClick={()=>openGift("gold","gold-coins","Gold Coins",state.gold)}><Gift size={14}/>Gift Gold · CBG</button></div></article>
           {cbc>0&&<article className="bag-inventory-card generic legendary"><div className="rpg-item-art"><img src="/classroom/cbc-token.webp" alt="CBC token"/><strong>×{cbc}</strong></div><div className="rpg-item-copy"><small>CLASSROOM CURRENCY</small><h3>Classroom Credits</h3><span>Gift any CBC amount to students by username.</span></div><div className="rpg-item-actions"><button type="button" onClick={()=>openGift("cbc","classroom-credit","CBC",cbc)}><Gift size={14}/>Gift CBC</button></div></article>}
           {state.tickets > 0 && (
             <article className="bag-inventory-card ticket legendary">

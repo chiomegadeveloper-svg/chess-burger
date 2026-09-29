@@ -1138,7 +1138,7 @@ export default async function handler(req: Req, res: Res) {
       const error=banners.error??tickets.error??items.error??used.error;if(error)fail(503,'Run Supabase migrations through 0034, then reopen your Bag.');
       const available=(items.data??[]).filter((item:any)=>item.item_kind!=='avatar_frame'||Date.parse(String(item.metadata?.expires_at??''))>Date.now());
       const activeItem=String(account.profile.active_avatar_frame_item??'');
-      return res.status(200).json({banners:banners.data??[],tickets:Number(tickets.data?.quantity??0),items:available,active:account.profile.active_feed_banner??'',active_frame_item:available.some((item:any)=>item.item_kind==='avatar_frame'&&item.item_id===activeItem)?activeItem:null,gold:Number(account.profile.gold_points??0),bag_slots:Number(account.profile.bag_slots??10),used_slots:Number(used.data??0),server_now:now});
+      return res.status(200).json({banners:banners.data??[],tickets:Number(tickets.data?.quantity??0),items:available,active:account.profile.active_feed_banner??'',active_frame_item:available.some((item:any)=>item.item_kind==='avatar_frame'&&item.item_id===activeItem)?activeItem:null,gold:Number(account.profile.gold_points??0),cbr:Number(account.profile.cbr??0),bag_slots:Number(account.profile.bag_slots??10),used_slots:Number(used.data??0),server_now:now});
     }
     if(action==='avatar-frame-state'){
       const configured=await client.from('cb_profiles').select('active_avatar_frame_item').eq('user_id',account.id).maybeSingle();
@@ -1173,8 +1173,10 @@ export default async function handler(req: Req, res: Res) {
     if(action==='gift-gold'){
       const username=String(body.username??'').trim(),amount=Number(body.amount),requestId=String(body.request_id??'');
       if(!/^@?[a-z0-9_]{2,40}$/i.test(username)||!Number.isInteger(amount)||amount<1||amount>1000000||!/^[a-f0-9-]{36}$/i.test(requestId))fail(400,'Choose a valid username and Gold amount.');
+      if(Number(account.profile.cbr??0)<177)fail(403,'Reach Player Level 3 before gifting CBG.');
+      if(Number(account.profile.gold_points??0)<188)fail(409,'Keep at least 188 CBG in your balance to activate CBG gifting.');
       const gifted=await client.rpc('cb_gift_gold',{p_sender_id:account.id,p_username:username,p_amount:amount,p_request_id:requestId});
-      if(gifted.error){const message=String(gifted.error.message??'Gold gift failed.');if(/cb_gift_gold|cb_gold_gifts|bag_slots|schema cache|function/i.test(message))fail(503,'Run supabase/0034_bag_slots_and_gold_gifts.sql, then try again.');fail(409,message);}
+      if(gifted.error){const message=String(gifted.error.message??'CBG gift failed.');if(/cb_gift_gold|cb_gold_gifts|bag_slots|schema cache|function/i.test(message))fail(503,'Run Supabase migrations through 0083, then try again.');fail(409,message);}
       return res.status(200).json(gifted.data);
     }
     if(action==='gift-bag-item'){
