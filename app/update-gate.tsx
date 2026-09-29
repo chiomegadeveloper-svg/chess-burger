@@ -7,7 +7,7 @@ import "./update-gate.css";
 declare const __CHESS_BURGER_BUILD_ID__: string;
 
 export default function UpdateGate() {
-  const [available,setAvailable]=useState(false);
+  const [available,setAvailable]=useState("");
   const [restarting,setRestarting]=useState(false);
 
   useEffect(()=>{
@@ -17,8 +17,8 @@ export default function UpdateGate() {
       try {
         const response=await fetch(`/version.json?check=${Date.now()}`,{cache:"no-store"});
         if (!response.ok) return;
-        const version=await response.json() as {buildId?:string};
-        if (active && version.buildId && version.buildId!==__CHESS_BURGER_BUILD_ID__) setAvailable(true);
+        const version=await response.json() as {buildId?:string;version?:string};
+        if (active && version.buildId && version.buildId!==__CHESS_BURGER_BUILD_ID__) setAvailable(version.version||"new");
       } catch { /* Keep the current app usable during a temporary connection failure. */ }
     }
     void check();
@@ -41,7 +41,7 @@ export default function UpdateGate() {
   return createPortal(<div className="cb-update-backdrop" role="alertdialog" aria-modal="true" aria-labelledby="cb-update-title" aria-describedby="cb-update-description">
     <section className="cb-update-card">
       <img src="/cburger_logo.png" alt=""/>
-      <h2 id="cb-update-title">Chess Burger has an update</h2>
+      <h2 id="cb-update-title">Chess Burger v{available} is ready</h2>
       <p id="cb-update-description">Restart the app to get the latest features and fixes.</p>
       <button type="button" autoFocus disabled={restarting} onClick={()=>{
         setRestarting(true);
