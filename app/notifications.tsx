@@ -5,6 +5,7 @@ import { Bell, CheckCheck, Gift, MessageCircle, RefreshCw, X } from "lucide-reac
 import { arena } from "./arena-client";
 import { getSupabase } from "./supabase";
 import "./notifications.css";
+declare const __CHESS_BURGER_BUILD_ID__: string;
 
 type Notification = { key: string; kind: string; title: string; body: string; target: string; created_at: string; sticky?: boolean };
 export type OwnerPendingAlert = Pick<Notification, "key" | "title" | "body" | "created_at">;
@@ -81,10 +82,34 @@ export default function NotificationBell({ userId, isOwner, homeActive, invites,
   const [unavailable, setUnavailable] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [update, setUpdate] = useState<{buildId:string;version:string}|null>(null);
+  const [restarting, setRestarting] = useState(false);
+  const [deferredUpdate, setDeferredUpdate] = useState("");
   const container = useRef<HTMLDivElement>(null);
   const running = useRef<string | null>(null);
   const currentUser = useRef(userId);
   currentUser.current = userId;
+
+  useEffect(() => {
+    let active = true;
+    const check = async () => {
+      if (!navigator.onLine || document.visibilityState === "hidden") return;
+      try {
+        const response = await fetch(`/version.json?check=${Date.now()}`, {cache:"no-store"});
+        if (!response.ok) return;
+        const next = await response.json() as {buildId?:string;version?:string};
+        if (active && next.buildId && next.buildId !== __CHESS_BURGER_BUILD_ID__)
+          setUpdate({buildId:next.buildId,version:next.version || "new"});
+      } catch { /* Try again when the connection returns. */ }
+    };
+    void check();
+    const timer = window.setInterval(() => void check(), 60_000);
+    const visible = () => { if (document.visibilityState === "visible") void check(); };
+    window.addEventListener("focus", visible);
+    window.addEventListener("online", visible);
+    document.addEventListener("visibilitychange", visible);
+    return () => { active=false;window.clearInterval(timer);window.removeEventListener("focus",visible);window.removeEventListener("online",visible);document.removeEventListener("visibilitychange",visible); };
+  }, []);
 
   const refresh = useCallback(async () => {
     if (!userId || running.current === userId || !navigator.onLine) return;
@@ -139,6 +164,7 @@ export default function NotificationBell({ userId, isOwner, homeActive, invites,
   }, [open]);
 
   const dynamic: Notification[] = [];
+  if (update) dynamic.push({key:`app-update:${update.buildId}`,kind:"app-update",title:`Chess Burger v${update.version} is ready`,body:"Restart the app to get the latest features and fixes.",target:"",created_at:new Date().toISOString(),sticky:true});
   if (chat?.personalUnread) dynamic.push({ key: `chat:personal:${chat.personalUnread}`, kind: "chat", title: "Unread personal messages", body: `${chat.personalUnread} message${chat.personalUnread === 1 ? "" : "s"} waiting for you.`, target: chat.firstUnreadSender ? `chat-personal:${chat.firstUnreadSender}` : "chat-personal", created_at: new Date().toISOString(), sticky: true });
   if (chat?.communityUnread) dynamic.push({ key: `chat:community:${chat.communityUnread}`, kind: "chat", title: "Unread community messages", body: `${chat.communityUnread} message${chat.communityUnread === 1 ? "" : "s"} in community chat.`, target: "chat-community", created_at: new Date().toISOString(), sticky: true });
   for (const group of chat?.groups ?? []) if (group.unread) dynamic.push({ key: `chat:group:${group.id}:${group.unread}`, kind: "chat", title: `Unread messages in ${group.name}`, body: `${group.unread} message${group.unread === 1 ? "" : "s"} waiting for you.`, target: `chat-group:${group.id}`, created_at: new Date().toISOString(), sticky: true });
@@ -149,7 +175,7 @@ export default function NotificationBell({ userId, isOwner, homeActive, invites,
   const items = [...remote, ...dynamic]
     .filter(item => item.sticky || !read[item.key] || now - Date.parse(read[item.key]) < READ_RETENTION_MS)
     .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
-  const unread = items.filter(item => !read[item.key]).length;
+  const unread = items.filter(item => !read[item.key] && item.key !== deferredUpdate).length;
   const mark = async (keys: string[]) => {
     if (!keys.length || !userId) return;
     const at = new Date().toISOString();
@@ -172,17 +198,19 @@ export default function NotificationBell({ userId, isOwner, homeActive, invites,
   const unreadCount = Math.min(99, unread);
 
   return <div className="notification-container" ref={container}>
-    <button className="notification-trigger" type="button" aria-label={`Notifications${unread ? `, ${unread} unread` : ""}`} aria-expanded={open} aria-controls="cb-notification-panel" onClick={() => { setOpen(value => !value); if (!open) { void mark(items.filter(item => !read[item.key]).map(item => item.key)); void refresh(); } }}>
+    <button className="notification-trigger" type="button" aria-label={`Notifications${unread ? `, ${unread} unread` : ""}`} aria-expanded={open} aria-controls="cb-notification-panel" onClick={() => { setOpen(value => !value); if (!open) { void mark(items.filter(item => item.kind !== "app-update" && !read[item.key]).map(item => item.key)); void refresh(); } }}>
       <Bell size={19} aria-hidden="true" />{unread > 0 && <span className="notification-badge" aria-hidden="true">{unread > 99 ? "99+" : unreadCount}</span>}
     </button>
     {open && <section id="cb-notification-panel" className="notification-panel" aria-label="Notifications">
       <div className="notification-heading"><span><Bell size={17} /><strong>Notifications</strong></span><button className="notification-close" type="button" onClick={() => setOpen(false)} aria-label="Close notifications"><X size={17} /></button></div>
-      <div className="notification-toolbar"><span>{unread ? `${unread} unread` : "All caught up"}</span><div><button type="button" aria-label="Refresh notifications" title="Refresh" disabled={loading} onClick={() => void refresh()}><RefreshCw size={15} className={loading ? "notification-spinning" : ""} /></button><button type="button" disabled={!unread} onClick={() => void mark(items.filter(item => !read[item.key]).map(item => item.key))}><CheckCheck size={15} /> Mark read</button></div></div>
+      <div className="notification-toolbar"><span>{unread ? `${unread} unread` : "All caught up"}</span><div><button type="button" aria-label="Refresh notifications" title="Refresh" disabled={loading} onClick={() => void refresh()}><RefreshCw size={15} className={loading ? "notification-spinning" : ""} /></button><button type="button" disabled={!unread} onClick={() => void mark(items.filter(item => item.kind !== "app-update" && !read[item.key]).map(item => item.key))}><CheckCheck size={15} /> Mark read</button></div></div>
       {error && <p className="notification-error" role="alert">{error}</p>}
       {unavailable.length > 0 && <p className="notification-error">Some activity could not load. Try refreshing.</p>}
       <div className="notification-list" aria-live="polite">
         {items.length === 0 && <div className="notification-empty">{loading ? "Checking your activity…" : error ? "Try again when notifications are available." : "No notifications yet. Your next Chess Burger update will appear here."}</div>}
-        {items.map(item => <button type="button" key={item.key} className={`notification-item${!read[item.key] ? " is-unread" : ""}${item.kind === "owner-sale" ? " owner-sale-alert" : ""}`} onClick={() => choose(item)}>
+        {items.map(item => item.kind === "app-update" ? <article key={item.key} className="notification-item notification-update">
+          <span className="notification-icon"><RefreshCw size={17}/></span><span className="notification-copy"><strong>{item.title}</strong><span>{item.body}</span><span className="notification-update-actions"><button type="button" disabled={restarting} onClick={() => {setRestarting(true);void (async()=>{try{await navigator.serviceWorker?.getRegistration().then(reg=>reg?.update());}catch{}finally{window.location.reload();}})();}}>{restarting?"Restarting…":"Restart now"}</button><button type="button" onClick={() => {setDeferredUpdate(item.key);setOpen(false);}}>Update later</button></span></span>
+        </article> : <button type="button" key={item.key} className={`notification-item${!read[item.key] ? " is-unread" : ""}${item.kind === "owner-sale" ? " owner-sale-alert" : ""}`} onClick={() => choose(item)}>
           <span className="notification-icon">{item.kind === "chat" || item.kind === "comment" ? <MessageCircle size={17} /> : item.kind === "gift" || item.kind === "reward" || item.kind === "purchase" ? <Gift size={17} /> : <Bell size={17} />}</span>
           <span className="notification-copy"><strong>{item.title}</strong><span>{item.body}</span><small>{ago(item.created_at)}</small></span>
           {!read[item.key] && <i className="notification-dot" aria-label="Unread" />}

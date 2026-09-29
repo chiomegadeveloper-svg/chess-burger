@@ -15,6 +15,19 @@ type Res = { status: (code: number) => Res; json: (body: unknown) => void; setHe
 // The Supabase schema is managed in SQL migrations, so the server route uses
 // runtime checks instead of a generated TypeScript database declaration.
 type Db = any;
+const CPU_COOLDOWN_HOURS = [48,48,42,40,36,34,32,24,18,12];
+type CpuLockRow = {level:number;wins:number;locked_until:string|null;updated_at:string};
+async function correctCpuLock(client:Db,userId:string,row:CpuLockRow):Promise<CpuLockRow>{
+  const start=Date.parse(row.updated_at),original=Date.parse(row.locked_until??'');
+  const duration=CPU_COOLDOWN_HOURS[Number(row.level)-1];
+  if(Number(row.wins)!==3||!Number.isFinite(start)||!Number.isFinite(original)||!duration)return row;
+  const expected=start+duration*3600_000;
+  if(original<=expected+60_000)return row;
+  const corrected=new Date(expected).toISOString();
+  const saved=await client.from('cb_cpu_level_limits').update({locked_until:corrected}).eq('user_id',userId).eq('level',row.level).eq('locked_until',row.locked_until).select('locked_until').maybeSingle();
+  if(saved.error)throw new Error(saved.error.message);
+  return {...row,locked_until:saved.data?.locked_until??corrected};
+}
 
 // Keep the match engine in this serverless entrypoint. Vercel was unable to
 // resolve the former cross-file helper at runtime, which crashed Arena before
@@ -922,12 +935,13 @@ export default async function handler(req: Req, res: Res) {
       return res.status(200).json({leaders:leaders.data});
     }
     if(action==='cpu-level-status'){
-      const result=await client.from('cb_cpu_level_limits').select('level,wins,locked_until').eq('user_id',account.id);
+      const result=await client.from('cb_cpu_level_limits').select('level,wins,locked_until,updated_at').eq('user_id',account.id);
       if(result.error){
         if(['42P01','PGRST205'].includes(result.error.code??''))fail(503,'Apply supabase/0085_cpu_level_cooldowns.sql in Supabase to enable CPU level limits.');
         fail(500,result.error.message);
       }
-      const current=Date.now(),byLevel=new Map((result.data??[]).map((row:any)=>[Number(row.level),row]));
+      const corrected=await Promise.all((result.data??[]).map((row:CpuLockRow)=>correctCpuLock(client,account.id,row)));
+      const current=Date.now(),byLevel=new Map(corrected.map((row:CpuLockRow)=>[Number(row.level),row]));
       return res.status(200).json({enabled:true,levels:Array.from({length:10},(_,index)=>{
         const row:any=byLevel.get(index+1),lockedUntil=String(row?.locked_until??''),locked=Date.parse(lockedUntil)>current;
         return {level:index+1,wins:row?.locked_until&&!locked?0:Number(row?.wins??0),locked_until:locked?lockedUntil:null};
@@ -942,12 +956,18 @@ export default async function handler(req: Req, res: Res) {
       const cbrDelta=outcome==='win'?reward:-loss,goldDelta=outcome==='win'?reward:0;
       const probe=await client.from('cb_cpu_level_limits').select('level').eq('user_id',account.id).limit(1);
       if(probe.error)fail(['42P01','PGRST205'].includes(probe.error.code??'')?503:500,['42P01','PGRST205'].includes(probe.error.code??'')?'Apply supabase/0085_cpu_level_cooldowns.sql in Supabase to enable CPU level limits.':probe.error.message);
+      const before=await client.from('cb_cpu_level_limits').select('level,wins,locked_until,updated_at').eq('user_id',account.id).eq('level',level).maybeSingle();
+      if(before.error)fail(500,before.error.message);
+      if(before.data)await correctCpuLock(client,account.id,before.data);
       const claimed=await client.rpc('cb_claim_cpu_reward',{p_user_id:account.id,p_game_id:gameId,p_cbr:cbrDelta,p_gold:goldDelta,p_mode:group,p_level:level});
       if(claimed.error){
         if(/PGRST202|Could not find the function|schema cache/i.test(claimed.error.message))fail(503,'Apply supabase/0085_cpu_level_cooldowns.sql in Supabase to enable CPU level limits.');
         fail(409,claimed.error.message);
       }
       const result=claimed.data??{};
+      const after=await client.from('cb_cpu_level_limits').select('level,wins,locked_until,updated_at').eq('user_id',account.id).eq('level',level).maybeSingle();
+      if(after.error)fail(500,after.error.message);
+      if(after.data){const corrected=await correctCpuLock(client,account.id,after.data);result.locked_until=corrected.locked_until;result.wins=corrected.wins;}
       if(result.awarded){const aiName=cpuRobotName(body.ai_name,level),event=await client.from('cb_feed').insert({user_id:account.id,kind:outcome==='win'?'win':'loss',display_name:account.profile.display_name,content:`${outcome==='win'?'defeated':'lost to'} ${aiName} in a ${group.toLowerCase()} CPU match.`,cbr_delta:cbrDelta,gold_delta:goldDelta});if(event.error)console.warn('arena.cpu-feed-failed',{gameId});}
       return res.status(200).json(result);
     }

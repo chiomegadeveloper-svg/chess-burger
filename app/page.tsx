@@ -51,7 +51,6 @@ import { profileRequest } from "./profile-client";
 import { FloatingChatButton, SocialHub, MatchResult, openSocial, type MatchSummary } from "./social";
 import PublicProfile from "./public-profile";
 import InstallPrompt from "./install-prompt";
-import UpdateGate from "./update-gate";
 import {APP_VERSION} from "./app-version";
 import { BagPage, ShopPage } from "./shop";
 import DonateShop from "./donate-shop";
@@ -365,18 +364,6 @@ function AppPage() {
       setShowSplash(false);
     }, 6000);
     if ("serviceWorker" in navigator) {
-      const updating = !!navigator.serviceWorker.controller;
-      let reloaded = false;
-      if (updating)
-        navigator.serviceWorker.addEventListener(
-          "controllerchange",
-          () => {
-            if (reloaded) return;
-            reloaded = true;
-            location.reload();
-          },
-          { once: true },
-        );
       navigator.serviceWorker
         .register("/sw.js")
         .then(async (reg) => {
@@ -1210,5 +1197,5 @@ export default function Page() {
     );
   }
 
-  return <><AppPage /><UpdateGate /></>;
+  return <AppPage />;
 }
