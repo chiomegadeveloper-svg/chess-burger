@@ -1,7 +1,7 @@
 export type CpuLevelLimit = { level: number; wins: number; locked_until: string | null };
 export type CpuLevelStatus = { enabled: boolean; levels: CpuLevelLimit[] };
 
-export const CPU_COOLDOWN_HOURS = [216, 192, 168, 144, 120, 96, 72, 48, 24, 12] as const;
+export const CPU_COOLDOWN_HOURS = [48, 48, 42, 40, 36, 34, 32, 24, 18, 12] as const;
 
 export function effectiveCpuLimit(limit: CpuLevelLimit | undefined, now: number) {
   const until = limit?.locked_until ? Date.parse(limit.locked_until) : 0;
@@ -11,7 +11,8 @@ export function effectiveCpuLimit(limit: CpuLevelLimit | undefined, now: number)
 
 export function cpuCooldownLabel(level: number) {
   const hours = CPU_COOLDOWN_HOURS[level - 1] ?? 0;
-  return hours === 12 ? '12h cooldown' : `${hours / 24}d cooldown`;
+  const days = Math.floor(hours / 24), remainingHours = hours % 24;
+  return `${days ? `${days}d` : ''}${days && remainingHours ? ' ' : ''}${remainingHours ? `${remainingHours}h` : ''} cooldown`;
 }
 
 export function remainingCpuCooldown(until: number, now: number) {
