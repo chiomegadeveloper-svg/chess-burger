@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { AccessToken, DataPacket_Kind, RoomServiceClient, TrackSource } from "livekit-server-sdk";
 import { Chess } from "chess.js";
 import chessMathHandler from "./_chess-math.js";
+import chessMathAttackHandler from "./_chess-math-attack.js";
 
 /** Locked student boards accept one legal White chess move per update. */
 function legalStudentMove(before:string,after:string){
@@ -25,6 +26,9 @@ export default async function handler(req:Req,res:Res){
   if(typeof action==="string"&&["chess-math-state","chess-math-start","chess-math-finish"].includes(action)){
     // Vercel's request properties can be non-enumerable, so spreading req drops headers.
     return chessMathHandler({method:req.method,headers:req.headers,body:{...req.body,action:action.slice("chess-math-".length)}},res);
+  }
+  if(typeof action==="string"&&["chess-math-attack-state","chess-math-attack-start","chess-math-attack-answer"].includes(action)){
+    return chessMathAttackHandler({method:req.method,headers:req.headers,body:{...req.body,action:action.slice("chess-math-attack-".length)}},res);
   }
   res.setHeader("Cache-Control","no-store");
   try{
