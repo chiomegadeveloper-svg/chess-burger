@@ -60,7 +60,7 @@ import Puzzles from "./puzzles";
 import GrandArena from "./grand-arena";
 import Classroom from "./classroom";
 import GuildPage from "./guild";
-import NotificationBell from "./notifications";
+import NotificationBell, { OwnerPendingHomeAlert, type OwnerPendingAlert } from "./notifications";
 import "./play-selection-tournament.css";
 import "./header-portals.css";
 
@@ -110,6 +110,7 @@ function savedSharedBoard(userId: string) {
 function AppPage() {
   const [trainingId,setTrainingId]=useState(""),[trainingInvite,setTrainingInvite]=useState(""),[openTrainingAccount,setOpenTrainingAccount]=useState(false);
   const [feedTarget, setFeedTarget] = useState<"recent" | "announcement" | "rewards">("recent");
+  const [ownerPending, setOwnerPending] = useState<OwnerPendingAlert[]>([]);
   const [tab, setTab] = useState("profile"),
     [profile, setProfile] = useState<PlayerProfile | null>(null),
     [replayGame, setReplayGame] = useState<SavedGame | null>(null),
@@ -588,6 +589,8 @@ function AppPage() {
   let content;
   if (tab === "home")
     content = (
+      <>
+      {owner && <OwnerPendingHomeAlert alerts={ownerPending} onReview={() => navigate("cms-cbg-editor")} />}
       <CommunityFeed
         key={feedTarget}
         initialTab={feedTarget}
@@ -604,6 +607,7 @@ function AppPage() {
           setTab("public-profile");
         }}
       />
+      </>
     );
   else if (tab === "public-profile")
     content = (
@@ -977,7 +981,7 @@ function AppPage() {
             <ShieldCheck size={17} aria-hidden="true" />
             <span>CMS</span>
           </button>}
-          <NotificationBell userId={member === true && profile?.user_id !== "guest-device" ? profile?.user_id : undefined} isOwner={owner} invites={invites} onNavigate={openNotification} />
+          <NotificationBell userId={member === true && profile?.user_id !== "guest-device" ? profile?.user_id : undefined} isOwner={owner} homeActive={tab === "home"} invites={invites} onNavigate={openNotification} onOwnerPending={setOwnerPending} />
           <button
             className="header-about-button"
             aria-label="About Chess Burger"

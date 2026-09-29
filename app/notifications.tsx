@@ -7,6 +7,7 @@ import { getSupabase } from "./supabase";
 import "./notifications.css";
 
 type Notification = { key: string; kind: string; title: string; body: string; target: string; created_at: string; sticky?: boolean };
+export type OwnerPendingAlert = Pick<Notification, "key" | "title" | "body" | "created_at">;
 type Inbox = { items: Notification[]; read_entries: { notification_key: string; read_at: string }[]; unavailable: string[] };
 type ChatSummary = { personalUnread: number; firstUnreadSender?: string | null; communityUnread: number; groups: { id: string; name: string; unread: number }[] };
 type ArenaWindow = { entry_open: boolean; current: { date: string; slot: number; starts_at: string } | null };
@@ -57,7 +58,21 @@ const mergeReads = (local: ReadTimes, server: Inbox["read_entries"]): ReadTimes 
   return merged;
 };
 
-export default function NotificationBell({ userId, isOwner, invites, onNavigate }: { userId?: string; isOwner?: boolean; invites: Invite[]; onNavigate: (target: string) => void }) {
+export function OwnerPendingHomeAlert({ alerts, onReview }: { alerts: OwnerPendingAlert[]; onReview: () => void }) {
+  if (!alerts.length) return null;
+  const sales = alerts.filter(item => item.title === "NEW SALE").length;
+  const donations = alerts.filter(item => item.title === "NEW DONATION").length;
+  const count = (value: number) => value >= 30 ? "30+" : String(value);
+  return <section className="owner-home-payment-alert" aria-label="Pending payments requiring owner approval" role="status">
+    <div className="owner-home-payment-header">
+      <div><small>OWNER APPROVAL REQUIRED</small><h2>{sales > 0 && <span>NEW SALE</span>}{donations > 0 && <span>NEW DONATION</span>}</h2><p>{sales > 0 && `${count(sales)} CBG purchase${sales === 1 ? "" : "s"}`}{sales > 0 && donations > 0 ? " · " : ""}{donations > 0 && `${count(donations)} donation${donations === 1 ? "" : "s"}`} awaiting payment verification.</p></div>
+      <button type="button" onClick={onReview}>Review in CMS →</button>
+    </div>
+    <ul>{alerts.slice(0, 3).map(item => <li key={item.key}><strong>{item.title}</strong><span>{item.body}</span></li>)}</ul>
+  </section>;
+}
+
+export default function NotificationBell({ userId, isOwner, homeActive, invites, onNavigate, onOwnerPending }: { userId?: string; isOwner?: boolean; homeActive?: boolean; invites: Invite[]; onNavigate: (target: string) => void; onOwnerPending?: (alerts: OwnerPendingAlert[]) => void }) {
   const [open, setOpen] = useState(false);
   const [remote, setRemote] = useState<Notification[]>([]);
   const [read, setRead] = useState<ReadTimes>({});
@@ -83,6 +98,7 @@ export default function NotificationBell({ userId, isOwner, invites, onNavigate 
     if (currentUser.current !== userId) return;
     if (inbox.status === "fulfilled") {
       setRemote(inbox.value.items);
+      if (isOwner) onOwnerPending?.(inbox.value.items.filter(item => item.kind === "owner-sale"));
       setRead(mergeReads(savedReads(userId), inbox.value.read_entries));
       setUnavailable(inbox.value.unavailable);
       setError("");
@@ -91,10 +107,11 @@ export default function NotificationBell({ userId, isOwner, invites, onNavigate 
     if (arenaWindow.status === "fulfilled") setWindowState(arenaWindow.value);
     running.current = null;
     setLoading(false);
-  }, [userId]);
+  }, [userId, isOwner, onOwnerPending]);
 
   useEffect(() => {
     setRemote([]); setRead(userId ? savedReads(userId) : {}); setChat(null); setWindowState(null); setError(""); setOpen(false);
+    onOwnerPending?.([]);
     if (!userId) return;
     const initial = window.setTimeout(() => void refresh(), 0);
     const timer = window.setInterval(() => { if (document.visibilityState === "visible") void refresh(); }, isOwner ? 30_000 : 60_000);
@@ -104,7 +121,13 @@ export default function NotificationBell({ userId, isOwner, invites, onNavigate 
     window.addEventListener("cb-profile-saved", visible);
     document.addEventListener("visibilitychange", visible);
     return () => { window.clearTimeout(initial); window.clearInterval(timer); window.removeEventListener("focus", visible); window.removeEventListener("online", visible); window.removeEventListener("cb-profile-saved", visible); document.removeEventListener("visibilitychange", visible); };
-  }, [userId, isOwner, refresh]);
+  }, [userId, isOwner, refresh, onOwnerPending]);
+
+  useEffect(() => {
+    if (!homeActive || !isOwner || !userId) return;
+    const timer = window.setTimeout(() => void refresh(), 0);
+    return () => window.clearTimeout(timer);
+  }, [homeActive, isOwner, userId, refresh]);
 
   useEffect(() => {
     if (!open) return;
