@@ -940,6 +940,18 @@ export default async function handler(req: Req, res: Res) {
       if(leaders.error)fail(/cb_cpu_leaders|schema cache|function/i.test(leaders.error.message)?503:500,/cb_cpu_leaders|schema cache|function/i.test(leaders.error.message)?'Apply supabase/0080_cpu_rankings.sql in Supabase to enable CPU rankings.':leaders.error.message);
       return res.status(200).json({leaders:leaders.data});
     }
+    if(action==='cpu-level-status'){
+      const result=await client.from('cb_cpu_level_limits').select('level,wins,locked_until').eq('user_id',account.id);
+      if(result.error){
+        if(['42P01','PGRST205'].includes(result.error.code??''))return res.status(200).json({enabled:false,levels:[]});
+        fail(500,result.error.message);
+      }
+      const current=Date.now(),byLevel=new Map((result.data??[]).map((row:any)=>[Number(row.level),row]));
+      return res.status(200).json({enabled:true,levels:Array.from({length:10},(_,index)=>{
+        const row:any=byLevel.get(index+1),lockedUntil=String(row?.locked_until??''),locked=Date.parse(lockedUntil)>current;
+        return {level:index+1,wins:row?.locked_until&&!locked?0:Number(row?.wins??0),locked_until:locked?lockedUntil:null};
+      })});
+    }
     if(action==='claim-cpu-reward'){
       const gameId=String(body.game_id??''),control=String(body.control??''),level=Number(body.level),pgn=String(body.pgn??''),outcome=String(body.outcome??'');
       if(!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(gameId)||!Number.isInteger(level)||level<1||level>10||!['win','loss'].includes(outcome))fail(400,'Invalid CPU game result.');
@@ -947,11 +959,18 @@ export default async function handler(req: Req, res: Res) {
       const game=new Chess();try{if(pgn)game.loadPgn(pgn);}catch{fail(400,'Invalid CPU game record.');}
       if(outcome==='win'&&(!game.isCheckmate()||game.turn()!=='b'))fail(400,'Only a completed checkmate victory earns a CPU reward.');
       const cbrDelta=outcome==='win'?reward:-loss,goldDelta=outcome==='win'?reward:0;
-      let claimed=await client.rpc('cb_claim_cpu_reward',{p_user_id:account.id,p_game_id:gameId,p_cbr:cbrDelta,p_gold:goldDelta,p_mode:group});
-      // Keep CPU rewards working during the interval between code deploy and migration.
-      if(claimed.error && (/PGRST202|Could not find the function/i).test(claimed.error.message))
+      const probe=await client.from('cb_cpu_level_limits').select('level').eq('user_id',account.id).limit(1);
+      const limitsEnabled=!probe.error;
+      if(probe.error&&!['42P01','PGRST205'].includes(probe.error.code??''))fail(500,probe.error.message);
+      let claimed=await client.rpc('cb_claim_cpu_reward',{p_user_id:account.id,p_game_id:gameId,p_cbr:cbrDelta,p_gold:goldDelta,p_mode:group,...(limitsEnabled?{p_level:level}:{})});
+      // Until the migration is applied, keep the existing CPU reward route usable.
+      if(!limitsEnabled&&claimed.error&&(/PGRST202|Could not find the function/i).test(claimed.error.message))
         claimed=await client.rpc('cb_claim_cpu_reward',{p_user_id:account.id,p_game_id:gameId,p_cbr:cbrDelta,p_gold:goldDelta});
-      if(claimed.error)fail(/cb_claim_cpu_reward|schema cache|function/i.test(claimed.error.message)?503:500,/cb_claim_cpu_reward|schema cache|function/i.test(claimed.error.message)?'Apply supabase/0080_cpu_rankings.sql in Supabase to enable CPU rewards and rankings.':claimed.error.message);
+      if(claimed.error){
+        if(limitsEnabled&&/PGRST202|Could not find the function|schema cache/i.test(claimed.error.message))fail(503,'Apply supabase/0085_cpu_level_cooldowns.sql in Supabase to enable CPU level limits.');
+        if(!limitsEnabled&&/cb_claim_cpu_reward|schema cache|function/i.test(claimed.error.message))fail(503,'Apply supabase/0080_cpu_rankings.sql in Supabase to enable CPU rewards and rankings.');
+        fail(409,claimed.error.message);
+      }
       const result=claimed.data??{};
       if(result.awarded){const aiName=cpuRobotName(body.ai_name,level),event=await client.from('cb_feed').insert({user_id:account.id,kind:outcome==='win'?'win':'loss',display_name:account.profile.display_name,content:`${outcome==='win'?'defeated':'lost to'} ${aiName} in a ${group.toLowerCase()} CPU match.`,cbr_delta:cbrDelta,gold_delta:goldDelta});if(event.error)console.warn('arena.cpu-feed-failed',{gameId});}
       return res.status(200).json(result);

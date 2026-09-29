@@ -1,0 +1,20 @@
+.cpu-limit-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:18px 0 -3px;color:#edf6f6}
+.cpu-limit-heading strong,.cpu-limit-heading small{display:block}
+.cpu-limit-heading strong{font-size:13px}
+.cpu-limit-heading small{margin-top:3px;color:#aabdc5;font-size:10px}
+.cpu-limit-heading>span{flex:none;padding:6px 9px;border:1px solid #bb9e565c;border-radius:99px;background:#302c1d;color:#e6ca7e;font-size:9px;font-weight:700}
+.cpu-levels button{min-height:84px}
+.cpu-levels button div{flex:1}
+.cpu-levels button em{display:block;overflow:hidden;margin-top:7px;color:#e7c578;font-size:9px;font-style:normal;font-weight:700;text-overflow:ellipsis;white-space:nowrap}
+.cpu-levels button.cpu-level-locked{border-color:#765f42;background:linear-gradient(145deg,#2b2926,#1c2023)}
+.cpu-levels button.cpu-level-locked em{color:#ffcf91}
+.cpu-levels button:disabled{cursor:not-allowed}
+.cpu-levels button:disabled:hover{transform:none;border-color:#3c4852}
+.cpu-levels button.cpu-level-locked:hover{border-color:#765f42}
+.cpu-levels button:not(.cpu-level-locked):disabled{opacity:.7}
+.cpu-limit-error,.cpu-limit-pending,.cpu-limit-game-note{margin:12px 0 0;padding:9px 12px;border:1px solid #ad755e;border-radius:10px;background:#3c2a27;color:#ffd5c1;font-size:10px}
+.cpu-limit-error button{margin-left:8px;padding:3px 8px;border:1px solid #f1c895;border-radius:7px;background:transparent;color:inherit;font:inherit;font-weight:700;cursor:pointer}
+.cpu-limit-pending{border-color:#5d6470;background:#222b30;color:#b5c9d0}
+.cpu-limit-game-note{margin:0 0 10px;border-color:#ad9251;background:#312b1c;color:#f5da94;font-weight:600}
+.cpu-board-actions button:disabled,.cpu-result-actions button:disabled{opacity:.48;cursor:not-allowed}
+@media(max-width:560px){.cpu-limit-heading{align-items:flex-start}.cpu-limit-heading>span{font-size:8px}.cpu-levels button{min-height:81px}.cpu-levels button em{font-size:8px}}

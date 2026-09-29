@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Bot, ChevronLeft, RotateCcw, Shield, Trophy, X } from "lucide-react";
 import { arena } from "./arena-client";
 import { gameFromPgn, boardResult, finishClockTurn, remainingClock, TIME_CONTROLS, timeControl, type ArenaMatch, type ArenaPlayer } from "./game-rules";
 import MatchBoard from "./match-board";
 import { chooseCpuMove } from "./cpu-turn";
 import CpuRankings from "./cpu-rankings";
+import { cpuCooldownLabel, effectiveCpuLimit, remainingCpuCooldown, type CpuLevelStatus } from "./cpu-level-limits";
+import "./cpu-level-limits.css";
 
 const levels = [
   { level: 1, label: "Beginner", elo: 500, skill: 0, think: 80 },
@@ -36,7 +38,22 @@ function createMatch(player: ArenaPlayer, level: (typeof levels)[number], contro
 
 export default function CpuGame({ player, onClose, onReward }: { player: ArenaPlayer; onClose: () => void; onReward: () => void }) {
   const [selectedLevel, setSelectedLevel] = useState<(typeof levels)[number] | null>(null), [control, setControl] = useState("10+0"), [match, setMatch] = useState<ArenaMatch | null>(null), [engineReady, setEngineReady] = useState(false), [thinking, setThinking] = useState(false), [engineError, setEngineError] = useState(""), [rewardStatus, setRewardStatus] = useState(""), [endReason,setEndReason]=useState<"checkmate"|"timeout"|"resigned"|"aborted"|"">(""),[showStats,setShowStats]=useState(false),[settledStats,setSettledStats]=useState<{cbr:number;gold:number;cbrDelta:number;goldDelta:number}|null>(null);
+  const [limits, setLimits] = useState<CpuLevelStatus | null>(null), [limitError, setLimitError] = useState(""), [limitNotice, setLimitNotice] = useState(""), [starting, setStarting] = useState(false), [claimPending, setClaimPending] = useState(false), [clockNow, setClockNow] = useState(() => Date.now());
   const workerRef = useRef<Worker | null>(null), matchRef = useRef<ArenaMatch | null>(null), levelRef = useRef<(typeof levels)[number] | null>(null), claimedRef = useRef(new Set<string>()),aiWatchdogRef=useRef<number|null>(null),pendingAiRef=useRef<number|null>(null);
+  const startingRef = useRef(false);
+  const refreshLimits = useCallback(async () => {
+    const status = await arena<CpuLevelStatus>("cpu-level-status");
+    setLimits(status);
+    setLimitError("");
+    return status;
+  }, []);
+  useEffect(() => {
+    void refreshLimits().catch(error => setLimitError(error instanceof Error ? error.message : "Could not load CPU levels."));
+    const timer = window.setInterval(() => setClockNow(Date.now()), 30_000);
+    const onFocus = () => { void refreshLimits().catch(() => {}); };
+    window.addEventListener("focus", onFocus);
+    return () => { window.clearInterval(timer); window.removeEventListener("focus", onFocus); };
+  }, [refreshLimits]);
   useEffect(() => { matchRef.current = match; }, [match]);
   useEffect(() => { levelRef.current = selectedLevel; }, [selectedLevel]);
   function finishCpuTurn(version: number, uci: string | null) {
@@ -102,13 +119,32 @@ export default function CpuGame({ player, onClose, onReward }: { player: ArenaPl
   useEffect(() => {
     if (!match || match.status !== "finished" || match.result === "draw" || !match.result || !selectedLevel || claimedRef.current.has(match.id)) return;
     const won = match.result === "white";
-    claimedRef.current.add(match.id); setRewardStatus(won ? "Awarding your victory…" : "Updating your CBR…");
-    arena<{ awarded: boolean; cbr:number;gold:number;cbr_delta: number; gold_delta: number }>("claim-cpu-reward", { game_id: match.id, control: match.control, level: selectedLevel.level, ai_name: match.black?.display_name, pgn: match.pgn, outcome: won ? "win" : "loss" })
-      .then((result) => { setSettledStats({cbr:Number(result.cbr),gold:Number(result.gold),cbrDelta:Number(result.cbr_delta),goldDelta:Number(result.gold_delta)});setRewardStatus(result.awarded ? (won ? `Victory reward: +${result.gold_delta} Gold · +${result.cbr_delta} CBR` : `CPU loss: ${result.cbr_delta} CBR · no Gold deducted`) : "This CPU result was already recorded."); onReward(); })
-      .catch((error) => { claimedRef.current.delete(match.id); setRewardStatus(error instanceof Error ? error.message : "Reward could not be awarded. Try again."); });
-  }, [match, onReward, selectedLevel]);
+    claimedRef.current.add(match.id); setClaimPending(true); setRewardStatus(won ? "Awarding your victory…" : "Updating your CBR…");
+    arena<{ awarded: boolean; cbr:number;gold:number;cbr_delta: number; gold_delta: number; wins?: number; locked_until?: string | null }>("claim-cpu-reward", { game_id: match.id, control: match.control, level: selectedLevel.level, ai_name: match.black?.display_name, pgn: match.pgn, outcome: won ? "win" : "loss" })
+      .then((result) => {
+        setSettledStats({cbr:Number(result.cbr),gold:Number(result.gold),cbrDelta:Number(result.cbr_delta),goldDelta:Number(result.gold_delta)});
+        const cooldown = result.locked_until && Date.parse(result.locked_until) > Date.now();
+        setRewardStatus(result.awarded ? (cooldown ? `Level ${selectedLevel.level} complete · ${cpuCooldownLabel(selectedLevel.level)} started.` : won ? `Victory reward: +${result.gold_delta} Gold · +${result.cbr_delta} CBR` : `CPU loss: ${result.cbr_delta} CBR · no Gold deducted`) : "This CPU result was already recorded.");
+        if (result.wins !== undefined) setLimits(previous => previous ? { ...previous, levels: previous.levels.map(item => item.level === selectedLevel.level ? { ...item, wins: result.wins!, locked_until: result.locked_until ?? null } : item) } : previous);
+        void refreshLimits().catch(() => {});
+        onReward();
+      })
+      .catch((error) => { claimedRef.current.delete(match.id); setRewardStatus(error instanceof Error ? error.message : "Reward could not be awarded. Try again."); void refreshLimits().catch(() => {}); })
+      .finally(() => setClaimPending(false));
+  }, [match, onReward, refreshLimits, selectedLevel]);
 
-  function start(level: (typeof levels)[number]) { if(aiWatchdogRef.current!==null){window.clearTimeout(aiWatchdogRef.current);aiWatchdogRef.current=null;}pendingAiRef.current=null;workerRef.current?.postMessage("stop");workerRef.current?.postMessage("ucinewgame");const next = createMatch(player, level, control); setSelectedLevel(level); setMatch(next); matchRef.current = next; setRewardStatus("");setSettledStats(null);setEndReason("");setShowStats(false);setThinking(false); }
+  async function start(level: (typeof levels)[number]) {
+    if (startingRef.current || claimPending) return;
+    startingRef.current = true; setStarting(true);
+    try {
+      const latest = await refreshLimits();
+      const state = effectiveCpuLimit(latest.levels.find(item => item.level === level.level), Date.now());
+      if (latest.enabled && state.locked) { setLimitNotice(`Level ${level.level} unlocks in ${remainingCpuCooldown(state.until, Date.now())}.`); return; }
+      setLimitNotice("");
+      if(aiWatchdogRef.current!==null){window.clearTimeout(aiWatchdogRef.current);aiWatchdogRef.current=null;}pendingAiRef.current=null;workerRef.current?.postMessage("stop");workerRef.current?.postMessage("ucinewgame");const next = createMatch(player, level, control); setSelectedLevel(level); setMatch(next); matchRef.current = next; setRewardStatus("");setSettledStats(null);setEndReason("");setShowStats(false);setThinking(false);
+    } catch (error) { setLimitError(error instanceof Error ? error.message : "Could not check this CPU level. Please retry."); }
+    finally { startingRef.current = false; setStarting(false); }
+  }
   function playerMove(move: { from: string; to: string; promotion?: string }) {
     if (!match || thinking || match.status!=="active" || gameFromPgn(match.pgn).turn()!=="w") return;
     const chess = gameFromPgn(match.pgn);
@@ -141,7 +177,25 @@ export default function CpuGame({ player, onClose, onReward }: { player: ArenaPl
   function resign(){pendingAiRef.current=null;if(aiWatchdogRef.current!==null)window.clearTimeout(aiWatchdogRef.current);workerRef.current?.postMessage("stop");setThinking(false);setEndReason("resigned");setShowStats(true);setMatch(value=>value?{...value,status:"finished",result:"black",version:value.version+1}:value);}
   function abort(){pendingAiRef.current=null;if(aiWatchdogRef.current!==null)window.clearTimeout(aiWatchdogRef.current);workerRef.current?.postMessage("stop");setThinking(false);setEndReason("aborted");setRewardStatus("Aborted CPU game · no CBR or Gold change");setSettledStats({cbr:player.cbr,gold:player.gold_points,cbrDelta:0,goldDelta:0});setShowStats(true);setMatch(value=>value?{...value,status:"cancelled",result:null,version:value.version+1}:value);}
 
-  if (!selectedLevel || !match) return <section className="cpu-setup"><button className="back-button" type="button" onClick={onClose}><ChevronLeft size={16}/>Match Lobby</button><div className="page-heading"><div><span className="cpu-eyebrow">Chess Burger AI Arena</span><h1>Play with CPU</h1><p>Wins earn Gold and CBR; losses deduct CBR only. CPU games never change your live-match count.</p></div><Bot size={38}/></div><div className="cpu-rewards"><strong>CPU rating</strong><span>Bullet: win +2 Gold/+2 CBR · loss −3 CBR</span><span>Blitz: win +3 Gold/+3 CBR · loss −4 CBR</span><span>Rapid: win +5 Gold/+5 CBR · loss −6 CBR</span></div><div className="cpu-time-controls" aria-label="CPU time control">{TIME_CONTROLS.map(item=><button type="button" className={control===item.id?"active":""} aria-pressed={control===item.id} key={item.id} onClick={()=>setControl(item.id)}><strong>{item.label}</strong><small>{item.group} · win +{REWARDS[item.group as keyof typeof REWARDS]} / loss −{LOSSES[item.group as keyof typeof LOSSES]}</small></button>)}</div><div className="cpu-levels" role="list" aria-label="AI strength levels">{levels.map(level=><button type="button" role="listitem" key={level.level} onClick={()=>start(level)}><span>{level.level}</span><div><strong>{level.label}</strong><small>Approx. {level.elo} strength</small></div></button>)}</div><CpuRankings userId={player.user_id}/></section>;
+  if (!selectedLevel || !match) return <section className="cpu-setup">
+    <button className="back-button" type="button" onClick={onClose}><ChevronLeft size={16}/>Match Lobby</button>
+    <div className="page-heading"><div><span className="cpu-eyebrow">Chess Burger AI Arena</span><h1>Play with CPU</h1><p>Wins earn Gold and CBR; losses deduct CBR only. CPU games never change your live-match count.</p></div><Bot size={38}/></div>
+    <div className="cpu-rewards"><strong>CPU rating</strong><span>Bullet: win +2 Gold/+2 CBR · loss −3 CBR</span><span>Blitz: win +3 Gold/+3 CBR · loss −4 CBR</span><span>Rapid: win +5 Gold/+5 CBR · loss −6 CBR</span></div>
+    <div className="cpu-time-controls" aria-label="CPU time control">{TIME_CONTROLS.map(item=><button type="button" className={control===item.id?"active":""} aria-pressed={control===item.id} key={item.id} onClick={()=>setControl(item.id)}><strong>{item.label}</strong><small>{item.group} · win +{REWARDS[item.group as keyof typeof REWARDS]} / loss −{LOSSES[item.group as keyof typeof LOSSES]}</small></button>)}</div>
+    <div className="cpu-limit-heading"><div><strong>Choose your AI level</strong><small>Three wins per level start its cooldown. Losses and draws do not use a win.</small></div><span>0 / 3 → cooldown</span></div>
+    {limitError && <div className="cpu-limit-error" role="alert">{limitError} <button type="button" onClick={()=>void refreshLimits().catch(error=>setLimitError(error instanceof Error ? error.message : "Could not load levels."))}>Retry</button></div>}
+    {limitNotice && <div className="cpu-limit-game-note" role="status">{limitNotice}</div>}
+    {limits && !limits.enabled && <p className="cpu-limit-pending">CPU level cooldowns are awaiting activation.</p>}
+    <div className="cpu-levels" aria-label="AI strength levels">{levels.map(level=>{
+      const state = effectiveCpuLimit(limits?.levels.find(item=>item.level===level.level),clockNow);
+      return <button type="button" key={level.level} className={state.locked?"cpu-level-locked":""} disabled={starting||claimPending||!limits||!!limitError||state.locked} aria-label={`Level ${level.level}, ${level.label}, ${state.locked?remainingCpuCooldown(state.until,clockNow)+" until available":state.wins+" of 3 wins"}`} onClick={()=>void start(level)}>
+        <span>{level.level}</span><div><strong>{level.label}</strong><small>Approx. {level.elo} strength</small><em>{state.locked?remainingCpuCooldown(state.until,clockNow):`${state.wins}/3 wins · ${cpuCooldownLabel(level.level)}`}</em></div>
+      </button>;
+    })}</div>
+    <CpuRankings userId={player.user_id}/>
+  </section>;
   const moves=gameFromPgn(match.pgn).history().length,outcome=match.status==="cancelled"?"aborted":match.result==="white"?"win":match.result==="black"?"loss":"draw";
-  return <section className="cpu-game"><button className="back-button" type="button" onClick={onClose}><ChevronLeft size={16}/>Match Lobby</button><div className="cpu-game-status"><img src={match.black?.avatar_url} alt=""/><div><strong>{match.black?.display_name}</strong><small>AI Level {selectedLevel.level} · {selectedLevel.label}</small></div><span>{engineError||(thinking?`${match.black?.display_name} is thinking…`:engineReady?`${timeControl(match.control).group} · You play White`:"Loading AI engine…")}</span></div>{rewardStatus&&<div className="cpu-reward-status" role="status">{rewardStatus}</div>}<div className="cpu-board-actions"><button type="button" onClick={()=>start(selectedLevel)}><RotateCcw size={15}/>New game</button><button type="button" onClick={()=>{workerRef.current?.postMessage("stop");pendingAiRef.current=null;if(aiWatchdogRef.current!==null)window.clearTimeout(aiWatchdogRef.current);setThinking(false);setMatch(null);setSelectedLevel(null);}}>Change setup</button></div><MatchBoard match={match} ownId={player.user_id} onMove={playerMove} onResign={resign} onAbort={abort} busy={thinking} connection="AI · Local engine"/>{showStats&&<div className="cpu-result-overlay"><section className="cpu-result-dialog" role="dialog" aria-modal="true" aria-labelledby="cpu-result-title"><button className="cpu-result-close" type="button" aria-label="Close statistics" onClick={()=>setShowStats(false)}><X size={18}/></button><div className={`cpu-result-icon ${outcome}`}>{outcome==="win"?<Trophy/>:outcome==="aborted"?<Shield/>:<Bot/>}</div><h1 id="cpu-result-title">{outcome==="win"?"You won!":outcome==="loss"?endReason==="resigned"?"You resigned":"AI won":outcome==="aborted"?"Game aborted":"Game drawn"}</h1><p>Against {match.black?.display_name}</p><div className="cpu-result-players"><div><img src={player.avatar_url} alt=""/><strong>{player.display_name}</strong><small>You · White</small></div><b>VS</b><div><img src={match.black?.avatar_url} alt=""/><strong>{match.black?.display_name}</strong><small>AI Level {selectedLevel.level}</small></div></div><div className="cpu-result-stats"><div><strong>{timeControl(match.control).label}</strong><span>{timeControl(match.control).group}</span></div><div><strong>{moves}</strong><span>Moves played</span></div><div><strong className={(settledStats?.cbrDelta??0)<0?"negative":"positive"}>{settledStats?`${settledStats.cbrDelta>0?"+":""}${settledStats.cbrDelta}`:outcome==="draw"?"0":"…"}</strong><span>CBR change</span></div><div><strong className="gold">{settledStats?`${settledStats.goldDelta>0?"+":""}${settledStats.goldDelta}`:outcome==="draw"?"0":"…"}</strong><span>Gold change</span></div></div><p className="cpu-result-reason">{endReason==="resigned"?"Result recorded by resignation.":endReason==="aborted"?"No rating or Gold was changed.":rewardStatus||"Final game statistics"}</p><div className="cpu-result-actions"><button type="button" onClick={()=>start(selectedLevel)}><RotateCcw size={16}/>Play again</button><button type="button" onClick={()=>{setShowStats(false);setMatch(null);setSelectedLevel(null);}}>Change setup</button><button type="button" onClick={onClose}>Match Lobby</button></div></section></div>}</section>;
+  const levelLimit=effectiveCpuLimit(limits?.levels.find(item=>item.level===selectedLevel.level),clockNow);
+  const replayDisabled=starting||claimPending||!limits||!!limitError||levelLimit.locked;
+  return <section className="cpu-game"><button className="back-button" type="button" onClick={onClose}><ChevronLeft size={16}/>Match Lobby</button><div className="cpu-game-status"><img src={match.black?.avatar_url} alt=""/><div><strong>{match.black?.display_name}</strong><small>AI Level {selectedLevel.level} · {selectedLevel.label}</small></div><span>{engineError||(thinking?`${match.black?.display_name} is thinking…`:engineReady?`${timeControl(match.control).group} · You play White`:"Loading AI engine…")}</span></div>{rewardStatus&&<div className="cpu-reward-status" role="status">{rewardStatus}</div>}{levelLimit.locked&&<div className="cpu-limit-game-note" role="status">Level {selectedLevel.level} complete · {remainingCpuCooldown(levelLimit.until,clockNow)}. Choose another level to keep playing.</div>}{limitNotice&&!levelLimit.locked&&<div className="cpu-limit-game-note" role="status">{limitNotice}</div>}{limitError&&<div className="cpu-limit-error" role="alert">{limitError}</div>}<div className="cpu-board-actions"><button type="button" disabled={replayDisabled} onClick={()=>void start(selectedLevel)}><RotateCcw size={15}/>New game</button><button type="button" onClick={()=>{workerRef.current?.postMessage("stop");pendingAiRef.current=null;if(aiWatchdogRef.current!==null)window.clearTimeout(aiWatchdogRef.current);setThinking(false);setMatch(null);setSelectedLevel(null);}}>Change setup</button></div><MatchBoard match={match} ownId={player.user_id} onMove={playerMove} onResign={resign} onAbort={abort} busy={thinking} connection="AI · Local engine"/>{showStats&&<div className="cpu-result-overlay"><section className="cpu-result-dialog" role="dialog" aria-modal="true" aria-labelledby="cpu-result-title"><button className="cpu-result-close" type="button" aria-label="Close statistics" onClick={()=>setShowStats(false)}><X size={18}/></button><div className={`cpu-result-icon ${outcome}`}>{outcome==="win"?<Trophy/>:outcome==="aborted"?<Shield/>:<Bot/>}</div><h1 id="cpu-result-title">{outcome==="win"?"You won!":outcome==="loss"?endReason==="resigned"?"You resigned":"AI won":outcome==="aborted"?"Game aborted":"Game drawn"}</h1><p>Against {match.black?.display_name}</p><div className="cpu-result-players"><div><img src={player.avatar_url} alt=""/><strong>{player.display_name}</strong><small>You · White</small></div><b>VS</b><div><img src={match.black?.avatar_url} alt=""/><strong>{match.black?.display_name}</strong><small>AI Level {selectedLevel.level}</small></div></div><div className="cpu-result-stats"><div><strong>{timeControl(match.control).label}</strong><span>{timeControl(match.control).group}</span></div><div><strong>{moves}</strong><span>Moves played</span></div><div><strong className={(settledStats?.cbrDelta??0)<0?"negative":"positive"}>{settledStats?`${settledStats.cbrDelta>0?"+":""}${settledStats.cbrDelta}`:outcome==="draw"?"0":"…"}</strong><span>CBR change</span></div><div><strong className="gold">{settledStats?`${settledStats.goldDelta>0?"+":""}${settledStats.goldDelta}`:outcome==="draw"?"0":"…"}</strong><span>Gold change</span></div></div><p className="cpu-result-reason">{endReason==="resigned"?"Result recorded by resignation.":endReason==="aborted"?"No rating or Gold was changed.":rewardStatus||"Final game statistics"}</p><div className="cpu-result-actions"><button type="button" disabled={replayDisabled} onClick={()=>void start(selectedLevel)}><RotateCcw size={16}/>Play again</button><button type="button" onClick={()=>{setShowStats(false);setMatch(null);setSelectedLevel(null);}}>Change setup</button><button type="button" onClick={onClose}>Match Lobby</button></div></section></div>}</section>;
 }
