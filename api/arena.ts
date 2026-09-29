@@ -375,7 +375,7 @@ async function activeAvatarFrame(client: Db, profile: any) {
 async function playerMap(client: Db, ids: string[]) {
   const unique = [...new Set(ids.filter(Boolean))];
   if (!unique.length) return new Map<string, any>();
-  let r = await client.from('cb_profiles').select('user_id,username,display_name,avatar_url,country_code,cbr,gold_points,wins,losses,win_streak,active_feed_banner,active_avatar_frame_item').in('user_id', unique);
+  let r = await client.from('cb_profiles').select('user_id,username,display_name,avatar_url,country_code,cbr,gold_points,wins,losses,win_streak,role,active_feed_banner,active_avatar_frame_item').in('user_id', unique);
   if (r.error && /active_feed_banner|active_avatar_frame_item|schema cache/i.test(r.error.message)) r = await client.from('cb_profiles').select('user_id,username,display_name,avatar_url,country_code,cbr,gold_points,wins,losses,win_streak').in('user_id', unique);
   if (r.error) fail(500, r.error.message);
   const players = r.data ?? [];
@@ -501,7 +501,7 @@ async function publicFeed(client: Db) {
   const actorIds = [...new Set<string>(visible.filter((e: any) => e.kind !== 'announcement').map((e: any) => e.user_id))];
   // Public identity comes from current membership, including joins, quits and renames.
   // Fetch all guilds in one join alongside the existing feed lookups.
-  const [waiting, people, memberships] = await Promise.all([
+  const [waiting, people, memberships, supporterTiers] = await Promise.all([
     challengeIds.length
       ? client.from('cb_matches').select('id,play_mode,wager_gold').in('id', challengeIds).eq('status', 'waiting').is('invite_to', null).gt('created_at', new Date(now() - 120000).toISOString())
       : Promise.resolve({ data: [], error: null }),
@@ -509,8 +509,13 @@ async function publicFeed(client: Db) {
     actorIds.length
       ? client.from('cb_guild_members').select('user_id,guild:cb_guilds(name,logo_url)').in('user_id', actorIds)
       : Promise.resolve({ data: [], error: null }),
+    actorIds.length
+      ? client.rpc('cb_supporter_tiers', {p_user_ids:actorIds})
+      : Promise.resolve({data:[],error:null}),
   ]);
   if (waiting.error) fail(500, waiting.error.message);
+  // If the migration is pending, never render a stale Premium entitlement.
+  const tierByUser = new Map<string,string>((supporterTiers.data??[]).map((row:any)=>[row.user_id,row.tier]));
   const frameByUser = new Map<string, string>();
   if (actorIds.length) {
     // Only display equipped rentals that are still owned and unexpired.
@@ -538,6 +543,10 @@ async function publicFeed(client: Db) {
     const match = activeChallenges.get(e.challenge_match_id);
     const announcement = e.kind === 'announcement';
     const guild = announcement ? undefined : guildByUser.get(e.user_id);
+    const player = people.get(e.user_id);
+    const supporterTier = tierByUser.get(e.user_id)??'';
+    const premiumAllowed = supporterTier==='premium';
+    const feedBanner = player?.active_feed_banner==='premium-supporter'&&!premiumAllowed?'':player?.active_feed_banner??'';
     return {
       id: e.kind === 'challenge' && e.challenge_match_id ? `challenge:${e.challenge_match_id}` : e.id,
       user_id: e.user_id, kind: e.kind, display_name: announcement ? 'Chess Burger' : e.display_name,
@@ -545,7 +554,8 @@ async function publicFeed(client: Db) {
       cbr_delta: e.cbr_delta ?? 0, gold_delta: e.gold_delta ?? 0, heart_count: e.heart_count ?? 0, created_at: e.created_at,
       avatar_url: announcement ? '/cburger_logo.png' : people.get(e.user_id)?.avatar_url ?? '', cbr: people.get(e.user_id)?.cbr ?? 88,
       avatar_frame_id: announcement ? null : frameByUser.get(e.user_id) ?? null,
-      feed_banner: announcement ? '' : people.get(e.user_id)?.active_feed_banner ?? '',
+      feed_banner: announcement ? '' : feedBanner,
+      supporter_tier: announcement ? '' : feedBanner==='premium-supporter'&&premiumAllowed?'premium':supporterTier?'app_donor':'',
       guild_name: guild?.name ?? '', guild_logo_url: guild?.logo_url ?? '',
       play_mode: match?.play_mode ?? 'normal', wager_gold: Number(match?.wager_gold ?? 0),
     };

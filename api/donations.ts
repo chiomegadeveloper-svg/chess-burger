@@ -4,6 +4,7 @@ type Req={method?:string;headers:{authorization?:string|string[]};body?:Record<s
 type Res={status:(code:number)=>Res;json:(body:unknown)=>void;setHeader:(key:string,value:string)=>void};
 const fail=(status:number,message:string):never=>{const error=Error(message) as Error&{status:number};error.status=status;throw error;};
 const schemaHint='Apply supabase/0079_donations_premium_banner.sql in the Chess Burger Supabase project.';
+const tierSchemaHint='Apply supabase/0081_donation_supporter_tiers.sql in the Chess Burger Supabase project before approving donations.';
 const uuid=/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i;
 
 async function emailOwnersAboutDonation(donation:{id:string;amount_php:number;reference_last6:string;created_at:string},donor:{username?:string|null;display_name?:string|null}){
@@ -45,12 +46,14 @@ export default async function handler(req:Req,res:Res){
     const owner=profile.data!.role==='owner';
 
     if(action==='catalog'){
-      const [orders,entitlement]=await Promise.all([
+      const [orders,entitlement,tiers]=await Promise.all([
         db.from('cb_donations').select('id,amount_php,reference_last6,status,created_at,expires_at,reviewed_at,reject_reason').eq('donor_id',userId).order('created_at',{ascending:false}).limit(20),
         db.from('cb_user_items').select('product_id').eq('user_id',userId).eq('product_id','premium-supporter').gt('expires_at',new Date().toISOString()).maybeSingle(),
+        db.rpc('cb_supporter_tiers',{p_user_ids:[userId]}),
       ]);
       if(orders.error||entitlement.error)fail(503,schemaHint);
-      return res.status(200).json({orders:orders.data||[],premium:!!entitlement.data,active:profile.data!.active_feed_banner==='premium-supporter',qr_url:'/shop/chess-burger-qrph.png'});
+      const premium=!tiers.error&&tiers.data?.some((row:{user_id:string;tier:string})=>row.user_id===userId&&row.tier==='premium')&&!!entitlement.data;
+      return res.status(200).json({orders:orders.data||[],premium,active:premium&&profile.data!.active_feed_banner==='premium-supporter',qr_url:'/shop/chess-burger-qrph.png'});
     }
     if(action==='reserve'){
       const id=String(body.id||''),rawAmount=String(body.amount_php??'');
@@ -79,9 +82,12 @@ export default async function handler(req:Req,res:Res){
     if(action==='equip'){
       if(typeof body.equipped!=='boolean')fail(400,'Choose whether to equip the banner.');
       if(body.equipped){
+        const tiers=await db.rpc('cb_supporter_tiers',{p_user_ids:[userId]});
+        if(tiers.error)fail(503,tierSchemaHint);
+        if(!tiers.data?.some((row:{user_id:string;tier:string})=>row.user_id===userId&&row.tier==='premium'))fail(403,'Premium requires an approved donation over ₱888 or an owner entitlement.');
         const owned=await db.from('cb_user_items').select('product_id').eq('user_id',userId).eq('product_id','premium-supporter').gt('expires_at',new Date().toISOString()).maybeSingle();
         if(owned.error)fail(503,schemaHint);
-        if(!owned.data)fail(403,'The Premium User banner is available after a verified donation.');
+        if(!owned.data)fail(403,'The Premium User banner is available after a verified donation over ₱888 or to owners.');
       }
       let query=db.from('cb_profiles').update({active_feed_banner:body.equipped?'premium-supporter':null}).eq('user_id',userId);
       if(!body.equipped)query=query.eq('active_feed_banner','premium-supporter');
@@ -112,6 +118,10 @@ export default async function handler(req:Req,res:Res){
     }
     if(action==='review'){
       const id=String(body.id||'');if(!uuid.test(id)||typeof body.approve!=='boolean')fail(400,'Choose a pending donation.');
+      if(body.approve){
+        const ready=await db.rpc('cb_supporter_tiers',{p_user_ids:[]});
+        if(ready.error)fail(503,tierSchemaHint);
+      }
       const reviewed=await db.rpc('cb_review_donation',{p_owner_id:userId,p_donation_id:id,p_approve:body.approve,p_reason:String(body.reason||'')});
       if(reviewed.error)fail(/schema cache|function|relation/i.test(reviewed.error.message)?503:409,/schema cache|function|relation/i.test(reviewed.error.message)?schemaHint:reviewed.error.message);
       return res.status(200).json({donation:reviewed.data});

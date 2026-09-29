@@ -285,11 +285,13 @@ export default function CommunityFeed({
     const all = [
       ...(localFeed.status === "fulfilled" ? localFeed.value.events : []),
     ]
-      .map((event) =>
-        event.feed_banner || !ownProfile || event.user_id !== ownProfile.user_id
+      .map((event) => {
+        if (event.feed_banner || !ownProfile || event.user_id !== ownProfile.user_id) return event;
+        const ownBanner = ownProfile.active_feed_banner ?? "";
+        return ownBanner === PREMIUM_SUPPORTER_ID && event.supporter_tier !== "premium"
           ? event
-          : { ...event, feed_banner: ownProfile.active_feed_banner ?? "" },
-      )
+          : { ...event, feed_banner: ownBanner };
+      })
       .filter((e) => e.kind !== "first_blood" && (!e.expires_at || Date.parse(e.expires_at) > Date.now()));
     setChallenges(
       all
@@ -977,7 +979,7 @@ export default function CommunityFeed({
           return (
             <li
               key={event.id}
-              className={`feed-cloud kind-${event.kind}${!announcement && event.guild_name ? " has-guild" : ""}${banner ? " has-feed-banner" : ""}${banner && isGraphicBanner(banner) ? " has-graphic-banner" : ""}${banner?.tier === "animated" ? " animated-graphic-banner" : ""}${banner?.id===PREMIUM_SUPPORTER_ID?" premium-supporter-feed":""}${arenaChampion ? " grand-arena-champion-feed" : ""}`}
+              className={`feed-cloud kind-${event.kind}${!announcement && event.guild_name ? " has-guild" : ""}${banner ? " has-feed-banner" : ""}${banner && isGraphicBanner(banner) ? " has-graphic-banner" : ""}${banner?.tier === "animated" ? " animated-graphic-banner" : ""}${banner?.id===PREMIUM_SUPPORTER_ID?" premium-supporter-feed":""}${!announcement&&(banner?.id===PREMIUM_SUPPORTER_ID||event.supporter_tier==='app_donor')?" has-supporter-tag":""}${arenaChampion ? " grand-arena-champion-feed" : ""}`}
               style={bannerStyle}
             >
               <button
@@ -1015,8 +1017,9 @@ export default function CommunityFeed({
                   ))}
                 </span>
               )}
+              {!announcement && banner?.id===PREMIUM_SUPPORTER_ID && <span className="feed-supporter-tag premium-user-tag">♛ PREMIUM USER</span>}
+              {!announcement && banner?.id!==PREMIUM_SUPPORTER_ID && event.supporter_tier==='app_donor' && <span className="feed-supporter-tag app-donor-tag">APP DONOR</span>}
               <div className="feed-copy">
-                {banner?.id===PREMIUM_SUPPORTER_ID&&<span className="premium-user-tag">♛ PREMIUM USER</span>}
                 {arenaChampion && (
                   <span className="arena-champion-ribbon">
                     <Crown size={13} /> GRAND ARENA CHAMPION
