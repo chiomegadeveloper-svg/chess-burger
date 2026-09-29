@@ -1,12 +1,14 @@
 "use client";
 import {useCallback,useEffect,useState} from "react";
-import {ArrowLeft,BookOpen,Clock,Copy,GraduationCap,KeyRound,LogOut,RefreshCw,ShoppingBag,Users} from "lucide-react";
+import {ArrowLeft,BookOpen,Calculator,ChevronRight,Clock,Copy,GraduationCap,KeyRound,LogOut,RefreshCw,ShoppingBag,Users} from "lucide-react";
 import {toast} from "sonner";
 import {classroom} from "./classroom-client";
 import "./classroom.css";
 import "./classroom-timed-access.css";
 import ClassroomWorkshop from "./classroom-workshop";
 import SebaTournament from "./seba-tournament";
+import ChessMath from "./chess-math";
+import "./chess-math-entry.css";
 
 const PACKAGES=[
   {kind:"pawn",name:"Room Pawn",slots:5,hours:12},
@@ -27,9 +29,9 @@ export default function Classroom({onBack,onOpenShop}:{onBack:()=>void;onOpenSho
   const [role,setRole]=useState<""|"teacher"|"student">("");
   const [now,setNow]=useState(()=>Date.now());
   useEffect(()=>{const timer=window.setInterval(()=>setNow(Date.now()),1000);return()=>window.clearInterval(timer)},[]);
-  const [state,setState]=useState<State|null>(null),[busy,setBusy]=useState(false),[selected,setSelected]=useState("pawn"),[name,setName]=useState(""),[code,setCode]=useState(""),[workshop,setWorkshop]=useState<string|null>(null),[certificateRoom,setCertificateRoom]=useState<string|null>(null);
+  const [state,setState]=useState<State|null>(null),[busy,setBusy]=useState(false),[selected,setSelected]=useState("pawn"),[name,setName]=useState(""),[code,setCode]=useState(""),[workshop,setWorkshop]=useState<string|null>(null),[certificateRoom,setCertificateRoom]=useState<string|null>(null),[chessMathOpen,setChessMathOpen]=useState(false);
   const load=useCallback(()=>classroom<State>("state").then(setState).catch(e=>toast.error(e.message)),[]);
-  useEffect(()=>{if(workshop)return;let pending=false;const update=async()=>{if(pending||!navigator.onLine||document.visibilityState==="hidden")return;pending=true;try{await load()}finally{pending=false}};void update();const refresh=window.setInterval(()=>void update(),15000+Math.floor(Math.random()*2000));const resumed=()=>{if(document.visibilityState==="visible")void update()};document.addEventListener("visibilitychange",resumed);window.addEventListener("online",resumed);return()=>{window.clearInterval(refresh);document.removeEventListener("visibilitychange",resumed);window.removeEventListener("online",resumed)}},[load,workshop]);
+  useEffect(()=>{if(workshop||chessMathOpen)return;let pending=false;const update=async()=>{if(pending||!navigator.onLine||document.visibilityState==="hidden")return;pending=true;try{await load()}finally{pending=false}};void update();const refresh=window.setInterval(()=>void update(),15000+Math.floor(Math.random()*2000));const resumed=()=>{if(document.visibilityState==="visible")void update()};document.addEventListener("visibilitychange",resumed);window.addEventListener("online",resumed);return()=>{window.clearInterval(refresh);document.removeEventListener("visibilitychange",resumed);window.removeEventListener("online",resumed)}},[load,workshop,chessMathOpen]);
   const create=async()=>{if(!name.trim())return toast.error("Name your Room Session.");setBusy(true);try{const result=await classroom<{room:Room}>("create",{package:selected,name,request_id:crypto.randomUUID()});toast.success(`${result.room.name} created`,{description:`Student code: ${result.room.invite_code}`});setName("");await load()}catch(e){toast.error(e instanceof Error?e.message:"Unable to create room.")}finally{setBusy(false)}};
   const join=async()=>{setBusy(true);try{const result=await classroom<{room:Room}>("join",{code:code.trim().toUpperCase(),request_id:crypto.randomUUID()});toast.success(`Welcome to ${result.room.name}`);setCode("");await load()}catch(e){toast.error(e instanceof Error?e.message:"Unable to join room.")}finally{setBusy(false)}};
   const free=state?.settings?.cbc_enabled===false;
@@ -38,13 +40,14 @@ export default function Classroom({onBack,onOpenShop}:{onBack:()=>void;onOpenSho
   const rename=async(room:Room)=>{const next=window.prompt("Rename Room Session",room.name)?.trim();if(!next||next===room.name)return;setBusy(true);try{await classroom("rename",{room_id:room.id,name:next});toast.success("Room renamed.");await load()}catch(e){toast.error(e instanceof Error?e.message:"Unable to rename room.")}finally{setBusy(false)}};
   if(certificateRoom)return <section className="classroom-page"><button className="back-button" onClick={()=>setCertificateRoom(null)}><ArrowLeft size={15}/>Back to classroom</button><SebaTournament roomId={certificateRoom} teacher={role==="teacher"} archive/></section>;
   if(workshop)return <ClassroomWorkshop roomId={workshop} onExit={()=>{setWorkshop(null);void load()}}/>;
+  if(chessMathOpen)return <ChessMath onExit={()=>setChessMathOpen(false)}/>;
   return <section className="classroom-page">
     <button className="back-button" type="button" onClick={role?()=>setRole(""):onBack}><ArrowLeft size={15}/>{role?"Student Lobby":"Play selection"}</button>
     <header className="classroom-hero"><span>CHESSBURGER LEARNING</span><h1>Classroom</h1><p>Create welcoming chess rooms or join your instructor with a private code.</p></header>
-    {!role?<div className="classroom-role-grid">
+    {!role?<><div className="classroom-role-grid">
       <button onClick={()=>setRole("teacher")}><img src="/classroom/teacher.webp" alt="Chess instructor"/><span><small>CREATE & TEACH</small><strong>Teacher</strong><b>Open instructor tools</b></span></button>
       <button onClick={()=>setRole("student")}><img src="/classroom/student.webp" alt="Chess student"/><span><small>JOIN & LEARN</small><strong>Student</strong><b>Enter a classroom</b></span></button>
-    </div>:<>
+    </div><button type="button" className="chess-math-entry" onClick={()=>setChessMathOpen(true)}><span className="chess-math-entry-icon"><Calculator size={25}/></span><span className="chess-math-entry-copy"><small>NEW · TIMED CHALLENGE</small><strong>Chess Math</strong><b>Piece values, trade logic, and Top 10 rankings</b></span><span className="chess-math-entry-action">Play quiz <ChevronRight size={17}/></span></button></>:<>
       <div className="classroom-wallets">
         <article><img src="/classroom/cbc-token.webp" alt="CBC token"/><span><small>CLASSROOM CREDITS</small><strong>{state?.wallet?.cbc??0} CBC</strong></span></article>
         <article><span><small>CHESSBURGER GOLD</small><strong>{state?.gold??0} CBG</strong></span></article>
