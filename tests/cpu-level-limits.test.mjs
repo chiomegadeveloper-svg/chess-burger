@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import { CPU_COOLDOWN_HOURS, cpuCooldownLabel, effectiveCpuLimit, remainingCpuCooldown } from '../app/cpu-level-limits.ts';
 
 test('the ten CPU levels display the configured cooldowns', () => {
-  assert.deepEqual([...CPU_COOLDOWN_HOURS], [216, 192, 168, 144, 120, 96, 72, 48, 24, 12]);
+  assert.deepEqual([...CPU_COOLDOWN_HOURS], [48, 48, 42, 40, 36, 34, 32, 24, 18, 12]);
   assert.deepEqual(Array.from({length: 10}, (_, index) => cpuCooldownLabel(index + 1)),
-    ['9d cooldown', '8d cooldown', '7d cooldown', '6d cooldown', '5d cooldown',
-      '4d cooldown', '3d cooldown', '2d cooldown', '1d cooldown', '12h cooldown']);
+    ['2d cooldown', '2d cooldown', '1d 18h cooldown', '1d 16h cooldown', '1d 12h cooldown',
+      '1d 10h cooldown', '1d 8h cooldown', '1d cooldown', '18h cooldown', '12h cooldown']);
 });
 
 test('a locked level resets its displayed wins when the cooldown expires', () => {
