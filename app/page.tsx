@@ -51,6 +51,7 @@ import { profileRequest } from "./profile-client";
 import { FloatingChatButton, SocialHub, MatchResult, openSocial, type MatchSummary } from "./social";
 import PublicProfile from "./public-profile";
 import InstallPrompt from "./install-prompt";
+import UpdateGate from "./update-gate";
 import { BagPage, ShopPage } from "./shop";
 import DonateShop from "./donate-shop";
 import { isProfileComplete } from "./profile-completion";
@@ -1208,5 +1209,5 @@ export default function Page() {
     );
   }
 
-  return <AppPage />;
+  return <><AppPage /><UpdateGate /></>;
 }
