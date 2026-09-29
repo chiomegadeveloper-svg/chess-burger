@@ -7,8 +7,8 @@ const account = read("../app/account.tsx");
 const styles = read("../app/vanguard-card.css");
 
 test("Vanguard card uses a fixed blank frame with live player identity and stats", () => {
-  assert.equal(existsSync(new URL("../public/player-card/vanguard-template.webp", import.meta.url)), true);
-  assert.match(account, /vanguard-template\.webp/);
+  assert.equal(existsSync(new URL("../public/player-card/vanguard-template-v2.webp", import.meta.url)), true);
+  assert.match(account, /vanguard-template-v2\.webp/);
   assert.match(account, /profile\.display_name/);
   assert.match(account, /profile\.username/);
   assert.match(account, /flag\(profile\.country_code\)/);
@@ -25,4 +25,11 @@ test("level and guild emblems are live overlays without shield artwork", () => {
   assert.match(styles, /\.card-level-insignia\{left:/);
   assert.match(styles, /\.card-guild-insignia\{left:/);
   assert.match(styles, /background:radial-gradient\(circle/);
+});
+
+test("emblem slots retain a visible responsive five-by-two frame grid", () => {
+  assert.match(styles, /grid-template-columns:repeat\(5,minmax\(0,1fr\)\)/);
+  assert.match(styles, /grid-template-rows:repeat\(2,minmax\(0,1fr\)\)/);
+  assert.match(styles, /\.card-emblem\{[^}]*border:1px solid #d7b65a/);
+  assert.match(styles, /\.card-emblem-grid\{[^}]*bottom:4\.2%/);
 });

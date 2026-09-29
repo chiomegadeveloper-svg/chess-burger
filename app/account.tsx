@@ -775,7 +775,7 @@ export default function Account({
   const playerCard = (
     <>
       <div className="player-card vanguard-template-card" aria-label={`${profile.display_name}'s Vanguard player card`}>
-        <img className="vanguard-template-art" src="/player-card/vanguard-template.webp" alt="" aria-hidden="true" />
+        <img className="vanguard-template-art" src="/player-card/vanguard-template-v2.webp" alt="" aria-hidden="true" />
         <div className="card-main">
           <div className="portrait-ring">
             <div className="portrait-circle">
@@ -804,11 +804,11 @@ export default function Account({
           </div>
         </div>
         <div className="card-stats">
-          <div><strong>{profile.gold_points.toLocaleString()}</strong><span>CBG</span></div>
-          <div><strong>{cardSummary?.cbc?.toLocaleString()??"—"}</strong><span>CBC</span></div>
-          <div><strong>{profile.cbr.toLocaleString()}</strong><span>CBR</span></div>
-          <div><strong>{cardSummary?.tickets?.toLocaleString()??"—"}</strong><span>Arena tickets</span></div>
-          <div><strong>{winRate}%</strong><span>Win rate</span></div>
+          <div><img src="/currency/cbg-coin.webp" alt=""/><span>CBG</span><strong>{profile.gold_points.toLocaleString()}</strong></div>
+          <div><img src="/classroom/cbc-token.webp" alt=""/><span>CBC</span><strong>{cardSummary?.cbc?.toLocaleString()??"—"}</strong></div>
+          <div><i aria-hidden="true">♜</i><span>CBR</span><strong>{profile.cbr.toLocaleString()}</strong></div>
+          <div><img src="/grand-arena/arena-ticket.webp" alt=""/><span>Arena tickets</span><strong>{cardSummary?.tickets?.toLocaleString()??"—"}</strong></div>
+          <div><i aria-hidden="true">⚔</i><span>Win rate</span><strong>{winRate}%</strong></div>
         </div>
         <div className="card-achievements">
           <CardEmblemCollection selected={profile.featured_badges} onChoose={() => document.getElementById('featured-emblem-picker')?.scrollIntoView({behavior:'smooth',block:'center'})}/>
