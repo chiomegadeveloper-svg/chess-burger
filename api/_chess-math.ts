@@ -52,7 +52,7 @@ export default async function handler(req:Req,res:Res){
     if(action==='state'){
       const difficulty=validDifficulty(body.difficulty)?body.difficulty:'easy';
       const existing=await active(),rankings=await optionalLeaders(existing?.difficulty??difficulty);
-      return res.status(200).json({bank:{math:500,logic:500},active:existing?view(existing):null,...rankings});
+      return res.status(200).json({bank:{math:1000,logic:500},active:existing?view(existing):null,...rankings});
     }
     if(action==='start'){
       const difficulty=body.difficulty,count=Number(body.count),duration=Number(body.duration_seconds);

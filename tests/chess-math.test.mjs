@@ -2,15 +2,21 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {chessMathBank,pieceValues,pickQuestions,questionView,scoreAnswers} from '../api/_chess-math-bank.ts';
 
-test('Chess Math generates 500 distinct arithmetic and 500 distinct trade questions',()=>{
-  assert.equal(chessMathBank.length,1000);
-  assert.equal(chessMathBank.filter(question=>question.kind==='math').length,500);
+test('Chess Math generates 1,000 distinct arithmetic and 500 distinct trade questions',()=>{
+  assert.equal(chessMathBank.length,1500);
+  assert.equal(chessMathBank.filter(question=>question.kind==='math').length,1000);
   assert.equal(chessMathBank.filter(question=>question.kind==='logic').length,500);
-  assert.equal(new Set(chessMathBank.map(question=>question.id)).size,1000);
-  assert.equal(new Set(chessMathBank.map(question=>question.prompt)).size,1000);
+  assert.equal(new Set(chessMathBank.map(question=>question.id)).size,1500);
+  assert.equal(new Set(chessMathBank.map(question=>question.prompt)).size,1500);
   assert.deepEqual(pieceValues,{Q:9,B:3,R:5,N:3,P:1});
   assert.equal(chessMathBank.find(question=>question.id==='math-add-B-3')?.answer,'6');
   assert.equal(chessMathBank.find(question=>question.id==='logic-winner-Q-R')?.answer,'A');
+  assert.equal(chessMathBank.find(question=>question.id==='math-mdas-Q-3')?.answer,'45');
+  assert.equal(chessMathBank.find(question=>question.id==='math-five-B-2')?.answer,'23');
+  assert.equal(chessMathBank.find(question=>question.id==='math-divide-R-4')?.answer,'19');
+  assert.equal(chessMathBank.find(question=>question.id==='math-half-Q-2')?.answer,'5.5');
+  assert.equal(chessMathBank.find(question=>question.id==='math-variable-N-3')?.answer,'3');
+  assert.equal(chessMathBank.find(question=>question.id==='math-situation-P-1')?.answer,'-2');
 });
 
 test('every difficulty can assemble 50 questions from both categories without answers leaking',()=>{

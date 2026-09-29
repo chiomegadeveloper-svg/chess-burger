@@ -15,6 +15,33 @@ function makeBank():MathQuestion[]{
     math.push({id:`math-mul-${key}`,kind:'math',difficulty:'medium',prompt:`${number} × ${piece.symbol} = ?`,answer:String(number*piece.value)});
     math.push({id:`math-mix-${key}`,kind:'math',difficulty:'hard',prompt:`(${number} + ${piece.symbol}) × ${other.symbol} = ?`,answer:String((number+piece.value)*other.value)});
   }
+  // 500 additional Chess Math problems: 100 MDAS, 100 five-term,
+  // 100 exact division, 50 fractions, 50 variables, and 100 situations.
+  for(const piece of pieces)for(let n=1;n<=20;n++){
+    const tag=`${piece.symbol}-${n}`;
+    math.push({id:`math-mdas-${tag}`,kind:'math',difficulty:n<=7?'easy':'medium',
+      prompt:`${n} + ${piece.symbol} × R − B = ?`,
+      answer:String(n+piece.value*5-3)});
+    math.push({id:`math-five-${tag}`,kind:'math',difficulty:'hard',
+      prompt:`(${piece.symbol} + B) × R + ${n} − Q = ?`,
+      answer:String((piece.value+3)*5+n-9)});
+    const dividend=n*3;
+    math.push({id:`math-divide-${tag}`,kind:'math',difficulty:n<=7?'easy':'medium',
+      prompt:`${dividend} × ${piece.symbol} ÷ B − P = ?`,
+      answer:String(n*piece.value-1)});
+    math.push({id:`math-situation-${tag}`,kind:'math',difficulty:n<=7?'medium':'hard',
+      prompt:`You capture a ${piece.name} plus ${n} points from pawns. Your opponent captures a Bishop and a Pawn. What is your material lead? Use a negative number if behind.`,
+      answer:String(piece.value+n-4)});
+  }
+  for(const piece of pieces)for(let n=1;n<=10;n++){
+    const tag=`${piece.symbol}-${n}`,half=(piece.value+n)/2;
+    math.push({id:`math-half-${tag}`,kind:'math',difficulty:'easy',
+      prompt:`(${piece.symbol} + ${n}) ÷ 2 = ? Give a decimal when needed.`,
+      answer:String(half)});
+    math.push({id:`math-variable-${tag}`,kind:'math',difficulty:'medium',
+      prompt:`2 × X + ${piece.symbol} = ${2*n+piece.value}. What is X?`,
+      answer:String(n)});
+  }
   const logic:MathQuestion[]=[];
   for(const takenByA of pieces)for(const takenByB of pieces){
     const key=`${takenByA.symbol}-${takenByB.symbol}`;
@@ -37,7 +64,7 @@ function makeBank():MathQuestion[]{
     logic.push({id:`logic-points-${key}`,kind:'logic',difficulty:'hard',prompt:`${story} By how many piece points does the leading player lead?`,answer:String(Math.abs(difference))});
     if(++trades===200)break outer;
   }
-  if(math.length!==500||logic.length!==500||new Set([...math,...logic].map(item=>item.id)).size!==1000)throw Error('Chess Math question bank is incomplete.');
+  if(math.length!==1000||logic.length!==500||new Set([...math,...logic].map(item=>item.id)).size!==1500)throw Error('Chess Math question bank is incomplete.');
   return [...math,...logic];
 }
 export const chessMathBank=makeBank();
@@ -63,7 +90,7 @@ export function questionView(question:MathQuestion,sessionId:string,index=0){
   if(['A','B','Equal'].includes(answer))options=['A','B','Equal'];
   else{
     const value=Number(answer),choices=new Set([value]);
-    for(const delta of [1,-1,3,-3,5,9,2,-2]){if(choices.size>=4)break;const candidate=value+delta;if(candidate>=0)choices.add(candidate);}
+    for(const delta of [1,-1,3,-3,5,9,2,-2]){if(choices.size>=4)break;const candidate=value+delta;if(Number.isFinite(candidate))choices.add(candidate);}
     options=[...choices].map(String);
   }
   const rotated=options.map((_,index)=>options[(index+seed%options.length)%options.length]);
