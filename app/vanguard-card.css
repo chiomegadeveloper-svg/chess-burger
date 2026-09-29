@@ -65,3 +65,39 @@
 .vanguard-template-card .portrait-ring{background:none;box-shadow:none}
 .vanguard-template-card .portrait-circle{box-shadow:0 1.1cqw 2.4cqw #000b}
 .vanguard-template-card .card-insignia{z-index:5}
+
+
+/* Live premium frames and coordinated Vanguard identity panels. */
+.vanguard-template-card .portrait-ring>.avatar-frame-overlay{inset:0;width:100%;height:100%}
+.vanguard-template-card .card-level-insignia,.vanguard-template-card .card-guild-insignia{
+  top:60.5%;width:14%;height:14%;aspect-ratio:auto;
+  border:1px solid #caa751;border-radius:.8cqw;
+  background:linear-gradient(145deg,#10212ade,#050b11ed);
+  box-shadow:inset 0 0 0 1px #21d9f259,0 .5cqw 1.5cqw #0009,0 0 1.4cqw #08c9e128;
+}
+.vanguard-template-card .card-level-insignia{left:4.8%}
+.vanguard-template-card .card-guild-insignia{left:21.2%}
+.vanguard-template-card .identity-level-emblem{width:57%;height:69%}
+.vanguard-template-card .card-guild-insignia img{width:57%;height:69%}
+.vanguard-template-card .card-insignia small{
+  top:auto;bottom:5%;width:94%;font-size:clamp(5px,.85cqw,10px);
+  color:#f4d582;letter-spacing:.02em;
+}
+.vanguard-template-card .card-identity{
+  left:3.8%;top:76%;width:32.4%;min-height:16%;
+  display:grid;place-items:center;
+  padding:1.1cqw .8cqw;
+  border:1px solid #caa751;border-radius:.8cqw;
+  background:linear-gradient(145deg,#10212adc,#050b11ef);
+  box-shadow:inset 0 0 0 1px #21d9f259,0 .5cqw 1.5cqw #0009,0 0 1.4cqw #08c9e128;
+}
+.vanguard-template-card .card-identity-heading{width:100%}
+.vanguard-template-card .card-identity h2{font-size:clamp(11px,2.8cqw,32px)}
+.vanguard-template-card .card-status{margin-top:.65cqw}
+.vanguard-template-card::before{
+  content:"";display:block;position:absolute;inset:0;z-index:1;pointer-events:none;
+  background:radial-gradient(ellipse at 21% 27%,#10d8f224,transparent 33%),radial-gradient(ellipse at 73% 65%,#f0bc2817,transparent 42%);
+  animation:vanguard-ambient 5s ease-in-out infinite alternate;
+}
+@keyframes vanguard-ambient{from{opacity:.28}to{opacity:1}}
+@media(prefers-reduced-motion:reduce){.vanguard-template-card::before{animation:none;opacity:.6}}

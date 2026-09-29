@@ -785,6 +785,7 @@ export default function Account({
                 profile.display_name.charAt(0)
               )}
             </div>
+            <AvatarFrameOverlay frameId={profile.avatar_frame_id}/>
           </div>
           <div className="card-identity">
             <div className="card-identity-heading">
