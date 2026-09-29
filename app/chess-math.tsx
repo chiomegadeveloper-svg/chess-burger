@@ -34,7 +34,7 @@ export default function ChessMath({onExit}:{onExit:()=>void}){
   const load=useCallback(async(level:Difficulty)=>{
     const request=++loadRequest.current;
     setLoading(true);
-    try{const response=await chessMath<{active:Session|null;leaders:Leaders}>('state',{difficulty:level});if(request!==loadRequest.current)return;setLeaders(response.leaders||empty);if(response.active)hydrate(response.active);setError('');}
+    try{const response=await chessMath<{active:Session|null;leaders:Leaders;rankings_error?:string|null}>('state',{difficulty:level});if(request!==loadRequest.current)return;setLeaders(response.leaders||empty);if(response.active)hydrate(response.active);setError(response.rankings_error||'');}
     catch(issue){if(request===loadRequest.current)setError(issue instanceof Error?issue.message:'Chess Math is unavailable.');}
     finally{if(request===loadRequest.current)setLoading(false)}
   },[hydrate]);
