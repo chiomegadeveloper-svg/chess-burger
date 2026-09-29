@@ -943,7 +943,7 @@ export default async function handler(req: Req, res: Res) {
     if(action==='cpu-level-status'){
       const result=await client.from('cb_cpu_level_limits').select('level,wins,locked_until').eq('user_id',account.id);
       if(result.error){
-        if(['42P01','PGRST205'].includes(result.error.code??''))return res.status(200).json({enabled:false,levels:[]});
+        if(['42P01','PGRST205'].includes(result.error.code??''))fail(503,'Apply supabase/0085_cpu_level_cooldowns.sql in Supabase to enable CPU level limits.');
         fail(500,result.error.message);
       }
       const current=Date.now(),byLevel=new Map((result.data??[]).map((row:any)=>[Number(row.level),row]));
@@ -960,15 +960,10 @@ export default async function handler(req: Req, res: Res) {
       if(outcome==='win'&&(!game.isCheckmate()||game.turn()!=='b'))fail(400,'Only a completed checkmate victory earns a CPU reward.');
       const cbrDelta=outcome==='win'?reward:-loss,goldDelta=outcome==='win'?reward:0;
       const probe=await client.from('cb_cpu_level_limits').select('level').eq('user_id',account.id).limit(1);
-      const limitsEnabled=!probe.error;
-      if(probe.error&&!['42P01','PGRST205'].includes(probe.error.code??''))fail(500,probe.error.message);
-      let claimed=await client.rpc('cb_claim_cpu_reward',{p_user_id:account.id,p_game_id:gameId,p_cbr:cbrDelta,p_gold:goldDelta,p_mode:group,...(limitsEnabled?{p_level:level}:{})});
-      // Until the migration is applied, keep the existing CPU reward route usable.
-      if(!limitsEnabled&&claimed.error&&(/PGRST202|Could not find the function/i).test(claimed.error.message))
-        claimed=await client.rpc('cb_claim_cpu_reward',{p_user_id:account.id,p_game_id:gameId,p_cbr:cbrDelta,p_gold:goldDelta});
+      if(probe.error)fail(['42P01','PGRST205'].includes(probe.error.code??'')?503:500,['42P01','PGRST205'].includes(probe.error.code??'')?'Apply supabase/0085_cpu_level_cooldowns.sql in Supabase to enable CPU level limits.':probe.error.message);
+      const claimed=await client.rpc('cb_claim_cpu_reward',{p_user_id:account.id,p_game_id:gameId,p_cbr:cbrDelta,p_gold:goldDelta,p_mode:group,p_level:level});
       if(claimed.error){
-        if(limitsEnabled&&/PGRST202|Could not find the function|schema cache/i.test(claimed.error.message))fail(503,'Apply supabase/0085_cpu_level_cooldowns.sql in Supabase to enable CPU level limits.');
-        if(!limitsEnabled&&/cb_claim_cpu_reward|schema cache|function/i.test(claimed.error.message))fail(503,'Apply supabase/0080_cpu_rankings.sql in Supabase to enable CPU rewards and rankings.');
+        if(/PGRST202|Could not find the function|schema cache/i.test(claimed.error.message))fail(503,'Apply supabase/0085_cpu_level_cooldowns.sql in Supabase to enable CPU level limits.');
         fail(409,claimed.error.message);
       }
       const result=claimed.data??{};
