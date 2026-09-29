@@ -775,7 +775,7 @@ export default function Account({
   const playerCard = (
     <>
       <div className="player-card vanguard-template-card" aria-label={`${profile.display_name}'s Vanguard player card`}>
-        <img className="vanguard-template-art" src="/player-card/vanguard-template-v2.webp" alt="" aria-hidden="true" />
+        <img className="vanguard-template-art" src="/player-card/vanguard-template-v3.webp" alt="" aria-hidden="true" />
         <div className="card-main">
           <div className="portrait-ring">
             <div className="portrait-circle">
@@ -785,7 +785,6 @@ export default function Account({
                 profile.display_name.charAt(0)
               )}
             </div>
-            <AvatarFrameOverlay frameId={profile.avatar_frame_id}/>
           </div>
           <div className="card-identity">
             <div className="card-identity-heading">
