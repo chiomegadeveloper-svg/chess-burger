@@ -52,6 +52,7 @@ import { FloatingChatButton, SocialHub, MatchResult, openSocial, type MatchSumma
 import PublicProfile from "./public-profile";
 import InstallPrompt from "./install-prompt";
 import UpdateGate from "./update-gate";
+import {APP_VERSION} from "./app-version";
 import { BagPage, ShopPage } from "./shop";
 import DonateShop from "./donate-shop";
 import { isProfileComplete } from "./profile-completion";
@@ -847,7 +848,7 @@ function AppPage() {
         <header className="app-header">
           <div className="brand">
             <img src="/cburger_logo.png" alt="Chess Burger" />
-            <span className="brand-name"><strong>CHESS <b>BURGER</b></strong><small>v0.9 PUBLIC BETA</small></span>
+            <span className="brand-name"><strong>CHESS <b>BURGER</b></strong><small>v{APP_VERSION} PUBLIC BETA</small></span>
           </div>
         </header>
         <div className="scroll-area">
@@ -959,7 +960,7 @@ function AppPage() {
       <header className="app-header">
         <div className="brand">
           <img src="/cburger_logo.png" alt="Chess Burger" />
-          <span className="brand-name"><strong>CHESS <b>BURGER</b></strong><small>v0.9 PUBLIC BETA</small></span>
+          <span className="brand-name"><strong>CHESS <b>BURGER</b></strong><small>v{APP_VERSION} PUBLIC BETA</small></span>
         </div>
         <div className="header-actions">
           <button
