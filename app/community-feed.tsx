@@ -24,13 +24,14 @@ import { arena } from "./arena-client";
 import { SocialButtons } from "./social";
 import { levelFor } from "./cbr";
 import type { ArenaMatch, ArenaPlayer } from "./game-rules";
-import { feedBanner, isGraphicBanner } from "./feed-banner-catalog";
+import { feedBanner, isGraphicBanner, PREMIUM_SUPPORTER_ID } from "./feed-banner-catalog";
 import { AvatarFrameOverlay } from "./avatar-frame-art";
 import DailyRewards from "./daily-rewards";
 import {OnlineTrainings} from "./online-training";
 import "./arena-champion-feed.css";
 import "./guild-feed.css";
 import "./graphic-feed-banners.css";
+import "./premium-banner.css";
 type CommunityEvent = FeedEvent & { origin?: "arena" };
 type OnlinePlayer = ArenaPlayer & { available: boolean };
 
@@ -976,7 +977,7 @@ export default function CommunityFeed({
           return (
             <li
               key={event.id}
-              className={`feed-cloud kind-${event.kind}${!announcement && event.guild_name ? " has-guild" : ""}${banner ? " has-feed-banner" : ""}${banner && isGraphicBanner(banner) ? " has-graphic-banner" : ""}${banner?.tier === "animated" ? " animated-graphic-banner" : ""}${arenaChampion ? " grand-arena-champion-feed" : ""}`}
+              className={`feed-cloud kind-${event.kind}${!announcement && event.guild_name ? " has-guild" : ""}${banner ? " has-feed-banner" : ""}${banner && isGraphicBanner(banner) ? " has-graphic-banner" : ""}${banner?.tier === "animated" ? " animated-graphic-banner" : ""}${banner?.id===PREMIUM_SUPPORTER_ID?" premium-supporter-feed":""}${arenaChampion ? " grand-arena-champion-feed" : ""}`}
               style={bannerStyle}
             >
               <button
@@ -1015,6 +1016,7 @@ export default function CommunityFeed({
                 </span>
               )}
               <div className="feed-copy">
+                {banner?.id===PREMIUM_SUPPORTER_ID&&<span className="premium-user-tag">♛ PREMIUM USER</span>}
                 {arenaChampion && (
                   <span className="arena-champion-ribbon">
                     <Crown size={13} /> GRAND ARENA CHAMPION

@@ -52,6 +52,7 @@ import { FloatingChatButton, SocialHub, MatchResult, openSocial, type MatchSumma
 import PublicProfile from "./public-profile";
 import InstallPrompt from "./install-prompt";
 import { BagPage, ShopPage } from "./shop";
+import DonateShop from "./donate-shop";
 import { isProfileComplete } from "./profile-completion";
 import Testimonials from "./testimonials";
 import CpuGame from "./cpu-game";
@@ -802,6 +803,7 @@ function AppPage() {
       </section>
     );
   else if (tab === "shop") content = <ShopPage profile={profile} onChanged={() => void refreshProfile()} />;
+  else if (tab === "donate") content = <section className="shop-page shop-home"><button type="button" className="back-button" onClick={() => setTab("shop")}><ArrowLeft size={16}/> Shop</button><DonateShop/></section>;
   else if (tab === "bag") content = <BagPage onChanged={() => void refreshProfile()} />;
   else if (tab === "guild") content = <GuildPage profile={profile} onChanged={() => void refreshProfile()} />;
   else if (tab === "reports") content = <ReportTickets onBack={() => setTab("home")}/>;
@@ -919,6 +921,10 @@ function AppPage() {
               >
                 <img src="/welcome/classroom.webp" alt="Chess classroom" />
                 <strong>CLASS ROOM</strong>
+              </button>
+              <button disabled={needsAgreement} className="welcome-card donate" onClick={() => finishWelcome("donate")}>
+                <img src="/welcome/donate.webp" alt="Friendly chess pieces hugging to support Chess Burger" />
+                <strong>DONATE</strong>
               </button>
               <button disabled={needsAgreement} className="welcome-card guild" onClick={() => finishWelcome("guild")}>
                 <img src="/welcome/guild.webp" alt="Chess Burger guild tavern" />

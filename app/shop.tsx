@@ -15,6 +15,7 @@ import { arena } from "./arena-client";
 import {
   FEED_BANNERS,
   FEED_BANNER_DURATIONS,
+  PREMIUM_SUPPORTER_ID,
   feedBanner,
   feedBannerRentalPrice,
   isGraphicBanner,
@@ -26,6 +27,8 @@ import { getSupabase } from "./supabase";
 import { classroom } from "./classroom-client";
 import { BoardThemeStore } from "./board-theme-store";
 import CbgShop from "./cbg-shop";
+import DonateShop from "./donate-shop";
+import {donations} from "./donations-client";
 import { AvatarFrameStore } from "./avatar-frame-store";
 import { avatarFrame } from "./avatar-frame-catalog";
 import { AvatarFrameArt } from "./avatar-frame-art";
@@ -435,6 +438,7 @@ export function ShopPage({
         </span>
       </div>
     <CbgShop />
+    <DonateShop />
     <ArenaTicketStore
           fallbackGold={state.gold || profile?.gold_points || 0}
         />
@@ -542,11 +546,11 @@ export function BagPage({ onChanged }: { onChanged: () => void }) {
   const activate = async (id: string) => {
     setBusy(id);
     try {
-      const data = (await arena("activate-feed-banner", {
-        product_id: id,
-      })) as { active: string };
+      const data = id===PREMIUM_SUPPORTER_ID
+        ? await donations<{active:string}>('equip',{equipped:state.active!==id})
+        : await arena<{active:string}>("activate-feed-banner", {product_id:id});
       setState((current) => ({ ...current, active: data.active }));
-      toast.success(`${feedBanner(id)?.name ?? "Banner"} activated.`);
+      toast.success(id===PREMIUM_SUPPORTER_ID&&state.active===id?'Premium User banner unequipped.':`${feedBanner(id)?.name ?? "Banner"} activated.`);
       onChanged();
     } catch (error) {
       toast.error(
@@ -662,14 +666,14 @@ export function BagPage({ onChanged }: { onChanged: () => void }) {
             const active = state.active === rental.product_id;
             return (
               <article
-                className={`bag-inventory-card banner ${banner.tier} ${active ? "active" : ""}`}
+                className={`bag-inventory-card banner ${banner.tier} ${rental.product_id===PREMIUM_SUPPORTER_ID?'premium-supporter':''} ${active ? "active" : ""}`}
                 key={rental.product_id}
               >
                 <div className="rpg-item-art">
-                  <span
+                  {rental.product_id===PREMIUM_SUPPORTER_ID?<div className="premium-banner-preview" role="img" aria-label="Glowing Premium User banner"><span>♛</span><strong>PREMIUM USER</strong></div>:<span
                     className="banner-swatch"
                     style={{ background: banner.background }}
-                  />
+                  />}
                   {active && (
                     <b>
                       <Check size={11} /> EQUIPPED
@@ -677,19 +681,19 @@ export function BagPage({ onChanged }: { onChanged: () => void }) {
                   )}
                 </div>
                 <div className="rpg-item-copy">
-                  <small>{banner.tier} banner</small>
+                  <small>{rental.product_id===PREMIUM_SUPPORTER_ID?'PERMANENT SUPPORTER BANNER':`${banner.tier} banner`}</small>
                   <h3>{banner.name}</h3>
-                  <span>{rentalLabel(rental.expires_at)}</span>
+                  <span>{rental.product_id===PREMIUM_SUPPORTER_ID?'Yours forever':rentalLabel(rental.expires_at)}</span>
                 </div>
                 <div className="rpg-item-actions">
                   <button
                     type="button"
-                    disabled={busy === rental.product_id || active}
+                    disabled={busy === rental.product_id || (active&&rental.product_id!==PREMIUM_SUPPORTER_ID)}
                     onClick={() => void activate(rental.product_id)}
                   >
-                    {active ? "Active" : "Use"}
+                    {active ? rental.product_id===PREMIUM_SUPPORTER_ID?'Unequip':'Active' : 'Equip'}
                   </button>
-                  <button
+                  {rental.product_id!==PREMIUM_SUPPORTER_ID&&<button
                     type="button"
                     onClick={() =>
                       openGift(
@@ -701,7 +705,7 @@ export function BagPage({ onChanged }: { onChanged: () => void }) {
                   >
                     <Gift size={14} />
                     Gift
-                  </button>
+                  </button>}
                 </div>
               </article>
             );

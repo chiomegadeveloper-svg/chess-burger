@@ -1155,6 +1155,7 @@ export default async function handler(req: Req, res: Res) {
     if(action==='gift-bag-item'){
       const username=String(body.username??'').trim(),kind=String(body.item_kind??''),itemId=String(body.item_id??''),quantity=Number(body.quantity??1),requestId=String(body.request_id??'');
       if(!/^@?[a-z0-9_]{2,40}$/i.test(username)||!/^[a-z][a-z0-9_-]{1,40}$/i.test(kind)||!/^[a-z0-9][a-z0-9_-]{1,80}$/i.test(itemId)||!Number.isInteger(quantity)||quantity<1||!/^[a-f0-9-]{36}$/i.test(requestId))fail(400,'Choose a valid item, quantity, and recipient username.');
+      if(kind==='feed_banner'&&itemId==='premium-supporter')fail(403,'Premium User is a personal supporter reward and cannot be gifted.');
       if(kind==='avatar_frame'){
         if(quantity!==1)fail(400,'Gift one avatar frame rental at a time.');
         const owned=await client.from('cb_inventory_items').select('metadata').eq('user_id',account.id).eq('item_kind',kind).eq('item_id',itemId).gt('quantity',0).maybeSingle();

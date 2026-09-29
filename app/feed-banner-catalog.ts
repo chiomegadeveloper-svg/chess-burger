@@ -8,6 +8,8 @@ export type FeedBanner = {
 };
 
 export type FeedBannerDuration = 3 | 5 | 7;
+export const PREMIUM_SUPPORTER_ID = 'premium-supporter';
+const premiumSupporter: FeedBanner = { id: PREMIUM_SUPPORTER_ID, name: 'Premium User', tier: 'metallic', price: 0, background: 'linear-gradient(110deg,#080c11 0%,#201a15 32%,#8c611e 72%,#e5bf65 100%)', ink: '#fff9e9' };
 export const FEED_BANNER_DURATIONS: FeedBannerDuration[] = [3, 5, 7];
 export const isGraphicBanner = (banner: FeedBanner) => !["pastel", "metallic", "neon"].includes(banner.tier);
 export const feedBannerRentalPrice = (tier: FeedBanner["tier"], days: FeedBannerDuration, base = 0) => {
@@ -144,4 +146,4 @@ const LEGACY_FEED_BANNERS: FeedBanner[] = [
   { id: "warrior-10", name: "Solar Blade", tier: "warrior", price: 988, background: "url('/feed-banners/warrior-10.webp') center / cover no-repeat", ink: "#ffffff" },
 ];
 
-export const feedBanner = (id?: string | null) => [...FEED_BANNERS, ...LEGACY_FEED_BANNERS].find((banner) => banner.id === id);
+export const feedBanner = (id?: string | null) => id === PREMIUM_SUPPORTER_ID ? premiumSupporter : [...FEED_BANNERS, ...LEGACY_FEED_BANNERS].find((banner) => banner.id === id);
