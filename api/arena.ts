@@ -1500,14 +1500,20 @@ export default async function handler(req: Req, res: Res) {
         if (blocked.data?.length) fail(403, 'This profile is unavailable.');
       }
       const profile = one<any>(await client.from('cb_profiles').select('*').eq('user_id', target).maybeSingle());
-      const [friends,followers,following,rank]=await Promise.all([
+      const [friends,followers,following,rank,cardWallet,cardTickets,cardMembership]=await Promise.all([
         client.from('cb_social_links').select('user_id',{count:'exact',head:true}).eq('kind','friend').eq('status','accepted').or(`user_id.eq.${target},target_id.eq.${target}`),
         client.from('cb_social_links').select('user_id',{count:'exact',head:true}).eq('kind','follow').eq('target_id',target),
         client.from('cb_social_links').select('user_id',{count:'exact',head:true}).eq('kind','follow').eq('user_id',target),
         playerRank(client,profile),
+        client.from('cb_classroom_wallets').select('cbc').eq('user_id',target).maybeSingle(),
+        client.from('cb_arena_tickets').select('quantity').eq('user_id',target).maybeSingle(),
+        client.from('cb_guild_members').select('guild_id,guild:cb_guilds(name,logo_url)').eq('user_id',target).maybeSingle(),
       ]);
       if(friends.error||followers.error||following.error)fail(500,friends.error?.message??followers.error?.message??following.error?.message??'Unable to load social totals.');
-      return res.status(200).json({ profile: { ...profile, ocbr: Number(profile.ocbr ?? 88), avatar_frame_id: await activeAvatarFrame(client,profile) }, rank, social:{friends:friends.count??0,followers:followers.count??0,following:following.count??0}, owner_progression_available: account.profile.role === 'owner' && target !== account.id });
+      const guild=Array.isArray(cardMembership.data?.guild)?cardMembership.data.guild[0]:cardMembership.data?.guild;
+      const regions=['tacloban','leyte','samar','biliran','s-leyte','e-samar','n-samar','cebu','davao','manila','ormoc','tambay'];
+      const region=regions.findIndex((_,i)=>cardMembership.data?.guild_id===`7dcb0000-0000-4000-8000-${(i+1).toString(16).padStart(12,'0')}`);
+      return res.status(200).json({ profile: { ...profile, ocbr: Number(profile.ocbr ?? 88), avatar_frame_id: await activeAvatarFrame(client,profile) }, rank, social:{friends:friends.count??0,followers:followers.count??0,following:following.count??0}, card_summary:{cbc:cardWallet.error?null:Number(cardWallet.data?.cbc??0),tickets:cardTickets.error?null:Number(cardTickets.data?.quantity??0),guild_name:String(guild?.name??''),guild_logo_url:region>=0?`/guild/default-${regions[region]}-logo.webp`:String(guild?.logo_url??'')}, owner_progression_available: account.profile.role === 'owner' && target !== account.id });
     }
     if (action === 'presence') return res.status(200).json(await savePresence(client, account, body));
     if (action === 'nearby') return res.status(200).json(await nearbyPlayers(client, account));

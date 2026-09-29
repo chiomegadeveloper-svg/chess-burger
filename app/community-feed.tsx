@@ -28,6 +28,7 @@ import { feedBanner, isGraphicBanner, PREMIUM_SUPPORTER_ID } from "./feed-banner
 import { AvatarFrameOverlay } from "./avatar-frame-art";
 import DailyRewards from "./daily-rewards";
 import {OnlineTrainings} from "./online-training";
+import FeedCardSnapshot from "./feed-card-snapshot";
 import "./arena-champion-feed.css";
 import "./guild-feed.css";
 import "./graphic-feed-banners.css";
@@ -243,6 +244,9 @@ export default function CommunityFeed({
     [accepting, setAccepting] = useState<string | null>(null);
   const [arenaOpen, setArenaOpen] = useState<{ content: string } | null>(null);
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
+  const [feedHoverCard,setFeedHoverCard]=useState<string|null>(null);
+  const feedHoverTimer=useRef<ReturnType<typeof setTimeout>|null>(null);
+  useEffect(()=>()=>{if(feedHoverTimer.current)clearTimeout(feedHoverTimer.current);},[]);
   const [onlineUsers, setOnlineUsers] = useState<OnlinePlayer[]>([]),
     [onlineStatus,setOnlineStatus]=useState(""),
     [onlineCount,setOnlineCount]=useState(0),
@@ -985,6 +989,10 @@ export default function CommunityFeed({
               <button
                 className="feed-player"
                 disabled={announcement}
+                onMouseEnter={() => {if(announcement||!window.matchMedia('(hover: hover)').matches)return;if(feedHoverTimer.current)clearTimeout(feedHoverTimer.current);feedHoverTimer.current=setTimeout(()=>setFeedHoverCard(event.user_id),250);}}
+                onMouseLeave={() => {if(feedHoverTimer.current)clearTimeout(feedHoverTimer.current);setFeedHoverCard(null);}}
+                onFocus={() => {if(!announcement)setFeedHoverCard(event.user_id);}}
+                onBlur={() => setFeedHoverCard(null)}
                 onClick={() => !announcement && onOpenProfile(event.user_id)}
                 aria-label={
                   announcement
@@ -1153,6 +1161,7 @@ export default function CommunityFeed({
           );
         })}
       </ol>
+      {feedHoverCard&&<FeedCardSnapshot userId={feedHoverCard}/>}
       {tab !== "online" && total > PAGE_SIZE && (
         <nav className="feed-pagination" aria-label="Feed pages">
           <button disabled={page === 1} onClick={() => setPage((p) => p - 1)}>

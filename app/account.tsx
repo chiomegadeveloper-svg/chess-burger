@@ -838,7 +838,7 @@ export default function Account({
               </div>
             </div>
         <div className="card-achievements">
-          <CardEmblemCollection profile={profile}/>
+          <CardEmblemCollection selected={profile.featured_badges} onChoose={() => document.getElementById('featured-emblem-picker')?.scrollIntoView({behavior:'smooth',block:'center'})}/>
         </div>
       </div>
     </>
@@ -901,6 +901,7 @@ export default function Account({
     return (
       <section>
         {playerCard}
+        <FeaturedRewardPicker selected={profile.featured_badges} profile={profile} onChange={(featured_badges) => void saveFeaturedEmblems(featured_badges)}/>
         <AppFeaturedPhoto />
         <RewardEmblems profile={profile} />
       </section>

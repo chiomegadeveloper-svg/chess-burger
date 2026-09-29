@@ -32,7 +32,7 @@ async function recoverStoredAvatar(client: any, userId: string) {
 
 function view(row: Record<string, unknown> | null) {
   if (!row) return null;
-  return { ...row, ocbr: Number(row.ocbr ?? 88), gold_points: Number(row.gold_points ?? 88), wins: Number(row.wins ?? 0), losses: Number(row.losses ?? 0), win_streak: Number(row.win_streak ?? 0), featured_photos: list(row.featured_photos, 4), featured_badges: list(row.featured_badges, 5) };
+  return { ...row, ocbr: Number(row.ocbr ?? 88), gold_points: Number(row.gold_points ?? 88), wins: Number(row.wins ?? 0), losses: Number(row.losses ?? 0), win_streak: Number(row.win_streak ?? 0), featured_photos: list(row.featured_photos, 4), featured_badges: list(row.featured_badges, 10) };
 }
 async function framedView(client: any, row: Record<string, unknown> | null) {
   const profile = view(row);
@@ -108,7 +108,7 @@ export default async function handler(req: Req, res: Res) {
       avatar_url: avatar,
       country_code: /^[A-Z]{2}$/.test(country) ? country : 'PH',
       featured_photos: list(input.featured_photos, 4).map(cleanUrl),
-      featured_badges: list(input.featured_badges, 5),
+      featured_badges: list(input.featured_badges, 10),
     };
     // Only these editable fields can be written. Existing roles, rewards and
     // match statistics remain under database control.
