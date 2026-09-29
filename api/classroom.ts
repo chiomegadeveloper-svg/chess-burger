@@ -25,12 +25,12 @@ export default async function handler(req:Req,res:Res){
     if(req.method!=="POST")fail(405,"Method not allowed.");
     const url=process.env.NEXT_PUBLIC_SUPABASE_URL||process.env.VITE_SUPABASE_URL||process.env.SUPABASE_URL;
     const key=process.env.SUPABASE_SERVICE_ROLE_KEY||"";
-    if(!url)fail(503,"Classroom server is missing NEXT_PUBLIC_SUPABASE_URL or VITE_SUPABASE_URL.");
+    if(!url)return fail(503,"Classroom server is missing NEXT_PUBLIC_SUPABASE_URL or VITE_SUPABASE_URL.");
     if(!key)fail(503,"Classroom server is missing SUPABASE_SERVICE_ROLE_KEY.");
     const client=createClient(url,key,{auth:{persistSession:false}});
     const raw=req.headers.authorization,token=(Array.isArray(raw)?raw[0]:raw||"").replace(/^Bearer\s+/i,"");
     const auth=await client.auth.getUser(token);
-    if(auth.error||!auth.data.user)fail(401,"Please sign in again.");
+    if(auth.error||!auth.data.user)return fail(401,"Please sign in again.");
     const userId=auth.data.user.id,body=req.body||{},action=String(body.action||"");
     const freeClassroom=async()=>{const setting=await client.from("cb_classroom_settings").select("*").eq("id",true).single();if(setting.error)fail(500,setting.error.message);return setting.data?.cbc_enabled===false;};
     const activeEnrollment=async(roomId:string,studentId:string,now:string,free:boolean)=>{const enrollment=await client.from("cb_classroom_enrollments").select("student_id,access_expires_at").eq("room_id",roomId).eq("student_id",studentId).maybeSingle();if(enrollment.error)fail(500,enrollment.error.message);return enrollment.data&&(free||enrollment.data.access_expires_at>now)?enrollment.data:null;};
@@ -259,7 +259,7 @@ export default async function handler(req:Req,res:Res){
     if(action==="workshop-update"){
       const roomId=String(body.room_id||""),kind=String(body.kind||""),now=new Date().toISOString();
       const room=await client.from("cb_classroom_rooms").select("teacher_id,status,expires_at").eq("id",roomId).single();
-      if(room.error||!room.data||room.data.status!=="active"||room.data.expires_at<=now)fail(404,"Active classroom not found.");
+      if(room.error||!room.data||room.data.status!=="active"||room.data.expires_at<=now)return fail(404,"Active classroom not found.");
       const teacher=room.data.teacher_id===userId;
       const free=await freeClassroom();
       if(!teacher&&!await activeEnrollment(roomId,userId,now,free))fail(403,"Your classroom access has expired.");
@@ -270,7 +270,7 @@ export default async function handler(req:Req,res:Res){
         if(kind==="reset-puzzle"){
           const lastPuzzle=await client.from("cb_classroom_lesson_events").select("fen").eq("room_id",roomId).eq("scope","assignment").like("label","Puzzle assigned to%").order("created_at",{ascending:false}).limit(1).maybeSingle();
           if(lastPuzzle.error)fail(500,lastPuzzle.error.message);
-          if(!lastPuzzle.data)fail(409,"Assign a puzzle before resetting student boards.");
+          if(!lastPuzzle.data)return fail(409,"Assign a puzzle before resetting student boards.");
           assignedFen=lastPuzzle.data.fen;
         }
         const targetStudentId=kind==="reset-puzzle"?String(body.student_id||""):"";

@@ -25,7 +25,7 @@ namespace MatchEngine {
   }
   export const actions = new Set(['match', 'move', 'resign', 'abort', 'timeout', 'offer', 'respond-offer']);
   type Row = Record<string, any>;
-  type Meta = { requests?: Record<string, { takeback: number; draw: number }>; pending?: any; last?: any; request_ids?: string[]; move_ids?: string[] };
+  type Meta = { requests?: Record<string, { takeback: number; draw: number }>; pending?: any; last?: any; request_ids?: string[]; move_ids?: string[]; abort_closed?: boolean };
   const LIMIT = 3, OFFER_MS = 30_000, FIRST_MOVE_MS = 40_000;
   const increments: Record<string, number> = { '1+0': 0, '1+1': 1, '2+1': 1, '3+0': 0, '3+2': 2, '5+0': 0, '10+0': 0, '10+5': 5, '15+10': 10 };
   const reject = (message: string, status = 409): never => { throw new Failure(message, status); };
@@ -61,7 +61,7 @@ namespace MatchEngine {
       if ((c.white ? row.white_id : row.black_id) !== actor) reject('Wait for your opponent.', 403);
       if (typeof input.base_pgn === 'string' ? input.base_pgn !== row.pgn : Number(input.version) !== row.version) reject('The board changed. Please try your move again.');
       const move = input.move as { from?: string; to?: string; promotion?: string } | undefined;
-      if (!move?.from || !move.to) reject('Choose a legal move.', 400);
+      if (!move?.from || !move.to) return reject('Choose a legal move.', 400);
       try { c.chess.move({ from: move.from, to: move.to, promotion: move.promotion ?? 'q' }); } catch { reject('That move is not legal.', 400); }
       const increment = (increments[row.control] ?? 0) * 1000;
       const ended = c.chess.isCheckmate() ? (c.chess.turn() === 'w' ? 'black' : 'white') : c.chess.isDraw() ? 'draw' : null;
@@ -128,7 +128,7 @@ namespace MatchEngine {
         if (changed.data) await broadcastMatch(view(row));
       }
       if (row.status === 'finished') return { match: await matchView(client, row) };
-      const match = view(row);
+      const match: ReturnType<typeof view> & { white?: any; black?: any } = view(row);
       if (!body.compact) {
         const people = await client.from('cb_profiles').select('user_id,username,display_name,avatar_url,country_code,cbr,gold_points,wins,losses,win_streak').in('user_id', [row.white_id, row.black_id].filter(Boolean));
         check(people.error);
@@ -345,7 +345,7 @@ function userScopedDb(req:Req):Db{
   const url=process.env.NEXT_PUBLIC_SUPABASE_URL??process.env.VITE_SUPABASE_URL;
   const key=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY??process.env.VITE_SUPABASE_PUBLISHABLE_KEY??process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY??process.env.VITE_SUPABASE_ANON_KEY??process.env.SUPABASE_SERVICE_ROLE_KEY??'';
   const header=req.headers.authorization,authorization=Array.isArray(header)?header[0]:header;
-  if(!url||!key||!authorization)fail(503,'The CMS database connection is unavailable.');
+  if(!url||!key||!authorization)return fail(503,'The CMS database connection is unavailable.');
   return createClient(url,key,{global:{headers:{Authorization:authorization}},auth:{autoRefreshToken:false,persistSession:false}}) as Db;
 }
 async function signedIn(client: Db, req: Req) {
@@ -387,7 +387,7 @@ async function playerMap(client: Db, ids: string[]) {
       for(const player of players)if(player.active_feed_banner&&!valid.has(`${player.user_id}:${player.active_feed_banner}`))player.active_feed_banner='';
     }
   }
-  return new Map(players.map((p: any) => [p.user_id, p]));
+  return new Map<string, any>(players.map((p: any) => [p.user_id, p]));
 }
 async function matchView(client: Db, row: any) {
   const players = await playerMap(client, [row.white_id, row.black_id]);
@@ -588,7 +588,7 @@ async function livePresenceTimestampField(client:Db):Promise<string>{
     if(!probe.error){cachedPresenceTimestampField=field;return field;}
     if(!/column .* does not exist|schema cache/i.test(String(probe.error.message??'')))fail(500,probe.error.message);
   }
-  fail(503,'Live presence has no supported timestamp. Apply supabase/0075_concurrent_user_indexes.sql.');
+  return fail(503,'Live presence has no supported timestamp. Apply supabase/0075_concurrent_user_indexes.sql.');
 }
 async function publicOnlineUsers(client: Db) {
   const field=await livePresenceTimestampField(client);
