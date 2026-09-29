@@ -18,9 +18,9 @@
 
 /* Live level and guild art — deliberately no shield frame. */
 .vanguard-template-card .card-insignia{display:block;position:absolute;inset:0;z-index:4;pointer-events:none}
-.vanguard-template-card .card-level-insignia,.vanguard-template-card .card-guild-insignia{display:grid;position:absolute;place-items:center;align-content:center;width:8.5%;aspect-ratio:1;padding:0;border:0;background:radial-gradient(circle,#0a1b24d9 0 43%,transparent 72%);box-shadow:none;text-align:center}
-.vanguard-template-card .card-level-insignia{left:7.7%;top:59.2%}
-.vanguard-template-card .card-guild-insignia{left:26.1%;top:59.2%}
+.vanguard-template-card .card-level-insignia,.vanguard-template-card .card-guild-insignia{display:grid;position:absolute;place-items:center;align-content:center;width:9.5%;aspect-ratio:1;padding:0;border:0;background:radial-gradient(circle,#0a1b24d9 0 43%,transparent 72%);box-shadow:none;text-align:center}
+.vanguard-template-card .card-level-insignia{left:9%;top:57.5%}
+.vanguard-template-card .card-guild-insignia{left:28%;top:57.5%}
 .vanguard-template-card .identity-level-emblem{width:82%;height:82%;max-height:none;object-fit:contain;filter:drop-shadow(0 .3cqw .4cqw #000) drop-shadow(0 0 .45cqw #10d7ef77)}
 .vanguard-template-card .card-guild-insignia img{width:76%;height:76%;max-width:none;border-radius:14%;object-fit:contain;filter:drop-shadow(0 .3cqw .4cqw #000)}
 .vanguard-template-card .empty-guild-emblem{display:block;width:55%;height:55%;border:1px dashed #6b7b8244;border-radius:50%}
@@ -29,8 +29,8 @@
 /* Five stats always remain in their own equal cells. */
 .vanguard-template-card .card-stats{display:grid;position:absolute;z-index:3;left:39%;top:13.5%;width:56.1%;height:18.5%;grid-template-columns:repeat(5,minmax(0,1fr));gap:1.35%;margin:0;padding:0;border:0}
 .vanguard-template-card .card-stats>div,.vanguard-template-card .card-stats>div:first-child{display:grid;min-width:0;grid-template-rows:minmax(0,1fr) auto auto;place-items:center;align-content:center;gap:.15cqw;padding:.7cqw .25cqw;border:1px solid #d2b45c;border-radius:.7cqw;background:linear-gradient(155deg,#0c171dcc,#05090dcc);box-shadow:inset 0 0 0 1px #00d9ef1f;text-align:center;overflow:hidden}
-.vanguard-template-card .card-stats img{width:clamp(14px,4.2cqw,50px);height:clamp(14px,4.2cqw,50px);object-fit:contain;filter:drop-shadow(0 .2cqw .25cqw #000)}
-.vanguard-template-card .card-stats i{display:grid;place-items:center;width:clamp(14px,4.2cqw,50px);height:clamp(14px,4.2cqw,50px);color:#7cecff;font:normal 900 clamp(12px,3.2cqw,38px)/1 Georgia,serif;text-shadow:0 0 .6cqw #00d8f6}
+.vanguard-template-card .card-stats img{width:clamp(16px,5.2cqw,60px);height:clamp(16px,5.2cqw,60px);object-fit:contain;filter:drop-shadow(0 .2cqw .25cqw #000)}
+.vanguard-template-card .card-stats i{display:grid;place-items:center;width:clamp(16px,5.2cqw,60px);height:clamp(16px,5.2cqw,60px);color:#7cecff;font:normal 900 clamp(14px,4cqw,46px)/1 Georgia,serif;text-shadow:0 0 .6cqw #00d8f6}
 .vanguard-template-card .card-stats span{display:block;color:#d4dde1;font-size:clamp(4px,.83cqw,9px);font-weight:800;line-height:1;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
 .vanguard-template-card .card-stats strong{display:block;max-width:100%;color:#fff;font-size:clamp(7px,1.5cqw,18px);font-weight:900;line-height:1;text-shadow:0 .12cqw .18cqw #000;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
@@ -47,10 +47,16 @@
 .vanguard-template-card .card-emblem-grid{display:grid;position:absolute;left:2.2%;right:2.2%;top:18%;bottom:4.2%;grid-template-columns:repeat(5,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr));gap:2.1% 1.2%}
 .vanguard-template-card .card-emblem{display:grid;place-items:center;min-width:0;min-height:0;padding:7%;border:1px solid #d7b65a;border-radius:.7cqw;background:linear-gradient(155deg,#142129cc,#05090dcc);box-shadow:inset 0 0 0 1px #00d9ef1f;overflow:hidden;text-align:center}
 .vanguard-template-card .card-emblem.unlocked{background:radial-gradient(circle at 50% 40%,#18313a,#071015 72%)}
-.vanguard-template-card .card-emblem-art{display:block;width:min(58%,6.4cqw);height:auto;aspect-ratio:1;filter:drop-shadow(0 .25cqw .35cqw #000)}
+.vanguard-template-card .card-emblem-art{display:block;width:min(82%,8.4cqw);height:auto;aspect-ratio:1;filter:drop-shadow(0 .25cqw .35cqw #000)}
 .vanguard-template-card .card-emblem-art img{width:100%;height:100%;object-fit:contain}
 .vanguard-template-card .card-emblem strong{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .vanguard-template-card .card-emblem.empty{border-color:#8e7c4c99;background:#071015b5}
 .vanguard-template-card .card-emblem.empty .card-emblem-art{visibility:hidden}
 
-@media(max-width:650px){.vanguard-template-card{border-radius:10px}.vanguard-template-card .card-stats>div{border-width:.6px}.vanguard-template-card .card-emblem{padding:4%;border-width:.6px}.vanguard-template-card .card-emblem-art{width:52%}.vanguard-template-card .card-emblem-collection header>svg{display:none}.vanguard-template-card .card-emblem-choose{padding:.25cqw .45cqw}}
+@media(max-width:650px){.vanguard-template-card{border-radius:10px}.vanguard-template-card .card-stats>div{border-width:.6px}.vanguard-template-card .card-emblem{padding:4%;border-width:.6px}.vanguard-template-card .card-emblem-art{width:78%}.vanguard-template-card .card-emblem-collection header>svg{display:none}.vanguard-template-card .card-emblem-choose{padding:.25cqw .45cqw}}
+
+.vanguard-template-card .card-emblem.unlocked:hover,.vanguard-template-card .card-emblem.unlocked:focus-visible{position:relative;z-index:10;overflow:visible;outline:2px solid #6ce9f1;outline-offset:1px}
+.vanguard-template-card .card-emblem-tooltip{display:none;position:absolute;z-index:12;left:50%;bottom:calc(100% + .5cqw);width:max-content;max-width:min(22cqw,220px);transform:translateX(-50%);padding:.7cqw 1cqw;border:1px solid #d9ba68;border-radius:.6cqw;background:#07141ef2;box-shadow:0 .5cqw 2cqw #000b;color:#f9f3dc;text-align:center;white-space:normal;pointer-events:none}
+.vanguard-template-card .card-emblem-tooltip b{display:block;font-size:clamp(9px,1.3cqw,15px);line-height:1.2}
+.vanguard-template-card .card-emblem-tooltip small{display:block;margin-top:.3cqw;color:#b8d8e2;font-size:clamp(8px,1cqw,12px);line-height:1.25}
+.vanguard-template-card .card-emblem.unlocked:hover .card-emblem-tooltip,.vanguard-template-card .card-emblem.unlocked:focus-visible .card-emblem-tooltip{display:block}

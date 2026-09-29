@@ -796,12 +796,13 @@ export default function Account({
                   Level {level.level} · {level.name}
                 </span>
               </div>
-              <div className="card-insignia">
-                <div className="card-level-insignia"><img className="identity-level-emblem" src={"/levels/level-" + String(level.level - 1).padStart(2, "0") + ".png"} alt={`Level ${level.level}: ${level.name}`} /><small>LEVEL {level.level}</small></div>
-                <div className="card-guild-insignia">{cardSummary?.guild_logo_url?<img src={cardSummary.guild_logo_url} alt={`${cardSummary.guild_name} guild logo`}/>:<span className="empty-guild-emblem" aria-label="No guild emblem"/>}<small>{cardSummary?.guild_name||"NO GUILD"}</small></div>
-              </div>
+
             </div>
           </div>
+        </div>
+        <div className="card-insignia">
+          <div className="card-level-insignia"><img className="identity-level-emblem" src={"/levels/level-" + String(level.level - 1).padStart(2, "0") + ".png"} alt={`Level ${level.level}: ${level.name}`} /><small>LEVEL {level.level}</small></div>
+          <div className="card-guild-insignia">{cardSummary?.guild_logo_url?<img src={cardSummary.guild_logo_url} alt={`${cardSummary.guild_name} guild logo`}/>:<span className="empty-guild-emblem" aria-label="No guild emblem"/>}<small>{cardSummary?.guild_name||"NO GUILD"}</small></div>
         </div>
         <div className="card-stats">
           <div><img src="/currency/cbg-coin.webp" alt=""/><span>CBG</span><strong>{profile.gold_points.toLocaleString()}</strong></div>
