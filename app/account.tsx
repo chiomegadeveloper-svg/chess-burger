@@ -10,7 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Camera, Image as ImageIcon, Shield } from "lucide-react";
+import { Camera, Image as ImageIcon } from "lucide-react";
 import { toast } from "sonner";
 import { levelFor } from "./cbr";
 import { getSupabase, PlayerProfile } from "./supabase";
@@ -774,13 +774,8 @@ export default function Account({
     isStaff = profile.role === "owner" || profile.role === "admin";
   const playerCard = (
     <>
-      <div className="player-card">
-        <div className="card-topline">
-          <span className="card-brand-logo">
-            <img src="/cburger_logo.png" alt="Chess Burger" />
-          </span>
-          <span>VANGUARD • PLAYER CARD</span>
-        </div>
+      <div className="player-card vanguard-template-card" aria-label={`${profile.display_name}'s Vanguard player card`}>
+        <img className="vanguard-template-art" src="/player-card/vanguard-template.webp" alt="" aria-hidden="true" />
         <div className="card-main">
           <div className="portrait-ring">
             <div className="portrait-circle">
@@ -795,48 +790,26 @@ export default function Account({
           <div className="card-identity">
             <div className="card-identity-heading">
               <div>
-                <p>
-                  @{profile.username.replace(/^@+/, "")} ·{" "}
-                  {flag(profile.country_code)}
-                </p>
                 <h2>{profile.display_name}</h2>
-                <span className="card-online">
-                  <i />
-                  Online
-                </span>
+                <p>@{profile.username.replace(/^@+/, "")} <span aria-label={profile.country_code}>{flag(profile.country_code)}</span></p>
                 <span className="card-status">
                   Level {level.level} · {level.name}
                 </span>
               </div>
               <div className="card-insignia">
                 <div className="card-level-insignia"><img className="identity-level-emblem" src={"/levels/level-" + String(level.level - 1).padStart(2, "0") + ".png"} alt={`Level ${level.level}: ${level.name}`} /><small>LEVEL {level.level}</small></div>
-                <div className="card-guild-insignia">{cardSummary?.guild_logo_url?<img src={cardSummary.guild_logo_url} alt={`${cardSummary.guild_name} guild logo`}/>:<Shield aria-hidden="true"/>}<small>{cardSummary?.guild_name||"NO GUILD"}</small></div>
+                <div className="card-guild-insignia">{cardSummary?.guild_logo_url?<img src={cardSummary.guild_logo_url} alt={`${cardSummary.guild_name} guild logo`}/>:<span className="empty-guild-emblem" aria-label="No guild emblem"/>}<small>{cardSummary?.guild_name||"NO GUILD"}</small></div>
               </div>
             </div>
-
           </div>
         </div>
-            <div className="card-stats">
-              <div>
-                <strong>
-                  <i>♞</i>
-                  {profile.cbr}
-                </strong>
-                <span>CBR</span>
-              </div>
-              <div><strong><i>◆</i>{profile.gold_points.toLocaleString()}</strong><span>CBG</span></div>
-              <div>
-                <strong><i>◈</i>{cardSummary?.cbc?.toLocaleString()??"—"}</strong><span>CBC</span>
-              </div>
-              <div><strong><i>◇</i>{cardSummary?.tickets?.toLocaleString()??"—"}</strong><span>Arena tickets</span></div>
-              <div>
-                <strong>
-                  <i>♛</i>
-                  {winRate}%
-                </strong>
-                <span>Win rate</span>
-              </div>
-            </div>
+        <div className="card-stats">
+          <div><strong>{profile.gold_points.toLocaleString()}</strong><span>CBG</span></div>
+          <div><strong>{cardSummary?.cbc?.toLocaleString()??"—"}</strong><span>CBC</span></div>
+          <div><strong>{profile.cbr.toLocaleString()}</strong><span>CBR</span></div>
+          <div><strong>{cardSummary?.tickets?.toLocaleString()??"—"}</strong><span>Arena tickets</span></div>
+          <div><strong>{winRate}%</strong><span>Win rate</span></div>
+        </div>
         <div className="card-achievements">
           <CardEmblemCollection selected={profile.featured_badges} onChoose={() => document.getElementById('featured-emblem-picker')?.scrollIntoView({behavior:'smooth',block:'center'})}/>
         </div>
