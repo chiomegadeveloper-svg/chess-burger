@@ -11,12 +11,14 @@ import ProfilePhotoBucket from "./profile-photo-bucket";
 import Portfolio from "./portfolio";
 import Testimonials from "./testimonials";
 import { AvatarFrameOverlay } from "./avatar-frame-art";
+import OwnerProgression from "./owner-progression";
 
 type SocialCounts = { friends: number; followers: number; following: number };
 type PublicProfileResponse = {
   profile: PlayerProfile;
   rank: number;
   social: SocialCounts;
+  owner_progression_available?: boolean;
 };
 
 const emptySocial: SocialCounts = { friends: 0, followers: 0, following: 0 };
@@ -32,30 +34,29 @@ export default function PublicProfile({
   currentUserId?: string;
   onChallenge: (player: ArenaPlayer) => void;
 }) {
-  const [profile, setProfile] = useState<PlayerProfile | null>(null);
-  const [rank, setRank] = useState(0);
-  const [social, setSocial] = useState<SocialCounts>(emptySocial);
-  const [error, setError] = useState("");
+  const [response, setResponse] = useState<{ userId: string; data?: PublicProfileResponse; error?: string } | null>(null);
 
   useEffect(() => {
-    setProfile(null);
-    setError("");
     let live = true;
     void arena<PublicProfileResponse>("public-profile", { user_id: userId })
       .then((result) => {
         if (!live) return;
-        setProfile(result.profile);
-        setRank(result.rank);
-        setSocial(result.social ?? emptySocial);
+        setResponse({ userId, data: result });
       })
       .catch((cause) => {
-        if (live) setError((cause as Error).message);
+        if (live) setResponse({ userId, error: (cause as Error).message });
       });
     return () => {
       live = false;
     };
   }, [userId]);
 
+  const current = response?.userId === userId ? response : null;
+  const error = current?.error ?? "";
+  const profile = current?.data?.profile ?? null;
+  const rank = current?.data?.rank ?? 0;
+  const social = current?.data?.social ?? emptySocial;
+  const ownerProgressionAvailable = current?.data?.owner_progression_available === true;
   if (error) {
     return (
       <section className="public-profile cloud-panel">
@@ -92,7 +93,7 @@ export default function PublicProfile({
             <button className="gold-button" onClick={() => onChallenge(profile)}>
               <Swords size={16} /> Challenge
             </button>
-            <SocialButtons target={profile.user_id} onBlocked={() => setError("You blocked this player. Manage blocked players in Friends.")} />
+            <SocialButtons target={profile.user_id} onBlocked={() => setResponse({ userId, error: "You blocked this player. Manage blocked players in Friends." })} />
           </div>
         </div>
       ) : null}
@@ -114,6 +115,7 @@ export default function PublicProfile({
         <span>{profile.losses} losses</span>
         <span>{profile.win_streak} win streak</span>
       </div>
+      {ownerProgressionAvailable && <OwnerProgression key={profile.user_id} userId={profile.user_id} />}
       <ProfilePhotoBucket photos={profile.featured_photos} name={profile.display_name} />
       <Portfolio userId={profile.user_id} owner={profile.user_id === currentUserId} />
       <Testimonials profileId={profile.user_id} currentUserId={currentUserId} />

@@ -1449,10 +1449,24 @@ export default async function handler(req: Req, res: Res) {
       const removed=await client.from('cb_profile_testimonials').delete().eq('id',id).select('id').maybeSingle();
       if(removed.error)fail(500,removed.error.message);return res.status(200).json({ok:true});
     }
+    if (action === 'owner-progression') {
+      if (account.profile.role !== 'owner') fail(403, 'Only an Owner can view player progression.');
+      const target = String(body.user_id ?? ''), page = Number(body.page ?? 1);
+      if (!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(target) || !Number.isInteger(page) || page < 1 || page > 5) fail(400, 'Choose a player and a page from 1 to 5.');
+      const start = (page - 1) * 20;
+      const logs = await client.from('cb_level_progression')
+        .select('id,event_type,old_cbr,new_cbr,old_level,new_level,old_wins,new_wins,old_losses,new_losses,actor_user_id,created_at', { count: 'exact' })
+        .eq('user_id', target).order('id', { ascending: false }).range(start, start + 19);
+      if (logs.error) {
+        if (/cb_level_progression|schema cache|relation/i.test(logs.error.message)) fail(503, 'Apply supabase/0084_owner_level_progression.sql in Supabase to enable the owner progression log.');
+        fail(500, logs.error.message);
+      }
+      return res.status(200).json({ entries: logs.data ?? [], page, total: Math.min(100, logs.count ?? 0) });
+    }
     if (action === 'public-profile') {
       const target = String(body.user_id ?? '');
       if (!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(target)) fail(400, 'Choose a registered player.');
-      if (target !== account.id) {
+      if (target !== account.id && account.profile.role !== 'owner') {
         const blocked = await client.from('cb_social_links').select('user_id').eq('kind', 'block').or(`and(user_id.eq.${account.id},target_id.eq.${target}),and(user_id.eq.${target},target_id.eq.${account.id})`).limit(1);
         if (blocked.error) fail(500, blocked.error.message);
         if (blocked.data?.length) fail(403, 'This profile is unavailable.');
@@ -1465,7 +1479,7 @@ export default async function handler(req: Req, res: Res) {
         playerRank(client,profile),
       ]);
       if(friends.error||followers.error||following.error)fail(500,friends.error?.message??followers.error?.message??following.error?.message??'Unable to load social totals.');
-      return res.status(200).json({ profile: { ...profile, ocbr: Number(profile.ocbr ?? 88), avatar_frame_id: await activeAvatarFrame(client,profile) }, rank, social:{friends:friends.count??0,followers:followers.count??0,following:following.count??0} });
+      return res.status(200).json({ profile: { ...profile, ocbr: Number(profile.ocbr ?? 88), avatar_frame_id: await activeAvatarFrame(client,profile) }, rank, social:{friends:friends.count??0,followers:followers.count??0,following:following.count??0}, owner_progression_available: account.profile.role === 'owner' && target !== account.id });
     }
     if (action === 'presence') return res.status(200).json(await savePresence(client, account, body));
     if (action === 'nearby') return res.status(200).json(await nearbyPlayers(client, account));
