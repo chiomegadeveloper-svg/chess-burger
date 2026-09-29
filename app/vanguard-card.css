@@ -45,15 +45,15 @@
 .vanguard-template-card .card-emblem-choose{margin-left:auto;padding:.35cqw .7cqw;border:1px solid #d4b66a;border-radius:.45cqw;background:#151c20d9;color:#ffe4a2;font:800 clamp(4px,.75cqw,9px)/1.2 Poppins,sans-serif;white-space:nowrap;cursor:pointer}
 .vanguard-template-card .card-emblem-choose:hover,.vanguard-template-card .card-emblem-choose:focus-visible{background:#4d3b20;outline:1px solid #65eaf4}
 .vanguard-template-card .card-emblem-grid{display:grid;position:absolute;left:2.2%;right:2.2%;top:18%;bottom:4.2%;grid-template-columns:repeat(5,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr));gap:2.1% 1.2%}
-.vanguard-template-card .card-emblem{display:grid;place-items:center;min-width:0;min-height:0;padding:7%;border:1px solid #d7b65a;border-radius:.7cqw;background:linear-gradient(155deg,#142129cc,#05090dcc);box-shadow:inset 0 0 0 1px #00d9ef1f;overflow:hidden;text-align:center}
+.vanguard-template-card .card-emblem{display:grid;place-items:center;min-width:0;min-height:0;padding:2%;border:1px solid #d7b65a;border-radius:.7cqw;background:linear-gradient(155deg,#142129cc,#05090dcc);box-shadow:inset 0 0 0 1px #00d9ef1f;overflow:hidden;text-align:center}
 .vanguard-template-card .card-emblem.unlocked{background:radial-gradient(circle at 50% 40%,#18313a,#071015 72%)}
-.vanguard-template-card .card-emblem-art{display:block;width:min(82%,8.4cqw);height:auto;aspect-ratio:1;filter:drop-shadow(0 .25cqw .35cqw #000)}
+.vanguard-template-card .card-emblem-art{display:block;width:min(96%,10cqw);height:auto;aspect-ratio:1;filter:drop-shadow(0 .25cqw .35cqw #000)}
 .vanguard-template-card .card-emblem-art img{width:100%;height:100%;object-fit:contain}
 .vanguard-template-card .card-emblem strong{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .vanguard-template-card .card-emblem.empty{border-color:#8e7c4c99;background:#071015b5}
 .vanguard-template-card .card-emblem.empty .card-emblem-art{visibility:hidden}
 
-@media(max-width:650px){.vanguard-template-card{border-radius:10px}.vanguard-template-card .card-stats>div{border-width:.6px}.vanguard-template-card .card-emblem{padding:4%;border-width:.6px}.vanguard-template-card .card-emblem-art{width:78%}.vanguard-template-card .card-emblem-collection header>svg{display:none}.vanguard-template-card .card-emblem-choose{padding:.25cqw .45cqw}}
+@media(max-width:650px){.vanguard-template-card{border-radius:10px}.vanguard-template-card .card-stats>div{border-width:.6px}.vanguard-template-card .card-emblem{padding:2%;border-width:.6px}.vanguard-template-card .card-emblem-art{width:94%}.vanguard-template-card .card-emblem-collection header>svg{display:none}.vanguard-template-card .card-emblem-choose{padding:.25cqw .45cqw}}
 
 .vanguard-template-card .card-emblem.unlocked:hover,.vanguard-template-card .card-emblem.unlocked:focus-visible{position:relative;z-index:10;overflow:visible;outline:2px solid #6ce9f1;outline-offset:1px}
 .vanguard-template-card .card-emblem-tooltip{display:none;position:absolute;z-index:12;left:50%;bottom:calc(100% + .5cqw);width:max-content;max-width:min(22cqw,220px);transform:translateX(-50%);padding:.7cqw 1cqw;border:1px solid #d9ba68;border-radius:.6cqw;background:#07141ef2;box-shadow:0 .5cqw 2cqw #000b;color:#f9f3dc;text-align:center;white-space:normal;pointer-events:none}
