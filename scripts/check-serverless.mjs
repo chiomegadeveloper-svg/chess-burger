@@ -47,5 +47,9 @@ for (const name of files) {
   }
 }
 
+if (entrypoints > 12) {
+  failed = true;
+  console.error(`[serverless-check] ${entrypoints} API entrypoints exceed the 12-function Vercel Hobby limit. Merge a related route into an existing entrypoint.`);
+}
 if (failed) process.exit(1);
 console.log(`[serverless-check] ${entrypoints} API entrypoints and ${files.length - entrypoints} private helpers passed validation.`);

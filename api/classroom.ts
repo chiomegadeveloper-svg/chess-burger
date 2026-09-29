@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { AccessToken, DataPacket_Kind, RoomServiceClient, TrackSource } from "livekit-server-sdk";
 import { Chess } from "chess.js";
+import chessMathHandler from "./_chess-math.js";
 
 /** Locked student boards accept one legal White chess move per update. */
 function legalStudentMove(before:string,after:string){
@@ -20,6 +21,10 @@ type Res={status:(n:number)=>Res;json:(v:unknown)=>void;setHeader:(k:string,v:st
 const fail=(status:number,message:string):never=>{const e=Error(message) as Error&{status:number};e.status=status;throw e;};
 
 export default async function handler(req:Req,res:Res){
+  const action=req.body?.action;
+  if(typeof action==="string"&&["chess-math-state","chess-math-start","chess-math-finish"].includes(action)){
+    return chessMathHandler({...req,body:{...req.body,action:action.slice("chess-math-".length)}},res);
+  }
   res.setHeader("Cache-Control","no-store");
   try{
     if(req.method!=="POST")fail(405,"Method not allowed.");
