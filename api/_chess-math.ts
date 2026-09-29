@@ -32,6 +32,13 @@ export default async function handler(req:Req,res:Res){
       if(result.error)fail(missing(result.error)?503:500,missing(result.error)?migration:result.error.message);
       return result.data;
     };
+    const optionalLeaders=async(difficulty:Difficulty)=>{
+      try{return {leaders:await leaders(difficulty),rankings_error:null};}
+      catch(error){
+        console.error('[chess-math] Rankings unavailable:',error);
+        return {leaders:{score:[],speed:[],finishers:[]},rankings_error:error instanceof Error?error.message:'Rankings are unavailable.'};
+      }
+    };
     const active=async()=>{
       const result=await db.from('cb_chess_math_sessions').select('id,difficulty,question_ids,duration_seconds,started_at,expires_at').eq('user_id',userId).is('finished_at',null).gt('expires_at',new Date().toISOString()).order('started_at',{ascending:false}).limit(1).maybeSingle();
       if(result.error)fail(missing(result.error)?503:500,missing(result.error)?migration:result.error.message);
@@ -44,8 +51,8 @@ export default async function handler(req:Req,res:Res){
 
     if(action==='state'){
       const difficulty=validDifficulty(body.difficulty)?body.difficulty:'easy';
-      const existing=await active(),rankings=await leaders(existing?.difficulty??difficulty);
-      return res.status(200).json({bank:{math:500,logic:500},active:existing?view(existing):null,leaders:rankings});
+      const existing=await active(),rankings=await optionalLeaders(existing?.difficulty??difficulty);
+      return res.status(200).json({bank:{math:500,logic:500},active:existing?view(existing):null,...rankings});
     }
     if(action==='start'){
       const difficulty=body.difficulty,count=Number(body.count),duration=Number(body.duration_seconds);
@@ -67,7 +74,7 @@ export default async function handler(req:Req,res:Res){
       if(found.error)fail(missing(found.error)?503:500,missing(found.error)?migration:found.error.message);
       if(!found.data)fail(404,'Chess Math session not found.');
       const session=found.data;
-      if(session.finished_at)return res.status(200).json({result:{score:session.score,total:session.question_ids.length,answered:session.answered_count,elapsed_ms:session.elapsed_ms,difficulty:session.difficulty},leaders:await leaders(session.difficulty)});
+      if(session.finished_at)return res.status(200).json({result:{score:session.score,total:session.question_ids.length,answered:session.answered_count,elapsed_ms:session.elapsed_ms,difficulty:session.difficulty},...await optionalLeaders(session.difficulty)});
       const answers=(submitted as Array<{id:string;answer:string}>).map(row=>{
         const index=/^q([1-9]|[1-4][0-9]|50)$/.test(row.id)?Number(row.id.slice(1))-1:-1;
         return {id:session.question_ids[index]||'',answer:row.answer.trim()};
@@ -78,9 +85,9 @@ export default async function handler(req:Req,res:Res){
       const elapsed=Math.max(0,Math.min(session.duration_seconds*1000,finishedAt.getTime()-Date.parse(session.started_at)));
       const updated=await db.from('cb_chess_math_sessions').update({finished_at:finishedAt.toISOString(),answers:withinDeadline?answers:[],score:graded.score,answered_count:graded.answered,elapsed_ms:elapsed}).eq('id',id).eq('user_id',userId).is('finished_at',null).select('score,answered_count,elapsed_ms').maybeSingle();
       if(updated.error)fail(missing(updated.error)?503:500,missing(updated.error)?migration:updated.error.message);
-      if(!updated.data){const done=await db.from('cb_chess_math_sessions').select('score,answered_count,elapsed_ms').eq('id',id).eq('user_id',userId).single();if(done.error)fail(500,'Refresh your Chess Math result.');return res.status(200).json({result:{score:done.data!.score,total:session.question_ids.length,answered:done.data!.answered_count,elapsed_ms:done.data!.elapsed_ms,difficulty:session.difficulty},leaders:await leaders(session.difficulty)});}
-      return res.status(200).json({result:{score:graded.score,total:session.question_ids.length,answered:graded.answered,elapsed_ms:elapsed,difficulty:session.difficulty,late:!withinDeadline},leaders:await leaders(session.difficulty)});
+      if(!updated.data){const done=await db.from('cb_chess_math_sessions').select('score,answered_count,elapsed_ms').eq('id',id).eq('user_id',userId).single();if(done.error)fail(500,'Refresh your Chess Math result.');return res.status(200).json({result:{score:done.data!.score,total:session.question_ids.length,answered:done.data!.answered_count,elapsed_ms:done.data!.elapsed_ms,difficulty:session.difficulty},...await optionalLeaders(session.difficulty)});}
+      return res.status(200).json({result:{score:graded.score,total:session.question_ids.length,answered:graded.answered,elapsed_ms:elapsed,difficulty:session.difficulty,late:!withinDeadline},...await optionalLeaders(session.difficulty)});
     }
     fail(404,'Unknown Chess Math action.');
-  }catch(error){const issue=error as Error&{status?:number};res.status(issue.status||500).json({error:issue.status?issue.message:'Chess Math request failed.'});}
+  }catch(error){const issue=error as Error&{status?:number};console.error('[chess-math] Request failed:',issue);res.status(issue.status||500).json({error:issue.status?issue.message:'Chess Math server request failed. Please try again.'});}
 }
