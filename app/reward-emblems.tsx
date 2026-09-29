@@ -7,13 +7,8 @@ import {levelFor} from "./cbr";
 import "./reward-emblems.css";
 
 type RewardStats={cbr?:number;wins?:number;win_streak?:number};
-const emblemArtwork:Record<RewardId,number>={
- "rookie-flame":0,"knights-steel":1,"burger-blitz":2,"first-checkmate":12,"golden-pawn":5,
- "cbr-climber":6,"neon-board":18,"burger-master":14,"silver-rook":13,"friendly-challenger":9,
- "tactical-thinker":10,"midnight-board":4,"golden-king":15,"cb-champion":19,"flaming-queen":11,
- "community-legend":8,"cyber-knight":7,"burger-crown":17,"grandmaster-gold":16,"cb-supreme":3,
-};
-export function RewardMark({id}:{id:RewardId}){return <img src={`/reward-emblems/emblem-${emblemArtwork[id]}.webp`} alt="" aria-hidden="true"/>;}
+const emblemArtwork:Record<RewardId,number>={ "rookie-flame":0, "knights-steel":1, "burger-blitz":2, "first-checkmate":3, "golden-pawn":4, "cbr-climber":5, "neon-board":6, "burger-master":7, "silver-rook":8, "friendly-challenger":9, "tactical-thinker":10, "midnight-board":11, "golden-king":12, "cb-champion":13, "flaming-queen":14, "community-legend":15, "cyber-knight":16, "burger-crown":17, "grandmaster-gold":18, "cb-supreme":19};
+export function RewardMark({id}:{id:RewardId}){return <img src={`/reward-emblems-v2/emblem-${emblemArtwork[id]}.webp`} alt="" aria-hidden="true"/>;}
 
 function localUnlocks(profile?:RewardStats):RewardId[]{
  if(!profile)return [];
