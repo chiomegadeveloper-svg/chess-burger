@@ -934,6 +934,19 @@ export default async function handler(req: Req, res: Res) {
       if(leaders.error)fail(/cb_cpu_leaders|schema cache|function/i.test(leaders.error.message)?503:500,/cb_cpu_leaders|schema cache|function/i.test(leaders.error.message)?'Apply supabase/0080_cpu_rankings.sql in Supabase to enable CPU rankings.':leaders.error.message);
       return res.status(200).json({leaders:leaders.data});
     }
+    if(action==='player-card-summary'){
+      const [wallet,tickets,membership]=await Promise.all([
+        client.from('cb_classroom_wallets').select('cbc').eq('user_id',account.id).maybeSingle(),
+        client.from('cb_arena_tickets').select('quantity').eq('user_id',account.id).maybeSingle(),
+        client.from('cb_guild_members').select('guild_id,guild:cb_guilds(name,logo_url)').eq('user_id',account.id).maybeSingle()
+      ]);
+      const error=wallet.error??tickets.error??membership.error;
+      if(error)fail(503,'Player card balances are temporarily unavailable.');
+      const guild=Array.isArray(membership.data?.guild)?membership.data.guild[0]:membership.data?.guild;
+      const regional=['tacloban','leyte','samar','biliran','s-leyte','e-samar','n-samar','cebu','davao','manila','ormoc','tambay'];
+      const index=regional.findIndex((_,i)=>membership.data?.guild_id===`7dcb0000-0000-4000-8000-${(i+1).toString(16).padStart(12,'0')}`);
+      return res.status(200).json({cbc:Number(wallet.data?.cbc??0),tickets:Number(tickets.data?.quantity??0),guild_name:String(guild?.name??''),guild_logo_url:index>=0?`/guild/default-${regional[index]}-logo.webp`:String(guild?.logo_url??'')});
+    }
     if(action==='cpu-level-status'){
       const result=await client.from('cb_cpu_level_limits').select('level,wins,locked_until,updated_at').eq('user_id',account.id);
       if(result.error){

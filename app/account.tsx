@@ -10,7 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Camera, Image as ImageIcon, Trophy } from "lucide-react";
+import { Camera, Image as ImageIcon, Shield } from "lucide-react";
 import { toast } from "sonner";
 import { levelFor } from "./cbr";
 import { getSupabase, PlayerProfile } from "./supabase";
@@ -23,7 +23,7 @@ import {
 import AppFeaturedPhoto from "./app-featured-photo";
 import RewardEmblems, {
   FeaturedRewardPicker,
-  FeaturedRewardSlots,
+  CardEmblemCollection,
 } from "./reward-emblems";
 import { arena } from "./arena-client";
 import { profileRequest } from "./profile-client";
@@ -117,7 +117,14 @@ export default function Account({
   const [remember, setRemember] = useState(true),
     [registered, setRegistered] = useState<boolean | null>(null);
   const [editing, setEditing] = useState(false);
-  const [emblemPickerOpen, setEmblemPickerOpen] = useState(false);
+  const [cardSummary, setCardSummary] = useState<{cbc:number;tickets:number;guild_name:string;guild_logo_url:string}|null>(null);
+  useEffect(() => {
+    if (!profile?.user_id || guest) {setCardSummary(null);return;}
+    let live=true;
+    const load=()=>{void arena<{cbc:number;tickets:number;guild_name:string;guild_logo_url:string}>("player-card-summary").then(data=>{if(live)setCardSummary(data);}).catch(()=>{});};
+    load();window.addEventListener("focus",load);
+    return()=>{live=false;window.removeEventListener("focus",load);};
+  },[profile?.user_id,guest]);
   const [socialCounts, setSocialCounts] = useState({
     friends: 0,
     followers: 0,
@@ -772,7 +779,7 @@ export default function Account({
           <span className="card-brand-logo">
             <img src="/cburger_logo.png" alt="Chess Burger" />
           </span>
-          <span>{flag(profile.country_code)} PLAYER CARD</span>
+          <span>VANGUARD • PLAYER CARD</span>
         </div>
         <div className="card-main">
           <div className="portrait-ring">
@@ -801,16 +808,14 @@ export default function Account({
                   Level {level.level} · {level.name}
                 </span>
               </div>
-              <img
-                className="identity-level-emblem"
-                src={
-                  "/levels/level-" +
-                  String(level.level - 1).padStart(2, "0") +
-                  ".png"
-                }
-                alt={level.name}
-              />
+              <div className="card-insignia">
+                <div className="card-level-insignia"><img className="identity-level-emblem" src={"/levels/level-" + String(level.level - 1).padStart(2, "0") + ".png"} alt={`Level ${level.level}: ${level.name}`} /><small>LEVEL {level.level}</small></div>
+                <div className="card-guild-insignia">{cardSummary?.guild_logo_url?<img src={cardSummary.guild_logo_url} alt={`${cardSummary.guild_name} guild logo`}/>:<Shield aria-hidden="true"/>}<small>{cardSummary?.guild_name||"NO GUILD"}</small></div>
+              </div>
             </div>
+
+          </div>
+        </div>
             <div className="card-stats">
               <div>
                 <strong>
@@ -819,20 +824,11 @@ export default function Account({
                 </strong>
                 <span>CBR</span>
               </div>
+              <div><strong><i>◆</i>{profile.gold_points.toLocaleString()}</strong><span>CBG</span></div>
               <div>
-                <strong>
-                  <i>♜</i>
-                  {profile.ocbr ?? 88}
-                </strong>
-                <span>OCBR</span>
+                <strong><i>◈</i>{cardSummary?.cbc?.toLocaleString()??"—"}</strong><span>CBC</span>
               </div>
-              <div>
-                <strong>
-                  <i>♟</i>
-                  {profile.gold_points.toLocaleString()}
-                </strong>
-                <span>Gold</span>
-              </div>
+              <div><strong><i>◇</i>{cardSummary?.tickets?.toLocaleString()??"—"}</strong><span>Arena tickets</span></div>
               <div>
                 <strong>
                   <i>♛</i>
@@ -841,61 +837,12 @@ export default function Account({
                 <span>Win rate</span>
               </div>
             </div>
-          </div>
-        </div>
         <div className="card-achievements">
-          <section className="card-trophy-frame">
-            <header>
-              <Trophy />
-              <span>
-                <strong>Tournament Trophies</strong>
-                <small>Chess Burger official awards</small>
-              </span>
-            </header>
-            <div className="trophy-slots" aria-label="Tournament trophy slots">
-              {["Champion", "Finalist", "Special award"].map((label) => (
-                <span key={label}>
-                  <i>♛</i>
-                  <small>{label}</small>
-                </span>
-              ))}
-            </div>
-          </section>
-          <FeaturedRewardSlots
-            selected={profile.featured_badges}
-            profile={profile}
-            onChoose={() => setEmblemPickerOpen((open) => !open)}
-          />
+          <CardEmblemCollection profile={profile}/>
         </div>
       </div>
     </>
   );
-  const emblemPickerPanel = emblemPickerOpen ? (
-    <section className="emblem-picker-panel" aria-label="Choose featured emblems">
-      <header>
-        <div>
-          <span>PLAYER CARD</span>
-          <h2>Choose featured emblems</h2>
-        </div>
-        <button
-          type="button"
-          onClick={() => setEmblemPickerOpen(false)}
-          aria-label="Close emblem chooser"
-        >
-          Close
-        </button>
-      </header>
-      <p>Select up to five unlocked emblems. Changes save immediately.</p>
-      <FeaturedRewardPicker
-        selected={profile.featured_badges}
-        profile={profile}
-        onChange={(featured_badges) =>
-          void saveFeaturedEmblems(featured_badges)
-        }
-      />
-      {error && <p className="auth-error" role="alert">{error}</p>}
-    </section>
-  ) : null;
   const passwordSecurity =
     !guest && user ? (
       <section className="password-security">
@@ -954,7 +901,6 @@ export default function Account({
     return (
       <section>
         {playerCard}
-        {emblemPickerPanel}
         <AppFeaturedPhoto />
         <RewardEmblems profile={profile} />
       </section>

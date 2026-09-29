@@ -42,6 +42,11 @@ export function FeaturedRewardSlots({selected,profile,onChoose}:{selected:string
  const chosen=selected.filter(valid).slice(0,5);
  return <section className="card-featured-rewards"><header><Medal/><span><strong>Featured Emblems</strong><small>{ready?`${chosen.length} of 5 selected`:"Loading rewards…"}</small></span>{onChoose&&<button type="button" className="choose-emblems-button" onClick={onChoose}>Choose</button>}</header><div className="featured-reward-slots" aria-label="Five featured reward emblem slots">{Array.from({length:5},(_,index)=>{const id=chosen[index],reward=id&&REWARDS.find(item=>item.id===id);return reward?<span className={`featured-reward-slot ${reward.kind}`} key={index} title={reward.name}><i><RewardMark id={reward.id}/></i><small>{reward.name}</small></span>:<span className="featured-reward-slot empty" key={index} aria-label="Empty featured emblem slot"><i>?</i><small>Empty</small></span>;})}</div></section>;
 }
+export function CardEmblemCollection({profile}:{profile?:RewardStats}){
+ const {unlocked,ready}=useRewardUnlocks(profile);
+ const displayed=[...REWARDS.filter(reward=>unlocked.includes(reward.id)),...REWARDS.filter(reward=>!unlocked.includes(reward.id))].slice(0,10);
+ return <section className="card-emblem-collection" aria-label="Ten unlockable emblems"><header><Medal/><span><strong>Vanguard Emblems</strong><small>{ready?`${unlocked.length} unlocked · 10 displayed`:'Checking unlocks…'}</small></span></header><div className="card-emblem-grid">{displayed.map(reward=><article key={reward.id} className={`card-emblem ${unlocked.includes(reward.id)?'unlocked':'locked'}`} title={`${reward.name} — ${reward.requirement}`}><span className="card-emblem-art"><RewardMark id={reward.id}/></span><strong>{reward.name}</strong><small>{unlocked.includes(reward.id)?'Unlocked':reward.requirement}</small></article>)}</div></section>;
+}
 export function FeaturedRewardPicker({selected,onChange,profile}:{selected:string[];onChange:(next:string[])=>void;profile?:RewardStats}){
  const {unlocked,ready}=useRewardUnlocks(profile),known=selected.filter(valid);
  const toggle=(id:RewardId)=>{if(!unlocked.includes(id))return;if(known.includes(id))onChange(known.filter(item=>item!==id));else if(known.length<5)onChange([...known,id]);};

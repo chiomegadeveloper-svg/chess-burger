@@ -32,6 +32,7 @@ import "./v46.css";
 import "./feed-banner-shop.css";
 import "./v47.css";
 import "./grand-arena.css";
+import "./vanguard-card.css";
 import {APP_VERSION} from "./app-version";
 
 export const metadata: Metadata = {
