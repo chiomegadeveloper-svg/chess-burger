@@ -578,27 +578,17 @@ function liveAt(row: any) {
   const parsed = value ? Date.parse(String(value)) : NaN;
   return Number.isFinite(parsed) ? parsed : null;
 }
-let cachedPresenceTimestampField:string|undefined;
-let cachedAdditionalPresenceFields:string[]|undefined;
 async function livePresenceTimestampField(client:Db):Promise<string>{
-  if(cachedPresenceTimestampField)return cachedPresenceTimestampField;
-  for(const field of ['seen_at','last_seen_at','updated_at','last_seen']){
-    // A zero-length range can return 416 from PostgREST even when the column exists.
-    const probe=await client.from('cb_live_presence').select(field,{head:true}).limit(1);
-    if(!probe.error){cachedPresenceTimestampField=field;return field;}
-    if(!/column .* does not exist|schema cache/i.test(String(probe.error.message??'')))fail(500,probe.error.message);
-  }
-  return fail(503,'Live presence has no supported timestamp. Apply supabase/0075_concurrent_user_indexes.sql.');
+  // seen_at has been part of cb_live_presence since 0013. HEAD probes against
+  // this table return an empty 500 error on the production PostgREST gateway.
+  void client;
+  return 'seen_at';
 }
 async function publicOnlineUsers(client: Db) {
   const field=await livePresenceTimestampField(client);
   const cutoff=new Date(now()-60_000).toISOString();
-  const [presence,total]=await Promise.all([
-    client.from('cb_live_presence').select(`user_id,${field}`).gt(field,cutoff).order(field,{ascending:false}).limit(100),
-    client.from('cb_live_presence').select('user_id',{count:'exact',head:true}).gt(field,cutoff),
-  ]);
-  if(presence.error)fail(500,presence.error.message);
-  if(total.error)console.warn('arena.online-users.count-unavailable',total.error.message);
+  const presence=await client.from('cb_live_presence').select(`user_id,${field}`,{count:'exact'}).gt(field,cutoff).order(field,{ascending:false}).limit(100);
+  if(presence.error)fail(500,presence.error.message||presence.error.code||'Could not read live presence.');
   const recentById=new Map<string,{user_id:string;lastSeen:number}>();
   const collect=(rows:any[],timestamp:string)=>{
     for(const row of rows){
@@ -608,24 +598,8 @@ async function publicOnlineUsers(client: Db) {
     }
   };
   collect(presence.data??[],field);
-  // Older clients can update a legacy timestamp while newer clients update
-  // seen_at. Read each available column, even if the first has some users.
-  if(!cachedAdditionalPresenceFields){
-    const candidates=['seen_at','last_seen_at','updated_at','last_seen'].filter(candidate=>candidate!==field);
-    const probes=await Promise.all(candidates.map(candidate=>client.from('cb_live_presence').select(candidate,{head:true}).limit(1)));
-    cachedAdditionalPresenceFields=candidates.filter((_,index)=>!probes[index].error);
-  }
-  const otherFields=cachedAdditionalPresenceFields.filter(candidate=>candidate!==field);
-  const alternate=await Promise.all(otherFields.map(candidate=>client.from('cb_live_presence').select(`user_id,${candidate}`).gt(candidate,cutoff).order(candidate,{ascending:false}).limit(100)));
-  alternate.forEach((result,index)=>{if(!result.error)collect(result.data??[],otherFields[index]);});
-  if(!recentById.size){
-    // GET/count can disagree on production gateways. Read a bounded set of
-    // presence records and apply the same 60-second cutoff in this function.
-    const fallback=await client.from('cb_live_presence').select('*').limit(1000);
-    if(!fallback.error)for(const candidate of ['seen_at','last_seen_at','updated_at','last_seen'])collect(fallback.data??[],candidate);
-  }
   const recent=[...recentById.values()].sort((a,b)=>b.lastSeen-a.lastSeen).slice(0,100);
-  if(!recent.length&&(total.count??0)>0)fail(503,'Presence is active, but the player list could not be read. Please try again.');
+  if(!recent.length&&(presence.count??0)>0)fail(503,'Presence is active, but the player list could not be read. Please try again.');
   const ids=recent.map((row:any)=>row.user_id);
   const [white,black]=ids.length?await Promise.all([
     client.from('cb_matches').select('white_id').eq('status','active').in('white_id',ids),
@@ -654,7 +628,7 @@ async function publicOnlineUsers(client: Db) {
     return player ? { ...player, cbr: Number(player.cbr ?? 88), available: !playing.has(row.user_id) } : null;
   }).filter(Boolean).sort((a: any, b: any) => b.cbr - a.cbr);
   if(recent.length&&!users.length){console.warn('arena.online-users.profiles-missing',{presence:recent.length,profiles:people.size});fail(503,'Online players are active, but their profiles could not be loaded. Please try again.');}
-  return { users, count: Math.max(users.length,recentById.size,total.error?0:total.count??0) };
+  return { users, count: Math.max(users.length,recentById.size,presence.count??0) };
 }
 
 async function activeMatchFor(client: Db, userId: string) {
