@@ -579,6 +579,7 @@ function liveAt(row: any) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 let cachedPresenceTimestampField:string|undefined;
+let cachedAdditionalPresenceFields:string[]|undefined;
 async function livePresenceTimestampField(client:Db):Promise<string>{
   if(cachedPresenceTimestampField)return cachedPresenceTimestampField;
   for(const field of ['seen_at','last_seen_at','updated_at','last_seen']){
@@ -598,26 +599,32 @@ async function publicOnlineUsers(client: Db) {
   ]);
   if(presence.error)fail(500,presence.error.message);
   if(total.error)console.warn('arena.online-users.count-unavailable',total.error.message);
-  let recent=presence.data??[];
-  // A legacy production table can expose more than one timestamp column.
-  // Match the field used for the count whenever the first read disagrees.
-  if(!recent.length){
-    for(const candidate of ['seen_at','last_seen_at','updated_at','last_seen']){
-      if(candidate===field)continue;
-      const retry=await client.from('cb_live_presence').select(`user_id,${candidate}`).gt(candidate,cutoff).order(candidate,{ascending:false}).limit(100);
-      if(!retry.error&&retry.data?.length){recent=retry.data;cachedPresenceTimestampField=candidate;break;}
+  const recentById=new Map<string,{user_id:string;lastSeen:number}>();
+  const collect=(rows:any[],timestamp:string)=>{
+    for(const row of rows){
+      const lastSeen=Date.parse(String(row[timestamp]??''));
+      if(!row.user_id||!Number.isFinite(lastSeen)||lastSeen<=Date.parse(cutoff))continue;
+      if(lastSeen>(recentById.get(row.user_id)?.lastSeen??0))recentById.set(row.user_id,{user_id:row.user_id,lastSeen});
     }
+  };
+  collect(presence.data??[],field);
+  // Older clients can update a legacy timestamp while newer clients update
+  // seen_at. Read each available column, even if the first has some users.
+  if(!cachedAdditionalPresenceFields){
+    const candidates=['seen_at','last_seen_at','updated_at','last_seen'].filter(candidate=>candidate!==field);
+    const probes=await Promise.all(candidates.map(candidate=>client.from('cb_live_presence').select(candidate,{head:true}).limit(1)));
+    cachedAdditionalPresenceFields=candidates.filter((_,index)=>!probes[index].error);
   }
-  if(!recent.length){
+  const otherFields=cachedAdditionalPresenceFields.filter(candidate=>candidate!==field);
+  const alternate=await Promise.all(otherFields.map(candidate=>client.from('cb_live_presence').select(`user_id,${candidate}`).gt(candidate,cutoff).order(candidate,{ascending:false}).limit(100)));
+  alternate.forEach((result,index)=>{if(!result.error)collect(result.data??[],otherFields[index]);});
+  if(!recentById.size){
     // GET/count can disagree on production gateways. Read a bounded set of
     // presence records and apply the same 60-second cutoff in this function.
-    const fallback=await client.from('cb_live_presence').select('*',{count:'exact'}).limit(1000);
-    if(!fallback.error)recent=(fallback.data??[]).filter((row:any)=>
-      ['seen_at','last_seen_at','updated_at','last_seen'].some(field=>
-        Number.isFinite(Date.parse(String(row[field]??'')))&&Date.parse(String(row[field]))>Date.parse(cutoff)
-      )
-    ).slice(0,100);
+    const fallback=await client.from('cb_live_presence').select('*').limit(1000);
+    if(!fallback.error)for(const candidate of ['seen_at','last_seen_at','updated_at','last_seen'])collect(fallback.data??[],candidate);
   }
+  const recent=[...recentById.values()].sort((a,b)=>b.lastSeen-a.lastSeen).slice(0,100);
   if(!recent.length&&(total.count??0)>0)fail(503,'Presence is active, but the player list could not be read. Please try again.');
   const ids=recent.map((row:any)=>row.user_id);
   const [white,black]=ids.length?await Promise.all([
@@ -647,7 +654,7 @@ async function publicOnlineUsers(client: Db) {
     return player ? { ...player, cbr: Number(player.cbr ?? 88), available: !playing.has(row.user_id) } : null;
   }).filter(Boolean).sort((a: any, b: any) => b.cbr - a.cbr);
   if(recent.length&&!users.length){console.warn('arena.online-users.profiles-missing',{presence:recent.length,profiles:people.size});fail(503,'Online players are active, but their profiles could not be loaded. Please try again.');}
-  return { users, count: Math.max(users.length,total.error?0:total.count??0) };
+  return { users, count: Math.max(users.length,recentById.size,total.error?0:total.count??0) };
 }
 
 async function activeMatchFor(client: Db, userId: string) {
@@ -1255,7 +1262,17 @@ export default async function handler(req: Req, res: Res) {
       return res.status(200).json(report.data);
     }
     if (action === 'heartbeat') return res.status(200).json(await saveLiveHeartbeat(client, account.id));
-    if (action === 'online-users') return res.status(200).json(await publicOnlineUsers(client));
+    if (action === 'online-users') {
+      let online=await publicOnlineUsers(client);
+      if(online.users.length<100&&!online.users.some((user:any)=>user.user_id===account.id)){
+        // A signed-in viewer is online now. Repair a missing client heartbeat
+        // and re-read instead of presenting a misleading empty directory.
+        await saveLiveHeartbeat(client,account.id);
+        online=await publicOnlineUsers(client);
+        if(online.users.length<100&&!online.users.some((user:any)=>user.user_id===account.id))fail(503,'Online presence was saved but could not be read. Please retry.');
+      }
+      return res.status(200).json(online);
+    }
     if (action === 'map-stats') {
       let field:string|null=null;
       try{field=await livePresenceTimestampField(client);}catch(error){

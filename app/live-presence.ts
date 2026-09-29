@@ -19,8 +19,10 @@ export function useLivePresence(userId?:string, gpsEnabled=false, activeMatchId=
             const client=await getSupabase();
             const session=client?(await client.auth.getSession()).data.session:null;
             if(client&&session?.user.id===userId){
-              const saved=await client.from('cb_live_presence').upsert({user_id:userId,seen_at:new Date().toISOString()},{onConflict:'user_id'});
-              if(!saved.error)return;
+              // Ask PostgREST to return the saved row. A no-content response
+              // alone does not prove the presence row is visible to readers.
+              const saved=await client.from('cb_live_presence').upsert({user_id:userId,seen_at:new Date().toISOString()},{onConflict:'user_id'}).select('user_id,seen_at').maybeSingle();
+              if(!saved.error&&saved.data?.user_id===userId&&Date.parse(saved.data.seen_at)>Date.now()-60_000)return;
             }
             directAvailable=false;
           }catch{directAvailable=false}
