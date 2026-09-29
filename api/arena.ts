@@ -578,11 +578,18 @@ function liveAt(row: any) {
   const parsed = value ? Date.parse(String(value)) : NaN;
   return Number.isFinite(parsed) ? parsed : null;
 }
+let cachedPresenceTimestampField:string|undefined;
 async function livePresenceTimestampField(client:Db):Promise<string>{
-  // seen_at has been part of cb_live_presence since 0013. HEAD probes against
-  // this table return an empty 500 error on the production PostgREST gateway.
-  void client;
-  return 'seen_at';
+  if(cachedPresenceTimestampField)return cachedPresenceTimestampField;
+  for(const field of ['seen_at','last_seen_at','updated_at','last_seen']){
+    // Production can have an older column name. Use GET: HEAD returned an
+    // empty gateway error and prevented the directory from trying another.
+    const probe=await client.from('cb_live_presence').select(field).limit(1);
+    if(!probe.error){cachedPresenceTimestampField=field;return field;}
+    if(!/column .* does not exist|schema cache|PGRST204|42703/i.test(String(probe.error.message??'')+' '+String(probe.error.code??'')))
+      fail(500,probe.error.message||probe.error.code||'Could not inspect live presence.');
+  }
+  return fail(503,'Live presence needs a timestamp column. Apply supabase/0075_concurrent_user_indexes.sql.');
 }
 async function publicOnlineUsers(client: Db) {
   const field=await livePresenceTimestampField(client);
