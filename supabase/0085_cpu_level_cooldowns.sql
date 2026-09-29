@@ -71,7 +71,7 @@ begin
   if p_cbr>0 then
     v_wins:=v_wins+1;
     if v_wins=3 then
-      v_cooldown:=case when p_level=10 then interval '12 hours' else (10-p_level)*interval '1 day' end;
+      v_cooldown:=(array[48,48,42,40,36,34,32,24,18,12])[p_level]*interval '1 hour';
       v_locked_until:=v_now+v_cooldown;
     end if;
   end if;
