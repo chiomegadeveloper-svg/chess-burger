@@ -638,7 +638,7 @@ export default function CommunityFeed({
           </b>
         </button>
       )}
-      {tab === "challenge" && challenges.length > 0 && (
+      {(tab === "challenge" || tab === "recent") && challenges.length > 0 && (
         <section className="pinned-challenges" aria-label="Open challenges">
           <h2>Open challenges</h2>
           {challenges.map((event) => (
