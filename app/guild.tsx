@@ -6,7 +6,7 @@ import {getSupabase,type PlayerProfile} from './supabase';
 import {loadImageFile,toWebpUnder1Mb} from './media';
 import './guild.css';
 
-type Member={guild_id:string;user_id:string;joined_at:string;leader_vote:string|null;profile?:{username:string;display_name:string;avatar_url:string;cbr:number}};
+type Member={guild_id:string;user_id:string;joined_at:string;leader_vote?:string|null;profile?:{username:string;display_name:string;avatar_url:string;cbr:number}};
 type Guild={id:string;name:string;guild_code?:string;logo_url:string;cover_url:string;leader_id:string|null;creator_id:string|null;is_default?:boolean;chest_cbg:number;release_at:string|null;member_count:number;guild_points:number;members?:Member[]};
 type JoinRequest={id:string;guild_id?:string;user_id?:string;created_at:string;profile?:{display_name:string;username:string;avatar_url:string;cbr:number}};
 type GuildActivity={id:number;kind:string;actor_name:string;detail:string;amount:number;created_at:string};
