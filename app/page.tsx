@@ -587,6 +587,7 @@ function AppPage() {
         profile={profile}
         onMatch={openMatch}
         onArena={() => setTab("grand-arena")}
+        onOpenChallenge={() => { setTarget(null); setTab("challenge"); }}
         onChallenge={(player) => {
           setTarget(player);
           setTab("challenge");

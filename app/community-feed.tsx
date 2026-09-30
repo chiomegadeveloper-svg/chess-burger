@@ -229,6 +229,7 @@ export default function CommunityFeed({
   onOpenProfile,
   onMatch,
   onChallenge,
+  onOpenChallenge,
   onArena,
 }: {
   initialTab?: FeedTab;
@@ -236,6 +237,7 @@ export default function CommunityFeed({
   onOpenProfile: (userId: string) => void;
   onMatch: (id: string) => void;
   onChallenge: (player: ArenaPlayer) => void;
+  onOpenChallenge: () => void;
   onArena: () => void;
 }) {
   const [tab, setTab] = useState<FeedTab>(initialTab),
@@ -617,6 +619,7 @@ export default function CommunityFeed({
           Rewards
         </button>
       </div>
+      {tab === "challenge" && <button type="button" className="challenge-portal" onClick={onOpenChallenge} aria-label="Open Match Lobby, Challenge a Player"><span className="challenge-portal-icon"><Swords size={24} aria-hidden="true" /></span><span className="challenge-portal-copy"><strong>Challenge a Player</strong><small>Open Match Lobby to challenge by username, challenge anyone, or schedule a match.</small></span><ChevronRight size={20} aria-hidden="true" /></button>}
       {tab === "rewards" && <DailyRewards />}
       {tab === "training" && <OnlineTrainings profile={profile} />}
       {tab === "recent" && arenaOpen && (
