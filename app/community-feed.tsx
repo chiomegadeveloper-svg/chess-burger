@@ -655,6 +655,13 @@ export default function CommunityFeed({
                   </small>
                 </span>
               </span>
+              <div className="pinned-challenge-versus" aria-label={`${event.display_name} versus an open challenger`}>
+                <button type="button" aria-label={`Preview ${event.display_name}'s user card`} onMouseEnter={()=>{if(!window.matchMedia("(hover: hover)").matches)return;if(feedHoverTimer.current)clearTimeout(feedHoverTimer.current);feedHoverTimer.current=setTimeout(()=>setFeedHoverCard(event.user_id),220)}} onMouseLeave={()=>{if(feedHoverTimer.current)clearTimeout(feedHoverTimer.current);setFeedHoverCard(null)}} onFocus={()=>setFeedHoverCard(event.user_id)} onBlur={()=>setFeedHoverCard(null)} onClick={()=>setFeedHoverCard(event.user_id)}>
+                  <span className={`feed-avatar challenge-avatar${event.avatar_frame_id?" has-avatar-frame":""}`}>{event.avatar_url?<img src={event.avatar_url} alt=""/>:event.display_name.charAt(0)}<AvatarFrameOverlay frameId={event.avatar_frame_id}/></span>
+                </button>
+                <img src="/challenge-vs.png" alt="versus"/>
+                <span className="challenge-avatar challenge-open" aria-label="Waiting for challenger">?</span>
+              </div>
               <button
                 className="gold-button"
                 disabled={accepting !== null || event.user_id === userId}

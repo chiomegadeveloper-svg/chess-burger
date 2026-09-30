@@ -1588,7 +1588,9 @@ export default async function handler(req: Req, res: Res) {
       if (publicRows.error || mine.error) fail(503, 'Scheduled challenges are unavailable until the database update is applied.');
       const rows = [...new Map([...(publicRows.data??[]),...(mine.data??[])].map((row:any)=>[row.id,row])).values()];
       const names = await playerMap(client,rows.flatMap((row:any)=>[row.host_id,row.target_id].filter(Boolean)));
-      return res.status(200).json({challenges:rows.map((row:any)=>({...row,host_name:names.get(row.host_id)?.display_name??'A player',target_name:row.target_id?names.get(row.target_id)?.display_name??'A player':null}))});
+      const frames=await Promise.all([...names.values()].map(async (player:any)=>[player.user_id,player.active_avatar_frame_item?await activeAvatarFrame(client,player):null] as const));
+      const frameById=new Map(frames);
+      return res.status(200).json({challenges:rows.map((row:any)=>({...row,host_name:names.get(row.host_id)?.display_name??'A player',host_avatar_url:names.get(row.host_id)?.avatar_url??'',host_frame_id:frameById.get(row.host_id)??null,target_name:row.target_id?names.get(row.target_id)?.display_name??'A player':null,target_avatar_url:row.target_id?names.get(row.target_id)?.avatar_url??'':'',target_frame_id:row.target_id?frameById.get(row.target_id)??null:null}))});
     }
     if (action === 'schedule-create') {
       await requireFairPlayReady(client,account.id);
