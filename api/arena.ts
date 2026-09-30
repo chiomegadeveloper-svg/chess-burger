@@ -485,6 +485,7 @@ async function settle(client: Db, match: any) {
       if (event.error) fail(500, event.error.message);
     }
   }
+  if(match.play_mode==='cbr_wager') { const wager=await client.rpc('cb_settle_cbr_wager',{p_match_id:match.id}); if(wager.error) fail(500,wager.error.message); }
   const rated = await client.from('cb_matches').update({ rating_applied: true }).eq('id', match.id).eq('rating_applied', false);
   if (rated.error) fail(500, rated.error.message);
 }
@@ -1579,6 +1580,97 @@ export default async function handler(req: Req, res: Res) {
       if (update?.error && update.error.code !== '23505') fail(500, update.error.message);
       return res.status(200).json({ ok: true });
     }
+    // Scheduled challenges are reservations. A match is created only when a player
+    // opens the agreed window, so the existing two-minute room expiry still applies.
+    if (action === 'schedule-list') {
+      const publicRows = await client.from('cb_scheduled_challenges').select('*').is('target_id', null).eq('status', 'pending').gt('scheduled_at', new Date(now()-30*60000).toISOString()).order('scheduled_at', {ascending:true}).limit(50);
+      const mine = await client.from('cb_scheduled_challenges').select('*').or(`host_id.eq.${account.id},target_id.eq.${account.id}`).in('status',['pending','countered','accepted']).gt('scheduled_at',new Date(now()-30*60000).toISOString()).order('scheduled_at',{ascending:true}).limit(50);
+      if (publicRows.error || mine.error) fail(503, 'Scheduled challenges are unavailable until the database update is applied.');
+      const rows = [...new Map([...(publicRows.data??[]),...(mine.data??[])].map((row:any)=>[row.id,row])).values()];
+      const names = await playerMap(client,rows.flatMap((row:any)=>[row.host_id,row.target_id].filter(Boolean)));
+      return res.status(200).json({challenges:rows.map((row:any)=>({...row,host_name:names.get(row.host_id)?.display_name??'A player',target_name:row.target_id?names.get(row.target_id)?.display_name??'A player':null}))});
+    }
+    if (action === 'schedule-create') {
+      await requireFairPlayReady(client,account.id);
+      const scheduled = Date.parse(String(body.scheduled_at??''));
+      if (!Number.isFinite(scheduled)||scheduled<now()+15*60000||scheduled>now()+5*86400000) fail(400,'Choose a time at least 15 minutes from now and no more than 5 days away.');
+      const control=String(body.control??''); tc(control);
+      const wagerKind=String(body.wager_kind??'none');
+      const wagerAmount=wagerKind==='none'?0:Number(body.wager_amount);
+      if(!['none','cbg','cbr'].includes(wagerKind)||!Number.isInteger(wagerAmount)||wagerAmount<0||(wagerKind!=='none'&&wagerAmount<1)||(wagerKind==='cbg'&&wagerAmount>10000)||(wagerKind==='cbr'&&wagerAmount>100))fail(400,'Choose a valid CBG or CBR wager.');
+      if(wagerKind==='cbg'&&Number(account.profile.gold_points??0)<wagerAmount||wagerKind==='cbr'&&Number(account.profile.cbr??0)<wagerAmount)fail(409,'You do not have enough CBG or CBR for that wager.');
+      const audience=String(body.audience??'');
+      if (!['anyone','username'].includes(audience)) fail(400,'Choose an audience.');
+      const target=audience==='username'?String(body.target??''):null;
+      if (audience==='username') {
+        if(!/^[a-f0-9-]{36}$/i.test(target)||target===account.id) fail(400,'Choose another player.');
+        const person=await client.from('cb_profiles').select('user_id').eq('user_id',target).maybeSingle();
+        if(person.error||!person.data) fail(404,'Player not found.');
+      }
+      const pending=await client.from('cb_scheduled_challenges').select('id').eq('host_id',account.id).in('status',['pending','countered','accepted']).gt('scheduled_at',new Date(now()-30*60000).toISOString()).limit(5);
+      if(pending.error) fail(503,'Scheduled challenges are unavailable until the database update is applied.');
+      if((pending.data??[]).length>=5) fail(409,'You can have up to five upcoming scheduled challenges.');
+      const row=one<any>(await client.from('cb_scheduled_challenges').insert({host_id:account.id,target_id:target,control,scheduled_at:new Date(scheduled).toISOString(),status:'pending',wager_kind:wagerKind,wager_amount:wagerAmount}).select('*').single());
+      return res.status(200).json({challenge:row});
+    }
+    if (action === 'schedule-respond') {
+      const id=String(body.id??''),response=String(body.response??'');
+      const current=one<any>(await client.from('cb_scheduled_challenges').select('*').eq('id',id).single());
+      if(Date.parse(current.scheduled_at)+30*60000<=now()) fail(409,'This scheduled challenge has expired.');
+      const isHost=current.host_id===account.id,isTarget=current.target_id===account.id;
+      if((response==='join'||response==='accept')&&current.wager_kind!=='none'&&Number(account.profile[current.wager_kind==='cbg'?'gold_points':'cbr']??0)<current.wager_amount)fail(409,'You do not have enough CBG or CBR for this wager.');
+      if(response==='join' && !current.target_id && current.status==='pending' && !isHost) {
+        const changed=await client.from('cb_scheduled_challenges').update({target_id:account.id,status:'accepted'}).eq('id',id).is('target_id',null).eq('status','pending').select('*').maybeSingle();
+        if(changed.error) fail(500,changed.error.message); if(!changed.data) fail(409,'Another player accepted first.');
+        return res.status(200).json({challenge:changed.data});
+      }
+      if(response==='accept' && ((isTarget&&current.status==='pending')||(isHost&&current.status==='countered'))) {
+        const changes:any={status:'accepted'};
+        if(isHost) changes.scheduled_at=current.proposal_at;
+        changes.proposal_at=null;
+        const changed=await client.from('cb_scheduled_challenges').update(changes).eq('id',id).eq('status',current.status).eq(isHost?'host_id':'target_id',account.id).select('*').maybeSingle();
+        if(changed.error||!changed.data) fail(409,'This proposal changed. Refresh and try again.');
+        return res.status(200).json({challenge:changed.data});
+      }
+      if(response==='counter' && isTarget && current.status==='pending') {
+        const proposed=Date.parse(String(body.scheduled_at??''));
+        if(!Number.isFinite(proposed)||proposed<now()+15*60000||proposed>Date.parse(current.created_at)+5*86400000) fail(400,'Offer a time at least 15 minutes away and within 5 days of the original invitation.');
+        const changed=await client.from('cb_scheduled_challenges').update({status:'countered',proposal_at:new Date(proposed).toISOString()}).eq('id',id).eq('target_id',account.id).eq('status','pending').select('*').maybeSingle();
+        if(changed.error||!changed.data) fail(409,'This invitation changed. Refresh and try again.');
+        return res.status(200).json({challenge:changed.data});
+      }
+      if(response==='reject' && (isHost||isTarget) && ['pending','countered','accepted'].includes(current.status)) {
+        const changed=await client.from('cb_scheduled_challenges').update({status:isHost?'cancelled':'rejected'}).eq('id',id).eq('status',current.status).eq(isHost?'host_id':'target_id',account.id).select('id').maybeSingle();
+        if(changed.error||!changed.data) fail(409,'This challenge changed. Refresh and try again.');
+        return res.status(200).json({ok:true});
+      }
+      fail(403,'You cannot respond to this challenge.');
+    }
+    if (action === 'schedule-launch') {
+      await requireFairPlayReady(client,account.id);
+      const id=String(body.id??''),row=one<any>(await client.from('cb_scheduled_challenges').select('*').eq('id',id).single());
+      if(row.status!=='accepted'||!row.target_id||![row.host_id,row.target_id].includes(account.id)) fail(403,'This scheduled challenge is not accepted.');
+      const due=Date.parse(row.scheduled_at);
+      if(now()<due-15*60000||now()>due+30*60000) fail(409,'Open the match from 15 minutes before until 30 minutes after its scheduled time.');
+      if(row.match_id) {
+        const existing=await client.from('cb_matches').select('*').eq('id',row.match_id).maybeSingle();
+        if(existing.error) fail(500,existing.error.message);
+        if(existing.data?.status==='waiting'&&Date.parse(existing.data.created_at)>now()-120000) return res.status(200).json({match:await matchView(client,existing.data)});
+        if(existing.data?.status==='active') return res.status(200).json({match:await matchView(client,existing.data)});
+        await client.from('cb_scheduled_challenges').update({match_id:null}).eq('id',id).eq('match_id',row.match_id);
+      }
+      const opponent=row.host_id===account.id?row.target_id:row.host_id;
+      const active=await client.from('cb_matches').select('id').eq('status','active').or(`white_id.eq.${account.id},black_id.eq.${account.id}`).limit(1);
+      if(active.error) fail(500,active.error.message); if(active.data?.length) fail(409,'Finish your active game first.');
+      const clock=tc(row.control);
+      const match=one<any>(await client.from('cb_matches').insert({host_id:account.id,white_id:account.id,invite_to:opponent,status:'waiting',code:code(),control:row.control,white_ms:clock.seconds*1000,black_ms:clock.seconds*1000,last_tick:new Date().toISOString(),white_cbr:account.profile.cbr,play_mode:row.wager_kind==='cbg'?'wager':row.wager_kind==='cbr'?'cbr_wager':'normal',wager_gold:row.wager_kind==='cbg'?row.wager_amount:0,wager_cbr:row.wager_kind==='cbr'?row.wager_amount:0,public_challenge:false}).select('*').single());
+      const claim=await client.from('cb_scheduled_challenges').update({match_id:match.id}).eq('id',id).eq('status','accepted').is('match_id',null).select('id').maybeSingle();
+      if(claim.error||!claim.data) {
+        await client.from('cb_matches').delete().eq('id',match.id).eq('status','waiting');
+        fail(409,'This challenge was opened elsewhere. Refresh to see the match.');
+      }
+      return res.status(200).json({match:await matchView(client,match)});
+    }
     if (action === 'search-players') {
       const query = String(body.query ?? '').trim().replace(/^@/, '').toLowerCase(); if (query.length < 2) return res.status(200).json({ players: [] });
       const r = await client.from('cb_profiles').select('user_id,username,display_name,avatar_url,country_code,cbr,gold_points,wins,losses,win_streak').neq('user_id', account.id).or(`username.ilike.%${query}%,display_name.ilike.%${query}%`).limit(10);
@@ -1665,8 +1757,10 @@ export default async function handler(req: Req, res: Res) {
         control=previous.control;
       }
       const clock = tc(control);
-      const playMode = body.play_mode === 'wager' && (target || publicChallenge) ? 'wager' : 'normal';
+      const playMode = ['wager','cbr_wager'].includes(String(body.play_mode)) && (target || publicChallenge) ? String(body.play_mode) : 'normal';
       const wagerGold = playMode === 'wager' ? Number(body.wager_gold) : 0;
+      const wagerCbr = playMode === 'cbr_wager' ? Number(body.wager_cbr) : 0;
+      if(playMode==='cbr_wager'&&(!Number.isInteger(wagerCbr)||wagerCbr<1||wagerCbr>100||Number(account.profile.cbr??0)<wagerCbr))fail(400,'Choose a CBR wager from 1 to 100 within your current rating.');
       if (playMode === 'wager' && (!Number.isInteger(wagerGold) || wagerGold < 1 || wagerGold > 10000)) fail(400, 'Choose a whole Gold wager from 1 to 10,000.');
       if (playMode === 'wager' && Number(account.profile.gold_points ?? 0) < wagerGold) fail(409, `You need ${wagerGold} Gold to create this wager.`);
       if (publicChallenge && target) fail(400, 'Choose one challenge audience.');
@@ -1693,8 +1787,8 @@ export default async function handler(req: Req, res: Res) {
       }
       const unqueued = await client.from('cb_match_queue').delete().eq('user_id', account.id).is('match_id', null);
       if (unqueued.error) fail(500, unqueued.error.message);
-      const match = one<any>(await client.from('cb_matches').insert({ host_id: account.id, white_id: account.id, invite_to: target, status: 'waiting', code: code(), control, white_ms: clock.seconds * 1000, black_ms: clock.seconds * 1000, last_tick: new Date().toISOString(), white_cbr: account.profile.cbr, play_mode: playMode, wager_gold: wagerGold, public_challenge: publicChallenge }).select('*').single());
-      if (publicChallenge) { const event = await client.from('cb_feed').insert({ user_id: account.id, kind: 'challenge', display_name: account.profile.display_name, content: `is looking for a ${clock.group.toLowerCase()} challenge · ${clock.label}${playMode === 'wager' ? ` · Wager ${wagerGold} Gold` : ''}.`, challenge_match_id: match.id, expires_at: new Date(now() + 120000).toISOString() }); if (event.error) { await client.from('cb_matches').delete().eq('id', match.id); fail(500, event.error.message); } }
+      const match = one<any>(await client.from('cb_matches').insert({ host_id: account.id, white_id: account.id, invite_to: target, status: 'waiting', code: code(), control, white_ms: clock.seconds * 1000, black_ms: clock.seconds * 1000, last_tick: new Date().toISOString(), white_cbr: account.profile.cbr, play_mode: playMode, wager_gold: wagerGold, wager_cbr:wagerCbr, public_challenge: publicChallenge }).select('*').single());
+      if (publicChallenge) { const event = await client.from('cb_feed').insert({ user_id: account.id, kind: 'challenge', display_name: account.profile.display_name, content: `is looking for a ${clock.group.toLowerCase()} challenge · ${clock.label}${playMode === 'wager' ? ` · Wager ${wagerGold} CBG` : playMode==='cbr_wager'?` · Wager ${wagerCbr} CBR`:''}.`, challenge_match_id: match.id, expires_at: new Date(now() + 120000).toISOString() }); if (event.error) { await client.from('cb_matches').delete().eq('id', match.id); fail(500, event.error.message); } }
       console.info('arena.room-created', { matchId: match.id, publicChallenge });
       return res.status(200).json({ match: await matchView(client, match), challengePublished: publicChallenge });
     }
@@ -1739,7 +1833,7 @@ export default async function handler(req: Req, res: Res) {
     if (action === 'state') {
       const [r, pending] = await Promise.all([
         client.from('cb_matches').select('*').eq('status', 'active').or(`white_id.eq.${account.id},black_id.eq.${account.id}`).order('created_at', { ascending: false }).limit(1).maybeSingle(),
-        client.from('cb_matches').select('id,host_id,control,code,created_at,play_mode,wager_gold,match_kind').eq('status', 'waiting').eq('invite_to', account.id).gt('created_at', new Date(now() - 120000).toISOString()).order('created_at', { ascending: false }).limit(10),
+        client.from('cb_matches').select('id,host_id,control,code,created_at,play_mode,wager_gold,wager_cbr,match_kind').eq('status', 'waiting').eq('invite_to', account.id).gt('created_at', new Date(now() - 120000).toISOString()).order('created_at', { ascending: false }).limit(10),
       ]);
       if (r.error || pending.error) fail(500, r.error?.message ?? pending.error?.message ?? 'Unable to load match state.');
       const current = r.data ? await finishExpiredMatch(client, r.data) : null;

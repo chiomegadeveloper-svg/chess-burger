@@ -963,8 +963,9 @@ export type MatchSummary = {
   ratingValue?: number;
   goldDelta?: number;
   goldPayout?: number;
-  playMode?: "normal" | "wager" | "queue" | "arena";
+  playMode?: "normal" | "wager" | "cbr_wager" | "queue" | "arena";
   wagerGold?: number;
+  wagerCbr?: number;
   control?: string;
   opponent?: ArenaPlayer;
   local?: boolean;
@@ -981,7 +982,7 @@ export function MatchResult({
   onRematchStarted?: (matchId: string) => void;
 }) {
   const [rematchOpen, setRematchOpen] = useState(false),
-    [rematchMode, setRematchMode] = useState<"normal" | "wager">("normal"),
+    [rematchMode, setRematchMode] = useState<"normal" | "wager" | "cbr_wager">("normal"),
     [rematchGold, setRematchGold] = useState(1),
     [rematchBusy, setRematchBusy] = useState(false),
     [rematchId, setRematchId] = useState(""),
@@ -1034,10 +1035,11 @@ export function MatchResult({
         target: result.opponent.user_id,
         play_mode: rematchMode,
         wager_gold: rematchMode === "wager" ? rematchGold : 0,
+        wager_cbr: rematchMode === "cbr_wager" ? rematchGold : 0,
         rematch_of: result.id,
       });
       setRematchId(data.match.id);
-      setRematchStatus(`${rematchMode === "wager" ? `${rematchGold} Gold wager` : "Normal rematch"} offered to ${result.opponent.display_name}.`);
+      setRematchStatus(`${rematchMode === "wager" ? `${rematchGold} CBG wager` : rematchMode === "cbr_wager" ? `${rematchGold} CBR wager` : "Normal rematch"} offered to ${result.opponent.display_name}.`);
     } catch (e) {
       setRematchStatus((e as Error).message);
     } finally {
@@ -1111,6 +1113,7 @@ export function MatchResult({
             </>
           )}
         </div>
+        {!result.aborted && result.playMode === "cbr_wager" && <p className="result-gold">{result.outcome === "draw" ? "CBR wager returned on draw" : result.outcome === "win" ? `Won up to ${result.wagerCbr ?? 0} CBR wager, included in your rating change` : `Lost up to ${result.wagerCbr ?? 0} CBR wager, included in your rating change`}</p>}
         {!result.aborted && !result.local && (result.goldDelta !== undefined || result.goldPayout !== undefined) && (
           <p className="result-gold">
             {result.playMode === "wager"
@@ -1160,16 +1163,17 @@ export function MatchResult({
                   <button type="button" className={rematchMode === "wager" ? "chosen" : ""} aria-pressed={rematchMode === "wager"} disabled={!!rematchId} onClick={() => setRematchMode("wager")}>
                     <Coins size={16} /><span><strong>Wager</strong><small>Both players stake equally</small></span>
                   </button>
+                  <button type="button" className={rematchMode === "cbr_wager" ? "chosen" : ""} aria-pressed={rematchMode === "cbr_wager"} disabled={!!rematchId} onClick={() => setRematchMode("cbr_wager")}><Swords size={16}/><span><strong>CBR wager</strong><small>Agreed rating stake</small></span></button>
                 </div>
-                {rematchMode === "wager" && !rematchId && (
-                  <label className="result-rematch-bet">Gold bet
-                    <input type="number" inputMode="numeric" min={1} max={Math.min(10000, result.player.gold_points)} value={rematchGold} onChange={(event) => setRematchGold(Math.max(0, Math.floor(Number(event.target.value) || 0)))} />
-                    <small>You have {result.player.gold_points} Gold.</small>
+                {rematchMode !== "normal" && !rematchId && (
+                  <label className="result-rematch-bet">{rematchMode === "wager" ? "CBG" : "CBR"} stake
+                    <input type="number" inputMode="numeric" min={1} max={rematchMode === "wager" ? Math.min(10000, result.player.gold_points) : Math.min(100,result.player.cbr)} value={rematchGold} onChange={(event) => setRematchGold(Math.max(0, Math.floor(Number(event.target.value) || 0)))} />
+                    <small>You have {rematchMode === "wager" ? result.player.gold_points : result.player.cbr} {rematchMode === "wager" ? "CBG" : "CBR"}.</small>
                   </label>
                 )}
                 {!rematchId && (
-                  <button type="button" className="gold-button wide" disabled={rematchBusy || (rematchMode === "wager" && (rematchGold < 1 || rematchGold > result.player.gold_points || rematchGold > 10000))} onClick={() => void offerRematch()}>
-                    {rematchBusy ? "Sending…" : rematchMode === "wager" ? `Offer ${rematchGold} Gold rematch` : "Offer normal rematch"}
+                  <button type="button" className="gold-button wide" disabled={rematchBusy || (rematchMode !== "normal" && (rematchGold < 1 || rematchGold > (rematchMode === "wager" ? Math.min(10000,result.player.gold_points) : Math.min(100,result.player.cbr))))} onClick={() => void offerRematch()}>
+                    {rematchBusy ? "Sending…" : rematchMode === "wager" ? `Offer ${rematchGold} CBG rematch` : rematchMode === "cbr_wager" ? `Offer ${rematchGold} CBR rematch` : "Offer normal rematch"}
                   </button>
                 )}
                 {rematchStatus && <p role="status">{rematchStatus}</p>}

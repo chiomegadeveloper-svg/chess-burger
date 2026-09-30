@@ -133,8 +133,9 @@ export type ArenaMatch = {
   gold_changes?: Record<string, number>;
   gold_payouts?: Record<string, number>;
   match_kind?: "standard" | "invasion";
-  play_mode?: "normal" | "wager" | "queue" | "arena";
+  play_mode?: "normal" | "wager" | "cbr_wager" | "queue" | "arena";
   wager_gold?: number;
+  wager_cbr?: number;
   public_challenge?: boolean;
   gold_funded?: boolean;
   territory_id?: string | null;
