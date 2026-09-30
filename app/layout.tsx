@@ -33,12 +33,22 @@ import "./feed-banner-shop.css";
 import "./v47.css";
 import "./grand-arena.css";
 import "./vanguard-card.css";
-import {APP_VERSION} from "./app-version";
 
 export const metadata: Metadata = {
-  title: `Chess Burger v${APP_VERSION} Public Beta`,
-  applicationName: `Chess Burger v${APP_VERSION} Public Beta`,
-  description: "Competitive chess, live.",
+  metadataBase: new URL("https://chessburger.site"),
+  title: "Chess Burger | Play Chess Online, vs CPU & Chess Puzzles",
+  applicationName: "Chess Burger",
+  description: "Play chess online, challenge the computer, solve chess puzzles and Chess Math quizzes, and join arenas and tournaments in Chess Burger.",
+  alternates: { canonical: "/" },
+  openGraph: {
+    type: "website",
+    siteName: "Chess Burger",
+    url: "/",
+    title: "Chess Burger | Play Chess Online, vs CPU & Chess Puzzles",
+    description: "Play chess online, challenge the computer, solve chess puzzles and Chess Math quizzes, and join arenas and tournaments in Chess Burger.",
+    images: ["/cburger_logo.png"],
+  },
+  twitter: { card: "summary", title: "Chess Burger | Play Chess Online, vs CPU & Chess Puzzles", description: "Play chess online, challenge the computer, solve chess puzzles and Chess Math quizzes, and join arenas and tournaments in Chess Burger.", images: ["/cburger_logo.png"] },
   manifest: "/manifest.webmanifest",
   verification: {
     google: "BpKi2gFy5TX5I_hDZ9zG2BDrM0KUrdLMk40B1jq-tKI",
