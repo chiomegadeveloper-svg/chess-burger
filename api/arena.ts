@@ -1583,14 +1583,32 @@ export default async function handler(req: Req, res: Res) {
     // Scheduled challenges are reservations. A match is created only when a player
     // opens the agreed window, so the existing two-minute room expiry still applies.
     if (action === 'schedule-list') {
-      const publicRows = await client.from('cb_scheduled_challenges').select('*').is('target_id', null).eq('status', 'pending').gt('scheduled_at', new Date(now()-30*60000).toISOString()).order('scheduled_at', {ascending:true}).limit(50);
-      const mine = await client.from('cb_scheduled_challenges').select('*').or(`host_id.eq.${account.id},target_id.eq.${account.id}`).in('status',['pending','countered','accepted']).gt('scheduled_at',new Date(now()-30*60000).toISOString()).order('scheduled_at',{ascending:true}).limit(50);
-      if (publicRows.error || mine.error) fail(503, 'Scheduled challenges are unavailable until the database update is applied.');
-      const rows = [...new Map([...(publicRows.data??[]),...(mine.data??[])].map((row:any)=>[row.id,row])).values()];
-      const names = await playerMap(client,rows.flatMap((row:any)=>[row.host_id,row.target_id].filter(Boolean)));
+      const cutoff=new Date(now()-30*60000).toISOString();
+      const publicRows = await client.from('cb_scheduled_challenges').select('*').is('target_id',null).eq('status','pending').gt('scheduled_at',cutoff).order('scheduled_at',{ascending:true}).limit(100);
+      const visibleRows = await client.from('cb_scheduled_challenges').select('*').eq('visibility','public').in('status',['pending','countered','accepted']).gt('scheduled_at',new Date(now()-5*86400000).toISOString()).order('scheduled_at',{ascending:true}).limit(100);
+      const missingVisibility=!!visibleRows.error && /visibility|schema cache|PGRST205|42703/i.test(String(visibleRows.error.message));
+      const mine = await client.from('cb_scheduled_challenges').select('*').or(`host_id.eq.${account.id},target_id.eq.${account.id}`).in('status',['pending','countered','accepted']).gt('scheduled_at',new Date(now()-5*86400000).toISOString()).order('scheduled_at',{ascending:true}).limit(100);
+      if(publicRows.error||mine.error||(visibleRows.error&&!missingVisibility)) fail(503,'Scheduled challenges are unavailable.');
+      const candidates=[...new Map([...(publicRows.data??[]),...(!missingVisibility?(visibleRows.data??[]):[]),...(mine.data??[])].map((row:any)=>[row.id,row])).values()];
+      const matchIds=candidates.map((row:any)=>row.match_id).filter(Boolean);
+      const liveMatches=matchIds.length?await client.from('cb_matches').select('id,status').in('id',matchIds):{data:[],error:null};
+      if(liveMatches.error) fail(503,'Live challenge status is unavailable.');
+      const matchStatus=new Map((liveMatches.data??[]).map((match:any)=>[match.id,match.status]));
+      const rows=candidates.filter((row:any)=>Date.parse(row.scheduled_at)>now()-30*60000||(row.status==='accepted'&&['waiting','active'].includes(String(matchStatus.get(row.match_id)))));
+      const names=await playerMap(client,rows.flatMap((row:any)=>[row.host_id,row.target_id].filter(Boolean)));
       const frames=await Promise.all([...names.values()].map(async (player:any)=>[player.user_id,player.active_avatar_frame_item?await activeAvatarFrame(client,player):null] as const));
       const frameById=new Map(frames);
-      return res.status(200).json({challenges:rows.map((row:any)=>({...row,host_name:names.get(row.host_id)?.display_name??'A player',host_avatar_url:names.get(row.host_id)?.avatar_url??'',host_frame_id:frameById.get(row.host_id)??null,target_name:row.target_id?names.get(row.target_id)?.display_name??'A player':null,target_avatar_url:row.target_id?names.get(row.target_id)?.avatar_url??'':'',target_frame_id:row.target_id?frameById.get(row.target_id)??null:null}))});
+      return res.status(200).json({challenges:rows.map((row:any)=>({...row,match_status:matchStatus.get(row.match_id)??null,host_name:names.get(row.host_id)?.display_name??'A player',host_avatar_url:names.get(row.host_id)?.avatar_url??'',host_frame_id:frameById.get(row.host_id)??null,target_name:row.target_id?names.get(row.target_id)?.display_name??'A player':null,target_avatar_url:row.target_id?names.get(row.target_id)?.avatar_url??'':'',target_frame_id:row.target_id?frameById.get(row.target_id)??null:null}))});
+    }
+    if (action === 'schedule-spectate') {
+      const id=String(body.id??'');
+      if(!/^[a-f0-9-]{36}$/i.test(id)) fail(400,'Choose a valid scheduled challenge.');
+      const schedule=one<any>(await client.from('cb_scheduled_challenges').select('*').eq('id',id).single());
+      if(schedule.status!=='accepted'||!schedule.match_id) fail(409,'This match has not started.');
+      if(schedule.host_id!==account.id&&schedule.target_id!==account.id&&schedule.visibility!=='public') fail(403,'This battle is private.');
+      const match=one<any>(await client.from('cb_matches').select('id,status,pgn,result,white_id,black_id,control').eq('id',schedule.match_id).single());
+      const players=await playerMap(client,[match.white_id,match.black_id].filter(Boolean));
+      return res.status(200).json({match:{id:match.id,status:match.status,pgn:match.pgn??'',result:match.result??null,control:match.control,white_name:players.get(match.white_id)?.display_name??'White',black_name:players.get(match.black_id)?.display_name??'Black'}});
     }
     if (action === 'schedule-create') {
       await requireFairPlayReady(client,account.id);
@@ -1612,7 +1630,10 @@ export default async function handler(req: Req, res: Res) {
       const pending=await client.from('cb_scheduled_challenges').select('id').eq('host_id',account.id).in('status',['pending','countered','accepted']).gt('scheduled_at',new Date(now()-30*60000).toISOString()).limit(5);
       if(pending.error) fail(503,'Scheduled challenges are unavailable until the database update is applied.');
       if((pending.data??[]).length>=5) fail(409,'You can have up to five upcoming scheduled challenges.');
-      const row=one<any>(await client.from('cb_scheduled_challenges').insert({host_id:account.id,target_id:target,control,scheduled_at:new Date(scheduled).toISOString(),status:'pending',wager_kind:wagerKind,wager_amount:wagerAmount}).select('*').single());
+      const payload={host_id:account.id,target_id:target,control,scheduled_at:new Date(scheduled).toISOString(),status:'pending',wager_kind:wagerKind,wager_amount:wagerAmount,visibility:audience==='anyone'?'public':'private'};
+      let created=await client.from('cb_scheduled_challenges').insert(payload).select('*').single();
+      if(created.error&&/visibility/i.test(String(created.error.message))){const {visibility,...legacy}=payload;created=await client.from('cb_scheduled_challenges').insert(legacy).select('*').single();}
+      const row=one<any>(created);
       return res.status(200).json({challenge:row});
     }
     if (action === 'schedule-respond') {
@@ -1640,6 +1661,11 @@ export default async function handler(req: Req, res: Res) {
         const changed=await client.from('cb_scheduled_challenges').update({status:'countered',proposal_at:new Date(proposed).toISOString()}).eq('id',id).eq('target_id',account.id).eq('status','pending').select('*').maybeSingle();
         if(changed.error||!changed.data) fail(409,'This invitation changed. Refresh and try again.');
         return res.status(200).json({challenge:changed.data});
+      }
+      if(response==='withdraw-counter' && isTarget && current.status==='countered') {
+        const changed=await client.from('cb_scheduled_challenges').update({status:'pending',proposal_at:null}).eq('id',id).eq('target_id',account.id).eq('status','countered').select('id').maybeSingle();
+        if(changed.error||!changed.data) fail(409,'This reschedule offer changed. Refresh and try again.');
+        return res.status(200).json({ok:true});
       }
       if(response==='reject' && (isHost||isTarget) && ['pending','countered','accepted'].includes(current.status)) {
         const changed=await client.from('cb_scheduled_challenges').update({status:isHost?'cancelled':'rejected'}).eq('id',id).eq('status',current.status).eq(isHost?'host_id':'target_id',account.id).select('id').maybeSingle();
