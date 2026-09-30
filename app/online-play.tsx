@@ -5,6 +5,7 @@ import { Search, Copy, Coins, Swords, X } from "lucide-react";
 import { arena } from "./arena-client";
 import { TIME_CONTROLS, type ArenaMatch, type ArenaPlayer, timeControl } from "./game-rules";
 import type { PlayerProfile } from "./supabase";
+import { isWagerEligible } from "./age-rules";
 import TimePicker from "./time-picker";
 import { Avatar } from "./match-board";
 import QrInput from "./qr-input";
@@ -39,6 +40,8 @@ export default function OnlinePlay({
   const cancelled = useRef(false),
     callback = useRef(onMatch);
   callback.current = onMatch;
+  const canWager = isWagerEligible(profile?.birthdate);
+  useEffect(() => { if (!canWager) setPlayMode("normal"); }, [canWager]);
   useEffect(() => {
     if (target) { setSelected(target); setAudience("username"); }
   }, [target?.user_id]);
@@ -149,6 +152,7 @@ export default function OnlinePlay({
   }
   function confirmPlayMode() {
     setError("");
+    if (playMode !== "normal" && !canWager) { setError("Wagers are available from age 14. Choose regular play."); setModeOpen(false); return; }
     if (target || challenge) {
       void create(playMode);
       return;
@@ -205,7 +209,7 @@ export default function OnlinePlay({
     );
   return (
     <section className="match-setup">
-      {modeOpen&&<div className="wager-overlay" role="presentation"><section className="wager-dialog" role="dialog" aria-modal="true" aria-labelledby="match-mode-title"><button className="wager-close" aria-label="Close match mode" onClick={()=>setModeOpen(false)}><X size={18}/></button><h2 id="match-mode-title">{target||challenge?"Choose invitation mode":"Choose Play Online mode"}</h2><p>{target||challenge?"Select how this invitation will be played before it is sent.":"Choose a regular match or find a player willing to match your Gold bet."}</p><div className="wager-mode-options"><button className={playMode==='normal'?'chosen':''} onClick={()=>setPlayMode('normal')}><Swords size={22}/><strong>Regular play</strong><small>No Gold stake · standard rewards</small></button><button className={playMode==='wager'?'chosen':''} onClick={()=>setPlayMode('wager')}><Coins size={22}/><strong>Wager play</strong><small>Both players stake equal Gold</small></button>{(target||challenge)&&<button className={playMode==='cbr_wager'?'chosen':''} onClick={()=>setPlayMode('cbr_wager')}><Swords size={22}/><strong>CBR wager</strong><small>Winner gains the agreed rating stake</small></button>}</div>{(playMode==='wager'||playMode==='cbr_wager')&&<label className="wager-amount">Your {playMode==="wager"?"CBG":"CBR"} wager<input type="number" inputMode="numeric" min={1} max={playMode==="wager"?Math.min(10000,profile.gold_points):Math.min(100,profile.cbr)} value={wagerGold} onChange={e=>setWagerGold(Math.max(0,Math.floor(Number(e.target.value)||0)))}/><small>You have {playMode==="wager"?profile.gold_points:profile.cbr} {playMode==="wager"?"CBG":"CBR"}. Both players must accept before play; draws have no wager transfer.</small></label>}<button className="gold-button wide" disabled={busy||((playMode==='wager'||playMode==='cbr_wager')&&(wagerGold<1||wagerGold>(playMode==='wager'?Math.min(10000,profile.gold_points):Math.min(100,profile.cbr))))} onClick={confirmPlayMode}>{busy?'Please wait…':target||challenge?(playMode==='wager'?`Offer ${wagerGold} CBG` : playMode==='cbr_wager'?`Offer ${wagerGold} CBR`:'Send regular invitation'):(playMode==='wager'?`Find ${wagerGold} Gold wager`:'Find regular opponent')}</button></section></div>}
+      {modeOpen&&<div className="wager-overlay" role="presentation"><section className="wager-dialog" role="dialog" aria-modal="true" aria-labelledby="match-mode-title"><button className="wager-close" aria-label="Close match mode" onClick={()=>setModeOpen(false)}><X size={18}/></button><h2 id="match-mode-title">{target||challenge?"Choose invitation mode":"Choose Play Online mode"}</h2><p>{target||challenge?"Select how this invitation will be played before it is sent.":"Choose a regular match or find a player willing to match your Gold bet."}</p><div className="wager-mode-options"><button className={playMode==='normal'?'chosen':''} onClick={()=>setPlayMode('normal')}><Swords size={22}/><strong>Regular play</strong><small>No Gold stake · standard rewards</small></button><button className={playMode==='wager'?'chosen':''} disabled={!canWager} onClick={()=>setPlayMode('wager')}><Coins size={22}/><strong>Wager play</strong><small>Both players stake equal Gold</small></button>{(target||challenge)&&<button className={playMode==='cbr_wager'?'chosen':''} disabled={!canWager} onClick={()=>setPlayMode('cbr_wager')}><Swords size={22}/><strong>CBR wager</strong><small>Winner gains the agreed rating stake</small></button>}</div>{!canWager&&<p role="note">Wagers are unavailable until your 14th birthday. Regular chess is available.</p>}{(playMode==='wager'||playMode==='cbr_wager')&&<label className="wager-amount">Your {playMode==="wager"?"CBG":"CBR"} wager<input type="number" inputMode="numeric" min={1} max={playMode==="wager"?Math.min(10000,profile.gold_points):Math.min(100,profile.cbr)} value={wagerGold} onChange={e=>setWagerGold(Math.max(0,Math.floor(Number(e.target.value)||0)))}/><small>You have {playMode==="wager"?profile.gold_points:profile.cbr} {playMode==="wager"?"CBG":"CBR"}. Both players must accept before play; draws have no wager transfer.</small></label>}<button className="gold-button wide" disabled={busy||((playMode==='wager'||playMode==='cbr_wager')&&(wagerGold<1||wagerGold>(playMode==='wager'?Math.min(10000,profile.gold_points):Math.min(100,profile.cbr))))} onClick={confirmPlayMode}>{busy?'Please wait…':target||challenge?(playMode==='wager'?`Offer ${wagerGold} CBG` : playMode==='cbr_wager'?`Offer ${wagerGold} CBR`:'Send regular invitation'):(playMode==='wager'?`Find ${wagerGold} Gold wager`:'Find regular opponent')}</button></section></div>}
       <div className="page-heading">
         <h1>{challenge ? "Challenge a Player" : target ? "Invite to a match" : "Play Online"}</h1>
         <span className="sample-label">{profile.cbr} CBR</span>
@@ -332,7 +336,7 @@ export default function OnlinePlay({
               : "Waiting for your opponent"}{" "}
             · {timeControl(room.control).label}
           </p>
-          {(room.play_mode === "wager" || room.play_mode === "cbr_wager") && room.invite_to === profile.user_id ? <div className="wager-answer-actions"><button className="gold-button" disabled={busy} onClick={() => void answerFoundWager(true)}>{busy ? "Processing…" : `Accept ${room.play_mode === "wager" ? room.wager_gold+" CBG" : room.wager_cbr+" CBR"} wager`}</button><button disabled={busy} onClick={() => void answerFoundWager(false)}>Reject Bet</button></div> : <button
+          {(room.play_mode === "wager" || room.play_mode === "cbr_wager") && room.invite_to === profile.user_id ? <div className="wager-answer-actions"><button className="gold-button" disabled={busy||!canWager} onClick={() => void answerFoundWager(true)}>{busy ? "Processing…" : `Accept ${room.play_mode === "wager" ? room.wager_gold+" CBG" : room.wager_cbr+" CBR"} wager`}</button><button disabled={busy} onClick={() => void answerFoundWager(false)}>Reject Bet</button></div> : <button
             disabled={busy}
             onClick={() => {
               setBusy(true);

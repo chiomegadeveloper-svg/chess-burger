@@ -30,6 +30,7 @@ import { profileRequest } from "./profile-client";
 import { toWebpUnder1Mb, toWebpUnder500Kb, validateImageFile } from "./media";
 import { AvatarFrameOverlay } from "./avatar-frame-art";
 import { isProfileComplete } from "./profile-completion";
+import { isValidBirthdate, isWagerEligible } from "./age-rules";
 import ProfilePhotoBucket from "./profile-photo-bucket";
 import Portfolio from "./portfolio";
 
@@ -49,6 +50,7 @@ const blankProfile = (id = "guest-device"): PlayerProfile => ({
   display_name: "New Player",
   bio: "",
   avatar_url: "",
+  birthdate: null,
   card_photo_url: "",
   country_code: "PH",
   featured_photos: [],
@@ -117,6 +119,7 @@ export default function Account({
   const [remember, setRemember] = useState(true),
     [registered, setRegistered] = useState<boolean | null>(null);
   const [editing, setEditing] = useState(false);
+  const [birthdateLocked, setBirthdateLocked] = useState(false);
   const [cardSummary, setCardSummary] = useState<{cbc:number;tickets:number;guild_name:string;guild_logo_url:string}|null>(null);
   useEffect(() => {
     if (!profile?.user_id || guest) {setCardSummary(null);return;}
@@ -180,6 +183,7 @@ export default function Account({
       if (u) setGuest(false);
       if (!u) {
         setRegistered(false);
+        setBirthdateLocked(false);
         setEditing(false);
         setProfile(null);
         setGuest(false);
@@ -215,13 +219,14 @@ export default function Account({
         ? { ...blankProfile(u.id), ...data }
         : newAccountProfile(u);
       const complete = isProfileComplete(loaded);
+      setBirthdateLocked(!!data?.birthdate);
       setRegistered(complete);
       setEditing(!complete);
       onMembershipChange?.(complete);
       if (!live) return;
       setProfile(loaded);
       onLoaded?.(loaded);
-      if (data) authStorage.setItem("cb-staff-profile", JSON.stringify(loaded));
+      if (data) authStorage.setItem("cb-staff-profile", JSON.stringify({...loaded,birthdate:undefined}));
       setLoading(false);
     }
     void getSupabase()
@@ -531,6 +536,7 @@ export default function Account({
           username: next.username,
           display_name: next.display_name,
           bio: next.bio,
+          birthdate: next.birthdate,
           avatar_url: next.avatar_url,
           country_code: next.country_code,
           featured_photos: next.featured_photos,
@@ -539,7 +545,7 @@ export default function Account({
         if (!data) throw new Error("Profile save returned no data.");
         const saved = { ...blankProfile(data.user_id), ...data };
         setProfile(saved);
-        authStorage.setItem("cb-staff-profile", JSON.stringify(saved));
+        authStorage.setItem("cb-staff-profile", JSON.stringify({...saved,birthdate:undefined}));
         onLoaded?.(saved);
         window.dispatchEvent(new Event("cb-profile-saved"));
         onSaved(saved);
@@ -599,6 +605,7 @@ export default function Account({
         throw Object.assign(new Error("Enter your name."), {
           code: "name_required",
         });
+      if (!isValidBirthdate(profile.birthdate)) throw Object.assign(new Error("Enter your birthday to continue."), { code: "birthday_required" });
       if (!profile.avatar_url?.trim())
         throw Object.assign(new Error("A profile picture is required to use Chess Burger."), {
           code: "avatar_required",
@@ -612,6 +619,7 @@ export default function Account({
         username,
         display_name: displayName,
         bio: profile.bio.trim(),
+        birthdate: profile.birthdate,
         avatar_url: profile.avatar_url,
         country_code: profile.country_code,
         featured_photos: profile.featured_photos,
@@ -622,9 +630,10 @@ export default function Account({
       const saved = { ...blankProfile(data.user_id), ...data };
       setProfile(saved);
       setRegistered(true);
+      setBirthdateLocked(true);
       setEditing(false);
       onMembershipChange?.(isProfileComplete(saved));
-      authStorage.setItem("cb-staff-profile", JSON.stringify(saved));
+      authStorage.setItem("cb-staff-profile", JSON.stringify({...saved,birthdate:undefined}));
       onSaved(saved);
       toast.success("Profile saved securely.");
     } catch (e) {
@@ -634,6 +643,8 @@ export default function Account({
           issue.code === "username_format" ||
           issue.code === "name_required" ||
           issue.code === "avatar_required" ||
+          issue.code === "birthday_required" ||
+          issue.code === "birthday_locked" ||
           issue.code === "country_required"
           ? (issue.message ?? "Check your profile details.")
           : `Profile could not be saved${issue.message ? ": " + issue.message : ". Please try again."}`,
@@ -652,6 +663,7 @@ export default function Account({
         username: next.username,
         display_name: next.display_name,
         bio: next.bio,
+        birthdate: next.birthdate,
         avatar_url: next.avatar_url,
         country_code: next.country_code,
         featured_photos: next.featured_photos,
@@ -980,11 +992,9 @@ export default function Account({
       {!profile.avatar_url&&<p className="auth-error" role="status">A profile picture is required. Upload one below and save your profile to unlock the app.</p>}
       {registered === false && (
         <div className="profile-registration-intro">
-          <span>STEP 2 OF 2</span>
-          <h2>Register your player profile</h2>
-          <p>
-            Add your name and unique username to unlock every Chess Burger page.
-          </p>
+          <span>ACCOUNT SETUP</span>
+          <h2>{profile.birthdate ? "Complete your player profile" : "Add your birthday"}</h2>
+          <p>Your birthday is required to enter Chess Burger. Players under 14 can play regular matches but cannot use wagers.</p>
         </div>
       )}
       <div className="account-toolbar">
@@ -1082,6 +1092,20 @@ export default function Account({
               setProfile({ ...profile, display_name: e.target.value })
             }
           />
+        </label>
+        <label>
+          Birthday
+          <input
+            type="date"
+            min="1900-01-01"
+            max={new Date().toISOString().slice(0,10)}
+            value={profile.birthdate ?? ""}
+            disabled={birthdateLocked}
+            required
+            onChange={(e) => setProfile({ ...profile, birthdate: e.target.value })}
+          />
+          <small>{birthdateLocked ? "Saved privately. Contact support if this date needs correction." : "Required before entering the app. Your birthday is private."}</small>
+          {profile.birthdate && !isWagerEligible(profile.birthdate) && <small>Wagers are unavailable until your 14th birthday.</small>}
         </label>
         <label>
           Country

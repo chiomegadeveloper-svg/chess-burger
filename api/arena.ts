@@ -377,6 +377,22 @@ async function signedIn(client: Db, req: Req) {
   const profile = one<any>(profileResult);
   return { id: user.id, profile };
 }
+function overWagerAge(birthdate: unknown) {
+  const value=String(birthdate??'');
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(value))return false;
+  const today=new Date(),cutoff=new Date(Date.UTC(today.getUTCFullYear()-14,today.getUTCMonth(),today.getUTCDate()));
+  return value<=cutoff.toISOString().slice(0,10);
+}
+async function requireWagerAge(client:Db,playerIds:Array<string|null|undefined>,actorId:string) {
+  const ids=[...new Set(playerIds.filter((id):id is string=>!!id))];
+  const result=await client.from('cb_profile_birthdays').select('user_id,birthdate').in('user_id',ids);
+  if(result.error)fail(503,'Birthday verification is unavailable. Wagers are temporarily disabled.');
+  const birthday=new Map((result.data??[]).map((row:any)=>[row.user_id,row.birthdate]));
+  if(ids.includes(actorId)&&!overWagerAge(birthday.get(actorId)))
+    fail(403,'Wagers are available only to players aged 14 or older with a saved birthday.');
+  if(ids.some(id=>!overWagerAge(birthday.get(id))))
+    fail(409,'This wager cannot be offered because a player is not eligible.');
+}
 async function activeAvatarFrame(client: Db, profile: any) {
   const itemId = String(profile.active_avatar_frame_item ?? '');
   if (!/^af-(basic|premium)-(10|[1-9])-[a-f0-9]{32}$/.test(itemId)) return null;
@@ -571,7 +587,7 @@ async function publicFeed(client: Db) {
       feed_banner: announcement ? '' : feedBanner,
       supporter_tier: announcement ? '' : feedBanner==='premium-supporter'&&premiumAllowed?'premium':supporterTier?'app_donor':'',
       guild_name: guild?.name ?? '', guild_logo_url: guild?.logo_url ?? '',
-      play_mode: match?.play_mode ?? 'normal', wager_gold: Number(match?.wager_gold ?? 0),
+      play_mode: match?.play_mode ?? 'normal', wager_gold: Number(match?.wager_gold ?? 0), wager_cbr: Number(match?.wager_cbr ?? 0),
     };
   }) };
 }
@@ -696,6 +712,7 @@ async function queuedMatch(client: Db, account: any, controlId: string, requeste
   const clock = tc(controlId);
   const playMode: 'normal' | 'wager' = requestedMode === 'wager' ? 'wager' : 'normal';
   const wagerGold = playMode === 'wager' ? Number(requestedWager) : 0;
+  if(playMode==='wager') await requireWagerAge(client,[account.id],account.id);
   if (playMode === 'wager' && (!Number.isInteger(wagerGold) || wagerGold < 1 || wagerGold > 10000)) fail(400, 'Choose a whole Gold wager from 1 to 10,000.');
   if (playMode === 'wager' && Number(account.profile.gold_points ?? 0) < wagerGold) fail(409, `You need ${wagerGold} Gold to search for this wager.`);
   const compatible = Object.entries(TIME).filter(([, value]) => value.group === clock.group).map(([id]) => queueTicket(id, playMode, wagerGold));
@@ -818,7 +835,10 @@ export default async function handler(req: Req, res: Res) {
     // The app refreshes this on sign-in to obtain the authoritative profile.
     // Keep it as a first-class migration action rather than falling through to
     // a 404 on every page load.
-    if (action === 'me') return res.status(200).json({ profile: { ...account.profile, ocbr: Number(account.profile.ocbr ?? 88), avatar_frame_id: await activeAvatarFrame(client,account.profile) }, rank: await playerRank(client, account.profile) });
+    if (action === 'me') {
+      const birthday=await client.from('cb_profile_birthdays').select('birthdate').eq('user_id',account.id).maybeSingle();
+      return res.status(200).json({ profile: { ...account.profile, birthdate: birthday.error ? null : birthday.data?.birthdate??null, ocbr: Number(account.profile.ocbr ?? 88), avatar_frame_id: await activeAvatarFrame(client,account.profile) }, rank: await playerRank(client, account.profile) });
+    }
     if (action === 'agreement-accept') {
       if (body.version !== '2026-09-27') fail(400, 'Please review the current End User Agreement.');
       const accepted = await client.from('cb_profiles').update({agreement_version:'2026-09-27',agreement_accepted_at:new Date().toISOString()}).eq('user_id',account.id).select('*').single();
@@ -1627,6 +1647,7 @@ export default async function handler(req: Req, res: Res) {
         const person=await client.from('cb_profiles').select('user_id').eq('user_id',target).maybeSingle();
         if(person.error||!person.data) fail(404,'Player not found.');
       }
+      if(wagerKind!=='none') await requireWagerAge(client,[account.id,target],account.id);
       const pending=await client.from('cb_scheduled_challenges').select('id').eq('host_id',account.id).in('status',['pending','countered','accepted']).gt('scheduled_at',new Date(now()-30*60000).toISOString()).limit(5);
       if(pending.error) fail(503,'Scheduled challenges are unavailable until the database update is applied.');
       if((pending.data??[]).length>=5) fail(409,'You can have up to five upcoming scheduled challenges.');
@@ -1641,6 +1662,7 @@ export default async function handler(req: Req, res: Res) {
       const current=one<any>(await client.from('cb_scheduled_challenges').select('*').eq('id',id).single());
       if(Date.parse(current.scheduled_at)+30*60000<=now()) fail(409,'This scheduled challenge has expired.');
       const isHost=current.host_id===account.id,isTarget=current.target_id===account.id;
+      if(current.wager_kind!=='none'&&['join','accept','counter'].includes(response)) await requireWagerAge(client,[current.host_id,current.target_id,account.id],account.id);
       if((response==='join'||response==='accept')&&current.wager_kind!=='none'&&Number(account.profile[current.wager_kind==='cbg'?'gold_points':'cbr']??0)<current.wager_amount)fail(409,'You do not have enough CBG or CBR for this wager.');
       if(response==='join' && !current.target_id && current.status==='pending' && !isHost) {
         const changed=await client.from('cb_scheduled_challenges').update({target_id:account.id,status:'accepted'}).eq('id',id).is('target_id',null).eq('status','pending').select('*').maybeSingle();
@@ -1687,6 +1709,7 @@ export default async function handler(req: Req, res: Res) {
         if(existing.data?.status==='active') return res.status(200).json({match:await matchView(client,existing.data)});
         await client.from('cb_scheduled_challenges').update({match_id:null}).eq('id',id).eq('match_id',row.match_id);
       }
+      if(row.wager_kind!=='none') await requireWagerAge(client,[row.host_id,row.target_id],account.id);
       const opponent=row.host_id===account.id?row.target_id:row.host_id;
       const active=await client.from('cb_matches').select('id').eq('status','active').or(`white_id.eq.${account.id},black_id.eq.${account.id}`).limit(1);
       if(active.error) fail(500,active.error.message); if(active.data?.length) fail(409,'Finish your active game first.');
@@ -1788,6 +1811,7 @@ export default async function handler(req: Req, res: Res) {
       const playMode = ['wager','cbr_wager'].includes(String(body.play_mode)) && (target || publicChallenge) ? String(body.play_mode) : 'normal';
       const wagerGold = playMode === 'wager' ? Number(body.wager_gold) : 0;
       const wagerCbr = playMode === 'cbr_wager' ? Number(body.wager_cbr) : 0;
+      if(playMode!=='normal') await requireWagerAge(client,[account.id,target],account.id);
       if(playMode==='cbr_wager'&&(!Number.isInteger(wagerCbr)||wagerCbr<1||wagerCbr>100||Number(account.profile.cbr??0)<wagerCbr))fail(400,'Choose a CBR wager from 1 to 100 within your current rating.');
       if (playMode === 'wager' && (!Number.isInteger(wagerGold) || wagerGold < 1 || wagerGold > 10000)) fail(400, 'Choose a whole Gold wager from 1 to 10,000.');
       if (playMode === 'wager' && Number(account.profile.gold_points ?? 0) < wagerGold) fail(409, `You need ${wagerGold} Gold to create this wager.`);
@@ -1823,6 +1847,7 @@ export default async function handler(req: Req, res: Res) {
     if (action === 'accept-challenge') {
       await requireFairPlayReady(client,account.id);
       const id = String(body.id ?? ''), match = await readMatch(client, id); if (match.white_id === account.id) fail(400, 'You cannot accept your own challenge.');
+      if(['wager','cbr_wager'].includes(match.play_mode)) await requireWagerAge(client,[match.white_id,account.id],account.id);
       if (match.status !== 'waiting' || match.invite_to || Date.parse(match.created_at) <= now() - 120000) fail(404, 'This challenge has expired or was accepted.');
       const event = await client.from('cb_feed').select('id').eq('challenge_match_id', id).eq('kind', 'challenge').gt('expires_at', new Date().toISOString()).maybeSingle(); if (event.error) fail(500, event.error.message); if (!event.data) fail(404, 'This challenge has expired or was accepted.');
       const changed = await client.rpc('cb_activate_gold_match', { p_match_id: id, p_acceptor_id: account.id }); if (changed.error) fail(/Gold|accepted|available/i.test(changed.error.message) ? 409 : 500, changed.error.message);
@@ -1839,6 +1864,7 @@ export default async function handler(req: Req, res: Res) {
       const match = one<any>(await client.from('cb_matches').select('*').eq('code', roomCode).eq('status', 'waiting').maybeSingle());
       if (match.white_id === account.id) fail(400, 'You cannot join your own room.');
       if (match.invite_to && match.invite_to !== account.id) fail(403, 'This invitation belongs to another player.');
+      if(['wager','cbr_wager'].includes(match.play_mode)) await requireWagerAge(client,[match.white_id,account.id],account.id);
       if (Date.parse(match.created_at) <= now() - 120000) fail(410, 'This invitation has expired.');
       if (match.match_kind === 'invasion') {
         const accepted = await client.rpc('cb_accept_invasion', { p_match_id: match.id, p_owner_id: account.id });

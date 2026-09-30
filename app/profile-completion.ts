@@ -1,8 +1,9 @@
+import { isValidBirthdate } from "./age-rules";
 import type { PlayerProfile } from "./supabase";
 
 type RegistrationProfile = Pick<
   PlayerProfile,
-  "user_id" | "username" | "display_name" | "avatar_url" | "country_code"
+  "user_id" | "username" | "display_name" | "avatar_url" | "country_code" | "birthdate"
 >;
 
 export function isProfileComplete(
@@ -12,6 +13,7 @@ export function isProfileComplete(
   const username = profile.username.replace(/^@+/, "").trim().toLowerCase();
   return (
     /^[a-z0-9_]{3,24}$/.test(username) &&
+    isValidBirthdate(profile.birthdate) &&
     profile.display_name.trim().length > 0 &&
     profile.avatar_url.trim().length > 0 &&
     profile.avatar_url.includes(`/storage/v1/object/public/cb-profile-media/${profile.user_id}/avatar-`) &&

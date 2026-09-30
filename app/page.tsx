@@ -258,7 +258,7 @@ function AppPage() {
       let current = data;
       try {
         const live = await arena<{ profile: PlayerProfile }>("me");
-        current = live.profile;
+        current = { ...live.profile, birthdate: data.birthdate };
       } catch {}
       const complete = isProfileComplete(current);
       setMember(complete);
@@ -268,7 +268,7 @@ function AppPage() {
         current = { ...current, ocbr: Math.max(0, Number(stored) || 88) };
       setProfile(current);
       setLocalOcbr(current.ocbr ?? 88);
-      authStorage.setItem("cb-staff-profile", JSON.stringify(current));
+      authStorage.setItem("cb-staff-profile", JSON.stringify({...current,birthdate:undefined}));
     } catch {}
   }, []);
   const openMatch = (id: string) => {
@@ -323,7 +323,7 @@ function AppPage() {
       setProfile(updated);
       if (profile.user_id === "guest-device")
         localStorage.setItem("cb-guest-profile", JSON.stringify(updated));
-      else authStorage.setItem("cb-staff-profile", JSON.stringify(updated));
+      else authStorage.setItem("cb-staff-profile", JSON.stringify({...updated,birthdate:undefined}));
     }
     toast.success("Offline OCBR " + (delta >= 0 ? "+" : "") + delta);
     return delta;
@@ -844,7 +844,7 @@ function AppPage() {
           <section className="profile-page registration-gate">
             <div className="page-heading">
               <h1>Complete your registration</h1>
-              <p>Your name, username, country, and profile photo are required before you can enter Chess Burger.</p>
+              <p>Your birthday, name, username, country, and profile photo are required before you can enter Chess Burger.</p>
             </div>
             <Account
               registrationOnly

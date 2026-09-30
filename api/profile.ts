@@ -17,6 +17,13 @@ function avatarPath(client: any, userId: string, value: unknown) {
 function list(value: unknown, limit: number) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string').slice(0, limit) : [];
 }
+function validBirthdate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year,month,day]=value.split('-').map(Number);
+  const date=new Date(Date.UTC(year,month-1,day));
+  return year>=1900 && date.getUTCFullYear()===year && date.getUTCMonth()===month-1 &&
+    date.getUTCDate()===day && value<=new Date().toISOString().slice(0,10);
+}
 const BOBBIE_OWNER_ID = 'b8746953-d532-4f7e-83f5-987192ee7b0c';
 
 async function recoverStoredAvatar(client: any, userId: string) {
@@ -59,6 +66,9 @@ export default async function handler(req: Req, res: Res) {
     if (authError || !user) return res.status(401).json({ error: 'Your login expired. Sign in again.' });
     const existing = await client.from('cb_profiles').select('*').eq('user_id', user.id).maybeSingle();
     if (existing.error) throw existing.error;
+    const birthdayRecord = await client.from('cb_profile_birthdays').select('birthdate').eq('user_id',user.id).maybeSingle();
+    if (birthdayRecord.error) throw birthdayRecord.error;
+    const storedBirthdate = String(birthdayRecord.data?.birthdate ?? '');
     if (req.method === 'GET') {
       let row = existing.data;
       if (row) {
@@ -81,11 +91,15 @@ export default async function handler(req: Req, res: Res) {
           if (!recovered.error) row = recovered.data;
         }
       }
-      return res.status(200).json({ profile: await framedView(client,row) });
+      return res.status(200).json({ profile: row ? { ...(await framedView(client,row)), birthdate: storedBirthdate || null } : null });
     }
 
     const input = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {};
     if (JSON.stringify(input).length > 30000) return res.status(413).json({ error: 'Profile is too large.' });
+    const enteredBirthdate = String(input.birthdate ?? '').trim();
+    if (storedBirthdate && enteredBirthdate && enteredBirthdate !== storedBirthdate) return res.status(409).json({ error: 'Birthday is already saved. Contact support if it needs correction.', code: 'birthday_locked' });
+    if (!storedBirthdate && !validBirthdate(enteredBirthdate)) return res.status(400).json({ error: 'Enter a valid birthday before using Chess Burger.', code: 'birthday_required' });
+    const birthdate = storedBirthdate || enteredBirthdate;
     const username = String(input.username ?? '').replace(/^@+/, '').trim().toLowerCase();
     const displayName = String(input.display_name ?? '').trim();
     if (!/^[a-z0-9_]{3,24}$/.test(username)) return res.status(400).json({ error: 'Username must use 3–24 lowercase letters, numbers, or underscores.', code: 'username_format' });
@@ -115,7 +129,11 @@ export default async function handler(req: Req, res: Res) {
     const saved = await client.from('cb_profiles').upsert(payload, { onConflict: 'user_id' }).select('*').single();
     if (saved.error?.code === '23505') return res.status(409).json({ error: 'That username is already taken. Choose another one.', code: 'username_taken' });
     if (saved.error) throw saved.error;
-    return res.status(200).json({ profile: await framedView(client,saved.data) });
+    if (!storedBirthdate) {
+      const inserted = await client.from('cb_profile_birthdays').insert({user_id:user.id,birthdate});
+      if (inserted.error) throw inserted.error;
+    }
+    return res.status(200).json({ profile: { ...(await framedView(client,saved.data)), birthdate } });
   } catch (error) {
     console.error('Chess Burger profile request failed', error);
     return res.status(500).json({ error: 'Profile could not be loaded or saved. Please retry.', code: 'profile_save_failed' });

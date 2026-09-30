@@ -26,6 +26,7 @@ import { levelFor } from "./cbr";
 import type { ArenaMatch, ArenaPlayer } from "./game-rules";
 import { feedBanner, isGraphicBanner, PREMIUM_SUPPORTER_ID } from "./feed-banner-catalog";
 import { AvatarFrameOverlay } from "./avatar-frame-art";
+import { isWagerEligible } from "./age-rules";
 import DailyRewards from "./daily-rewards";
 import ScheduledChallenges from "./scheduled-challenges";
 import {OnlineTrainings} from "./online-training";
@@ -34,7 +35,7 @@ import "./arena-champion-feed.css";
 import "./guild-feed.css";
 import "./graphic-feed-banners.css";
 import "./premium-banner.css";
-type CommunityEvent = FeedEvent & { origin?: "arena" };
+type CommunityEvent = FeedEvent & { origin?: "arena"; play_mode?:string; wager_gold?:number; wager_cbr?:number };
 type OnlinePlayer = ArenaPlayer & { available: boolean };
 
 type FeedTab =
@@ -664,11 +665,13 @@ export default function CommunityFeed({
               </div>
               <button
                 className="gold-button"
-                disabled={accepting !== null || event.user_id === userId}
+                disabled={accepting !== null || event.user_id === userId || (["wager","cbr_wager"].includes(event.play_mode??"") && !isWagerEligible(profile?.birthdate))}
                 onClick={() => void acceptChallenge(event)}
               >
                 {event.user_id === userId
                   ? "Your challenge"
+                  : ["wager","cbr_wager"].includes(event.play_mode??"") && !isWagerEligible(profile?.birthdate)
+                    ? "Wager unavailable under 14"
                   : accepting === event.id
                     ? "Joining…"
                     : "Accept challenge"}
@@ -677,8 +680,8 @@ export default function CommunityFeed({
           ))}
         </section>
       )}
-      {tab === "challenge" && <ScheduledChallenges userId={profile?.user_id} onMatch={onMatch}/>}
-      {tab === "recent" && <ScheduledChallenges userId={profile?.user_id} onMatch={onMatch} compact/>}
+      {tab === "challenge" && <ScheduledChallenges userId={profile?.user_id} onMatch={onMatch} canWager={isWagerEligible(profile?.birthdate)}/>}
+      {tab === "recent" && <ScheduledChallenges userId={profile?.user_id} onMatch={onMatch} canWager={isWagerEligible(profile?.birthdate)} compact/>}
       {status && (
         <p className="account-note" role="status">
           {status}

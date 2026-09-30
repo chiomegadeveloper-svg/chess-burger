@@ -17,7 +17,7 @@ export type ScheduledChallenge={
 };
 const dateTime=(value:string)=>new Date(value).toLocaleString(undefined,{dateStyle:"medium",timeStyle:"short"});
 const localValue=(value:string)=>{const d=new Date(value);return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,16)};
-export default function ScheduledChallenges({userId,onMatch,compact=false}:{userId?:string|null;onMatch:(id:string)=>void;compact?:boolean}){
+export default function ScheduledChallenges({userId,onMatch,compact=false,canWager=true}:{userId?:string|null;onMatch:(id:string)=>void;compact?:boolean;canWager?:boolean}){
   const [watchId,setWatchId]=useState<string|null>(null),[watchMatch,setWatchMatch]=useState<{status:string;pgn:string;result:string|null;white_name:string;black_name:string;control:string}|null>(null),[watchError,setWatchError]=useState(""),[items,setItems]=useState<ScheduledChallenge[]>([]),[error,setError]=useState(""),[busy,setBusy]=useState(""),[counter,setCounter]=useState<Record<string,string>>({}),[hoverUser,setHoverUser]=useState<string|null>(null),[confirmWager,setConfirmWager]=useState<ScheduledChallenge|null>(null);
   const hoverTimer=useRef<ReturnType<typeof setTimeout>|null>(null);
   useEffect(()=>()=>{if(hoverTimer.current)clearTimeout(hoverTimer.current)},[]);
@@ -59,13 +59,14 @@ export default function ScheduledChallenges({userId,onMatch,compact=false}:{user
           </button>:<span className="scheduled-avatar scheduled-open" aria-label="Waiting for a challenger">?</span>}
         </div>
         <div className="scheduled-actions">
-          {!host&&!item.target_id&&item.status==="pending"&&<button disabled={!!busy} onClick={()=>item.wager_kind==="none"?void action(item,"join"):setConfirmWager(item)}>{item.wager_kind==="none"?"Accept slot":`Review ${wager}`}</button>}
-          {target&&item.status==="pending"&&<><button disabled={!!busy} onClick={()=>item.wager_kind==="none"?void action(item,"accept"):setConfirmWager(item)}>{item.wager_kind==="none"?"Accept invitation":`Review ${wager}`}</button><label>Offer new time<input type="datetime-local" min={localValue(new Date(Date.now()+15*60000).toISOString())} max={localValue(new Date(Date.parse(item.created_at)+5*86400000).toISOString())} value={counter[item.id]??""} onChange={e=>setCounter(v=>({...v,[item.id]:e.target.value}))}/></label><button disabled={!!busy||!counter[item.id]} onClick={()=>void action(item,"counter")}>Offer reschedule</button><button disabled={!!busy} onClick={()=>void action(item,"reject")}>Decline invitation</button></>}
+          {item.wager_kind!=="none"&&!canWager&&<span className="scheduled-age-note">Wagers require age 14+</span>}
+          {!host&&!item.target_id&&item.status==="pending"&&<button disabled={!!busy||(item.wager_kind!=="none"&&!canWager)} onClick={()=>item.wager_kind==="none"?void action(item,"join"):setConfirmWager(item)}>{item.wager_kind==="none"?"Accept slot":`Review ${wager}`}</button>}
+          {target&&item.status==="pending"&&<><button disabled={!!busy||(item.wager_kind!=="none"&&!canWager)} onClick={()=>item.wager_kind==="none"?void action(item,"accept"):setConfirmWager(item)}>{item.wager_kind==="none"?"Accept invitation":`Review ${wager}`}</button><label>Offer new time<input type="datetime-local" min={localValue(new Date(Date.now()+15*60000).toISOString())} max={localValue(new Date(Date.parse(item.created_at)+5*86400000).toISOString())} value={counter[item.id]??""} onChange={e=>setCounter(v=>({...v,[item.id]:e.target.value}))}/></label><button disabled={!!busy||!counter[item.id]||(item.wager_kind!=="none"&&!canWager)} onClick={()=>void action(item,"counter")}>Offer reschedule</button><button disabled={!!busy} onClick={()=>void action(item,"reject")}>Decline invitation</button></>}
           {target&&item.status==="countered"&&<><button disabled={!!busy} onClick={()=>void action(item,"withdraw-counter")}>Cancel reschedule offer</button><button disabled={!!busy} onClick={()=>void action(item,"reject")}>Decline invitation</button></>}
-          {host&&item.status==="countered"&&<><button disabled={!!busy} onClick={()=>void action(item,"accept")}>Agree to new time</button><button disabled={!!busy} onClick={()=>void action(item,"reject")}>Reject offer</button></>}
+          {host&&item.status==="countered"&&<><button disabled={!!busy||(item.wager_kind!=="none"&&!canWager)} onClick={()=>void action(item,"accept")}>Agree to new time</button><button disabled={!!busy} onClick={()=>void action(item,"reject")}>Reject offer</button></>}
           {host&&item.status==="pending"&&<button disabled={!!busy} onClick={()=>void action(item,"reject")}>Cancel</button>}
           {(host||target)&&item.status==="accepted"&&!item.match_id&&<button disabled={!!busy} onClick={()=>void action(item,"reject")}>Cancel challenge</button>}
-          {canOpen&&<button disabled={!!busy} onClick={()=>void action(item,"launch")}>Open match</button>}
+          {canOpen&&<button disabled={!!busy||(item.wager_kind!=="none"&&!canWager)} onClick={()=>void action(item,"launch")}>Open match</button>}
           {item.status==="accepted"&&item.match_id&&["waiting","active"].includes(item.match_status??"")&&<button onClick={()=>{setWatchMatch(null);setWatchError("");setWatchId(item.id)}}>Watch live</button>}
         </div>
       </article>
