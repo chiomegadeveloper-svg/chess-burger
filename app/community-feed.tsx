@@ -27,6 +27,7 @@ import type { ArenaMatch, ArenaPlayer } from "./game-rules";
 import { feedBanner, isGraphicBanner, PREMIUM_SUPPORTER_ID } from "./feed-banner-catalog";
 import { AvatarFrameOverlay } from "./avatar-frame-art";
 import DailyRewards from "./daily-rewards";
+import ScheduledChallenges from "./scheduled-challenges";
 import {OnlineTrainings} from "./online-training";
 import FeedCardSnapshot from "./feed-card-snapshot";
 import "./arena-champion-feed.css";
@@ -37,7 +38,7 @@ type CommunityEvent = FeedEvent & { origin?: "arena" };
 type OnlinePlayer = ArenaPlayer & { available: boolean };
 
 type FeedTab =
-  "recent" | "popular" | "training" | "announcement" | "online" | "rewards";
+  "recent" | "popular" | "challenge" | "training" | "announcement" | "online" | "rewards";
 const PAGE_SIZE = 10,
   ONLINE_PAGE_SIZE = 60;
 const labels: Record<string, string> = {
@@ -309,11 +310,8 @@ export default function CommunityFeed({
     if (tab === "announcement")
       rows = rows.filter((e) => e.kind === "announcement");
     if (tab === "popular")
-      rows.sort(
-        (a, b) =>
-          b.heart_count - a.heart_count ||
-          Date.parse(b.created_at) - Date.parse(a.created_at),
-      );
+      rows.sort((a,b)=>b.heart_count-a.heart_count||Date.parse(b.created_at)-Date.parse(a.created_at));
+    if (tab === "challenge") rows = [];
     if (tab === "recent")
       rows.sort(
         (a, b) =>
@@ -329,7 +327,7 @@ export default function CommunityFeed({
     }
     setEvents(rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE));
     setStatus(
-      rows.length || all.some((e) => e.kind === "challenge")
+      tab === "challenge" || rows.length || all.some((e) => e.kind === "challenge")
         ? ""
         : localFeed.status === "rejected"
           ? "Community activity is temporarily unavailable."
@@ -538,6 +536,8 @@ export default function CommunityFeed({
             ? "Announcements"
             : tab === "online"
               ? "Online players"
+              : tab === "challenge"
+                ? "Challenges"
               : tab === "rewards"
                 ? "Daily Rewards"
                 : "Community feed"}
@@ -547,6 +547,8 @@ export default function CommunityFeed({
             ? "Official updates"
             : tab === "online"
               ? `${onlineCount} online`
+              : tab === "challenge"
+                ? "Open and scheduled"
               : tab === "rewards"
                 ? "7-day login streak"
                 : "Latest 50"}
@@ -580,12 +582,13 @@ export default function CommunityFeed({
             {onlineCount}
           </span>
         </button>
+        <button role="tab" aria-selected={tab === "popular"} onClick={() => selectTab("popular")}>Popular</button>
         <button
           role="tab"
-          aria-selected={tab === "popular"}
-          onClick={() => selectTab("popular")}
+          aria-selected={tab === "challenge"}
+          onClick={() => selectTab("challenge")}
         >
-          Popular
+          Challenge
         </button>
         <button
           role="tab"
@@ -632,7 +635,7 @@ export default function CommunityFeed({
           </b>
         </button>
       )}
-      {tab === "recent" && challenges.length > 0 && (
+      {tab === "challenge" && challenges.length > 0 && (
         <section className="pinned-challenges" aria-label="Open challenges">
           <h2>Open challenges</h2>
           {challenges.map((event) => (
@@ -664,6 +667,8 @@ export default function CommunityFeed({
           ))}
         </section>
       )}
+      {tab === "challenge" && <ScheduledChallenges userId={profile?.user_id} onMatch={onMatch}/>}
+      {tab === "recent" && <ScheduledChallenges userId={profile?.user_id} onMatch={onMatch} compact/>}
       {status && (
         <p className="account-note" role="status">
           {status}

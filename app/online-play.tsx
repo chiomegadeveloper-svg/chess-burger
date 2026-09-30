@@ -23,16 +23,18 @@ export default function OnlinePlay({
   challenge?: boolean;
 }) {
   const [control, setControl] = useState("10+0"),
+    [scheduledAt,setScheduledAt]=useState(""),
+    [scheduledDone,setScheduledDone]=useState(false),
     [searching, setSearching] = useState(false),
     [room, setRoom] = useState<ArenaMatch | null>(null),
     [query, setQuery] = useState(""),
     [results, setResults] = useState<ArenaPlayer[]>([]),
     [selected, setSelected] = useState<ArenaPlayer | null>(target ?? null),
-    [audience, setAudience] = useState<"username" | "anyone" | null>(target ? "username" : null),
+    [audience, setAudience] = useState<"username" | "anyone" | "scheduled-anyone" | "scheduled-user" | null>(target ? "username" : null),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [modeOpen, setModeOpen] = useState(false),
-    [playMode, setPlayMode] = useState<"normal"|"wager">("normal"),
+    [playMode, setPlayMode] = useState<"normal"|"wager"|"cbr_wager">("normal"),
     [wagerGold, setWagerGold] = useState(1);
   const cancelled = useRef(false),
     callback = useRef(onMatch);
@@ -41,7 +43,7 @@ export default function OnlinePlay({
     if (target) { setSelected(target); setAudience("username"); }
   }, [target?.user_id]);
   useEffect(() => {
-    if (!challenge || audience !== "username" || selected || query.trim().length < 2) { setResults([]); return; }
+    if (!challenge || audience !== "username" && audience !== "scheduled-user" || selected || query.trim().length < 2) { setResults([]); return; }
     let live = true;
     const timer = setTimeout(() => {
       void arena<{players:ArenaPlayer[]}>("search-players", {query:query.trim()})
@@ -101,7 +103,7 @@ export default function OnlinePlay({
             Date.now() - r.match.created_at > 120000)
         ) {
           setRoom(null);
-            setError(r.match.play_mode === "wager" ? "The wager was rejected or expired. No Gold was deducted." : "Invitation expired. Create another room.");
+            setError(r.match.play_mode === "wager" || r.match.play_mode === "cbr_wager" ? "The wager was rejected or expired. No stake was deducted." : "Invitation expired. Create another room.");
         }
       } catch (e) {
         if (active) setError((e as Error).message);
@@ -114,14 +116,20 @@ export default function OnlinePlay({
       clearInterval(timer);
     };
   }, [room?.id]);
-  async function create(requestedMode: "normal" | "wager" = playMode) {
+  async function create(requestedMode: "normal" | "wager" | "cbr_wager" = playMode) {
     setBusy(true);
     setError("");
     try {
+      if(challenge && (audience==="scheduled-anyone"||audience==="scheduled-user")){
+        if(!scheduledAt)throw Error("Choose a date and time.");
+        await arena("schedule-create",{audience:audience==="scheduled-anyone"?"anyone":"username",target:selected?.user_id,control,scheduled_at:new Date(scheduledAt).toISOString(),wager_kind:requestedMode==="wager"?"cbg":requestedMode==="cbr_wager"?"cbr":"none",wager_amount:requestedMode==="normal"?0:wagerGold});
+        setScheduledDone(true);setModeOpen(false);window.dispatchEvent(new Event("cb-profile-saved"));return;
+      }
       const r = await arena<{ match: ArenaMatch; challengePublished?: boolean }>("room", {
         control,
-        target: challenge ? selected?.user_id : target?.user_id,
+        target: challenge && (audience === "username" || audience === "scheduled-user") ? selected?.user_id : target?.user_id,
         publicChallenge: challenge && audience === "anyone",
+        wager_cbr: requestedMode === "cbr_wager" ? wagerGold : 0,
         play_mode: requestedMode,
         wager_gold: requestedMode === "wager" ? wagerGold : 0,
       });
@@ -197,7 +205,7 @@ export default function OnlinePlay({
     );
   return (
     <section className="match-setup">
-      {modeOpen&&<div className="wager-overlay" role="presentation"><section className="wager-dialog" role="dialog" aria-modal="true" aria-labelledby="match-mode-title"><button className="wager-close" aria-label="Close match mode" onClick={()=>setModeOpen(false)}><X size={18}/></button><h2 id="match-mode-title">{target||challenge?"Choose invitation mode":"Choose Play Online mode"}</h2><p>{target||challenge?"Select how this invitation will be played before it is sent.":"Choose a regular match or find a player willing to match your Gold bet."}</p><div className="wager-mode-options"><button className={playMode==='normal'?'chosen':''} onClick={()=>setPlayMode('normal')}><Swords size={22}/><strong>Regular play</strong><small>No Gold stake · standard rewards</small></button><button className={playMode==='wager'?'chosen':''} onClick={()=>setPlayMode('wager')}><Coins size={22}/><strong>Wager play</strong><small>Both players stake equal Gold</small></button></div>{playMode==='wager'&&<label className="wager-amount">Your Gold bet<input type="number" inputMode="numeric" min={1} max={Math.min(10000,profile.gold_points)} value={wagerGold} onChange={e=>setWagerGold(Math.max(0,Math.floor(Number(e.target.value)||0)))}/><small>You have {profile.gold_points} Gold. The found opponent must accept or reject the {wagerGold||0}-Gold bet.</small></label>}<button className="gold-button wide" disabled={busy||(playMode==='wager'&&(wagerGold<1||wagerGold>profile.gold_points||wagerGold>10000))} onClick={confirmPlayMode}>{busy?'Please wait…':target||challenge?(playMode==='wager'?`Send ${wagerGold} Gold wager`:'Send regular invitation'):(playMode==='wager'?`Find ${wagerGold} Gold wager`:'Find regular opponent')}</button></section></div>}
+      {modeOpen&&<div className="wager-overlay" role="presentation"><section className="wager-dialog" role="dialog" aria-modal="true" aria-labelledby="match-mode-title"><button className="wager-close" aria-label="Close match mode" onClick={()=>setModeOpen(false)}><X size={18}/></button><h2 id="match-mode-title">{target||challenge?"Choose invitation mode":"Choose Play Online mode"}</h2><p>{target||challenge?"Select how this invitation will be played before it is sent.":"Choose a regular match or find a player willing to match your Gold bet."}</p><div className="wager-mode-options"><button className={playMode==='normal'?'chosen':''} onClick={()=>setPlayMode('normal')}><Swords size={22}/><strong>Regular play</strong><small>No Gold stake · standard rewards</small></button><button className={playMode==='wager'?'chosen':''} onClick={()=>setPlayMode('wager')}><Coins size={22}/><strong>Wager play</strong><small>Both players stake equal Gold</small></button>{(target||challenge)&&<button className={playMode==='cbr_wager'?'chosen':''} onClick={()=>setPlayMode('cbr_wager')}><Swords size={22}/><strong>CBR wager</strong><small>Winner gains the agreed rating stake</small></button>}</div>{(playMode==='wager'||playMode==='cbr_wager')&&<label className="wager-amount">Your {playMode==="wager"?"CBG":"CBR"} wager<input type="number" inputMode="numeric" min={1} max={playMode==="wager"?Math.min(10000,profile.gold_points):Math.min(100,profile.cbr)} value={wagerGold} onChange={e=>setWagerGold(Math.max(0,Math.floor(Number(e.target.value)||0)))}/><small>You have {playMode==="wager"?profile.gold_points:profile.cbr} {playMode==="wager"?"CBG":"CBR"}. Both players must accept before play; draws have no wager transfer.</small></label>}<button className="gold-button wide" disabled={busy||((playMode==='wager'||playMode==='cbr_wager')&&(wagerGold<1||wagerGold>(playMode==='wager'?Math.min(10000,profile.gold_points):Math.min(100,profile.cbr))))} onClick={confirmPlayMode}>{busy?'Please wait…':target||challenge?(playMode==='wager'?`Offer ${wagerGold} CBG` : playMode==='cbr_wager'?`Offer ${wagerGold} CBR`:'Send regular invitation'):(playMode==='wager'?`Find ${wagerGold} Gold wager`:'Find regular opponent')}</button></section></div>}
       <div className="page-heading">
         <h1>{challenge ? "Challenge a Player" : target ? "Invite to a match" : "Play Online"}</h1>
         <span className="sample-label">{profile.cbr} CBR</span>
@@ -219,10 +227,12 @@ export default function OnlinePlay({
       {challenge && !room && <div className="cloud-panel challenge-options">
         <h2>Who do you want to challenge?</h2>
         <div className="challenge-audience">
-          <button type="button" className={audience === "username" ? "chosen" : ""} aria-pressed={audience === "username"} onClick={() => {setAudience("username");setError("");}}>Challenge by username</button>
-          <button type="button" className={audience === "anyone" ? "chosen" : ""} aria-pressed={audience === "anyone"} onClick={() => {setAudience("anyone");setSelected(null);setError("");}}>Challenge anyone</button>
+          <button type="button" className={audience === "username" ? "chosen" : ""} aria-pressed={audience === "username"} onClick={() => {setAudience("username");setScheduledDone(false);setError("");}}>Challenge by username</button>
+          <button type="button" className={audience === "anyone" ? "chosen" : ""} aria-pressed={audience === "anyone"} onClick={() => {setAudience("anyone");setSelected(null);setScheduledDone(false);setError("");}}>Challenge anyone</button>
+          <button type="button" className={audience === "scheduled-anyone" ? "chosen" : ""} aria-pressed={audience === "scheduled-anyone"} onClick={() => {setAudience("scheduled-anyone");setSelected(null);setScheduledDone(false);setError("");}}>Schedule anyone</button>
+          <button type="button" className={audience === "scheduled-user" ? "chosen" : ""} aria-pressed={audience === "scheduled-user"} onClick={() => {setAudience("scheduled-user");setScheduledDone(false);setError("");}}>Schedule a user</button>
         </div>
-        {audience === "username" && <div className="challenge-search">
+        {(audience === "username" || audience === "scheduled-user") && <div className="challenge-search">
           {selected ? <div className="challenge-selected"><Avatar player={selected}/><span><strong>{selected.display_name}</strong><small>@{selected.username}</small></span><button type="button" onClick={() => {setSelected(null);setQuery("");}}>Change</button></div> : <>
             <label htmlFor="challenge-username">Search username or name</label>
             <input id="challenge-username" autoComplete="off" value={query} onChange={e => {setQuery(e.target.value);setError("");}} placeholder="Type at least 2 characters" />
@@ -230,7 +240,9 @@ export default function OnlinePlay({
             {query.trim().length >= 2 && results.length === 0 && <p>No matches yet. Try a shorter name.</p>}
           </>}
         </div>}
-        {audience === "anyone" && <p>Choose a game time below. Your challenge will be pinned in the community feed for 2 minutes.</p>}
+        {audience === "anyone" && <p>Choose a game time below. Your challenge will appear in the Challenge tab for 2 minutes.</p>}
+        {(audience === "scheduled-anyone" || audience === "scheduled-user") && <label className="challenge-schedule-date">Choose a date and time within five days<input type="datetime-local" value={scheduledAt} min={new Date(Date.now()+15*60000-new Date().getTimezoneOffset()*60000).toISOString().slice(0,16)} max={new Date(Date.now()+5*86400000-new Date().getTimezoneOffset()*60000).toISOString().slice(0,16)} onChange={e=>setScheduledAt(e.target.value)}/><small>Times are shown in your device timezone. Open the match from 15 minutes before until 30 minutes after the agreed time.</small></label>}
+        {scheduledDone&&<p role="status">Scheduled challenge sent. Manage replies in Home → Challenge.</p>}
       </div>}
       <div className="cloud-panel">
         <TimePicker
@@ -256,14 +268,14 @@ export default function OnlinePlay({
         ) : (
           !room && (
             <button
-              disabled={busy || (challenge && (!audience || (audience === "username" && !selected)))}
+              disabled={busy || (challenge && (!audience || ((audience === "username" || audience === "scheduled-user") && !selected) || ((audience === "scheduled-anyone" || audience === "scheduled-user") && !scheduledAt)))}
               className="gold-button wide"
               onClick={() => {
                 setError("");
                 setModeOpen(true);
               }}
             >
-              {challenge ? audience === "anyone" ? "Post challenge to feed" : "Send challenge" : target ? "Send match invitation" : "Find opponent"}
+              {challenge ? audience === "anyone" ? "Post challenge to feed" : audience === "scheduled-anyone" ? "Schedule anyone" : audience === "scheduled-user" ? "Schedule a user" : "Send challenge" : target ? "Send match invitation" : "Find opponent"}
             </button>
           )
         )}
@@ -311,16 +323,16 @@ export default function OnlinePlay({
             Copy code
           </button>
           <p>
-            {room.play_mode === "wager" && room.invite_to === profile.user_id
-              ? `Opponent found · ${room.wager_gold} Gold wager. Accept the bet to start or reject it with no charge.`
-              : room.play_mode === "wager"
-                ? `Opponent found · waiting for them to accept your ${room.wager_gold} Gold wager`
-                : challenge && audience === "anyone" ? "Your challenge is pinned in the feed" : selected || target
+            {(room.play_mode === "wager" || room.play_mode === "cbr_wager") && room.invite_to === profile.user_id
+              ? `Opponent found · ${room.play_mode === "wager" ? room.wager_gold+" CBG" : room.wager_cbr+" CBR"} wager. Accept to start or reject with no stake.`
+              : room.play_mode === "wager" || room.play_mode === "cbr_wager"
+                ? `Opponent found · waiting for them to accept your ${room.play_mode === "wager" ? room.wager_gold+" CBG" : room.wager_cbr+" CBR"} wager`
+                : challenge && audience === "anyone" ? "Your challenge is in the Challenge tab" : selected || target
               ? "Invitation sent to " + (selected ?? target)?.display_name
               : "Waiting for your opponent"}{" "}
             · {timeControl(room.control).label}
           </p>
-          {room.play_mode === "wager" && room.invite_to === profile.user_id ? <div className="wager-answer-actions"><button className="gold-button" disabled={busy} onClick={() => void answerFoundWager(true)}>{busy ? "Processing…" : `Accept ${room.wager_gold} Gold Bet`}</button><button disabled={busy} onClick={() => void answerFoundWager(false)}>Reject Bet</button></div> : <button
+          {(room.play_mode === "wager" || room.play_mode === "cbr_wager") && room.invite_to === profile.user_id ? <div className="wager-answer-actions"><button className="gold-button" disabled={busy} onClick={() => void answerFoundWager(true)}>{busy ? "Processing…" : `Accept ${room.play_mode === "wager" ? room.wager_gold+" CBG" : room.wager_cbr+" CBR"} wager`}</button><button disabled={busy} onClick={() => void answerFoundWager(false)}>Reject Bet</button></div> : <button
             disabled={busy}
             onClick={() => {
               setBusy(true);

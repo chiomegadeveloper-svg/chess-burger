@@ -12,7 +12,7 @@ export type OwnerPendingAlert = Pick<Notification, "key" | "title" | "body" | "c
 type Inbox = { items: Notification[]; read_entries: { notification_key: string; read_at: string }[]; unavailable: string[] };
 type ChatSummary = { personalUnread: number; firstUnreadSender?: string | null; communityUnread: number; groups: { id: string; name: string; unread: number }[] };
 type ArenaWindow = { entry_open: boolean; current: { date: string; slot: number; starts_at: string } | null };
-type Invite = { id: string; host_name: string; created_at: number | string; play_mode?: string; wager_gold?: number; match_kind?: string };
+type Invite = { id: string; host_name: string; created_at: number | string; play_mode?: string; wager_gold?: number; wager_cbr?: number; match_kind?: string };
 
 async function request(method: "GET" | "POST", keys?: string[]): Promise<Inbox | { ok: boolean }> {
   const client = await getSupabase();
@@ -76,6 +76,7 @@ export function OwnerPendingHomeAlert({ alerts, onReview }: { alerts: OwnerPendi
 export default function NotificationBell({ userId, isOwner, homeActive, invites, onNavigate, onOwnerPending }: { userId?: string; isOwner?: boolean; homeActive?: boolean; invites: Invite[]; onNavigate: (target: string) => void; onOwnerPending?: (alerts: OwnerPendingAlert[]) => void }) {
   const [open, setOpen] = useState(false);
   const [remote, setRemote] = useState<Notification[]>([]);
+  const [scheduled,setScheduled]=useState<Array<{id:string;host_id:string;target_id:string|null;host_name:string;status:string;scheduled_at:string;proposal_at:string|null;created_at:string;match_id:string|null}>>([]);
   const [read, setRead] = useState<ReadTimes>({});
   const [chat, setChat] = useState<ChatSummary | null>(null);
   const [windowState, setWindowState] = useState<ArenaWindow | null>(null);
@@ -115,10 +116,11 @@ export default function NotificationBell({ userId, isOwner, homeActive, invites,
     if (!userId || running.current === userId || !navigator.onLine) return;
     running.current = userId;
     setLoading(true);
-    const [inbox, messages, arenaWindow] = await Promise.allSettled([
+    const [inbox, messages, arenaWindow, schedule] = await Promise.allSettled([
       request("GET") as Promise<Inbox>,
       arena<ChatSummary>("chat-summary"),
       fetch("/api/grand-arena?action=window", { cache: "no-store" }).then(async response => response.ok ? response.json() as Promise<ArenaWindow> : null),
+      arena<{challenges:typeof scheduled}>("schedule-list"),
     ]);
     if (currentUser.current !== userId) return;
     if (inbox.status === "fulfilled") {
@@ -129,13 +131,14 @@ export default function NotificationBell({ userId, isOwner, homeActive, invites,
       setError("");
     } else setError(inbox.reason instanceof Error ? inbox.reason.message : "Notifications are temporarily unavailable.");
     if (messages.status === "fulfilled") setChat(messages.value);
+    if(schedule.status==="fulfilled")setScheduled(schedule.value.challenges);
     if (arenaWindow.status === "fulfilled") setWindowState(arenaWindow.value);
     running.current = null;
     setLoading(false);
   }, [userId, isOwner, onOwnerPending]);
 
   useEffect(() => {
-    setRemote([]); setRead(userId ? savedReads(userId) : {}); setChat(null); setWindowState(null); setError(""); setOpen(false);
+    setRemote([]); setScheduled([]); setRead(userId ? savedReads(userId) : {}); setChat(null); setWindowState(null); setError(""); setOpen(false);
     onOwnerPending?.([]);
     if (!userId) return;
     const initial = window.setTimeout(() => void refresh(), 0);
@@ -169,7 +172,12 @@ export default function NotificationBell({ userId, isOwner, homeActive, invites,
   if (chat?.communityUnread) dynamic.push({ key: `chat:community:${chat.communityUnread}`, kind: "chat", title: "Unread community messages", body: `${chat.communityUnread} message${chat.communityUnread === 1 ? "" : "s"} in community chat.`, target: "chat-community", created_at: new Date().toISOString(), sticky: true });
   for (const group of chat?.groups ?? []) if (group.unread) dynamic.push({ key: `chat:group:${group.id}:${group.unread}`, kind: "chat", title: `Unread messages in ${group.name}`, body: `${group.unread} message${group.unread === 1 ? "" : "s"} waiting for you.`, target: `chat-group:${group.id}`, created_at: new Date().toISOString(), sticky: true });
   if (windowState?.entry_open && windowState.current) dynamic.push({ key: `arena-open:${windowState.current.date}:${windowState.current.slot}`, kind: "arena", title: "Grand Arena is open", body: "This session is accepting players now.", target: "grand-arena", created_at: windowState.current.starts_at });
-  for (const invite of invites) dynamic.push({ key: `invite:${invite.id}`, kind: invite.match_kind === "invasion" ? "territory" : "invite", title: invite.match_kind === "invasion" ? `${invite.host_name} challenged your kingdom` : `${invite.host_name} invited you to play`, body: invite.match_kind === "invasion" ? "Open the map to accept or decline this territory challenge." : invite.play_mode === "wager" ? `A ${invite.wager_gold} Gold challenge is waiting.` : "Open the invitation to accept or decline.", target: invite.match_kind === "invasion" ? "map" : "play-select", created_at: new Date(invite.created_at).toISOString(), sticky: true });
+  for(const challenge of scheduled){
+    if(challenge.target_id===userId && challenge.status==="pending")dynamic.push({key:`schedule:${challenge.id}:pending`,kind:"invite",title:`${challenge.host_name} scheduled a chess challenge`,body:`${new Date(challenge.scheduled_at).toLocaleString()} · Accept, offer a new time, or reject in Challenge.`,target:"challenge-feed",created_at:challenge.created_at,sticky:true});
+    if(challenge.host_id===userId && challenge.status==="countered")dynamic.push({key:`schedule:${challenge.id}:countered`,kind:"invite",title:"Reschedule offered",body:`New time: ${new Date(challenge.proposal_at??challenge.scheduled_at).toLocaleString()}. Agree or reject in Challenge.`,target:"challenge-feed",created_at:challenge.created_at,sticky:true});
+    if((challenge.host_id===userId||challenge.target_id===userId)&&challenge.status==="accepted"&&Date.parse(challenge.scheduled_at)-Date.now()<3600000)dynamic.push({key:`schedule:${challenge.id}:ready`,kind:"invite",title:"Scheduled chess challenge",body:`${new Date(challenge.scheduled_at).toLocaleString()} · Open the match from Challenge near the agreed time.`,target:"challenge-feed",created_at:challenge.scheduled_at,sticky:true});
+  }
+  for (const invite of invites) dynamic.push({ key: `invite:${invite.id}`, kind: invite.match_kind === "invasion" ? "territory" : "invite", title: invite.match_kind === "invasion" ? `${invite.host_name} challenged your kingdom` : `${invite.host_name} invited you to play`, body: invite.match_kind === "invasion" ? "Open the map to accept or decline this territory challenge." : invite.play_mode === "wager" ? `A ${invite.wager_gold} CBG challenge is waiting.` : invite.play_mode === "cbr_wager" ? `A ${invite.wager_cbr} CBR challenge is waiting.` : "Open the invitation to accept or decline.", target: invite.match_kind === "invasion" ? "map" : "play-select", created_at: new Date(invite.created_at).toISOString(), sticky: true });
 
   const now = Date.now();
   const items = [...remote, ...dynamic]

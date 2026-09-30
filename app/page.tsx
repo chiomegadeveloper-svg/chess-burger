@@ -110,7 +110,7 @@ function savedSharedBoard(userId: string) {
 }
 function AppPage() {
   const [trainingId,setTrainingId]=useState(""),[trainingInvite,setTrainingInvite]=useState(""),[openTrainingAccount,setOpenTrainingAccount]=useState(false);
-  const [feedTarget, setFeedTarget] = useState<"recent" | "announcement" | "rewards">("recent");
+  const [feedTarget, setFeedTarget] = useState<"recent" | "announcement" | "rewards" | "challenge">("recent");
   const [ownerPending, setOwnerPending] = useState<OwnerPendingAlert[]>([]);
   const [tab, setTab] = useState("profile"),
     [profile, setProfile] = useState<PlayerProfile | null>(null),
@@ -216,6 +216,7 @@ function AppPage() {
         goldPayout: m.gold_payouts?.[ownId] ?? 0,
         playMode: m.play_mode ?? "normal",
         wagerGold: Number(m.wager_gold ?? 0),
+        wagerCbr: Number(m.wager_cbr ?? 0),
         control: m.control,
         opponent,
       });
@@ -568,8 +569,8 @@ function AppPage() {
     if (target === "chat-group") return openSocial("chat", undefined, "group");
     if (target === "friend-requests") return openSocial("friends", undefined, "requests");
     if (target === "followers") return openSocial("followers");
-    if (target === "rewards" || target === "announcements" || target === "home") {
-      setFeedTarget(target === "rewards" ? "rewards" : target === "announcements" ? "announcement" : "recent");
+    if (target === "rewards" || target === "announcements" || target === "home" || target === "challenge-feed") {
+      setFeedTarget(target === "rewards" ? "rewards" : target === "announcements" ? "announcement" : target === "challenge-feed" ? "challenge" : "recent");
       navigate("home");
       return;
     }
@@ -1027,15 +1028,15 @@ function AppPage() {
           <div className="invite-inbox cloud-panel">
             {invites.map((i) => (
               <div key={i.id}>
-                <strong>{i.match_kind === "invasion" ? `${i.host_name} challenged your kingdom` : i.play_mode === "wager" ? `${i.host_name} offered a ${i.wager_gold} Gold bet` : `${i.host_name} invited you`}</strong>
+                <strong>{i.match_kind === "invasion" ? `${i.host_name} challenged your kingdom` : i.play_mode === "wager" ? `${i.host_name} offered a ${i.wager_gold} CBG bet` : i.play_mode === "cbr_wager" ? `${i.host_name} offered a ${i.wager_cbr} CBR wager` : `${i.host_name} invited you`}</strong>
                 <span>
                   {timeControl(i.control).group} ·{" "}
                   {timeControl(i.control).label}
-                  {i.play_mode === "wager" ? ` · Match ${i.wager_gold} Gold to play` : ""}
+                  {i.play_mode === "wager" ? ` · Match ${i.wager_gold} CBG to play` : i.play_mode === "cbr_wager" ? ` · Match ${i.wager_cbr} CBR to play` : ""}
                 </span>
                 <button
                   className="gold-button"
-                  disabled={respondingInvite === i.id || (i.play_mode === "wager" && Number(profile?.gold_points ?? 0) < Number(i.wager_gold ?? 0))}
+                  disabled={respondingInvite === i.id || (i.play_mode === "wager" && Number(profile?.gold_points ?? 0) < Number(i.wager_gold ?? 0)) || (i.play_mode === "cbr_wager" && Number(profile?.cbr ?? 0) < Number(i.wager_cbr ?? 0))}
                   onClick={() => {
                     setRespondingInvite(i.id);
                     void arena<{ match: ArenaMatch }>("join", { code: i.code })

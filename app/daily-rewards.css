@@ -3,7 +3,7 @@
 /* Keep the complete Community Feed navigation in one row. */
 .feed-page .feed-tabs.community-feed-tabs{
   display:grid!important;
-  grid-template-columns:repeat(6,minmax(0,1fr))!important;
+  grid-template-columns:repeat(7,minmax(0,1fr))!important;
   align-items:stretch;
   gap:4px!important;
   width:100%;
@@ -321,7 +321,7 @@
 @media(max-width:600px){
   .tab-label-full{display:none}
   .tab-label-short{display:inline}
-  .feed-page .feed-tabs.community-feed-tabs{grid-template-columns:repeat(6,minmax(0,1fr))!important;gap:2px!important;padding:3px!important}
+  .feed-page .feed-tabs.community-feed-tabs{grid-template-columns:repeat(7,minmax(0,1fr))!important;gap:2px!important;padding:3px!important}
   .feed-page .feed-tabs.community-feed-tabs>button{min-height:36px;padding:5px 1px!important;font-size:clamp(7px,2.1vw,9px)!important;letter-spacing:-.15px}
   .daily-reward-page .daily-reward-modal{padding:16px 12px;border-radius:22px}
   .daily-reward-heading{gap:7px 9px;padding-bottom:14px!important}
