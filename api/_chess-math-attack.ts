@@ -36,7 +36,7 @@ export default async function handler(req:Req,res:Res){
   const auth=await db.auth.getUser(token);
   if(auth.error||!auth.data.user)fail(401,'Sign in again to play Quiz ATTACK.');
   const userId=auth.data.user!.id,body=req.body||{},action=String(body.action||'');
-  const profile=await db.from('cb_profiles').select('avatar_url,agreement_version').eq('user_id',userId).maybeSingle();
+  const profile=await db.from('cb_profiles').select('avatar_url,agreement_version,display_name').eq('user_id',userId).maybeSingle();
   if(profile.error||!profile.data)fail(403,'Complete your Chess Burger profile first.');
   if(!String(profile.data!.avatar_url||'').includes(`/storage/v1/object/public/cb-profile-media/${userId}/avatar-`))fail(403,'Save a profile picture first.');
   if(profile.data!.agreement_version===null)fail(403,'Accept the End User Agreement first.');
@@ -87,6 +87,10 @@ export default async function handler(req:Req,res:Res){
    }).eq('id',row.id).eq('user_id',userId).eq('question_number',index).is('finished_at',null).select('*').maybeSingle();
    if(update.error)fail(missing(update.error)?503:500,missing(update.error)?migration:update.error.message);
    if(!update.data)fail(409,'This question was already answered. Refresh Quiz ATTACK.');
+   if(finished){
+    const event=await db.from('cb_feed').upsert({id:row.id,user_id:userId,kind:'chess_math',display_name:profile.data!.display_name||'Player',content:`completed Quiz ATTACK with ${score} correct answers in ${Math.round(elapsed/1000)} seconds.`},{onConflict:'id',ignoreDuplicates:true});
+    if(event.error)console.error('[chess-math-attack] Feed activity unavailable:',event.error);
+   }
    return res.status(200).json({correct,attempt:view(update.data as Attempt),...(finished?{leaders:await leaders()}:{})});
   }
   fail(404,'Unknown Quiz ATTACK action.');

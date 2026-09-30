@@ -46,6 +46,7 @@ const labels: Record<string, string> = {
   profile_created: "New player",
   profile_updated: "Profile",
   win: "Win",
+  chess_math: "Chess Math",
   new_reward: "Reward",
   top10: "Top 10 reward",
   announcement: "Announcement",

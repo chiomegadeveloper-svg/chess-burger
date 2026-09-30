@@ -22,7 +22,7 @@ export default async function handler(req:Req,res:Res){
     const auth=await db.auth.getUser(token);
     if(auth.error||!auth.data.user)fail(401,'Sign in again to play Chess Math.');
     const userId=auth.data.user!.id,body=req.body||{},action=String(body.action||'');
-    const profile=await db.from('cb_profiles').select('avatar_url,agreement_version').eq('user_id',userId).maybeSingle();
+    const profile=await db.from('cb_profiles').select('avatar_url,agreement_version,display_name').eq('user_id',userId).maybeSingle();
     if(profile.error||!profile.data)fail(403,'Complete your Chess Burger profile first.');
     if(!String(profile.data!.avatar_url||'').includes(`/storage/v1/object/public/cb-profile-media/${userId}/avatar-`))fail(403,'Save a profile picture first.');
     if(profile.data!.agreement_version===null)fail(403,'Accept the End User Agreement first.');
@@ -86,6 +86,8 @@ export default async function handler(req:Req,res:Res){
       const updated=await db.from('cb_chess_math_sessions').update({finished_at:finishedAt.toISOString(),answers:withinDeadline?answers:[],score:graded.score,answered_count:graded.answered,elapsed_ms:elapsed}).eq('id',id).eq('user_id',userId).is('finished_at',null).select('score,answered_count,elapsed_ms').maybeSingle();
       if(updated.error)fail(missing(updated.error)?503:500,missing(updated.error)?migration:updated.error.message);
       if(!updated.data){const done=await db.from('cb_chess_math_sessions').select('score,answered_count,elapsed_ms').eq('id',id).eq('user_id',userId).single();if(done.error)fail(500,'Refresh your Chess Math result.');return res.status(200).json({result:{score:done.data!.score,total:session.question_ids.length,answered:done.data!.answered_count,elapsed_ms:done.data!.elapsed_ms,difficulty:session.difficulty},...await optionalLeaders(session.difficulty)});}
+      const event=await db.from('cb_feed').upsert({id:session.id,user_id:userId,kind:'chess_math',display_name:profile.data!.display_name||'Player',content:`completed Chess Math ${session.difficulty} with ${graded.score}/${session.question_ids.length} correct in ${Math.round(elapsed/1000)} seconds.`},{onConflict:'id',ignoreDuplicates:true});
+      if(event.error)console.error('[chess-math] Feed activity unavailable:',event.error);
       return res.status(200).json({result:{score:graded.score,total:session.question_ids.length,answered:graded.answered,elapsed_ms:elapsed,difficulty:session.difficulty,late:!withinDeadline},...await optionalLeaders(session.difficulty)});
     }
     fail(404,'Unknown Chess Math action.');

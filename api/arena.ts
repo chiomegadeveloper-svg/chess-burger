@@ -395,7 +395,7 @@ async function requireWagerAge(client:Db,playerIds:Array<string|null|undefined>,
 }
 async function activeAvatarFrame(client: Db, profile: any) {
   const itemId = String(profile.active_avatar_frame_item ?? '');
-  if (!/^af-(basic|premium)-(10|[1-9])-[a-f0-9]{32}$/.test(itemId)) return null;
+  if (!/^af-(?:(?:basic|premium)-(?:10|[1-9])|vanguard-(?:20|1[0-9]|[1-9]))-[a-f0-9]{32}$/.test(itemId)) return null;
   const owned = await client.from('cb_inventory_items').select('metadata').eq('user_id',profile.user_id).eq('item_kind','avatar_frame').eq('item_id',itemId).gt('quantity',0).maybeSingle();
   if (owned.error) fail(500,owned.error.message);
   const frameId = String(owned.data?.metadata?.frame_id ?? '');
@@ -1200,7 +1200,7 @@ export default async function handler(req: Req, res: Res) {
     }
     if(action==='rent-avatar-frame'){
       const frameId=String(body.frame_id??''),days=Number(body.days),requestId=String(body.request_id??'');
-      if(!/^(basic|premium)-(10|[1-9])$/.test(frameId)||![7,21,30].includes(days)||!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(requestId))fail(400,'Choose a valid frame and rental period.');
+      if(!/^(?:(?:basic|premium)-(?:10|[1-9])|vanguard-(?:20|1[0-9]|[1-9]))$/.test(frameId)||![7,21,30].includes(days)||!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(requestId))fail(400,'Choose a valid frame and rental period.');
       const rented=await client.rpc('cb_rent_avatar_frame',{p_user_id:account.id,p_frame_id:frameId,p_days:days,p_request_id:requestId});
       if(rented.error){const message=String(rented.error.message??'Avatar frame rental failed.');if(/cb_rent_avatar_frame|schema cache|function|relation/i.test(message))fail(503,'Apply supabase/0065_avatar_frame_rentals.sql to enable avatar frame rentals.');fail(409,message);}
       return res.status(200).json(rented.data);

@@ -34,3 +34,6 @@
 .avatar-frame-card button{margin-top:4px;min-height:33px;padding:6px;border:1px solid #b59251;border-radius:8px;background:#443823;color:#ffda8d;font-size:11px;font-weight:700;cursor:pointer}
 .avatar-frame-card button:disabled{opacity:.5;cursor:not-allowed}
 @media(max-width:480px){.avatar-frame-store{padding:9px}.avatar-frame-store>header{padding:14px}.avatar-frame-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.avatar-frame-card{padding:8px}.avatar-frame-store h1{font-size:20px}}
+
+/* The Dark Vanguard art has a centered transparent portrait opening. */
+:is(.avatar-frame-art,.portrait-ring,.profile-avatar-static,.public-avatar,.feed-avatar,.arena-feed-champion-avatar,.player-avatar):has(>.avatar-frame-vanguard){--frame-photo-left:21%;--frame-photo-top:21%;--frame-photo-size:58%}

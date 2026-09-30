@@ -45,7 +45,7 @@ async function framedView(client: any, row: Record<string, unknown> | null) {
   const profile = view(row);
   const itemId = String(row?.active_avatar_frame_item ?? '');
   if (!profile) return null;
-  if (!/^af-(basic|premium)-(10|[1-9])-[a-f0-9]{32}$/.test(itemId)) return { ...profile, avatar_frame_id: null };
+  if (!/^af-(?:(?:basic|premium)-(?:10|[1-9])|vanguard-(?:20|1[0-9]|[1-9]))-[a-f0-9]{32}$/.test(itemId)) return { ...profile, avatar_frame_id: null };
   const item = await client.from('cb_inventory_items').select('metadata').eq('user_id',row!.user_id).eq('item_kind','avatar_frame').eq('item_id',itemId).gt('quantity',0).maybeSingle();
   const frameId = String(item.data?.metadata?.frame_id ?? '');
   return { ...profile, avatar_frame_id: !item.error && itemId.startsWith(`af-${frameId}-`) && Date.parse(String(item.data?.metadata?.expires_at ?? '')) > Date.now() ? frameId : null };
