@@ -1,6 +1,6 @@
 "use client";
 const MAINTENANCE_MODE = false;
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import {
   Home,
@@ -30,13 +30,9 @@ import SharedBoard from "./shared-board";
 import Account from "./account";
 import CommunityFeed from "./community-feed";
 import RecentPlays from "./recent-plays";
-import NearbyMap from "./nearby-map";
+import { OnlineTrainings } from "./online-training";
 import LocalPairing from "./local-pairing";
-import Cms from "./cms";
 import ReportTickets from "./report-tickets";
-import Tournaments from "./tournaments";
-import {OnlineTrainings} from "./online-training";
-import OnlinePlay, { OnlineGame } from "./online-play";
 import Rankings from "./rankings";
 import LiveChannel from "./live-channel";
 import { SavedGame, saveGame } from "./game-history";
@@ -52,18 +48,26 @@ import { FloatingChatButton, SocialHub, MatchResult, openSocial, type MatchSumma
 import PublicProfile from "./public-profile";
 import InstallPrompt from "./install-prompt";
 import {APP_VERSION} from "./app-version";
-import { BagPage, ShopPage } from "./shop";
-import DonateShop from "./donate-shop";
 import { isProfileComplete } from "./profile-completion";
 import Testimonials from "./testimonials";
-import CpuGame from "./cpu-game";
-import Puzzles from "./puzzles";
-import GrandArena from "./grand-arena";
-import Classroom from "./classroom";
-import GuildPage from "./guild";
 import NotificationBell, { OwnerPendingHomeAlert, type OwnerPendingAlert } from "./notifications";
 import "./play-selection-tournament.css";
 import "./header-portals.css";
+
+// Load game modes and management pages when opened instead of shipping every mode on launch.
+const NearbyMap = lazy(() => import("./nearby-map"));
+const Cms = lazy(() => import("./cms"));
+const Tournaments = lazy(() => import("./tournaments"));
+const OnlinePlay = lazy(() => import("./online-play"));
+const OnlineGame = lazy(() => import("./online-game"));
+const ShopPage = lazy(() => import("./shop").then(m => ({ default: m.ShopPage })));
+const BagPage = lazy(() => import("./shop").then(m => ({ default: m.BagPage })));
+const DonateShop = lazy(() => import("./donate-shop"));
+const CpuGame = lazy(() => import("./cpu-game"));
+const Puzzles = lazy(() => import("./puzzles"));
+const GrandArena = lazy(() => import("./grand-arena"));
+const Classroom = lazy(() => import("./classroom"));
+const GuildPage = lazy(() => import("./guild"));
 
 const modes = [
   {
@@ -363,7 +367,7 @@ function AppPage() {
     void clockTap.play().catch(() => {});
     const splash = setTimeout(() => {
       setShowSplash(false);
-    }, 6000);
+    }, 800);
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker
         .register("/sw.js")
@@ -830,7 +834,7 @@ function AppPage() {
       </section>
     );
   if (trainingId && (member !== true || !isProfileComplete(profile)) && !openTrainingAccount)
-    return <main className="online-training-landing"><OnlineTrainings initialId={trainingId} invite={trainingInvite} onCreateAccount={()=>setOpenTrainingAccount(true)}/><Toaster theme="light" position="top-center" richColors closeButton/></main>;
+    return <main className="online-training-landing"><Suspense fallback={<p className="account-note" role="status">Opening training…</p>}><OnlineTrainings initialId={trainingId} invite={trainingInvite} onCreateAccount={()=>setOpenTrainingAccount(true)}/></Suspense><Toaster theme="light" position="top-center" richColors closeButton/></main>;
   if ((member !== true || !isProfileComplete(profile)) && !showSplash)
     return (
       <main className="app-shell registration-locked-shell">
@@ -1064,7 +1068,7 @@ function AppPage() {
             ))}
           </div>
         )}
-        {content}
+        <Suspense fallback={<div className="cloud-panel account-note" role="status">Opening page…</div>}>{content}</Suspense>
         {pairingOpened && <div hidden={tab !== "pairing"}>
           {tab === "pairing" && back}
           <LocalPairing

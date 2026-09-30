@@ -1207,7 +1207,7 @@ export default async function handler(req: Req, res: Res) {
     }
     if(action==='equip-avatar-frame'){
       const itemId=body.item_id===null?null:String(body.item_id??'');
-      if(itemId && !/^af-(basic|premium)-(10|[1-9])-[a-f0-9]{32}$/.test(itemId))fail(400,'Choose a valid avatar frame.');
+      if(itemId && !/^af-(?:(?:basic|premium)-(?:10|[1-9])|vanguard-(?:20|1[0-9]|[1-9]))-[a-f0-9]{32}$/.test(itemId))fail(400,'Choose a valid avatar frame.');
       if(itemId){const item=await client.from('cb_inventory_items').select('metadata').eq('user_id',account.id).eq('item_kind','avatar_frame').eq('item_id',itemId).gt('quantity',0).maybeSingle();if(item.error)fail(500,item.error.message);if(!item.data||!(Date.parse(String(item.data.metadata?.expires_at??''))>Date.now()))fail(403,'This frame has expired or is not in your Bag.');}
       const saved=await client.from('cb_profiles').update({active_avatar_frame_item:itemId}).eq('user_id',account.id);
       if(saved.error)fail(503,'Apply supabase/0065_avatar_frame_rentals.sql to enable avatar frames.');

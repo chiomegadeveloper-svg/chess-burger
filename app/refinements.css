@@ -4,6 +4,17 @@
   --cb-cyan: #5bd7e5;
   --cb-gold: #dec16c;
 }
+
+/* Personal profile: keep the full portrait visible and put the upload action below it. */
+.profile-readonly .profile-hero { grid-template-columns:180px minmax(0,1fr); align-items:center; gap:24px; padding-bottom:42px; }
+.profile-readonly .profile-avatar-change { width:180px; height:180px; margin-bottom:28px; overflow:visible; box-sizing:border-box; }
+.profile-readonly .profile-avatar-change:not(:has(>.avatar-frame-overlay))>img,
+.profile-readonly .profile-avatar-change:not(:has(>.avatar-frame-overlay))>span { border-radius:50%; }
+.profile-readonly .profile-avatar-change i { top:calc(100% + 9px); bottom:auto; left:50%; right:auto; transform:translateX(-50%); width:max-content; max-width:100%; padding:6px 10px; border:1px solid #b5954c; border-radius:8px; background:#16252b; white-space:nowrap; }
+@media(max-width:650px) {
+  .profile-readonly .profile-hero { grid-template-columns:135px minmax(0,1fr); gap:16px; padding-bottom:38px; }
+  .profile-readonly .profile-avatar-change { width:135px; height:135px; }
+}
 button,
 input,
 select,
@@ -694,7 +705,7 @@ textarea:focus-visible {
   .profile-hero h2 {
     font-size: 21px;
   }
-  .profile-form {
+.profile-form {
     grid-template-columns: 1fr;
     padding: 18px;
   }

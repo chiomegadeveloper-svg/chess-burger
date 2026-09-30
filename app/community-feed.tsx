@@ -272,35 +272,22 @@ export default function CommunityFeed({
       setStatus("");
       return;
     }
-    const [localFeed, me, arenaWindow] = await Promise.allSettled([
+    void fetch("/api/grand-arena?action=window", { cache: "no-store" })
+      .then(response => response.json())
+      .then(windowState => {
+        if (seq !== request.current) return;
+        setArenaOpen(windowState?.open ? {
+          content: `The ${windowState.current?.slot === 1 ? "7–9 PM" : "10 PM–12 MN"} Grand Arena is open. Use 1 Arena Ticket to enter.`,
+        } : null);
+      })
+      .catch(() => { if (seq === request.current) setArenaOpen(null); });
+    const [localFeed] = await Promise.allSettled([
       arena<{ events: CommunityEvent[] }>("feed", {}, true),
-      arena<{ profile: ArenaPlayer }>("me"),
-      fetch("/api/grand-arena?action=window", { cache: "no-store" }).then(
-        (response) => response.json(),
-      ),
     ]);
     if (seq !== request.current) return;
-    setArenaOpen(
-      arenaWindow.status === "fulfilled" && arenaWindow.value?.open
-        ? {
-            content: `The ${arenaWindow.value.current?.slot === 1 ? "7–9 PM" : "10 PM–12 MN"} Grand Arena is open. Use 1 Arena Ticket to enter.`,
-          }
-        : null,
-    );
-    const ownProfile =
-      me.status === "fulfilled"
-        ? (me.value.profile as ArenaPlayer & { active_feed_banner?: string })
-        : null;
     const all = [
       ...(localFeed.status === "fulfilled" ? localFeed.value.events : []),
     ]
-      .map((event) => {
-        if (event.feed_banner || !ownProfile || event.user_id !== ownProfile.user_id) return event;
-        const ownBanner = ownProfile.active_feed_banner ?? "";
-        return ownBanner === PREMIUM_SUPPORTER_ID && event.supporter_tier !== "premium"
-          ? event
-          : { ...event, feed_banner: ownBanner };
-      })
       .filter((e) => e.kind !== "first_blood" && (!e.expires_at || Date.parse(e.expires_at) > Date.now()));
     setChallenges(
       all
