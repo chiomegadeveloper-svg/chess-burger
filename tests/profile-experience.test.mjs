@@ -12,6 +12,8 @@ const api = read("../api/arena.ts");
 const migration = read("../supabase/0023_profile_testimonials.sql");
 const dailyRanks = read("../supabase/0024_daily_top10_gold.sql");
 const rankings = read("../app/rankings.tsx");
+const account = read("../app/account.tsx");
+const accountStyles = read("../app/board-account.css");
 
 test("recent plays display five per page and retain twenty", () => {
   assert.match(recent, /slice\(0,20\)/);
@@ -31,6 +33,14 @@ test("featured photos use direct uploads and a tap-to-close responsive viewer", 
   assert.match(bucket, /accept="image\/jpeg,image\/png,image\/webp"/);
   assert.match(bucket, /onUpload\(file,index\)/);
   assert.match(bucket, /aria-label="Return to thumbnails"/);
+});
+
+test("avatar upload keeps a native Safari-compatible file control until processing finishes", () => {
+  assert.match(account, /async function chooseAvatar\(input: HTMLInputElement\)/);
+  assert.match(account, /await upload\(selected, "avatar"\);/);
+  assert.match(account, /finally \{[\s\S]*input\.value = "";/);
+  assert.match(account, /onChange=\{e=>void chooseAvatar\(e\.currentTarget\)\}/);
+  assert.match(accountStyles, /avatar-upload input\[type="file"\]\{display:block;position:absolute;z-index:12;inset:0;width:100%;height:100%/);
 });
 
 test("testimonials enforce one entry with paging, hearts, and authorized deletion", () => {

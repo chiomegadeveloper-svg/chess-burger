@@ -569,6 +569,17 @@ export default function Account({
       setBusy(false);
     }
   }
+  async function chooseAvatar(input: HTMLInputElement) {
+    const selected = input.files?.[0];
+    if (!selected) return;
+    try {
+      await upload(selected, "avatar");
+    } finally {
+      // Safari may keep Photos selections behind a temporary file handle.
+      // Clear it only after conversion and upload have finished.
+      input.value = "";
+    }
+  }
   async function save(e: React.FormEvent) {
     e.preventDefault();
     if (!profile || !client || !user) return;
@@ -906,7 +917,7 @@ export default function Account({
             )}
             <AvatarFrameOverlay frameId={profile.avatar_frame_id}/>
             <i><Camera/>Change photo</i>
-            <input type="file" accept="image/*,.heic,.heif,.avif,.jxl,.tif,.tiff" disabled={busy} onChange={e=>{const input=e.currentTarget,selected=input.files?.[0];input.value="";if(selected)void upload(selected,"avatar")}}/>
+            <input type="file" accept="image/*,.heic,.heif,.avif,.jxl,.tif,.tiff" disabled={busy} onChange={e=>void chooseAvatar(e.currentTarget)}/>
           </label>
           <div>
             <h2>{profile.display_name}</h2>
@@ -1013,12 +1024,7 @@ export default function Account({
             type="file"
             accept="image/*,.heic,.heif,.avif,.jxl,.tif,.tiff"
             disabled={busy}
-            onChange={(e) => {
-              const input = e.currentTarget;
-              const selected = input.files?.[0];
-              input.value = "";
-              if (selected) void upload(selected, "avatar");
-            }}
+            onChange={(e) => void chooseAvatar(e.currentTarget)}
           />
         </label>
         <div>

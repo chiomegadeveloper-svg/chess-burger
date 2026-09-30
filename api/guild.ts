@@ -141,7 +141,6 @@ export default async function handler(req:Req,res:Res){
    const byId=new Map((players.data??[]).map(row=>[row.user_id,row]));
    members=(memberRows.data??[]).map(row=>({...row,profile:byId.get(row.user_id)}));
    const actorNames=new Map((actorProfiles.data??[]).map(row=>[row.user_id,row.display_name||row.username]));
-   if((history.data??[]).length>20){const oldestKept=history.data![19].id;const removed=await db.from('cb_guild_activity').delete().eq('guild_id',guild.id).lt('id',oldestKept);if(removed.error)throw removed.error;}
    activity=(history.data??[]).slice(0,20).map(row=>({...row,actor_name:actorNames.get(row.actor_id)||'Player'}));
    if(isLeader){
     const byUser=new Map((applicants.data??[]).map(row=>[row.user_id,row]));
