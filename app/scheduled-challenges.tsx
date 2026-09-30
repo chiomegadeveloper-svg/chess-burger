@@ -30,7 +30,7 @@ export default function ScheduledChallenges({userId,onMatch,compact=false}:{user
   const visible=items.filter(item=>!compact||(!item.target_id&&item.status==="pending"));
   return <section className={compact?"scheduled-challenges compact":"scheduled-challenges"} aria-label="Scheduled chess challenges">
     {!compact&&<h2>Scheduled challenges</h2>}
-    {error&&<p role="alert" className="account-note">{error}</p>}
+    {error&&!compact&&<p role="alert" className="account-note">{error}</p>}
     {visible.length===0&&!compact&&<p className="account-note">No scheduled challenges yet. Create one from Challenge a Player.</p>}
     {visible.map(item=>{
       const host=item.host_id===userId,target=item.target_id===userId,due=Date.parse(item.scheduled_at),now=Date.now();
