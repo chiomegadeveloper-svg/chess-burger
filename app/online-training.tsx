@@ -117,7 +117,6 @@ export function OnlineTrainings({profile,initialId="",invite="",onCreateAccount,
  }
  return <section className="online-training-page">
   <header className="online-training-heading"><img src="/cburger_logo.png" alt=""/><div><small>CHESS BURGER · LIVE LEARNING</small><h1>Online Trainings</h1><p>Choose a class and send your registration for owner approval.</p></div></header>
-  {profile?.user_id&&<CertificateSection/>}
   {error&&<p className="online-training-error" role="alert">{error}</p>}{status&&<p className="online-training-success" role="status">{status}</p>}
   {!training&&<div className="online-training-grid">{trainings.map(item=><button className="online-training-card" type="button" key={item.id} onClick={()=>setSelected(item.id)}>
    {item.poster_url?<img src={item.poster_url} alt={`${item.title} poster`}/>:<span className="online-training-placeholder">♟</span>}
@@ -143,6 +142,7 @@ export function OnlineTrainings({profile,initialId="",invite="",onCreateAccount,
       <button type="button" disabled={busy||!profile.username||!name.trim()||!birthdate||!!status} onClick={()=>void join()}>{busy?"Submitting…":invite?"Confirm invitation":"Submit registration for approval"}</button>
      </>}
     </div><TrainingInstallCard/></div></div></article>}
+  {profile?.user_id&&<CertificateSection/>}
  </section>;
 }
 
