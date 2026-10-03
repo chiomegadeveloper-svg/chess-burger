@@ -43,7 +43,7 @@ export default async function handler(req:Req,res:Res){
     if(auth.error||!auth.data.user)return fail(401,"Please sign in again.");
     const userId=auth.data.user.id,body=req.body||{},action=String(body.action||"");
     const freeClassroom=async()=>{const setting=await client.from("cb_classroom_settings").select("*").eq("id",true).single();if(setting.error)fail(500,setting.error.message);return setting.data?.cbc_enabled===false;};
-    const activeEnrollment=async(roomId:string,studentId:string,now:string,free:boolean)=>{const enrollment=await client.from("cb_classroom_enrollments").select("student_id,access_expires_at").eq("room_id",roomId).eq("student_id",studentId).maybeSingle();if(enrollment.error)fail(500,enrollment.error.message);return enrollment.data&&(free||enrollment.data.access_expires_at>now)?enrollment.data:null;};
+const activeEnrollment=async(roomId:string,studentId:string,now:string,free:boolean,allowGrace=false)=>{const enrollment=await client.from("cb_classroom_enrollments").select("student_id,access_expires_at").eq("room_id",roomId).eq("student_id",studentId).maybeSingle();if(enrollment.error)fail(500,enrollment.error.message);return enrollment.data&&(free||enrollment.data.access_expires_at>now||(allowGrace&&Date.parse(enrollment.data.access_expires_at)+8*60_000>Date.parse(now)))?enrollment.data:null;};
     const gate=await client.from("cb_profiles").select("*").eq("user_id",userId).maybeSingle();
     if(gate.error)fail(500,gate.error.message);
     if(!String(gate.data?.avatar_url??"").includes(`/storage/v1/object/public/cb-profile-media/${userId}/avatar-`))fail(403,"Complete registration and save a profile picture to unlock Chess Burger.");
@@ -211,7 +211,7 @@ export default async function handler(req:Req,res:Res){
       const trainingRoom=await client.from("cb_online_trainings").select("id").eq("room_id",roomId).maybeSingle();
       if(trainingRoom.error)fail(500,trainingRoom.error.message);
       const free=await freeClassroom();
-      if(!teacher&&!await activeEnrollment(roomId,userId,now,free))fail(403,"Your classroom access has expired. Renew with 1 CBC.");
+      if(!teacher&&!await activeEnrollment(roomId,userId,now,free,true))fail(403,"Your eight-minute CBC grace period ended. Renew in Classroom to rejoin.");
       await client.from("cb_classroom_workspaces").upsert({room_id:roomId},{onConflict:"room_id",ignoreDuplicates:true});
       const [workspace,enrollments,boards,wallet,economy,profile,lessonLog]=await Promise.all([
         client.from("cb_classroom_workspaces").select("*").eq("room_id",roomId).single(),
@@ -223,7 +223,7 @@ export default async function handler(req:Req,res:Res){
         teacher?client.from("cb_classroom_lesson_events").select("id,scope,student_id,fen,annotations,label,created_at").eq("room_id",roomId).order("created_at",{ascending:false}).limit(100):Promise.resolve({data:[],error:null})
       ]);
       for(const result of [workspace,enrollments,boards,wallet,economy,profile,lessonLog])if(result.error)fail(500,result.error.message);
-      const admitted=(enrollments.data||[]).filter((row:any)=>free||row.access_expires_at>now);
+      const admitted=(enrollments.data||[]).filter((row:any)=>free||row.access_expires_at>now||(Date.parse(row.access_expires_at)+8*60_000>Date.parse(now)&&(teacher||row.student_id===userId)));
       const studentIds=admitted.map((row:any)=>row.student_id);
       const profiles=studentIds.length?await client.from("cb_profiles").select("user_id,display_name,username,avatar_url").in("user_id",studentIds):{data:[],error:null};
       if(profiles.error)fail(500,profiles.error.message);
@@ -356,6 +356,19 @@ export default async function handler(req:Req,res:Res){
     if(action==="terminate"){
       const result=await client.rpc("cb_terminate_classroom",{p_user_id:userId,p_room_id:String(body.room_id||"")});
       if(result.error)fail(400,result.error.message);return res.status(200).json({ok:true});
+    }
+    if(action==="gift-room-cbc"){
+      const roomId=String(body.room_id||""),studentId=String(body.student_id||""),quantity=Number(body.quantity||0),now=new Date().toISOString();
+      if(!Number.isInteger(quantity)||quantity<1||quantity>1000)fail(400,"Choose 1 to 1000 CBC.");
+      const room=await client.from("cb_classroom_rooms").select("teacher_id").eq("id",roomId).eq("status","active").gt("expires_at",now).maybeSingle();
+      if(room.error)fail(500,room.error.message);
+      if(room.data?.teacher_id!==userId)fail(403,"Only this classroom teacher can gift CBC.");
+      if(!await activeEnrollment(roomId,studentId,now,await freeClassroom(),true))fail(400,"Select an enrolled student within their renewal window.");
+      const profile=await client.from("cb_profiles").select("username").eq("user_id",studentId).single();
+      if(profile.error||!profile.data?.username)fail(400,"Student username unavailable.");
+      const result=await client.rpc("cb_gift_cbc",{p_sender_id:userId,p_username:profile.data.username,p_quantity:quantity,p_request_id:String(body.request_id||"")});
+      if(result.error)fail(400,result.error.message);
+      return res.status(200).json(result.data);
     }
     if(action==="gift-cbc"){
       const result=await client.rpc("cb_gift_cbc",{p_sender_id:userId,p_username:String(body.username||""),p_quantity:Number(body.quantity||0),p_request_id:String(body.request_id||"")});if(result.error)fail(400,result.error.message);return res.status(200).json(result.data);

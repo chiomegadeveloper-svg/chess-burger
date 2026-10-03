@@ -1773,3 +1773,6 @@
 .student-cbc-control label{display:inline-flex;align-items:center;gap:7px;padding:7px 9px;border:1px solid #527079;border-radius:9px;color:#d1f4f4;font-size:11px;cursor:pointer}
 .student-cbc-control input{accent-color:#e8c46c}
 @media(max-width:600px){.student-workshop-controls,.student-cbc-control{align-items:stretch;flex-direction:column}.student-workshop-controls>button,.student-cbc-control>button{width:100%}}
+
+
+.teacher-gift-strip{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 16px;background:#1c3432;color:#f9e8ba;border-bottom:1px solid #876a34}.teacher-gift-strip span{display:inline-flex;align-items:center;gap:6px}.teacher-gift-strip button,.cbc-grace-message button{border:1px solid #caa75b;border-radius:8px;background:#4a361c;color:#fff0c6;padding:7px 12px;font-weight:700;cursor:pointer}.teacher-gift-strip button:disabled{opacity:.5;cursor:default}.cbc-grace-message{display:flex;align-items:center;flex-wrap:wrap;gap:8px;color:#ffe2aa!important;font-weight:700!important}.seba-market select{width:100%;padding:9px;border:1px solid #a58a56;border-radius:7px;background:#172b2c;color:#fff}
