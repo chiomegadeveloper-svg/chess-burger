@@ -153,7 +153,11 @@ export default async function handler(req:Req,res:Res){
       const byRoom:Record<string,number>={};for(const row of counts.data||[])byRoom[row.room_id]=(byRoom[row.room_id]||0)+1;
       const profile=await client.from("cb_profiles").select("gold_points,role").eq("user_id",userId).single();
       const now=Date.now(),validJoined=(joined.data||[]).filter((row:any)=>row.room?.status==="active"&&new Date(row.room.expires_at).getTime()>now);
-      return res.status(200).json({wallet:wallet.data,gold:profile.data?.gold_points||0,settings:settings.data,owned:(owned.data||[]).map((r:any)=>({...r,student_count:byRoom[r.id]||0})),joined:validJoined,active:active.data||[]});
+      const joinedIds=validJoined.map((row:any)=>row.room.id);
+      const trainingRooms=joinedIds.length?await client.from("cb_online_trainings").select("room_id").in("room_id",joinedIds):{data:[],error:null};
+      if(trainingRooms.error)fail(500,trainingRooms.error.message);
+      const trainingIds=new Set((trainingRooms.data||[]).map((row:any)=>row.room_id));
+      return res.status(200).json({wallet:wallet.data,gold:profile.data?.gold_points||0,settings:settings.data,owned:(owned.data||[]).map((r:any)=>({...r,student_count:byRoom[r.id]||0})),joined:validJoined.map((row:any)=>({...row,room:{...row.room,training_room:trainingIds.has(row.room.id)}})),active:active.data||[]});
     }
     if(action==="buy-cbc"){
       const result=await client.rpc("cb_buy_cbc",{p_user_id:userId,p_quantity:Number(body.quantity||0),p_request_id:String(body.request_id||"")});if(result.error)fail(400,result.error.message);return res.status(200).json(result.data);
@@ -204,6 +208,8 @@ export default async function handler(req:Req,res:Res){
       const room=await client.from("cb_classroom_rooms").select("*").eq("id",roomId).eq("status","active").gt("expires_at",now).single();
       if(room.error||!room.data)fail(404,"Active classroom not found.");
       const teacher=room.data.teacher_id===userId;
+      const trainingRoom=await client.from("cb_online_trainings").select("id").eq("room_id",roomId).maybeSingle();
+      if(trainingRoom.error)fail(500,trainingRoom.error.message);
       const free=await freeClassroom();
       if(!teacher&&!await activeEnrollment(roomId,userId,now,free))fail(403,"Your classroom access has expired. Renew with 1 CBC.");
       await client.from("cb_classroom_workspaces").upsert({room_id:roomId},{onConflict:"room_id",ignoreDuplicates:true});
@@ -224,7 +230,7 @@ export default async function handler(req:Req,res:Res){
       const profileMap=new Map((profiles.data||[]).map((p:any)=>[p.user_id,p]));
       const boardMap=new Map((boards.data||[]).map((b:any)=>[b.student_id,b]));
       const students=admitted.map((e:any)=>({...(profileMap.get(e.student_id)||{user_id:e.student_id,display_name:"Student"}),access_expires_at:e.access_expires_at,board:boardMap.get(e.student_id)||{room_id:roomId,student_id:e.student_id,fen:"start",free_movement:false,version:0}}));
-      return res.status(200).json({role:teacher?"teacher":"student",room:room.data,workspace:workspace.data,students,lesson_log:(lessonLog.data||[]).filter((event:any)=>event.label!=="Student move starting position"),own_student_id:teacher?null:userId,coach_name:teacher?(profile.data?.display_name||profile.data?.username||"Coach"):null,wallet:{cbc:wallet.data?.cbc||0},economy:{gold:profile.data?.gold_points||0,cbc_gold_price:economy.data?.cbc_gold_price||0,cbc_enabled:economy.data?.cbc_enabled!==false,classroom_features_ready:Object.hasOwn(economy.data||{},"cbc_enabled")}});
+      return res.status(200).json({role:teacher?"teacher":"student",room:{...room.data,training_room:!!trainingRoom.data},workspace:workspace.data,students,lesson_log:(lessonLog.data||[]).filter((event:any)=>event.label!=="Student move starting position"),own_student_id:teacher?null:userId,coach_name:teacher?(profile.data?.display_name||profile.data?.username||"Coach"):null,wallet:{cbc:wallet.data?.cbc||0},economy:{gold:profile.data?.gold_points||0,cbc_gold_price:economy.data?.cbc_gold_price||0,cbc_enabled:economy.data?.cbc_enabled!==false,classroom_features_ready:Object.hasOwn(economy.data||{},"cbc_enabled")}});
     }
     if(action==="set-student-movement"){
       const roomId=String(body.room_id||""),studentId=String(body.student_id||""),now=new Date().toISOString();
@@ -300,6 +306,19 @@ export default async function handler(req:Req,res:Res){
         const logged=await client.from("cb_classroom_lesson_events").insert({room_id:roomId,actor_id:userId,scope:"assignment",student_id:targetStudentId||null,fen:assignedFen,annotations:[],label});
         if(logged.error)fail(500,logged.error.message);
         return res.status(200).json({assigned:assignments.length,fen:assignedFen});
+      }
+      if(kind==="reset-own-board"){
+        if(teacher)fail(403,"Only students can reset their own practice board.");
+        const saved=await client.from("cb_classroom_student_boards").upsert({
+          room_id:roomId,student_id:userId,fen:"start",annotations:[],updated_by:userId,updated_at:now
+        },{onConflict:"room_id,student_id"}).select("*").single();
+        if(saved.error)fail(500,saved.error.message);
+        const logged=await client.from("cb_classroom_lesson_events").insert({
+          room_id:roomId,actor_id:userId,scope:"student",student_id:userId,
+          fen:"start",annotations:[],label:"Student reset their practice board"
+        });
+        if(logged.error)fail(500,logged.error.message);
+        return res.status(200).json({board:saved.data});
       }
       if(kind==="master"){
         if(!teacher)fail(403,"Only the teacher can control the lesson board.");

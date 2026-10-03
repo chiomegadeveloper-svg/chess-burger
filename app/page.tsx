@@ -781,7 +781,7 @@ function AppPage() {
       </>
     );
   else if (tab === "tournaments") content = <section className="tournament-play-page"><button className="back-button" type="button" onClick={() => setTab("play-select")}><ArrowLeft size={16}/>Play destinations</button><Tournaments profile={profile} /></section>;
-  else if (tab === "training") content = <OnlineTrainings profile={profile} initialId={trainingId} invite={trainingInvite}/>;
+  else if (tab === "training") content = <OnlineTrainings profile={profile} initialId={trainingId} invite={trainingInvite} onOpenClassroom={() => navigate("classroom")}/>;
   else if (tab === "grand-arena") content = <GrandArena onBack={() => setTab("play-select")} onMatch={openMatch} onShop={() => setTab("shop")}/>;
   else if (tab === "classroom") content = <Classroom onBack={() => setTab("play-select")} onOpenShop={() => setTab("shop")}/>;
   else if (tab === "cpu" && profile) content = <CpuGame player={profile} onClose={() => setTab("play")} onReward={() => void refreshProfile()}/>;

@@ -38,3 +38,10 @@
 .online-training-account-gate h3{margin:8px 0;color:#f6d897}
 .online-training-account-gate p{color:#d1e0e1;font-size:12px;line-height:1.55}
 .online-training-account-gate button{width:100%}
+
+.training-decision{margin:16px 0;padding:15px 17px;border:1px solid #507784;border-radius:13px;background:#14313a;color:#e7f5f5}
+.training-decision strong{display:block;color:#f6d88e;font-size:15px}
+.training-decision p{margin:7px 0 0;font-size:12px;line-height:1.55}
+.training-decision.approved{border-color:#6bbf96;background:#183e36}
+.training-decision.declined{border-color:#b98484;background:#462b2c}
+.training-decision button{margin-top:12px;min-height:38px;padding:8px 14px;border:1px solid #e6c674;border-radius:9px;background:#493b24;color:#ffe6a4;font-weight:800;cursor:pointer}

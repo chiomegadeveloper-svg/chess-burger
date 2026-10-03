@@ -45,7 +45,7 @@ export default async function handler(req: Req, res: Res) {
     }
 
     const now = Date.now(), cutoff = new Date(now - age).toISOString(), day = phDay(now);
-    const [reads, reward, puzzle, banners, comments, feed, purchases, gifts, socials, member, announcements, cbgOrders, donorDonations] = await Promise.all([
+    const [reads, reward, puzzle, banners, comments, feed, purchases, gifts, socials, member, announcements, cbgOrders, donorDonations, trainingDecisions] = await Promise.all([
       db.from('cb_notification_reads').select('notification_key,read_at').eq('user_id', userId).gte('read_at', cutoff).order('read_at', { ascending: false }).limit(500),
       db.rpc('cb_daily_reward_status', { p_user_id: userId }),
       db.from('cb_daily_puzzle_claims').select('puzzle_id').eq('user_id', userId).eq('puzzle_day', day).limit(1),
@@ -59,6 +59,7 @@ export default async function handler(req: Req, res: Res) {
       db.from('cb_feed').select('id,content,created_at,expires_at').eq('kind', 'announcement').gte('created_at', new Date(now - 7 * 86400_000).toISOString()).order('created_at', { ascending: false }).limit(5),
       db.from('cb_cbg_orders').select('id,status,cbg_amount,reviewed_at').eq('buyer_id',userId).in('status',['approved','rejected']).gte('reviewed_at',cutoff).order('reviewed_at',{ascending:false}).limit(12),
       db.from('cb_donations').select('id,status,amount_php,reviewed_at').eq('donor_id',userId).in('status',['approved','rejected']).gte('reviewed_at',cutoff).order('reviewed_at',{ascending:false}).limit(12),
+      db.from('cb_online_training_registrations').select('id,approved_at,rejected_at,rejection_reason,created_at,training:cb_online_trainings(title,starts_at)').eq('user_id',userId).gte('created_at',new Date(now-90*86400_000).toISOString()).order('created_at',{ascending:false}).limit(30),
     ]);
     // The service-role client bypasses RLS: gate this query by the authenticated profile role.
     const ownerSales = gate.data?.role === 'owner'
@@ -105,6 +106,15 @@ export default async function handler(req: Req, res: Res) {
       if (row.delta < 0 && purchaseTitles[row.kind]) add({ key: `purchase:${row.id}`, kind: 'purchase', title: purchaseTitles[row.kind], body: `${Math.abs(row.delta)} Gold spent successfully.`, target: row.kind === 'arena_ticket_purchase' ? 'grand-arena' : row.kind === 'shop_purchase' ? 'bag' : row.kind === 'bag_slots' ? 'bag' : row.kind === 'cbc_purchase' || row.kind === 'classroom_room' || row.kind === 'seba_student_cbc' ? 'classroom' : 'shop', created_at: row.created_at });
       if (row.delta > 0 && row.kind === 'gold_gift') add({ key: `gold-gift:${row.id}`, kind: 'gift', title: 'Gold gift received', body: `Someone sent you ${row.delta} Gold.`, target: 'bag', created_at: row.created_at });
       if (row.delta > 0 && row.kind === 'arena_champion') add({ key: `champion:${row.id}`, kind: 'arena', title: 'Grand Arena champion!', body: `Your prize of ${row.delta} Gold has arrived.`, target: 'grand-arena', created_at: row.created_at });
+    }
+    const decisionRows = trainingDecisions.error && /rejected_at|rejection_reason|schema cache|does not exist/i.test(trainingDecisions.error.message)
+      ? [] : rows(trainingDecisions, 'online trainings');
+    for (const decision of decisionRows) {
+      const training = Array.isArray(decision.training) ? decision.training[0] : decision.training;
+      if (!training) continue;
+      const title = clean(training.title, 70), schedule = new Intl.DateTimeFormat('en-PH', {timeZone:'Asia/Manila',dateStyle:'medium',timeStyle:'short'}).format(new Date(training.starts_at));
+      if (decision.approved_at) add({key:`training:${decision.id}:approved`,kind:'training',title:'Online training approved',body:`${title} · ${schedule}. Be on time. Open Classroom, tap Student, then select your approved session under Enrolled sessions.`,target:'classroom',created_at:decision.approved_at});
+      else if (decision.rejected_at || Date.parse(training.starts_at)<=now) add({key:decision.rejected_at?`training:${decision.id}:rejected:${decision.rejected_at}`:`training:${decision.id}:not-approved`,kind:'training',title:'Online training not approved',body:clean(decision.rejection_reason,210)||`You were not approved for ${title}. Try the next session or ask the coach or teacher for clarification.`,target:'training',created_at:decision.rejected_at||training.starts_at});
     }
     for (const order of rows(cbgOrders, 'CBG purchases')) add({ key: `cbg-order:${order.id}:${order.status}`, kind: 'purchase', title: order.status === 'approved' ? 'CBG payment approved' : 'CBG payment not verified', body: order.status === 'approved' ? `${order.cbg_amount} CBG has been added to your wallet.` : 'Review your CBG order in Shop or contact the owner.', target: 'shop', created_at: order.reviewed_at });
     for (const order of rows(ownerSales, 'pending CBG sales')) add({ key: `owner-sale:${order.id}`, kind: 'owner-sale', title: 'NEW SALE', body: `${Number(order.cbg_amount).toLocaleString('en-US')} CBG · ₱${Number(order.amount_php).toFixed(2)} · Ref ending ${order.reference_last6}. Verify payment before approval.`, target: 'cms-cbg-editor', created_at: order.created_at, sticky: true });

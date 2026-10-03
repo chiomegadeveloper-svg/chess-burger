@@ -8,7 +8,8 @@ type Category="u12"|"u15"|"u20"|"all";
 type PackageKind="pawn"|"bishop"|"knight"|"rook"|"queen"|"king";
 type PaymentMode="free"|"paid"|"hidden";
 type Training={id:string;title:string;coach_name:string;poster_url:string;starts_at:string;capacity:number;category:Category;invitation_text:string;registered:number;confirmed:number;payment_mode:PaymentMode;price_php:number;package_kind:PackageKind|null};
-type Registrant={id:string;full_name:string;birthdate:string;confirmed:boolean;approved:boolean;username:string|null;invited_at:string|null;invite_token:string};
+type Registrant={id:string;full_name:string;birthdate:string;confirmed:boolean;approved:boolean;rejected:boolean;rejection_reason:string|null;username:string|null;invited_at:string|null;invite_token:string};
+type MyTrainingStatus={id:string;training_id:string;title:string;starts_at:string;approved_at:string|null;rejected_at:string|null;rejection_reason:string|null;room_id:string|null};
 type Managed=Training&{status:string;cbc_reward:number;room_id:string|null;room_code:string|null;registrants:Registrant[]};
 const packages:{kind:PackageKind;slots:number;duration:string}[]=[
  {kind:"pawn",slots:5,duration:"12 hours"},{kind:"bishop",slots:10,duration:"1 day"},
@@ -61,22 +62,24 @@ function TrainingInstallCard(){
  </aside>;
 }
 
-export function OnlineTrainings({profile,initialId="",invite="",onCreateAccount}:{profile?:PlayerProfile|null;initialId?:string;invite?:string;onCreateAccount?:()=>void}){
+export function OnlineTrainings({profile,initialId="",invite="",onCreateAccount,onOpenClassroom}:{profile?:PlayerProfile|null;initialId?:string;invite?:string;onCreateAccount?:()=>void;onOpenClassroom?:()=>void}){
  const[trainings,setTrainings]=useState<Training[]>([]),[selected,setSelected]=useState(initialId),[name,setName]=useState(profile?.display_name??""),[birthdate,setBirthdate]=useState("");
  const[busy,setBusy]=useState(false),[status,setStatus]=useState(""),[error,setError]=useState("");
- const[roster,setRoster]=useState<Managed|null>(null);
+ const[roster,setRoster]=useState<Managed|null>(null),[myStatuses,setMyStatuses]=useState<MyTrainingStatus[]>([]);
  const load=useCallback(async()=>{try{setError("");setTrainings(await rpc<Training[]>("cb_training_public",{p_id:initialId||null}));}catch(e){setError((e as Error).message);}},[initialId]);
  useEffect(()=>{void load();},[load]);
  useEffect(()=>setSelected(initialId),[initialId]);
+ useEffect(()=>{if(!profile?.user_id)return;let active=true;const refresh=async()=>{try{const rows=await rpc<MyTrainingStatus[]>("cb_training_my_status");if(active)setMyStatuses(rows)}catch{}};void refresh();const timer=window.setInterval(()=>{if(document.visibilityState==="visible")void refresh()},60_000);const onVisible=()=>{if(document.visibilityState==="visible")void refresh()};document.addEventListener("visibilitychange",onVisible);return()=>{active=false;window.clearInterval(timer);document.removeEventListener("visibilitychange",onVisible)}},[profile?.user_id]);
  const training=trainings.find(item=>item.id===selected);
+ const decision=myStatuses.find(item=>item.training_id===selected);
  async function join(){
   if(!training||!profile?.username)return;
   setBusy(true);setError("");
   try{
    validateAge(training,birthdate);
    const result=await rpc<string>("cb_training_register",{p_id:training.id,p_full_name:name.trim(),p_birthdate:birthdate,p_invite:invite||null});
-   setStatus(result==="approved"?"You are approved. Find your room in Classroom → Student portal.":"Registration received. The owner will review it; paid trainings require payment verification before approval.");
-   await load();
+   setStatus(result==="approved"?"Approved! Check the schedule and be on time. Open Classroom, tap Student, then enter your approved session.":result==="rejected"?"This registration was not accepted. Ask the coach for details or try another session.":"Registration received. The owner will review it; paid trainings require payment verification before approval.");
+   setMyStatuses(await rpc<MyTrainingStatus[]>("cb_training_my_status").catch(()=>[]));await load();
   }catch(e){setError((e as Error).message);}finally{setBusy(false);}
  }
  async function showRegistrants(event:Training){
@@ -97,6 +100,14 @@ export function OnlineTrainings({profile,initialId="",invite="",onCreateAccount}
  async function showRegistrantsReload(eventId:string){
   const managed=await rpc<Managed[]>("cb_training_manage");setRoster(managed.find(item=>item.id===eventId)??null);
  }
+ async function rejectRegistrant(reg:Registrant,event:Training){
+  const reason=window.prompt(`Optional reason for ${reg.full_name} (up to 250 characters):`,"")?.trim();
+  if(reason===undefined||reason.length>250)return;
+  if(!window.confirm(`Decline ${reg.full_name}'s registration for "${event.title}"? They will be notified.`))return;
+  setBusy(true);setError("");setStatus("");
+  try{await rpc("cb_training_reject",{p_registration_id:reg.id,p_reason:reason});await showRegistrantsReload(event.id);await load();setStatus(`${reg.full_name} was notified that this registration was not accepted.`);}
+  catch(e){setError((e as Error).message);}finally{setBusy(false);}
+ }
  async function removeRegistrant(reg:Registrant,event:Training){
   if(!window.confirm(`Remove ${reg.full_name} from "${event.title}"? Classroom access will be removed; CBC already awarded remains in the student's wallet.`))return;
   setBusy(true);setError("");setStatus("");
@@ -116,7 +127,10 @@ export function OnlineTrainings({profile,initialId="",invite="",onCreateAccount}
     <div className="online-training-title-row"><h2>{training.title}</h2>{profile?.role==="owner"&&<button className="online-training-roster-toggle" type="button" disabled={busy} aria-expanded={roster?.id===training.id} onClick={()=>void showRegistrants(training)}>{roster?.id===training.id?"Hide registrants":`View registrants (${training.registered})`}</button>}</div>
     <p>{training.invitation_text||"Join the Chess Burger online training session."}</p>
     <dl><div><dt>Coach</dt><dd>{training.coach_name}</dd></div><div><dt>Schedule</dt><dd>{new Date(training.starts_at).toLocaleString()}</dd></div><div><dt>Room</dt><dd>{training.package_kind?`Room ${training.package_kind} · ${training.capacity} students`:"Assigned by owner"}</dd></div><div><dt>Places</dt><dd>{training.confirmed} approved · {training.registered}/{training.capacity} registered</dd></div></dl>
-    {roster?.id===training.id&&<section className="online-training-roster" aria-label="Training registrants"><h3>Registration review</h3><ul>{roster.registrants.map(reg=><li key={reg.id}><span><strong>{reg.full_name}</strong><small>{reg.username?`@${reg.username}`:"Account pending"} · {reg.approved?"Approved and enrolled":"Awaiting approval"}</small></span><div className="online-training-registrant-actions">{!reg.approved&&<button disabled={busy||!reg.confirmed} onClick={()=>void approve(reg,training)}>Approve</button>}<button className="online-training-remove" disabled={busy} onClick={()=>void removeRegistrant(reg,training)}>Remove</button></div></li>)}</ul></section>}
+    {decision?.approved_at&&<aside className="training-decision approved" role="status"><strong>Registration approved</strong><p>Check the schedule: {new Date(decision.starts_at).toLocaleString()}. Please be on time. Open Classroom, tap <b>Student</b>, then tap your approved session under <b>Enrolled sessions</b>.</p>{onOpenClassroom&&<button type="button" onClick={onOpenClassroom}>Go to Classroom → Student</button>}</aside>}
+    {(decision?.rejected_at||decision&&!decision.approved_at&&Date.parse(decision.starts_at)<=Date.now())&&<aside className="training-decision declined" role="status"><strong>Registration not approved</strong><p>{decision?.rejection_reason||"You can try the next online training session or ask the coach or teacher for clarification."}</p></aside>}
+    {decision&&!decision.approved_at&&!decision.rejected_at&&Date.parse(decision.starts_at)>Date.now()&&<aside className="training-decision pending" role="status"><strong>Awaiting owner approval</strong><p>We will notify you here when the owner reviews your registration.</p></aside>}
+    {roster?.id===training.id&&<section className="online-training-roster" aria-label="Training registrants"><h3>Registration review</h3><ul>{roster.registrants.map(reg=><li key={reg.id}><span><strong>{reg.full_name}</strong><small>{reg.username?`@${reg.username}`:"Account pending"} · {reg.approved?"Approved and enrolled":reg.rejected?"Not accepted":"Awaiting approval"}</small></span><div className="online-training-registrant-actions">{!reg.approved&&!reg.rejected&&<button disabled={busy||!reg.confirmed} onClick={()=>void approve(reg,training)}>Approve</button>}{!reg.approved&&!reg.rejected&&<button disabled={busy} onClick={()=>void rejectRegistrant(reg,training)}>Not accepted</button>}<button className="online-training-remove" disabled={busy} onClick={()=>void removeRegistrant(reg,training)}>Remove</button></div></li>)}</ul></section>}
     <div className="online-training-join-layout"><div className="online-training-form">
      {!profile?<div className="online-training-account-gate"><small>STEP 1 · CHESS BURGER ACCOUNT</small><h3>Join Chess Burger first</h3><p>Complete your app registration, then return to this training link to submit your class registration. Visiting this link does not reserve a place.</p>{onCreateAccount&&<button className="online-training-secondary" type="button" onClick={onCreateAccount}>Create account or sign in</button>}</div>:<>
       <h3>Register for this class</h3>
@@ -156,6 +170,14 @@ export function OnlineTrainingCms({profile}:{profile:PlayerProfile}){
   try{await rpc("cb_training_approve",{p_registration_id:reg.id});await load();window.dispatchEvent(new Event("cb-profile-saved"));setNotice(`${reg.full_name} approved and enrolled. ${event.cbc_reward} CBC awarded.`);}
   catch(e){setError((e as Error).message);}finally{setBusy(false);}
  }
+ async function rejectRegistrant(reg:Registrant,event:Managed){
+  const reason=window.prompt(`Optional reason for ${reg.full_name} (up to 250 characters):`,"")?.trim();
+  if(reason===undefined||reason.length>250)return;
+  if(!window.confirm(`Decline ${reg.full_name}'s registration for "${event.title}"?`))return;
+  setBusy(true);setError("");
+  try{await rpc("cb_training_reject",{p_registration_id:reg.id,p_reason:reason});await load();setNotice(`${reg.full_name} was notified that this registration was not accepted.`);}
+  catch(e){setError((e as Error).message);}finally{setBusy(false);}
+ }
  async function removeRegistrant(reg:Registrant,event:Managed){
   if(!window.confirm(`Remove ${reg.full_name} from "${event.title}"? Classroom access will be removed; awarded CBC remains with the student.`))return;
   setBusy(true);setError("");
@@ -182,6 +204,6 @@ export function OnlineTrainingCms({profile}:{profile:PlayerProfile}){
   <div className="cms-actions"><button disabled={busy||title.trim().length<3||!coach.trim()||!startsAt||!Number.isInteger(reward)||reward<0||reward>1000||(paymentMode==="paid"&&(!Number.isFinite(price)||price<=0||message.trim().length<10))} onClick={()=>void save()}>{busy?"Saving…":id?"Update online training":"Create training and room"}</button>{id&&<button onClick={reset}>Cancel edit</button>}</div>
   <div className="online-training-managed">{events.map(event=><article key={event.id}><div className="online-training-managed-heading"><h3>{event.title}</h3><b>{event.payment_mode==="hidden"?"FEE HIDDEN":event.payment_mode==="paid"?peso(event.price_php):"FREE"}</b></div><p>{new Date(event.starts_at).toLocaleString()} · Room {event.package_kind??"not linked"} · {event.registrants.filter(reg=>reg.approved).length}/{event.capacity} approved · {event.cbc_reward} CBC per approval</p><div className="cms-actions"><button type="button" disabled={busy} onClick={()=>edit(event)}>Edit</button><button type="button" disabled={busy} onClick={()=>void navigator.clipboard.writeText(link(event.id)).then(()=>setNotice(`Registration link copied: ${link(event.id)}`)).catch(()=>setError("Could not copy the link."))}>Copy link</button><button className="online-training-delete" type="button" disabled={busy} onClick={()=>void remove(event)}>Delete training & link</button></div>
    {event.room_code&&<p className="online-training-room-note">Classroom: {event.title} · room code {event.room_code}. Approved students see it in Classroom → Student portal.</p>}
-   <h4>Registrants</h4>{event.registrants.map(reg=><div className="online-training-registrant" key={reg.id}><span><b>{reg.full_name}</b><small className={reg.approved?"online-training-account-active":undefined}>{reg.approved?`@${reg.username} · Approved and enrolled`:reg.confirmed?`@${reg.username} · Awaiting approval`:reg.invited_at?"Invited · awaiting account":"Awaiting account"}</small></span><div className="online-training-registrant-actions">{!reg.confirmed&&<button disabled={busy} onClick={()=>void inviteRegistrant(reg,event)}>Invite & copy link</button>}{reg.confirmed&&!reg.approved&&<button disabled={busy} onClick={()=>void approve(reg,event)}>Approve · {event.cbc_reward} CBC</button>}<button className="online-training-remove" type="button" disabled={busy} onClick={()=>void removeRegistrant(reg,event)}>Remove</button></div></div>)}{!event.registrants.length&&<p>No registrants yet.</p>}</article>)}</div>
+   <h4>Registrants</h4>{event.registrants.map(reg=><div className="online-training-registrant" key={reg.id}><span><b>{reg.full_name}</b><small className={reg.approved?"online-training-account-active":undefined}>{reg.approved?`@${reg.username} · Approved and enrolled`:reg.rejected?"Not accepted · student notified":reg.confirmed?`@${reg.username} · Awaiting approval`:reg.invited_at?"Invited · awaiting account":"Awaiting account"}</small></span><div className="online-training-registrant-actions">{!reg.confirmed&&<button disabled={busy} onClick={()=>void inviteRegistrant(reg,event)}>Invite & copy link</button>}{reg.confirmed&&!reg.approved&&!reg.rejected&&<button disabled={busy} onClick={()=>void approve(reg,event)}>Approve · {event.cbc_reward} CBC</button>}{!reg.approved&&!reg.rejected&&<button disabled={busy} onClick={()=>void rejectRegistrant(reg,event)}>Not accepted</button>}<button className="online-training-remove" type="button" disabled={busy} onClick={()=>void removeRegistrant(reg,event)}>Remove</button></div></div>)}{!event.registrants.length&&<p>No registrants yet.</p>}</article>)}</div>
  </section>;
 }
