@@ -65,15 +65,16 @@ async function dailyQuest(client:Db,a:any,action:string,body:Record<string,any>)
   const date=new Date(Date.now()+480*60000).toISOString().slice(0,10);
   const config=await client.from('cb_daily_quest_settings').select('*').eq('id',true).single();
   if(config.error)fail(503,'Daily Quest needs the Supabase 0094 migration.');
+  if(config.data?.reward_cbg==null||config.data?.reward_cbr==null||config.data?.reward_tickets==null)fail(503,'Daily Quest needs the Supabase 0095 combo rewards migration.');
   if(action==='quest-owner-settings'){
     if(a.profile.role!=='owner')fail(403,'Owner access is required.');
     return {settings:config.data};
   }
   if(action==='quest-save-owner-settings'){
     if(a.profile.role!=='owner')fail(403,'Owner access is required.');
-    const kind=String(body.kind??''),amount=Number(body.amount);
-    if(!['cbg','arena_ticket','cbr'].includes(kind)||!Number.isInteger(amount)||amount<1||amount>10000)fail(400,'Choose a reward and an amount from 1 to 10,000.');
-    const saved=await client.from('cb_daily_quest_settings').update({reward_kind:kind,reward_amount:amount,updated_by:a.id,updated_at:new Date().toISOString()}).eq('id',true).select('*').single();
+    const cbg=Number(body.cbg),cbr=Number(body.cbr),tickets=Number(body.tickets);
+    if(!Number.isInteger(cbg)||cbg<1||cbg>10000||!Number.isInteger(cbr)||cbr<1||cbr>10000||!Number.isInteger(tickets)||tickets<1||tickets>10)fail(400,'Choose 1–10,000 CBG, 1–10,000 CBR, and 1–10 Arena Tickets.');
+    const saved=await client.from('cb_daily_quest_settings').update({reward_cbg:cbg,reward_cbr:cbr,reward_tickets:tickets,reward_kind:'cbg',reward_amount:cbg,updated_by:a.id,updated_at:new Date().toISOString()}).eq('id',true).select('*').single();
     if(saved.error)fail(500,saved.error.message);
     return {settings:saved.data};
   }
@@ -84,7 +85,7 @@ async function dailyQuest(client:Db,a:any,action:string,body:Record<string,any>)
   const targets:Record<string,number>={puzzles:5+unsigned%4,online:2+(unsigned>>>3)%2,cpu:3+(unsigned>>>5)%3,quiz:2};
   const excluded=['puzzles','online','cpu','quiz'][(unsigned>>>8)%4];delete targets[excluded];
   if((unsigned>>>10)%2===0)targets.arena=1; // Bonus task, never blocks a claim.
-  const inserted=await client.from('cb_daily_quests').upsert({user_id:a.id,quest_day:date,targets,reward_kind:config.data.reward_kind,reward_amount:config.data.reward_amount},{onConflict:'user_id,quest_day',ignoreDuplicates:true});
+  const inserted=await client.from('cb_daily_quests').upsert({user_id:a.id,quest_day:date,targets,reward_kind:'cbg',reward_amount:config.data.reward_cbg,reward_cbg:config.data.reward_cbg,reward_cbr:config.data.reward_cbr,reward_tickets:config.data.reward_tickets},{onConflict:'user_id,quest_day',ignoreDuplicates:true});
   if(inserted.error)fail(503,'Daily Quest needs the Supabase 0094 migration.');
   if(action==='quest-claim'){
     const claimed=await client.rpc('cb_claim_daily_quest',{p_user_id:a.id,p_day:date});
