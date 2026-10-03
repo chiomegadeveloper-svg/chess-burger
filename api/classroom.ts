@@ -4,11 +4,12 @@ import { Chess } from "chess.js";
 import chessMathHandler from "./_chess-math.js";
 import chessMathAttackHandler from "./_chess-math-attack.js";
 
-/** Locked student boards accept one legal White chess move per update. */
-function legalStudentMove(before:string,after:string){
+/** Locked student boards accept one legal move by the room's approved student side. */
+function legalStudentMove(before:string,after:string,color:"w"|"b"){
   try{
-    const position=new Chess(before==="start"?new Chess().fen():before,{skipValidation:true});
-    if(position.turn()!=="w")return false;
+    const parts=(before==="start"?new Chess().fen():before).split(" ");
+    if(parts[1]!==color){parts[1]=color;parts[3]="-";}
+    const position=new Chess(parts.join(" "),{skipValidation:true});
     return position.moves({verbose:true}).some(move=>{
       const next=new Chess(position.fen(),{skipValidation:true});
       next.move(move);
@@ -259,13 +260,22 @@ const activeEnrollment=async(roomId:string,studentId:string,now:string,free:bool
       if(room.error)fail(500,room.error.message);
       if(room.data?.teacher_id!==userId)fail(403,"Only this room's teacher can approve color switches.");
       if(!await activeEnrollment(roomId,studentId,now,await freeClassroom()))fail(403,"Student access has expired.");
-      const existing=await client.from("cb_classroom_student_boards").select("view_flipped,flip_requested_at").eq("room_id",roomId).eq("student_id",studentId).maybeSingle();
+      const existing=await client.from("cb_classroom_student_boards").select("flip_requested_at").eq("room_id",roomId).eq("student_id",studentId).maybeSingle();
       if(existing.error)fail(500,existing.error.message);
       if(!existing.data?.flip_requested_at)fail(409,"No pending color switch request.");
-      const board=await client.from("cb_classroom_student_boards").update({flip_requested_at:null,...(body.approved?{view_flipped:!existing.data.view_flipped}:{})}).eq("room_id",roomId).eq("student_id",studentId).eq("flip_requested_at",existing.data.flip_requested_at).select("*").maybeSingle();
-      if(board.error)fail(500,board.error.message);
-      if(!board.data)fail(409,"Request already handled. Refresh and try again.");
-      return res.status(200).json({board:board.data});
+      let workspace=null;
+      if(body.approved){
+        const current=await client.from("cb_classroom_workspaces").select("student_color").eq("room_id",roomId).single();
+        if(current.error)fail(500,current.error.message);
+        const next=current.data.student_color==="b"?"w":"b";
+        const updated=await client.from("cb_classroom_workspaces").update({student_color:next,updated_by:userId,updated_at:now}).eq("room_id",roomId).eq("student_color",current.data.student_color).select("*").maybeSingle();
+        if(updated.error)fail(500,updated.error.message);
+        if(!updated.data)fail(409,"The class color changed. Refresh before approving another request.");
+        workspace=updated.data;
+      }
+      const cleared=await client.from("cb_classroom_student_boards").update({flip_requested_at:null}).eq("room_id",roomId).not("flip_requested_at","is",null);
+      if(cleared.error)fail(500,cleared.error.message);
+      return res.status(200).json({workspace,student_color:workspace?.student_color??null});
     }
     if(action==="takeback-student"){
       const roomId=String(body.room_id||""),studentId=String(body.student_id||""),shared=body.shared===true,now=new Date().toISOString();
@@ -357,8 +367,8 @@ const activeEnrollment=async(roomId:string,studentId:string,now:string,free:bool
         const activeCount=await client.from("cb_classroom_enrollments").select("student_id",{count:"exact",head:true}).eq("room_id",roomId).gt("access_expires_at",free?"1970-01-01T00:00:00Z":now);
         if(activeCount.error)fail(500,activeCount.error.message);if(activeCount.count!==1)fail(409,"Shared board is available only for one-on-one sessions.");
         const movement=await client.from("cb_classroom_student_boards").select("*").eq("room_id",roomId).eq("student_id",userId).maybeSingle();if(movement.error)fail(500,movement.error.message);
-        const previous=await client.from("cb_classroom_workspaces").select("fen").eq("room_id",roomId).single();if(previous.error)fail(500,previous.error.message);
-        if(!movement.data?.free_movement&&!legalStudentMove(previous.data?.fen||"start",fen))fail(400,"Your board is locked to one legal White move at a time.");
+        const previous=await client.from("cb_classroom_workspaces").select("fen,student_color").eq("room_id",roomId).single();if(previous.error)fail(500,previous.error.message);
+        if(!movement.data?.free_movement&&!legalStudentMove(previous.data?.fen||"start",fen,previous.data?.student_color==="b"?"b":"w"))fail(400,"Move a piece of your approved color using a legal chess move.");
         if(previous.data?.fen!==fen){const snapshot=await client.from("cb_classroom_lesson_events").insert({room_id:roomId,actor_id:userId,scope:"shared",student_id:userId,fen:previous.data?.fen||"start",annotations:[],label:"Student move starting position"});if(snapshot.error)fail(500,snapshot.error.message);}
         const saved=await client.from("cb_classroom_workspaces").update({fen,updated_by:userId,updated_at:now}).eq("room_id",roomId).select("*").single();
         if(saved.error)fail(500,saved.error.message);const logged=await client.from("cb_classroom_lesson_events").insert({room_id:roomId,actor_id:userId,scope:"shared",student_id:userId,fen,annotations:saved.data.annotations||[],label:"Student moved on the shared board"});if(logged.error)fail(500,logged.error.message);return res.status(200).json({workspace:saved.data});
@@ -368,7 +378,7 @@ const activeEnrollment=async(roomId:string,studentId:string,now:string,free:bool
         if(!await activeEnrollment(roomId,studentId,now,free))fail(403,"Student classroom access is not active.");
         const boardPatch:Record<string,unknown>={room_id:roomId,student_id:studentId,fen,updated_by:userId,updated_at:now};
         if(teacher&&Array.isArray(body.annotations))boardPatch.annotations=body.annotations.slice(0,80);
-        if(!teacher){const previous=await client.from("cb_classroom_student_boards").select("*").eq("room_id",roomId).eq("student_id",studentId).maybeSingle();if(previous.error)fail(500,previous.error.message);if(!previous.data?.free_movement&&!legalStudentMove(previous.data?.fen||"start",fen))fail(400,"Your board is locked to one legal White move at a time.");if((previous.data?.fen||"start")!==fen){const snapshot=await client.from("cb_classroom_lesson_events").insert({room_id:roomId,actor_id:userId,scope:"student",student_id:studentId,fen:previous.data?.fen||"start",annotations:[],label:"Student move starting position"});if(snapshot.error)fail(500,snapshot.error.message);}}
+        if(!teacher){const [previous,workspace]=await Promise.all([client.from("cb_classroom_student_boards").select("*").eq("room_id",roomId).eq("student_id",studentId).maybeSingle(),client.from("cb_classroom_workspaces").select("student_color").eq("room_id",roomId).single()]);if(previous.error||workspace.error)fail(500,previous.error?.message||workspace.error?.message||"Could not check board.");if(!previous.data?.free_movement&&!legalStudentMove(previous.data?.fen||"start",fen,workspace.data?.student_color==="b"?"b":"w"))fail(400,"Move a piece of your approved color using a legal chess move.");if((previous.data?.fen||"start")!==fen){const snapshot=await client.from("cb_classroom_lesson_events").insert({room_id:roomId,actor_id:userId,scope:"student",student_id:studentId,fen:previous.data?.fen||"start",annotations:[],label:"Student move starting position"});if(snapshot.error)fail(500,snapshot.error.message);}}
         const saved=await client.from("cb_classroom_student_boards").upsert(boardPatch,{onConflict:"room_id,student_id"}).select("*").single();
         if(saved.error)fail(500,saved.error.message);const logged=await client.from("cb_classroom_lesson_events").insert({room_id:roomId,actor_id:userId,scope:"student",student_id:studentId,fen,annotations:saved.data.annotations||[],label:teacher?"Teacher updated a student board":"Student moved a piece"});if(logged.error)fail(500,logged.error.message);return res.status(200).json({board:saved.data});
       }
