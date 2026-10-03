@@ -1,6 +1,6 @@
 import {createClient} from "@supabase/supabase-js";
 import {Chess} from "chess.js";
-import {hashCode,issueProof,unseal,type CertificateRow} from "./_certificate-proof";
+import {hashCode,issueProof,unseal,type CertificateRow} from "./_certificate-proof.js";
 type Req={method?:string;headers:{authorization?:string|string[]};body?:Record<string,unknown>};
 type Res={status:(n:number)=>Res;json:(v:unknown)=>void;setHeader:(k:string,v:string)=>void};
 const err=(status:number,message:string):never=>{throw Object.assign(new Error(message),{status})};
