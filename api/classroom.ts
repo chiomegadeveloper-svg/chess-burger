@@ -249,8 +249,8 @@ const activeEnrollment=async(roomId:string,studentId:string,now:string,free:bool
       const room=await client.from("cb_classroom_rooms").select("id").eq("id",roomId).eq("teacher_id",userId).eq("status","active").gt("expires_at",now).maybeSingle();
       if(room.error)fail(500,room.error.message);if(!room.data)fail(403,"Only this room's teacher can unlock student boards.");
       const mode=await client.from("cb_classroom_workspaces").select("board_mode").eq("room_id",roomId).single();
-      if(mode.error)fail(500,mode.error.message);
-      if(mode.data.board_mode!=="teach")fail(409,"Student movement can change only in Teach Mode.");
+      if(mode.error||!mode.data)fail(500,mode.error?.message||"Classroom board mode is unavailable.");
+      if(mode.data!.board_mode!=="teach")fail(409,"Student movement can change only in Teach Mode.");
       if(!await activeEnrollment(roomId,studentId,now,await freeClassroom()))fail(404,"Student is no longer active in this classroom.");
       const board=await client.from("cb_classroom_student_boards").upsert({room_id:roomId,student_id:studentId,free_movement:body.unlocked,updated_by:userId,updated_at:now},{onConflict:"room_id,student_id"}).select("*").single();
       if(board.error)fail(500,board.error.message);
@@ -263,9 +263,9 @@ const activeEnrollment=async(roomId:string,studentId:string,now:string,free:bool
       if(room.error)fail(500,room.error.message);
       if(room.data?.teacher_id!==userId)fail(403,"Only this classroom's teacher can change board mode.");
       const before=await client.from("cb_classroom_workspaces").select("board_mode").eq("room_id",roomId).single();
-      if(before.error)fail(500,before.error.message);
-      if(before.data.board_mode===mode)return res.status(200).json({workspace:before.data,unchanged:true});
-      const workspace=await client.from("cb_classroom_workspaces").update({board_mode:mode,...(mode==='play'?{fen:'start',annotations:[]}:{}),updated_by:userId,updated_at:now}).eq("room_id",roomId).eq("board_mode",before.data.board_mode).select("*").maybeSingle();
+      if(before.error||!before.data)fail(500,before.error?.message||"Classroom board mode is unavailable.");
+      if(before.data!.board_mode===mode)return res.status(200).json({workspace:before.data,unchanged:true});
+      const workspace=await client.from("cb_classroom_workspaces").update({board_mode:mode,...(mode==='play'?{fen:'start',annotations:[]}:{}),updated_by:userId,updated_at:now}).eq("room_id",roomId).eq("board_mode",before.data!.board_mode).select("*").maybeSingle();
       if(workspace.error)fail(500,workspace.error.message);
       if(!workspace.data)fail(409,"The mode changed. Refresh and try again.");
       // Reset individual boards when starting a fresh game; student free movement is Teach-only.
@@ -297,8 +297,8 @@ const activeEnrollment=async(roomId:string,studentId:string,now:string,free:bool
       if(body.approved){
         const current=await client.from("cb_classroom_workspaces").select("student_color").eq("room_id",roomId).single();
         if(current.error)fail(500,current.error.message);
-        const next=current.data.student_color==="b"?"w":"b";
-        const updated=await client.from("cb_classroom_workspaces").update({student_color:next,updated_by:userId,updated_at:now}).eq("room_id",roomId).eq("student_color",current.data.student_color).select("*").maybeSingle();
+        const next=current.data!.student_color==="b"?"w":"b";
+        const updated=await client.from("cb_classroom_workspaces").update({student_color:next,updated_by:userId,updated_at:now}).eq("room_id",roomId).eq("student_color",current.data!.student_color).select("*").maybeSingle();
         if(updated.error)fail(500,updated.error.message);
         if(!updated.data)fail(409,"The class color changed. Refresh before approving another request.");
         workspace=updated.data;
@@ -348,8 +348,8 @@ const activeEnrollment=async(roomId:string,studentId:string,now:string,free:bool
       const free=await freeClassroom();
       if(!teacher&&!await activeEnrollment(roomId,userId,now,free))fail(403,"Your classroom access has expired.");
       const modeRow=await client.from("cb_classroom_workspaces").select("board_mode,student_color,fen").eq("room_id",roomId).single();
-      if(modeRow.error)fail(500,modeRow.error.message);
-      const playMode=modeRow.data.board_mode!=="teach";
+      if(modeRow.error||!modeRow.data)fail(500,modeRow.error?.message||"Classroom board mode is unavailable.");
+      const playMode=modeRow.data!.board_mode!=="teach";
       const fen=String(body.fen||"start");if(fen.length>160)fail(400,"Invalid board position.");
       if(["assign-puzzle","reset-puzzle","assign-board"].includes(kind)){
         if(!teacher)fail(403,"Only the teacher can assign student boards.");
@@ -378,6 +378,13 @@ const activeEnrollment=async(roomId:string,studentId:string,now:string,free:bool
       }
       if(kind==="reset-own-board"){
         if(teacher)fail(403,"Only students can reset their own practice board.");
+        const activeCount=await client.from("cb_classroom_enrollments").select("student_id",{count:"exact",head:true}).eq("room_id",roomId).gt("access_expires_at",free?"1970-01-01T00:00:00Z":now);
+        if(activeCount.error)fail(500,activeCount.error.message);
+        if(activeCount.count===1){
+          const shared=await client.from("cb_classroom_workspaces").update({fen:"start",annotations:[],updated_by:userId,updated_at:now}).eq("room_id",roomId).select("*").single();
+          if(shared.error)fail(500,shared.error.message);
+          return res.status(200).json({workspace:shared.data});
+        }
         const saved=await client.from("cb_classroom_student_boards").upsert({
           room_id:roomId,student_id:userId,fen:"start",annotations:[],updated_by:userId,updated_at:now
         },{onConflict:"room_id,student_id"}).select("*").single();
@@ -391,7 +398,7 @@ const activeEnrollment=async(roomId:string,studentId:string,now:string,free:bool
       }
       if(kind==="master"){
         if(!teacher)fail(403,"Only the teacher can control the lesson board.");
-        if(playMode&&modeRow.data.fen!==fen&&!legalPlayMove(modeRow.data.fen||"start",fen)&&!(fen==="start"&&body.reset_board===true))fail(400,"Play Mode accepts one legal chess move at a time.");
+        if(playMode&&modeRow.data!.fen!==fen&&!legalPlayMove(modeRow.data!.fen||"start",fen)&&!(fen==="start"&&body.reset_board===true))fail(400,"Play Mode accepts one legal chess move at a time.");
         const annotations=Array.isArray(body.annotations)?body.annotations.slice(0,80):[];
         const control=String(body.time_control||"10+0").slice(0,12);
         const saved=await client.from("cb_classroom_workspaces").upsert({room_id:roomId,fen,annotations,time_control:control,selected_student_id:body.selected_student_id||null,updated_by:userId,updated_at:now},{onConflict:"room_id"}).select("*").single();
@@ -414,7 +421,7 @@ const activeEnrollment=async(roomId:string,studentId:string,now:string,free:bool
         if(playMode&&teacher){const previous=await client.from("cb_classroom_student_boards").select("fen").eq("room_id",roomId).eq("student_id",studentId).maybeSingle();if(previous.error)fail(500,previous.error.message);if((previous.data?.fen||"start")!==fen&&!legalPlayMove(previous.data?.fen||"start",fen)&&!(fen==="start"&&body.reset_board===true))fail(400,"Play Mode accepts one legal chess move at a time.");}
         const boardPatch:Record<string,unknown>={room_id:roomId,student_id:studentId,fen,updated_by:userId,updated_at:now};
         if(teacher&&Array.isArray(body.annotations))boardPatch.annotations=body.annotations.slice(0,80);
-        if(!teacher){const previous=await client.from("cb_classroom_student_boards").select("*").eq("room_id",roomId).eq("student_id",studentId).maybeSingle();if(previous.error)fail(500,previous.error.message);if((playMode||!previous.data?.free_movement)&&!legalStudentMove(previous.data?.fen||"start",fen,modeRow.data.student_color==="b"?"b":"w",playMode))fail(400,"Move a piece of your approved color using a legal chess move.");if((previous.data?.fen||"start")!==fen){const snapshot=await client.from("cb_classroom_lesson_events").insert({room_id:roomId,actor_id:userId,scope:"student",student_id:studentId,fen:previous.data?.fen||"start",annotations:[],label:"Student move starting position"});if(snapshot.error)fail(500,snapshot.error.message);}}
+        if(!teacher){const previous=await client.from("cb_classroom_student_boards").select("*").eq("room_id",roomId).eq("student_id",studentId).maybeSingle();if(previous.error)fail(500,previous.error.message);if((playMode||!previous.data?.free_movement)&&!legalStudentMove(previous.data?.fen||"start",fen,modeRow.data!.student_color==="b"?"b":"w",playMode))fail(400,"Move a piece of your approved color using a legal chess move.");if((previous.data?.fen||"start")!==fen){const snapshot=await client.from("cb_classroom_lesson_events").insert({room_id:roomId,actor_id:userId,scope:"student",student_id:studentId,fen:previous.data?.fen||"start",annotations:[],label:"Student move starting position"});if(snapshot.error)fail(500,snapshot.error.message);}}
         const saved=await client.from("cb_classroom_student_boards").upsert(boardPatch,{onConflict:"room_id,student_id"}).select("*").single();
         if(saved.error)fail(500,saved.error.message);const logged=await client.from("cb_classroom_lesson_events").insert({room_id:roomId,actor_id:userId,scope:"student",student_id:studentId,fen,annotations:saved.data.annotations||[],label:teacher?"Teacher updated a student board":"Student moved a piece"});if(logged.error)fail(500,logged.error.message);return res.status(200).json({board:saved.data});
       }
@@ -437,7 +444,7 @@ const activeEnrollment=async(roomId:string,studentId:string,now:string,free:bool
       if(!await activeEnrollment(roomId,studentId,now,await freeClassroom(),true))fail(400,"Select an enrolled student within their renewal window.");
       const profile=await client.from("cb_profiles").select("username").eq("user_id",studentId).single();
       if(profile.error||!profile.data?.username)fail(400,"Student username unavailable.");
-      const result=await client.rpc("cb_gift_cbc",{p_sender_id:userId,p_username:profile.data.username,p_quantity:quantity,p_request_id:String(body.request_id||"")});
+      const result=await client.rpc("cb_gift_cbc",{p_sender_id:userId,p_username:profile.data!.username,p_quantity:quantity,p_request_id:String(body.request_id||"")});
       if(result.error)fail(400,result.error.message);
       return res.status(200).json(result.data);
     }
