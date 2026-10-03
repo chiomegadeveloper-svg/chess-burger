@@ -1273,6 +1273,14 @@ export default async function handler(req: Req, res: Res) {
       if(awarded.error)fail(/cb_award_tournament_gold|schema cache|function/i.test(awarded.error.message)?503:409,awarded.error.message);
       return res.status(200).json({ok:true});
     }
+    if(action==='search-grant-users'){
+      if(account.profile.role!=='owner')fail(403,'Only an Owner can search grant recipients.');
+      const query=cmsUsername(body.query);
+      if(!/^[a-z0-9_]{2,40}$/.test(query))return res.status(200).json({users:[]});
+      const found=await client.from('cb_profiles').select('user_id,username,display_name').ilike('username',`%${query}%`).order('username',{ascending:true}).limit(10);
+      if(found.error)fail(500,found.error.message);
+      return res.status(200).json({users:found.data??[]});
+    }
     if(action==='grant-gold'){
       if(account.profile.role!=='owner')fail(403,'Only an Owner can grant Gold.');
       const username=cmsUsername(body.username),amount=cmsGoldAmount(body.amount),requestId=String(body.request_id??'');
