@@ -31,6 +31,7 @@ import Account from "./account";
 import CommunityFeed from "./community-feed";
 import RecentPlays from "./recent-plays";
 import { OnlineTrainings } from "./online-training";
+import { CertificateVerificationPage } from "./certificates";
 import LocalPairing from "./local-pairing";
 import ReportTickets from "./report-tickets";
 import Rankings from "./rankings";
@@ -113,6 +114,8 @@ function savedSharedBoard(userId: string) {
   } catch { return ""; }
 }
 function AppPage() {
+  const [verificationCode,setVerificationCode]=useState("");
+  useEffect(()=>{setVerificationCode(new URLSearchParams(window.location.search).get("verify-certificate")||"")},[]);
   const [trainingId,setTrainingId]=useState(""),[trainingInvite,setTrainingInvite]=useState(""),[openTrainingAccount,setOpenTrainingAccount]=useState(false);
   const [feedTarget, setFeedTarget] = useState<"recent" | "announcement" | "rewards" | "challenge">("recent");
   const [ownerPending, setOwnerPending] = useState<OwnerPendingAlert[]>([]);
@@ -833,6 +836,7 @@ function AppPage() {
         )}
       </section>
     );
+  if (verificationCode) return <CertificateVerificationPage code={verificationCode}/>;
   if (trainingId && (member !== true || !isProfileComplete(profile)) && !openTrainingAccount)
     return <main className="online-training-landing"><Suspense fallback={<p className="account-note" role="status">Opening training…</p>}><OnlineTrainings initialId={trainingId} invite={trainingInvite} onCreateAccount={()=>setOpenTrainingAccount(true)}/></Suspense><Toaster theme="light" position="top-center" richColors closeButton/></main>;
   if ((member !== true || !isProfileComplete(profile)) && !showSplash)

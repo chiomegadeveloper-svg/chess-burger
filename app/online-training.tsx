@@ -3,6 +3,7 @@ import {useCallback,useEffect,useState} from "react";
 import {getSupabase, type PlayerProfile} from "./supabase";
 import {uploadStaffImage,validateImageFile} from "./media";
 import "./online-training.css";
+import {CertificateSection} from "./certificates";
 
 type Category="u12"|"u15"|"u20"|"all";
 type PackageKind="pawn"|"bishop"|"knight"|"rook"|"queen"|"king";
@@ -116,6 +117,7 @@ export function OnlineTrainings({profile,initialId="",invite="",onCreateAccount,
  }
  return <section className="online-training-page">
   <header className="online-training-heading"><img src="/cburger_logo.png" alt=""/><div><small>CHESS BURGER · LIVE LEARNING</small><h1>Online Trainings</h1><p>Choose a class and send your registration for owner approval.</p></div></header>
+  {profile?.user_id&&<CertificateSection/>}
   {error&&<p className="online-training-error" role="alert">{error}</p>}{status&&<p className="online-training-success" role="status">{status}</p>}
   {!training&&<div className="online-training-grid">{trainings.map(item=><button className="online-training-card" type="button" key={item.id} onClick={()=>setSelected(item.id)}>
    {item.poster_url?<img src={item.poster_url} alt={`${item.title} poster`}/>:<span className="online-training-placeholder">♟</span>}
@@ -207,3 +209,4 @@ export function OnlineTrainingCms({profile}:{profile:PlayerProfile}){
    <h4>Registrants</h4>{event.registrants.map(reg=><div className="online-training-registrant" key={reg.id}><span><b>{reg.full_name}</b><small className={reg.approved?"online-training-account-active":undefined}>{reg.approved?`@${reg.username} · Approved and enrolled`:reg.rejected?"Not accepted · student notified":reg.confirmed?`@${reg.username} · Awaiting approval`:reg.invited_at?"Invited · awaiting account":"Awaiting account"}</small></span><div className="online-training-registrant-actions">{!reg.confirmed&&<button disabled={busy} onClick={()=>void inviteRegistrant(reg,event)}>Invite & copy link</button>}{reg.confirmed&&!reg.approved&&!reg.rejected&&<button disabled={busy} onClick={()=>void approve(reg,event)}>Approve · {event.cbc_reward} CBC</button>}{!reg.approved&&!reg.rejected&&<button disabled={busy} onClick={()=>void rejectRegistrant(reg,event)}>Not accepted</button>}<button className="online-training-remove" type="button" disabled={busy} onClick={()=>void removeRegistrant(reg,event)}>Remove</button></div></div>)}{!event.registrants.length&&<p>No registrants yet.</p>}</article>)}</div>
  </section>;
 }
+
