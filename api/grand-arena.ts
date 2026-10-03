@@ -85,15 +85,29 @@ async function dailyQuest(client:Db,a:any,action:string,body:Record<string,any>)
   const targets:Record<string,number>={puzzles:5+unsigned%4,online:2+(unsigned>>>3)%2,cpu:3+(unsigned>>>5)%3,quiz:2};
   const excluded=['puzzles','online','cpu','quiz'][(unsigned>>>8)%4];delete targets[excluded];
   if((unsigned>>>10)%2===0)targets.arena=1; // Bonus task, never blocks a claim.
-  const inserted=await client.from('cb_daily_quests').upsert({user_id:a.id,quest_day:date,targets,reward_kind:'cbg',reward_amount:config.data.reward_cbg,reward_cbg:config.data.reward_cbg,reward_cbr:config.data.reward_cbr,reward_tickets:config.data.reward_tickets},{onConflict:'user_id,quest_day',ignoreDuplicates:true});
-  if(inserted.error)fail(503,'Daily Quest needs the Supabase 0094 migration.');
+  let quest=await client.from('cb_daily_quests').select('*').eq('user_id',a.id).eq('quest_day',date).maybeSingle();
+  if(quest.error)fail(503,'Daily Quest needs the Supabase 0094 migration.');
+  if(!quest.data){
+    const inserted=await client.from('cb_daily_quests').upsert({user_id:a.id,quest_day:date,targets,reward_kind:'cbg',reward_amount:config.data.reward_cbg,reward_cbg:config.data.reward_cbg,reward_cbr:config.data.reward_cbr,reward_tickets:config.data.reward_tickets},{onConflict:'user_id,quest_day',ignoreDuplicates:true});
+    if(inserted.error)fail(503,inserted.error.message);
+    quest=await client.from('cb_daily_quests').select('*').eq('user_id',a.id).eq('quest_day',date).single();
+    if(quest.error)fail(500,quest.error.message);
+  }
+  // Owner edits apply to active, unclaimed quests. Claimed rows are immutable history.
+  if(!quest.data.claimed_at&&(quest.data.reward_cbg!==config.data.reward_cbg||quest.data.reward_cbr!==config.data.reward_cbr||quest.data.reward_tickets!==config.data.reward_tickets)){
+    const changed=await client.from('cb_daily_quests').update({reward_cbg:config.data.reward_cbg,reward_cbr:config.data.reward_cbr,reward_tickets:config.data.reward_tickets,reward_kind:'cbg',reward_amount:config.data.reward_cbg}).eq('user_id',a.id).eq('quest_day',date).is('claimed_at',null).select('*').maybeSingle();
+    if(changed.error)fail(500,changed.error.message);
+    if(changed.data)quest={...quest,data:changed.data};
+    else {quest=await client.from('cb_daily_quests').select('*').eq('user_id',a.id).eq('quest_day',date).single();if(quest.error)fail(500,quest.error.message);}
+  }
   if(action==='quest-claim'){
     const claimed=await client.rpc('cb_claim_daily_quest',{p_user_id:a.id,p_day:date});
     if(claimed.error)fail(409,claimed.error.message);
+    quest=await client.from('cb_daily_quests').select('*').eq('user_id',a.id).eq('quest_day',date).single();
+    if(quest.error)fail(500,quest.error.message);
   }
-  const quest=await client.from('cb_daily_quests').select('*').eq('user_id',a.id).eq('quest_day',date).single();
   const progress=await client.rpc('cb_daily_quest_progress',{p_user_id:a.id,p_day:date});
-  if(quest.error||progress.error)fail(500,quest.error?.message??progress.error?.message??'Quest unavailable.');
+  if(progress.error)fail(500,progress.error.message);
   return {quest:quest.data,progress:progress.data,server_now:new Date().toISOString()};
 }
 
