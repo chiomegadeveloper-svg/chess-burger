@@ -561,7 +561,7 @@ export default function CommunityFeed({
           ["training","Online Trainings"],
           ["announcement","Announcements"],
           ["rewards","Rewards"],
-        ] as const).map(([id,label])=><button key={id} type="button" role="tab" aria-label={label} title={label} aria-selected={tab===id} onClick={()=>selectTab(id)}><span className="home-tab-art" aria-hidden="true"><img src={`/home-tabs/${id}.webp`} width={44} height={44} alt="" loading="eager"/></span>{id==="online"&&<span className="home-online-badge" aria-label={`${onlineCount} users online`}>{onlineCount}</span>}</button>)}
+        ] as const).map(([id,label])=><button key={id} type="button" role="tab" aria-label={label} title={label} aria-selected={tab===id} onClick={()=>selectTab(id)}><span className="home-tab-art" aria-hidden="true"><img src={`/home-tabs/${id}.webp?v=2`} width={44} height={44} alt="" loading="eager"/></span>{id==="online"&&<span className="home-online-badge" aria-label={`${onlineCount} users online`}>{onlineCount}</span>}</button>)}
       </div>
       <div className="home-selected-tab" role="status">{({recent:"Recent feed",online:"Online",quest:"Daily Quest",popular:"Popular",challenge:"Challenge",training:"Online Trainings",announcement:"Announcements",rewards:"Rewards"} as const)[tab]}</div>
       {tab === "quest" && <DailyQuest />}
