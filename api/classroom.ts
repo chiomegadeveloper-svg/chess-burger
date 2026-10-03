@@ -242,6 +242,31 @@ const activeEnrollment=async(roomId:string,studentId:string,now:string,free:bool
       if(board.error)fail(500,board.error.message);
       return res.status(200).json({board:board.data});
     }
+    if(action==="request-board-orientation"){
+      const roomId=String(body.room_id||""),now=new Date().toISOString();
+      if(!/^[a-f0-9-]{36}$/i.test(roomId))fail(400,"Choose a valid room.");
+      const room=await client.from("cb_classroom_rooms").select("teacher_id").eq("id",roomId).eq("status","active").gt("expires_at",now).maybeSingle();
+      if(room.error)fail(500,room.error.message);
+      if(!room.data||room.data.teacher_id===userId||!await activeEnrollment(roomId,userId,now,await freeClassroom()))fail(403,"Only an active student can request a board color switch.");
+      const board=await client.from("cb_classroom_student_boards").upsert({room_id:roomId,student_id:userId,flip_requested_at:now},{onConflict:"room_id,student_id"}).select("*").single();
+      if(board.error)fail(500,board.error.message);
+      return res.status(200).json({board:board.data});
+    }
+    if(action==="decide-board-orientation"){
+      const roomId=String(body.room_id||""),studentId=String(body.student_id||""),now=new Date().toISOString();
+      if(!/^[a-f0-9-]{36}$/i.test(roomId)||!/^[a-f0-9-]{36}$/i.test(studentId)||typeof body.approved!=="boolean")fail(400,"Choose a valid student and decision.");
+      const room=await client.from("cb_classroom_rooms").select("teacher_id").eq("id",roomId).eq("status","active").gt("expires_at",now).maybeSingle();
+      if(room.error)fail(500,room.error.message);
+      if(room.data?.teacher_id!==userId)fail(403,"Only this room's teacher can approve color switches.");
+      if(!await activeEnrollment(roomId,studentId,now,await freeClassroom()))fail(403,"Student access has expired.");
+      const existing=await client.from("cb_classroom_student_boards").select("view_flipped,flip_requested_at").eq("room_id",roomId).eq("student_id",studentId).maybeSingle();
+      if(existing.error)fail(500,existing.error.message);
+      if(!existing.data?.flip_requested_at)fail(409,"No pending color switch request.");
+      const board=await client.from("cb_classroom_student_boards").update({flip_requested_at:null,...(body.approved?{view_flipped:!existing.data.view_flipped}:{})}).eq("room_id",roomId).eq("student_id",studentId).eq("flip_requested_at",existing.data.flip_requested_at).select("*").maybeSingle();
+      if(board.error)fail(500,board.error.message);
+      if(!board.data)fail(409,"Request already handled. Refresh and try again.");
+      return res.status(200).json({board:board.data});
+    }
     if(action==="takeback-student"){
       const roomId=String(body.room_id||""),studentId=String(body.student_id||""),shared=body.shared===true,now=new Date().toISOString();
       if(!/^[a-f0-9-]{36}$/i.test(roomId)||!/^[a-f0-9-]{36}$/i.test(studentId))fail(400,"Choose a valid student and room.");
