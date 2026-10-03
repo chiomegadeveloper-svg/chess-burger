@@ -1791,3 +1791,10 @@
   .classroom-workshop:not(.board-maximized) .workshop-stage.student-view{grid-template-columns:minmax(0,1fr)}
   .workshop-stage.student-view .student-teacher-board,.workshop-stage.student-view .student-shared-board,.workshop-stage.student-view .student-own-board{width:min(100%,680px);justify-self:center}
 }
+.seba-board-modes{display:flex;align-items:center;flex-wrap:wrap;gap:8px;padding:9px 16px;border-bottom:1px solid #b69250;background:#14272b;color:#fff2ce}
+.seba-board-modes>span{display:grid;gap:2px;margin-right:auto}.seba-board-modes strong{font-size:11px;letter-spacing:.1em}.seba-board-modes small{font-size:10px;color:#b8cbd0}
+.seba-board-modes button{min-height:34px;padding:7px 14px;border:1px solid #7e765d;border-radius:9px;background:#23363a;color:#f2eee0;font:700 11px Poppins,sans-serif;cursor:pointer}
+.seba-board-modes button.active{border-color:#f2cb68;background:linear-gradient(120deg,#dcb65b,#a97623);color:#1c180e}
+.seba-board-modes button:disabled{opacity:.55;cursor:default}.student-board-mode{color:#f2d275;font-size:11px;letter-spacing:.04em}
+.classroom-workshop.mode-play .piece-side-tray,.classroom-workshop.mode-play .piece-palette{display:none}
+@media(max-width:600px){.seba-board-modes{padding:8px;gap:6px}.seba-board-modes>span{width:100%}.seba-board-modes button{flex:1}}
