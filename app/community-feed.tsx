@@ -17,6 +17,7 @@ import {
   X,
   Ticket,
   Crown,
+  Newspaper, Radio, Compass, Flame,  GraduationCap, Megaphone, Gift,
 } from "lucide-react";
 import { toast } from "sonner";
 import { FeedEvent, getSupabase, type PlayerProfile } from "./supabase";
@@ -28,6 +29,8 @@ import { feedBanner, isGraphicBanner, PREMIUM_SUPPORTER_ID } from "./feed-banner
 import { AvatarFrameOverlay } from "./avatar-frame-art";
 import { isWagerEligible } from "./age-rules";
 import DailyRewards from "./daily-rewards";
+import DailyQuest from "./daily-quest";
+import "./home-tab-icons.css";
 import ScheduledChallenges from "./scheduled-challenges";
 import {OnlineTrainings} from "./online-training";
 import FeedCardSnapshot from "./feed-card-snapshot";
@@ -39,7 +42,7 @@ type CommunityEvent = FeedEvent & { origin?: "arena"; play_mode?:string; wager_g
 type OnlinePlayer = ArenaPlayer & { available: boolean };
 
 type FeedTab =
-  "recent" | "popular" | "challenge" | "training" | "announcement" | "online" | "rewards";
+  "recent" | "popular" | "challenge" | "training" | "announcement" | "online" | "rewards" | "quest";
 const PAGE_SIZE = 10,
   ONLINE_PAGE_SIZE = 60;
 const labels: Record<string, string> = {
@@ -266,7 +269,7 @@ export default function CommunityFeed({
     [reacted, setReacted] = useState<Set<string>>(new Set());
   const refresh = useCallback(async () => {
     const seq = ++request.current;
-    if (tab === "rewards" || tab === "training" || tab === "online") {
+    if (tab === "rewards" || tab === "training" || tab === "online" || tab === "quest") {
       setTotal(0);
       setEvents([]);
       setStatus("");
@@ -498,7 +501,7 @@ export default function CommunityFeed({
     setEvents([]);
     setExpandedImage(null);
     setOnlineCard(null);
-    setStatus(next === "training" ? "" : "Loading activity…");
+    setStatus(["training","online","rewards","quest"].includes(next) ? "" : "Loading activity…");
     setTab(next);
     setPage(1);
     setOnlinePage(1);
@@ -523,7 +526,9 @@ export default function CommunityFeed({
     <section className="feed-page">
       <div className="page-heading">
         <h1>
-          {tab === "announcement"
+          {tab === "quest"
+            ? "Daily Quest"
+            : tab === "announcement"
             ? "Announcements"
             : tab === "online"
               ? "Online players"
@@ -534,7 +539,9 @@ export default function CommunityFeed({
                 : "Community feed"}
         </h1>
         <span className="sample-label">
-          {tab === "announcement"
+          {tab === "quest"
+            ? "Today’s missions"
+            : tab === "announcement"
             ? "Official updates"
             : tab === "online"
               ? `${onlineCount} online`
@@ -545,69 +552,20 @@ export default function CommunityFeed({
                 : "Latest 50"}
         </span>
       </div>
-      <div
-        className="feed-tabs community-feed-tabs"
-        role="tablist"
-        aria-label="Community feed views"
-      >
-        <button
-          role="tab"
-          aria-label="Recent feed"
-          aria-selected={tab === "recent"}
-          onClick={() => selectTab("recent")}
-        >
-          <span className="tab-label-full">Recent feed</span>
-          <span className="tab-label-short">Feed</span>
-        </button>
-        <button
-          className="online-feed-tab"
-          role="tab"
-          aria-selected={tab === "online"}
-          onClick={() => selectTab("online")}
-        >
-          Online{" "}
-          <span
-            className="online-count-badge"
-            aria-label={`${onlineCount} users online`}
-          >
-            {onlineCount}
-          </span>
-        </button>
-        <button role="tab" aria-selected={tab === "popular"} onClick={() => selectTab("popular")}>Popular</button>
-        <button
-          role="tab"
-          aria-selected={tab === "challenge"}
-          onClick={() => selectTab("challenge")}
-        >
-          Challenge
-        </button>
-        <button
-          role="tab"
-          aria-label="Online Trainings"
-          aria-selected={tab === "training"}
-          onClick={() => selectTab("training")}
-        >
-          <span className="tab-label-full">Online Trainings</span>
-          <span className="tab-label-short">Training</span>
-        </button>
-        <button
-          role="tab"
-          aria-label="Announcements"
-          aria-selected={tab === "announcement"}
-          onClick={() => selectTab("announcement")}
-        >
-          <span className="tab-label-full">Announcements</span>
-          <span className="tab-label-short">News</span>
-        </button>
-        <button
-          className="rewards-feed-tab"
-          role="tab"
-          aria-selected={tab === "rewards"}
-          onClick={() => selectTab("rewards")}
-        >
-          Rewards
-        </button>
+      <div className="feed-tabs community-feed-tabs home-icon-tabs" role="tablist" aria-label="Home views">
+        {([
+          ["recent","Recent feed",Newspaper],
+          ["online","Online",Radio],
+          ["quest","Daily Quest",Compass],
+          ["popular","Popular",Flame],
+          ["challenge","Challenge",Swords],
+          ["training","Online Trainings",GraduationCap],
+          ["announcement","Announcements",Megaphone],
+          ["rewards","Rewards",Gift],
+        ] as const).map(([id,label,Icon])=><button key={id} type="button" role="tab" aria-label={label} title={label} aria-selected={tab===id} onClick={()=>selectTab(id)}><span className="home-tab-art" aria-hidden="true"><Icon size={22} strokeWidth={2.3}/></span>{id==="online"&&<span className="home-online-badge" aria-label={`${onlineCount} users online`}>{onlineCount}</span>}</button>)}
       </div>
+      <div className="home-selected-tab" role="status">{({recent:"Recent feed",online:"Online",quest:"Daily Quest",popular:"Popular",challenge:"Challenge",training:"Online Trainings",announcement:"Announcements",rewards:"Rewards"} as const)[tab]}</div>
+      {tab === "quest" && <DailyQuest />}
       {tab === "challenge" && <button type="button" className="challenge-portal" onClick={onOpenChallenge} aria-label="Open Match Lobby, Challenge a Player"><span className="challenge-portal-icon"><Swords size={24} aria-hidden="true" /></span><span className="challenge-portal-copy"><strong>Challenge a Player</strong><small>Open Match Lobby to challenge by username, challenge anyone, or schedule a match.</small></span><ChevronRight size={20} aria-hidden="true" /></button>}
       {tab === "rewards" && <DailyRewards />}
       {tab === "training" && <OnlineTrainings profile={profile} />}
@@ -1189,3 +1147,4 @@ export default function CommunityFeed({
     </section>
   );
 }
+
