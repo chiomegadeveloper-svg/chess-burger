@@ -33,3 +33,8 @@
 .online-training-managed-heading b{white-space:nowrap;color:#f8d78d;font-size:12px}
 .online-training-registrant-actions button{white-space:nowrap}
 @media(max-width:580px){.online-training-package-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.online-training-account-gate{padding:18px;border:1px solid #70bfc7;border-radius:14px;background:linear-gradient(140deg,#1d3b43,#182a31)}
+.online-training-account-gate small{color:#85e2e7;font-size:10px;font-weight:800;letter-spacing:.1em}
+.online-training-account-gate h3{margin:8px 0;color:#f6d897}
+.online-training-account-gate p{color:#d1e0e1;font-size:12px;line-height:1.55}
+.online-training-account-gate button{width:100%}

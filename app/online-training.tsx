@@ -116,14 +116,15 @@ export function OnlineTrainings({profile,initialId="",invite="",onCreateAccount}
     <p>{training.invitation_text||"Join the Chess Burger online training session."}</p>
     <dl><div><dt>Coach</dt><dd>{training.coach_name}</dd></div><div><dt>Schedule</dt><dd>{new Date(training.starts_at).toLocaleString()}</dd></div><div><dt>Room</dt><dd>{training.package_kind?`Room ${training.package_kind} · ${training.capacity} students`:"Assigned by owner"}</dd></div><div><dt>Places</dt><dd>{training.confirmed} approved · {training.registered}/{training.capacity} registered</dd></div></dl>
     {roster?.id===training.id&&<section className="online-training-roster" aria-label="Training registrants"><h3>Registration review</h3><ul>{roster.registrants.map(reg=><li key={reg.id}><span><strong>{reg.full_name}</strong><small>{reg.username?`@${reg.username}`:"Account pending"} · {reg.approved?"Approved and enrolled":"Awaiting approval"}</small></span><div className="online-training-registrant-actions">{!reg.approved&&<button disabled={busy||!reg.confirmed} onClick={()=>void approve(reg,training)}>Approve</button>}<button className="online-training-remove" disabled={busy} onClick={()=>void removeRegistrant(reg,training)}>Remove</button></div></li>)}</ul></section>}
-    <div className="online-training-join-layout"><div className="online-training-form"><h3>{profile?"Register for this class":"Chess Burger account required"}</h3>
-     {training.payment_mode==="paid"&&<p className="online-training-payment-note">Fee: <strong>{peso(training.price_php)}</strong>. The owner will verify your payment before approving your place. Register below, then follow the payment instructions provided by the owner.</p>}
-     {!profile&&<p>Sign in or create your Chess Burger account to register.</p>}
-     <label>Complete name<input autoComplete="name" maxLength={80} value={name} onChange={e=>setName(e.target.value)} required/></label>
-     {profile&&<label>Chess Burger username<input value={`@${profile.username}`} readOnly aria-label="Your Chess Burger username"/></label>}
-     <label>Birthdate<input type="date" value={birthdate} max={new Date().toISOString().slice(0,10)} onChange={e=>setBirthdate(e.target.value)} required/></label>
-     {profile&&<button type="button" disabled={busy||!profile.username||!name.trim()||!birthdate||!!status} onClick={()=>void join()}>{busy?"Submitting…":invite?"Confirm invitation":"Send registration"}</button>}
-     {!profile&&onCreateAccount&&<button className="online-training-secondary" type="button" onClick={onCreateAccount}>Sign up or sign in</button>}
+    <div className="online-training-join-layout"><div className="online-training-form">
+     {!profile?<div className="online-training-account-gate"><small>STEP 1 · CHESS BURGER ACCOUNT</small><h3>Join Chess Burger first</h3><p>Complete your app registration, then return to this training link to submit your class registration. Visiting this link does not reserve a place.</p>{onCreateAccount&&<button className="online-training-secondary" type="button" onClick={onCreateAccount}>Create account or sign in</button>}</div>:<>
+      <h3>Register for this class</h3>
+      {training.payment_mode==="paid"&&<p className="online-training-payment-note">Fee: <strong>{peso(training.price_php)}</strong>. The owner will verify your payment before approving your place. Follow the payment instructions from the owner.</p>}
+      <label>Complete name<input autoComplete="name" maxLength={80} value={name} onChange={e=>setName(e.target.value)} required/></label>
+      <label>Chess Burger username<input value={`@${profile.username}`} readOnly aria-label="Your Chess Burger username"/></label>
+      <label>Birthdate<input type="date" value={birthdate} max={new Date().toISOString().slice(0,10)} onChange={e=>setBirthdate(e.target.value)} required/></label>
+      <button type="button" disabled={busy||!profile.username||!name.trim()||!birthdate||!!status} onClick={()=>void join()}>{busy?"Submitting…":invite?"Confirm invitation":"Submit registration for approval"}</button>
+     </>}
     </div><TrainingInstallCard/></div></div></article>}
  </section>;
 }
