@@ -83,9 +83,12 @@ export async function loadImageFile(file: File) {
 
   try {
     await new Promise<void>((resolve, reject) => {
-      image.onload = () => resolve();
-      image.onerror = () =>
-        reject(Error("This browser cannot open that photo format. Export it as JPEG or PNG and try again."));
+      const timeout = window.setTimeout(() => reject(Error("Photo loading timed out. Try a smaller JPEG or PNG photo.")), 20000);
+      image.onload = () => { window.clearTimeout(timeout); resolve(); };
+      image.onerror = () => {
+        window.clearTimeout(timeout);
+        reject(Error("This browser cannot open that photo format. Choose it from Photos or export it as JPEG or PNG."));
+      };
       image.src = url;
     });
     if (!image.naturalWidth || !image.naturalHeight)
@@ -110,13 +113,13 @@ export async function canvasToWebpUnder1Mb(canvas: HTMLCanvasElement) {
   return compressImageSource(canvas, canvas.width, canvas.height);
 }
 
-async function toWebp(file: File, maxBytes: number) {
+async function toWebp(file: File, maxBytes: number, maxEdge = MAX_IMAGE_EDGE) {
   const loaded = await loadImageFile(file);
   try {
     await nextPaint();
     const initialScale = Math.min(
       1,
-      MAX_IMAGE_EDGE / Math.max(loaded.width, loaded.height),
+      maxEdge / Math.max(loaded.width, loaded.height),
     );
     return await compressImageSource(
       loaded.image,
@@ -131,7 +134,7 @@ async function toWebp(file: File, maxBytes: number) {
 }
 
 export const toWebpUnder1Mb = (file: File) => toWebp(file, MAX_IMAGE_BYTES);
-export const toWebpUnder500Kb = (file: File) => toWebp(file, 499_000);
+export const toWebpUnder500Kb = (file: File) => toWebp(file, 499_000, 1024);
 
 export async function uploadStaffImage(file: File, userId: string) {
   const blob = await toWebpUnder1Mb(file);

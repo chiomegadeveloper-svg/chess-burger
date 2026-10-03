@@ -586,6 +586,15 @@ export default function Account({
       input.value = "";
     }
   }
+  async function chooseFeaturedPhoto(input: HTMLInputElement, index: number) {
+    const selected = input.files?.[0];
+    if (!selected) return;
+    try {
+      await upload(selected, "photo", index);
+    } finally {
+      input.value = "";
+    }
+  }
   async function save(e: React.FormEvent) {
     e.preventDefault();
     if (!profile || !client || !user) return;
@@ -929,7 +938,7 @@ export default function Account({
             )}
             <AvatarFrameOverlay frameId={profile.avatar_frame_id}/>
             <i><Camera/>Change photo</i>
-            <input type="file" accept="image/*,.heic,.heif,.avif,.jxl,.tif,.tiff" disabled={busy} onChange={e=>void chooseAvatar(e.currentTarget)}/>
+            <input type="file" accept="image/jpeg,image/png,image/webp" disabled={busy} onChange={e=>void chooseAvatar(e.currentTarget)}/>
           </label>
           <div>
             <h2>{profile.display_name}</h2>
@@ -982,7 +991,7 @@ export default function Account({
             <p>{profile.bio || "No profile description yet."}</p>
           </article>
         </div>
-        <ProfilePhotoBucket photos={profile.featured_photos} name={profile.display_name} busy={busy} onUpload={(file,index)=>void upload(file,"photo",index)} />
+        <ProfilePhotoBucket photos={profile.featured_photos} name={profile.display_name} busy={busy} onUpload={(file,index)=>upload(file,"photo",index)} />
         {!guest && <Portfolio userId={profile.user_id} owner openNotification={portfolioNotification} />}
         {showPasswordSecurity && passwordSecurity}
       </section>
@@ -1032,7 +1041,7 @@ export default function Account({
           </i>
           <input
             type="file"
-            accept="image/*,.heic,.heif,.avif,.jxl,.tif,.tiff"
+            accept="image/jpeg,image/png,image/webp"
             disabled={busy}
             onChange={(e) => void chooseAvatar(e.currentTarget)}
           />
@@ -1158,10 +1167,7 @@ export default function Account({
                     accept="image/jpeg,image/png,image/webp"
                     disabled={busy}
                     onChange={(e) => {
-                      const input = e.currentTarget;
-                      const selected = input.files?.[0];
-                      input.value = "";
-                      if (selected) void upload(selected, "photo", i);
+                      void chooseFeaturedPhoto(e.currentTarget, i);
                     }}
                   />
                 </label>
@@ -1175,10 +1181,7 @@ export default function Account({
                   accept="image/jpeg,image/png,image/webp"
                   disabled={busy}
                   onChange={(e) => {
-                    const input = e.currentTarget;
-                    const selected = input.files?.[0];
-                    input.value = "";
-                    if (selected) void upload(selected, "photo", i);
+                    void chooseFeaturedPhoto(e.currentTarget, i);
                   }}
                 />
               </label>
