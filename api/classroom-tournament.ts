@@ -1,6 +1,6 @@
 import {createClient} from "@supabase/supabase-js";
 import {Chess} from "chess.js";
-import {issueProof} from "./_certificate-proof";
+import {hashCode,issueProof,unseal,type CertificateRow} from "./_certificate-proof";
 type Req={method?:string;headers:{authorization?:string|string[]};body?:Record<string,unknown>};
 type Res={status:(n:number)=>Res;json:(v:unknown)=>void;setHeader:(k:string,v:string)=>void};
 const err=(status:number,message:string):never=>{throw Object.assign(new Error(message),{status})};
@@ -9,7 +9,22 @@ const material:Record<string,number>={p:1,n:3,b:3,r:5,q:9,k:0};
 function aiMove(board:Chess,level:number){const moves=board.moves({verbose:true});if(!moves.length)return null;const scored=moves.map(move=>{const next=new Chess(board.fen());next.move(move);let score=(move.captured?material[move.captured]:0)*10+(move.promotion?material[move.promotion]*8:0)+(next.isCheckmate()?10000:next.isCheck()?2:0);if(level>=5){const replies=next.moves({verbose:true});score-=Math.max(0,...replies.map(reply=>(reply.captured?material[reply.captured]:0)*10+(reply.promotion?material[reply.promotion]*8:0)))*(level-3)/7}return {move,score:score+(Math.random()-.5)*(11-level)*4}}).sort((a,b)=>b.score-a.score);return scored[0].move}
 export default async function handler(req:Req,res:Res){res.setHeader("Cache-Control","no-store");try{
  if(req.method!=="POST")err(405,"Method not allowed.");const url=process.env.NEXT_PUBLIC_SUPABASE_URL||process.env.VITE_SUPABASE_URL||process.env.SUPABASE_URL,key=process.env.SUPABASE_SERVICE_ROLE_KEY;if(!url||!key)err(503,"Classroom database is not configured.");
- const db=createClient(url!,key!,{auth:{persistSession:false}}),raw=req.headers.authorization,token=(Array.isArray(raw)?raw[0]:raw||"").replace(/^Bearer\s+/i,"");const auth=await db.auth.getUser(token);if(auth.error||!auth.data.user)err(401,"Sign in again.");const userId=auth.data.user!.id,body=req.body||{},action=String(body.action||""),roomId=String(body.room_id||"");if(!uuid(roomId))err(400,"Choose a classroom.");
+ const db=createClient(url!,key!,{auth:{persistSession:false}}),body=req.body||{},action=String(body.action||""),roomId=String(body.room_id||"");
+ if(action==="certificate-verify"){
+  const code=String(body.code||"");if(!/^[A-Za-z0-9_-]{43}$/.test(code))return res.status(200).json({valid:false});
+  const proof=await db.from("cb_seba_certificate_proofs").select("certificate_id,sealed_snapshot").eq("code_hash",hashCode(code)).maybeSingle();if(proof.error)err(500,proof.error.message);
+  if(!proof.data)return res.status(200).json({valid:false});
+  const active=await db.from("cb_seba_certificates").select("id").eq("id",proof.data.certificate_id).maybeSingle();if(active.error)err(500,active.error.message);
+  return res.status(200).json(active.data?{valid:true,certificate:unseal(proof.data.sealed_snapshot)}:{valid:false});
+ }
+ const raw=req.headers.authorization,token=(Array.isArray(raw)?raw[0]:raw||"").replace(/^Bearer\s+/i,"");const auth=await db.auth.getUser(token);if(auth.error||!auth.data.user)err(401,"Sign in again.");const userId=auth.data.user!.id;
+ if(action==="certificate-list"){
+  const found=await db.from("cb_seba_certificates").select("id,student_id,student_name,title,coach_name,session_started_at,issued_at,rank").eq("student_id",userId).neq("student_name","").order("issued_at",{ascending:false}).limit(100);
+  if(found.error)err(500,found.error.message);
+  const certificates=await Promise.all((found.data||[]).map(async(row:CertificateRow)=>({...row,code:await issueProof(db,row)})));
+  return res.status(200).json({certificates});
+ }
+ if(!uuid(roomId))err(400,"Choose a classroom.");
  const q=async(query:any)=>{const r=await query;if(r.error)err(500,r.error.message);return r.data};
  const room=await q(db.from("cb_classroom_rooms").select("id,name,teacher_id,status,created_at,expires_at").eq("id",roomId).maybeSingle());if(!room)err(404,"Classroom not found.");const teacher=room.teacher_id===userId,now=new Date(),live=room.status==="active"&&new Date(room.expires_at)>now;
  const settings=await q(db.from("cb_classroom_settings").select("cbc_enabled").eq("id",true).single());const enrollment=teacher?null:await q(db.from("cb_classroom_enrollments").select("student_id,access_expires_at").eq("room_id",roomId).eq("student_id",userId).maybeSingle());if(!teacher&&!enrollment)err(403,"Join this classroom first.");const allowed=teacher||settings?.cbc_enabled===false||new Date(enrollment.access_expires_at)>now;
