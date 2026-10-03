@@ -265,7 +265,7 @@ const activeEnrollment=async(roomId:string,studentId:string,now:string,free:bool
       const before=await client.from("cb_classroom_workspaces").select("board_mode").eq("room_id",roomId).single();
       if(before.error||!before.data)fail(500,before.error?.message||"Classroom board mode is unavailable.");
       if(before.data!.board_mode===mode)return res.status(200).json({workspace:before.data,unchanged:true});
-      const workspace=await client.from("cb_classroom_workspaces").update({board_mode:mode,...(mode==='play'?{fen:'start',annotations:[]}:{}),updated_by:userId,updated_at:now}).eq("room_id",roomId).eq("board_mode",before.data!.board_mode).select("*").maybeSingle();
+      const workspace=await client.from("cb_classroom_workspaces").update({board_mode:mode,...(mode==='play'?{fen:'start',annotations:[],student_color:'w'}:{}),updated_by:userId,updated_at:now}).eq("room_id",roomId).eq("board_mode",before.data!.board_mode).select("*").maybeSingle();
       if(workspace.error)fail(500,workspace.error.message);
       if(!workspace.data)fail(409,"The mode changed. Refresh and try again.");
       // Reset individual boards when starting a fresh game; student free movement is Teach-only.
