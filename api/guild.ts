@@ -54,6 +54,7 @@ export default async function handler(req:Req,res:Res){
    else if(action==='leave')rpc='cb_guild_leave';
    else if(action==='kick'){if(!uuid(body.member_id))throw fail(400,'Choose a member.');rpc='cb_guild_kick';params.p_member_id=body.member_id;params.p_reason=String(body.reason??'').trim();}
    else if(action==='vote'){if(!uuid(body.candidate_id))throw fail(400,'Choose a member.');rpc='cb_guild_vote';params.p_candidate=body.candidate_id;}
+   else if(action==='donate'){if(!Number.isSafeInteger(body.amount)||Number(body.amount)<1||Number(body.amount)>1_000_000||!uuid(body.request_id))throw fail(400,'Enter a whole CBG amount and retry.');rpc='cb_guild_donate';params.p_amount=body.amount;params.p_request_id=body.request_id;}
    else if(action==='schedule'){rpc='cb_guild_schedule';params.p_release_at=body.release_at===null?null:String(body.release_at??'');if(params.p_release_at!==null&&!Number.isFinite(Date.parse(String(params.p_release_at))))throw fail(400,'Choose a valid release date.');}
    else if(action==='artwork'){
     const kind=String(body.kind),guildId=String(body.guild_id),path=String(body.path??'');
@@ -85,7 +86,7 @@ export default async function handler(req:Req,res:Res){
   const [released,me,profile,kickNotice]=await Promise.all([
    db.rpc('cb_guild_distribute_due'),
    db.from('cb_guild_members').select('guild_id,leader_vote').eq('user_id',userId).maybeSingle(),
-   db.from('cb_profiles').select('cbr').eq('user_id',userId).single(),
+   db.from('cb_profiles').select('cbr,gold_points').eq('user_id',userId).single(),
    db.from('cb_guild_kicks').select('guild_id,reason,created_at,cb_guilds(name)').eq('member_id',userId).order('created_at',{ascending:false}).limit(1).maybeSingle()
   ]);
   if(released.error)throw fail(503,'Guild database is not ready. Apply supabase/0047_guilds.sql.');
@@ -150,6 +151,6 @@ export default async function handler(req:Req,res:Res){
    }
   }
   const detail=guild?isMember?{...guild,members}:{id:guild.id,name:guild.name,logo_url:guild.logo_url,cover_url:guild.cover_url,guild_points:guild.guild_points,member_count:guild.member_count,guild_code:guild.guild_code,is_default:guild.is_default,leader_id:guild.leader_id,members}:null;
-  return res.status(200).json({page,total:guilds.count??0,eligible:Number(profile.data.cbr)>=177,my_guild_id:me.data?.guild_id??null,my_request:myRequest.data??null,requests,activity,analytics,kick_notice:kickNotice.data??null,regional_guilds:(regions.data??[]).map(guildArtwork),guilds:(guilds.data??[]).map(row=>{const art=guildArtwork(row);return {id:art.id,name:art.name,logo_url:art.logo_url,guild_points:art.guild_points}}),detail});
+  return res.status(200).json({page,total:guilds.count??0,eligible:Number(profile.data.cbr)>=177,my_gold:Number(profile.data.gold_points??0),my_guild_id:me.data?.guild_id??null,my_request:myRequest.data??null,requests,activity,analytics,kick_notice:kickNotice.data??null,regional_guilds:(regions.data??[]).map(guildArtwork),guilds:(guilds.data??[]).map(row=>{const art=guildArtwork(row);return {id:art.id,name:art.name,logo_url:art.logo_url,guild_points:art.guild_points}}),detail});
  }catch(error){const status=Number((error as {status?:number}).status)||500;if(status===500)console.error('Guild request failed',error);return res.status(status).json({error:status===500?'Guild request failed. Please retry.':message(error)});}
 }
