@@ -1797,6 +1797,10 @@
 .seba-board-modes button.active{border-color:#f2cb68;background:linear-gradient(120deg,#dcb65b,#a97623);color:#1c180e}
 .seba-board-modes button:disabled{opacity:.55;cursor:default}.student-board-mode{color:#f2d275;font-size:11px;letter-spacing:.04em}
 .classroom-workshop.mode-play .piece-side-tray,.classroom-workshop.mode-play .piece-palette{display:none}
+.classroom-workshop.mode-play .board-piece-layout{grid-template-columns:minmax(0,1fr);max-width:min(100%,calc(100dvh - 180px),720px);gap:6px}
+.classroom-workshop.mode-play .board-piece-layout>.board-zoom-control{grid-column:1;grid-row:1}
+.classroom-workshop.mode-play .board-piece-center{grid-column:1;grid-row:2;width:100%;min-width:0}
+.classroom-workshop.mode-play .board-piece-layout>.piece-tray-column{display:none}
 @media(max-width:600px){.seba-board-modes{padding:8px;gap:6px}.seba-board-modes>span{width:100%}.seba-board-modes button{flex:1}}
 .classroom-workshop:not(.board-maximized) .workshop-stage.student-view.one-on-one{grid-template-columns:minmax(0,1fr)}
 .workshop-stage.student-view.one-on-one .student-shared-board{width:min(100%,700px);justify-self:center}
