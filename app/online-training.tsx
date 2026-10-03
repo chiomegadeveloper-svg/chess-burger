@@ -1,15 +1,20 @@
 "use client";
 import {useCallback,useEffect,useState} from "react";
 import {getSupabase, type PlayerProfile} from "./supabase";
-import {arena} from "./arena-client";
 import {uploadStaffImage,validateImageFile} from "./media";
 import "./online-training.css";
 
 type Category="u12"|"u15"|"u20"|"all";
-type Training={id:string;title:string;coach_name:string;poster_url:string;starts_at:string;capacity:number;category:Category;invitation_text:string;registered:number;confirmed:number};
-type Registrant={id:string;full_name:string;birthdate:string;confirmed:boolean;username:string|null;invited_at:string|null;invite_token:string};
-type OwnerRegistrant={id:string;full_name:string;username:string|null;confirmed:boolean;invited:boolean};
-type Managed=Training&{status:string;registrants:Registrant[]};
+type PackageKind="pawn"|"bishop"|"knight"|"rook"|"queen"|"king";
+type PaymentMode="free"|"paid";
+type Training={id:string;title:string;coach_name:string;poster_url:string;starts_at:string;capacity:number;category:Category;invitation_text:string;registered:number;confirmed:number;payment_mode:PaymentMode;price_php:number;package_kind:PackageKind|null};
+type Registrant={id:string;full_name:string;birthdate:string;confirmed:boolean;approved:boolean;username:string|null;invited_at:string|null;invite_token:string};
+type Managed=Training&{status:string;cbc_reward:number;room_id:string|null;room_code:string|null;registrants:Registrant[]};
+const packages:{kind:PackageKind;slots:number;duration:string}[]=[
+ {kind:"pawn",slots:5,duration:"12 hours"},{kind:"bishop",slots:10,duration:"1 day"},
+ {kind:"knight",slots:15,duration:"3 days"},{kind:"rook",slots:20,duration:"5 days"},
+ {kind:"queen",slots:30,duration:"7 days"},{kind:"king",slots:40,duration:"14 days"}];
+const peso=(value:number)=>new Intl.NumberFormat("en-PH",{style:"currency",currency:"PHP"}).format(value);
 type InstallEvent=Event&{prompt:()=>Promise<void>;userChoice:Promise<{outcome:"accepted"|"dismissed"}>};
 const categoryLabels:Record<Category,string>={u12:"Under 12",u15:"Under 15",u20:"Under 20",all:"All ages"};
 const link=(id:string,token?:string)=>`${location.origin}/#training=${encodeURIComponent(id)}${token?`&invite=${encodeURIComponent(token)}`:""}`;
@@ -56,106 +61,125 @@ function TrainingInstallCard(){
 }
 
 export function OnlineTrainings({profile,initialId="",invite="",onCreateAccount}:{profile?:PlayerProfile|null;initialId?:string;invite?:string;onCreateAccount?:()=>void}){
- const[trainings,setTrainings]=useState<Training[]>([]),[selected,setSelected]=useState(initialId),[name,setName]=useState(profile?.display_name??""),[birthdate,setBirthdate]=useState(""),[busy,setBusy]=useState(false),[status,setStatus]=useState(""),[error,setError]=useState("");
- const[roster,setRoster]=useState<{id:string;registrants:OwnerRegistrant[]}|null>(null),[rosterBusy,setRosterBusy]=useState(false),[gifting,setGifting]=useState<string|null>(null),[removing,setRemoving]=useState<string|null>(null);
+ const[trainings,setTrainings]=useState<Training[]>([]),[selected,setSelected]=useState(initialId),[name,setName]=useState(profile?.display_name??""),[birthdate,setBirthdate]=useState("");
+ const[busy,setBusy]=useState(false),[status,setStatus]=useState(""),[error,setError]=useState("");
+ const[roster,setRoster]=useState<Managed|null>(null);
  const load=useCallback(async()=>{try{setError("");setTrainings(await rpc<Training[]>("cb_training_public",{p_id:initialId||null}));}catch(e){setError((e as Error).message);}},[initialId]);
  useEffect(()=>{void load();},[load]);
- useEffect(()=>{setSelected(initialId);},[initialId]);
+ useEffect(()=>setSelected(initialId),[initialId]);
  const training=trainings.find(item=>item.id===selected);
- async function join(){if(!training||!profile?.username)return;setBusy(true);setError("");try{validateAge(training,birthdate);await rpc<string>("cb_training_register",{p_id:training.id,p_full_name:name.trim(),p_birthdate:birthdate,p_invite:invite||null});setStatus(`Your place is confirmed with your Chess Burger account @${profile.username}.`);await load();}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
+ async function join(){
+  if(!training||!profile?.username)return;
+  setBusy(true);setError("");
+  try{
+   validateAge(training,birthdate);
+   const result=await rpc<string>("cb_training_register",{p_id:training.id,p_full_name:name.trim(),p_birthdate:birthdate,p_invite:invite||null});
+   setStatus(result==="approved"?"You are approved. Find your room in Classroom → Student portal.":"Registration received. The owner will review it; paid trainings require payment verification before approval.");
+   await load();
+  }catch(e){setError((e as Error).message);}finally{setBusy(false);}
+ }
  async function showRegistrants(event:Training){
   if(roster?.id===event.id){setRoster(null);return;}
-  setRosterBusy(true);setError("");
-  try{const result=await arena<{registrants:OwnerRegistrant[]}>("training-registrants",{id:event.id});setRoster({id:event.id,registrants:result.registrants});}
-  catch(e){setError((e as Error).message);}finally{setRosterBusy(false);}
+  setBusy(true);setError("");
+  try{const managed=await rpc<Managed[]>("cb_training_manage");setRoster(managed.find(item=>item.id===event.id)??null);}
+  catch(e){setError((e as Error).message);}finally{setBusy(false);}
  }
- async function giftCredit(event:Training,registrant:OwnerRegistrant){
-  if(!registrant.username||!window.confirm(`Gift 1 CB Credit from your balance to @${registrant.username}? The 4 CBG gift fee applies.`))return;
-  setGifting(registrant.id);setError("");setStatus("");
+ async function approve(reg:Registrant,event:Training){
+  if(!window.confirm(`Approve ${reg.full_name} for "${event.title}"? Confirm any peso payment has been received. The student will join the room and receive the training CBC award.`))return;
+  setBusy(true);setError("");setStatus("");
   try{
-   const result=await arena<{gifted:boolean}>("gift-training-cbc",{id:event.id,registration_id:registrant.id,request_id:crypto.randomUUID()});
-   setStatus(result.gifted?`1 CB Credit sent to @${registrant.username}. The 4 CBG gift fee was charged.`:"This credit gift was already processed.");
-   if(result.gifted)window.dispatchEvent(new Event("cb-profile-saved"));
-  }catch(e){setError((e as Error).message);}finally{setGifting(null);}
+   await rpc("cb_training_approve",{p_registration_id:reg.id});
+   setStatus(`${reg.full_name} approved and added to the classroom.`);
+   window.dispatchEvent(new Event("cb-profile-saved"));await showRegistrantsReload(event.id);await load();
+  }catch(e){setError((e as Error).message);}finally{setBusy(false);}
  }
- async function removeRegistrant(event:Training,registrant:OwnerRegistrant){
-  if(!window.confirm(`Remove ${registrant.full_name} from "${event.title}"? Their registration and invitation link will be cancelled.`))return;
-  setRemoving(registrant.id);setError("");setStatus("");
-  try{
-   await arena("remove-training-registrant",{id:event.id,registration_id:registrant.id});
-   setRoster(current=>current?.id===event.id?{...current,registrants:current.registrants.filter(item=>item.id!==registrant.id)}:current);
-   await load();setStatus(`${registrant.full_name} was removed from this training.`);
-  }catch(e){setError((e as Error).message);}finally{setRemoving(null);}
+ async function showRegistrantsReload(eventId:string){
+  const managed=await rpc<Managed[]>("cb_training_manage");setRoster(managed.find(item=>item.id===eventId)??null);
+ }
+ async function removeRegistrant(reg:Registrant,event:Training){
+  if(!window.confirm(`Remove ${reg.full_name} from "${event.title}"? Classroom access will be removed; CBC already awarded remains in the student's wallet.`))return;
+  setBusy(true);setError("");setStatus("");
+  try{await rpc("cb_training_remove",{p_registration_id:reg.id});await showRegistrantsReload(event.id);await load();setStatus(`${reg.full_name} removed.`);}
+  catch(e){setError((e as Error).message);}finally{setBusy(false);}
  }
  return <section className="online-training-page">
-  <header className="online-training-heading"><img src="/cburger_logo.png" alt=""/><div><small>CHESS BURGER · FREE LEARNING</small><h1>Online Trainings</h1><p>Choose a session and register for free.</p></div></header>
+  <header className="online-training-heading"><img src="/cburger_logo.png" alt=""/><div><small>CHESS BURGER · LIVE LEARNING</small><h1>Online Trainings</h1><p>Choose a class and send your registration for owner approval.</p></div></header>
   {error&&<p className="online-training-error" role="alert">{error}</p>}{status&&<p className="online-training-success" role="status">{status}</p>}
   {!training&&<div className="online-training-grid">{trainings.map(item=><button className="online-training-card" type="button" key={item.id} onClick={()=>setSelected(item.id)}>
    {item.poster_url?<img src={item.poster_url} alt={`${item.title} poster`}/>:<span className="online-training-placeholder">♟</span>}
-   <span><small>{categoryLabels[item.category]} · FREE</small><strong>{item.title}</strong><em>{new Date(item.starts_at).toLocaleString()} · {item.confirmed}/{item.capacity} confirmed</em><b>View training →</b></span>
+   <span><small>{categoryLabels[item.category]} · {item.payment_mode==="paid"?peso(item.price_php):"FREE"}</small><strong>{item.title}</strong><em>{new Date(item.starts_at).toLocaleString()} · {item.confirmed}/{item.capacity} approved</em><b>View training →</b></span>
   </button>)}{!trainings.length&&!error&&<p>No training sessions are open right now.</p>}</div>}
   {training&&<article className="online-training-details"><button className="online-training-back" type="button" onClick={()=>setSelected("")}>← All trainings</button>
    {training.poster_url&&<img className="online-training-poster" src={training.poster_url} alt={`${training.title} event poster`}/>}
-   <div className="online-training-info"><small>{categoryLabels[training.category]} · FREE TRAINING</small><div className="online-training-title-row"><h2>{training.title}</h2>{profile?.role==="owner"&&<button className="online-training-roster-toggle" type="button" disabled={rosterBusy} aria-expanded={roster?.id===training.id} aria-controls="training-registrants-panel" onClick={()=>void showRegistrants(training)}>{rosterBusy?"Loading registrants…":roster?.id===training.id?"Hide registrants":`View registrants (${training.registered})`}</button>}</div><p>{training.invitation_text||"Join the Chess Burger online training session."}</p>
-   <dl><div><dt>Coach</dt><dd>{training.coach_name}</dd></div><div><dt>Schedule</dt><dd>{new Date(training.starts_at).toLocaleString()}</dd></div><div><dt>Participants</dt><dd>{training.confirmed} confirmed · {training.registered}/{training.capacity} registered</dd></div></dl>
-   {profile?.role==="owner"&&roster?.id===training.id&&<section className="online-training-roster" id="training-registrants-panel" aria-label="Training registrants"><div className="online-training-roster-heading"><h3>Registered participants</h3><span>{roster.registrants.length}/{training.capacity}</span></div>{roster.registrants.length?<ul>{roster.registrants.map(reg=><li key={reg.id}><span><strong>{reg.username?`@${reg.username}`:reg.full_name}</strong><small className={reg.confirmed?"online-training-account-active":undefined}>{reg.confirmed?`${reg.full_name} · Account has active Chess Burger account`:reg.invited?"Invited · awaiting account confirmation":"Awaiting invitation and account confirmation"}</small></span><div className="online-training-registrant-actions"><button type="button" disabled={!reg.username||!!gifting||!!removing} title={!reg.username?"Available after the registrant joins with a Chess Burger account":undefined} onClick={()=>void giftCredit(training,reg)}>{gifting===reg.id?"Sending…":"Gift 1 CB Credit"}</button><button className="online-training-remove" type="button" disabled={!!removing||!!gifting} onClick={()=>void removeRegistrant(training,reg)} aria-label={`Remove ${reg.full_name} from ${training.title}`}>{removing===reg.id?"Removing…":"Remove"}</button></div></li>)}</ul>:<p>No one has registered yet.</p>}<p className="online-training-roster-note">1 CB Credit moves from your balance to a confirmed registrant. The 4 CBG gift fee applies.</p></section>}
-   <div className="online-training-join-layout"><div className="online-training-form"><h3>{invite?"Accept your invitation":profile?"Register for free":"Chess Burger account required"}</h3>
-    {!profile&&!invite&&<p>Create or sign in to your Chess Burger account to register for this online class.</p>}
-    {invite&&!profile&&<p>Sign in or create your Chess Burger account to confirm this personal invitation.</p>}
-    <label>Complete name<input autoComplete="name" maxLength={80} value={name} onChange={e=>setName(e.target.value)} required/></label>
-    {profile&&<label>Chess Burger username<input value={`@${profile.username}`} readOnly aria-label="Your Chess Burger username"/></label>}
-    <label>Birthdate<input type="date" value={birthdate} max={new Date().toISOString().slice(0,10)} onChange={e=>setBirthdate(e.target.value)} required/></label>
-    {profile&&<button type="button" disabled={busy||!profile.username||!name.trim()||!birthdate||!!status} onClick={()=>void join()}>{busy?"Submitting…":invite?"Confirm invitation":"Join online class"}</button>}
-    {!profile&&onCreateAccount&&<button className="online-training-secondary" type="button" onClick={onCreateAccount}>Sign up or sign in to join</button>}
-   </div><TrainingInstallCard/></div></div></article>}
+   <div className="online-training-info"><small>{categoryLabels[training.category]} · {training.payment_mode==="paid"?`PAID · ${peso(training.price_php)}`:"FREE TRAINING"}</small>
+    <div className="online-training-title-row"><h2>{training.title}</h2>{profile?.role==="owner"&&<button className="online-training-roster-toggle" type="button" disabled={busy} aria-expanded={roster?.id===training.id} onClick={()=>void showRegistrants(training)}>{roster?.id===training.id?"Hide registrants":`View registrants (${training.registered})`}</button>}</div>
+    <p>{training.invitation_text||"Join the Chess Burger online training session."}</p>
+    <dl><div><dt>Coach</dt><dd>{training.coach_name}</dd></div><div><dt>Schedule</dt><dd>{new Date(training.starts_at).toLocaleString()}</dd></div><div><dt>Room</dt><dd>{training.package_kind?`Room ${training.package_kind} · ${training.capacity} students`:"Assigned by owner"}</dd></div><div><dt>Places</dt><dd>{training.confirmed} approved · {training.registered}/{training.capacity} registered</dd></div></dl>
+    {roster?.id===training.id&&<section className="online-training-roster" aria-label="Training registrants"><h3>Registration review</h3><ul>{roster.registrants.map(reg=><li key={reg.id}><span><strong>{reg.full_name}</strong><small>{reg.username?`@${reg.username}`:"Account pending"} · {reg.approved?"Approved and enrolled":"Awaiting approval"}</small></span><div className="online-training-registrant-actions">{!reg.approved&&<button disabled={busy||!reg.confirmed} onClick={()=>void approve(reg,training)}>Approve</button>}<button className="online-training-remove" disabled={busy} onClick={()=>void removeRegistrant(reg,training)}>Remove</button></div></li>)}</ul></section>}
+    <div className="online-training-join-layout"><div className="online-training-form"><h3>{profile?"Register for this class":"Chess Burger account required"}</h3>
+     {training.payment_mode==="paid"&&<p className="online-training-payment-note">Fee: <strong>{peso(training.price_php)}</strong>. The owner will verify your payment before approving your place. Register below, then follow the payment instructions provided by the owner.</p>}
+     {!profile&&<p>Sign in or create your Chess Burger account to register.</p>}
+     <label>Complete name<input autoComplete="name" maxLength={80} value={name} onChange={e=>setName(e.target.value)} required/></label>
+     {profile&&<label>Chess Burger username<input value={`@${profile.username}`} readOnly aria-label="Your Chess Burger username"/></label>}
+     <label>Birthdate<input type="date" value={birthdate} max={new Date().toISOString().slice(0,10)} onChange={e=>setBirthdate(e.target.value)} required/></label>
+     {profile&&<button type="button" disabled={busy||!profile.username||!name.trim()||!birthdate||!!status} onClick={()=>void join()}>{busy?"Submitting…":invite?"Confirm invitation":"Send registration"}</button>}
+     {!profile&&onCreateAccount&&<button className="online-training-secondary" type="button" onClick={onCreateAccount}>Sign up or sign in</button>}
+    </div><TrainingInstallCard/></div></div></article>}
  </section>;
 }
 
 export function OnlineTrainingCms({profile}:{profile:PlayerProfile}){
- const[events,setEvents]=useState<Managed[]>([]),[id,setId]=useState<string|null>(null),[title,setTitle]=useState(""),[coach,setCoach]=useState(""),[startsAt,setStartsAt]=useState(""),[capacity,setCapacity]=useState(20),[category,setCategory]=useState<Category>("all"),[poster,setPoster]=useState(""),[message,setMessage]=useState(""),[busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState("");
+ const[events,setEvents]=useState<Managed[]>([]),[id,setId]=useState<string|null>(null),[title,setTitle]=useState(""),[coach,setCoach]=useState(""),[startsAt,setStartsAt]=useState("");
+ const[packageKind,setPackageKind]=useState<PackageKind>("bishop"),[category,setCategory]=useState<Category>("all"),[poster,setPoster]=useState(""),[message,setMessage]=useState("");
+ const[paymentMode,setPaymentMode]=useState<PaymentMode>("free"),[price,setPrice]=useState(0),[reward,setReward]=useState(0);
+ const[busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState("");
  const load=useCallback(async()=>{try{setEvents(await rpc<Managed[]>("cb_training_manage"));}catch(e){setError((e as Error).message);}},[]);
  useEffect(()=>{void load();},[load]);
- function edit(event:Managed){setId(event.id);setTitle(event.title);setCoach(event.coach_name);setStartsAt(new Date(new Date(event.starts_at).getTime()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,16));setCapacity(event.capacity);setCategory(event.category);setPoster(event.poster_url);setMessage(event.invitation_text);}
- function reset(){setId(null);setTitle("");setCoach("");setStartsAt("");setCapacity(20);setCategory("all");setPoster("");setMessage("");}
- async function save(){setBusy(true);setError("");try{const created=await rpc<string>("cb_training_save",{p_id:id,p_title:title,p_coach_name:coach,p_poster_url:poster,p_starts_at:new Date(startsAt).toISOString(),p_capacity:capacity,p_category:category,p_invitation_text:message});await load();setNotice(`Training published. Share this registration link: ${link(created)}`);await navigator.clipboard.writeText(link(created)).catch(()=>{});reset();}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
- async function upload(file:File){setBusy(true);setError("");try{validateImageFile(file);setPoster(await uploadStaffImage(file,profile.user_id));setNotice("Poster uploaded. Publish the training to make it visible.");}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
- async function inviteRegistrant(reg:Registrant,event:Managed){setBusy(true);setError("");try{const token=await rpc<string>("cb_training_invite",{p_registration_id:reg.id});const url=link(event.id,token);await navigator.clipboard.writeText(url);setNotice(`Invitation for ${reg.full_name} copied. Share this link with the registrant: ${url}`);await load();}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
- async function giftCredit(reg:Registrant,event:Managed){
-  if(!reg.username||!window.confirm(`Gift 1 CB Credit from your balance to @${reg.username}? The 4 CBG gift fee applies.`))return;
+ function edit(event:Managed){setId(event.id);setTitle(event.title);setCoach(event.coach_name);setStartsAt(new Date(new Date(event.starts_at).getTime()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,16));setPackageKind(event.package_kind??"bishop");setCategory(event.category);setPoster(event.poster_url);setMessage(event.invitation_text);setPaymentMode(event.payment_mode??"free");setPrice(Number(event.price_php)||0);setReward(event.cbc_reward||0);}
+ function reset(){setId(null);setTitle("");setCoach("");setStartsAt("");setPackageKind("bishop");setCategory("all");setPoster("");setMessage("");setPaymentMode("free");setPrice(0);setReward(0);}
+ async function save(){
   setBusy(true);setError("");setNotice("");
-  try{await arena("gift-training-cbc",{id:event.id,registration_id:reg.id,request_id:crypto.randomUUID()});setNotice(`1 CB Credit sent to @${reg.username}. The 4 CBG gift fee was charged.`);window.dispatchEvent(new Event("cb-profile-saved"));}
+  try{
+   const saved=await rpc<string>("cb_training_save_v2",{p_id:id,p_title:title.trim(),p_coach_name:coach.trim(),p_poster_url:poster,p_starts_at:new Date(startsAt).toISOString(),p_package:packageKind,p_category:category,p_invitation_text:message,p_payment_mode:paymentMode,p_price_php:paymentMode==="paid"?price:0,p_cbc_reward:reward});
+   await load();window.dispatchEvent(new Event("cb-profile-saved"));
+   setNotice(`Training published and classroom created. Registration link copied: ${link(saved)}`);
+   await navigator.clipboard.writeText(link(saved)).catch(()=>{});reset();
+  }catch(e){setError((e as Error).message);}finally{setBusy(false);}
+ }
+ async function upload(file:File){setBusy(true);setError("");try{validateImageFile(file);setPoster(await uploadStaffImage(file,profile.user_id));setNotice("Poster uploaded. Save the training to publish it.");}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
+ async function inviteRegistrant(reg:Registrant,event:Managed){setBusy(true);setError("");try{const token=await rpc<string>("cb_training_invite",{p_registration_id:reg.id});const url=link(event.id,token);await navigator.clipboard.writeText(url);setNotice(`Invitation for ${reg.full_name} copied: ${url}`);await load();}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
+ async function approve(reg:Registrant,event:Managed){
+  if(!window.confirm(`Approve ${reg.full_name} for "${event.title}"? Confirm payment was received if this is a paid class. This enrolls the student and transfers ${event.cbc_reward} CBC from your balance.`))return;
+  setBusy(true);setError("");
+  try{await rpc("cb_training_approve",{p_registration_id:reg.id});await load();window.dispatchEvent(new Event("cb-profile-saved"));setNotice(`${reg.full_name} approved and enrolled. ${event.cbc_reward} CBC awarded.`);}
   catch(e){setError((e as Error).message);}finally{setBusy(false);}
  }
  async function removeRegistrant(reg:Registrant,event:Managed){
-  if(!window.confirm(`Remove ${reg.full_name} from "${event.title}"? Their registration and invitation link will be cancelled.`))return;
-  setBusy(true);setError("");setNotice("");
-  try{
-   await arena("remove-training-registrant",{id:event.id,registration_id:reg.id});
-   setEvents(current=>current.map(item=>item.id===event.id?{...item,registrants:item.registrants.filter(person=>person.id!==reg.id)}:item));
-   setNotice(`${reg.full_name} was removed from "${event.title}".`);
-  }catch(e){setError((e as Error).message);}finally{setBusy(false);}
+  if(!window.confirm(`Remove ${reg.full_name} from "${event.title}"? Classroom access will be removed; awarded CBC remains with the student.`))return;
+  setBusy(true);setError("");
+  try{await rpc("cb_training_remove",{p_registration_id:reg.id});await load();setNotice(`${reg.full_name} removed.`);}
+  catch(e){setError((e as Error).message);}finally{setBusy(false);}
  }
  async function remove(event:Managed){
-  const count=event.registrants.length;
-  if(!window.confirm(`Permanently delete "${event.title}"? This will remove ${count} ${count===1?"registration":"registrations"} and make its registration and invitation links unavailable.`))return;
-  setBusy(true);setError("");setNotice("");
-  try{
-   await arena("delete-online-training",{id:event.id});
-   setEvents(current=>current.filter(item=>item.id!==event.id));
-   if(id===event.id)reset();
-   setNotice(`"${event.title}" was deleted. Its registration and invitation links are no longer available.`);
-  }catch(e){setError((e as Error).message);}finally{setBusy(false);}
+  if(!window.confirm(`Delete "${event.title}" and close its linked classroom session? Registrations and access will be removed; awarded CBC remains with students.`))return;
+  setBusy(true);setError("");
+  try{await rpc("cb_training_delete",{p_id:event.id});await load();if(id===event.id)reset();setNotice(`"${event.title}" deleted; its classroom closed.`);}
+  catch(e){setError((e as Error).message);}finally{setBusy(false);}
  }
- return <section className="cms-panel online-training-cms"><header><small>OWNER CONTROL</small><h2>Online Trainings</h2><p>Create a free session and personalize its invitation.</p></header>
+ const current=packages.find(item=>item.kind===packageKind)!;
+ return <section className="cms-panel online-training-cms"><header><small>OWNER CONTROL</small><h2>Online Trainings</h2><p>Schedule a free or paid class with a linked classroom room.</p></header>
   {error&&<p className="online-training-error" role="alert">{error}</p>}{notice&&<p className="online-training-success" role="status">{notice}</p>}
-  <div className="online-training-fields"><label>Event name<input value={title} maxLength={100} onChange={e=>setTitle(e.target.value)}/></label><label>Coach name<input value={coach} maxLength={80} onChange={e=>setCoach(e.target.value)}/></label>
-   <label>Date and time<input type="datetime-local" value={startsAt} onChange={e=>setStartsAt(e.target.value)}/></label><label>Participant limit<input type="number" min={1} max={500} value={capacity} onChange={e=>setCapacity(Number(e.target.value))}/></label>
-   <label>Age category<select value={category} onChange={e=>setCategory(e.target.value as Category)}>{Object.entries(categoryLabels).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>
-   <label>Poster image<input type="file" accept="image/jpeg,image/png,image/webp" disabled={busy} onChange={e=>{const file=e.target.files?.[0];if(file)void upload(file);}}/></label></div>
+  <div className="online-training-fields"><label>Event and room name<input value={title} maxLength={60} onChange={e=>setTitle(e.target.value)}/></label><label>Coach name<input value={coach} maxLength={80} onChange={e=>setCoach(e.target.value)}/></label>
+   <label>Date and time<input type="datetime-local" value={startsAt} onChange={e=>setStartsAt(e.target.value)}/></label><label>Age category<select value={category} onChange={e=>setCategory(e.target.value as Category)}>{Object.entries(categoryLabels).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>
+   <label>Poster image<input type="file" accept="image/jpeg,image/png,image/webp" disabled={busy} onChange={e=>{const file=e.target.files?.[0];if(file)void upload(file);}}/></label>
+   <label>CBC awarded per approved student<input type="number" min={0} max={1000} step={1} value={reward} onChange={e=>setReward(Number(e.target.value))}/></label></div>
+  <fieldset className="online-training-choice"><legend>Classroom room session</legend><div className="online-training-package-grid">{packages.map(item=><label key={item.kind} className={packageKind===item.kind?"selected":""}><input type="radio" name="training-package" checked={packageKind===item.kind} disabled={!!id&&!!events.find(e=>e.id===id)?.room_id} onChange={()=>setPackageKind(item.kind)}/><strong>Room {item.kind}</strong><small>{item.slots} students · {item.duration}</small></label>)}</div><p>Creates the room when you publish. The owner pays the configured room package in CBG. The room expires {current.duration} after the scheduled start.</p></fieldset>
+  <fieldset className="online-training-choice"><legend>Training fee</legend><div className="online-training-mode"><label><input type="radio" name="training-mode" checked={paymentMode==="free"} onChange={()=>setPaymentMode("free")}/> Free</label><label><input type="radio" name="training-mode" checked={paymentMode==="paid"} onChange={()=>setPaymentMode("paid")}/> Paid</label></div>{paymentMode==="paid"&&<label>Price per student (PHP)<input type="number" min={0.01} max={1000000} step={0.01} value={price} onChange={e=>setPrice(Number(e.target.value))}/></label>}<p>For paid classes, verify payment yourself before approving. The app does not collect the training fee.</p></fieldset>
   {poster&&<img className="online-training-cms-poster" src={poster} alt="Training poster preview"/>}
-  <label>Personal invitation text<textarea value={message} maxLength={500} onChange={e=>setMessage(e.target.value)} placeholder="Tell registrants what to expect…"/></label>
-  <div className="cms-actions"><button disabled={busy||!title.trim()||!coach.trim()||!startsAt} onClick={()=>void save()}>{busy?"Saving…":id?"Update online training":"Create online training & copy link"}</button>{id&&<button onClick={reset}>Cancel edit</button>}</div>
-  <div className="online-training-managed">{events.map(event=><article key={event.id}><h3>{event.title}</h3><p>{new Date(event.starts_at).toLocaleString()} · {categoryLabels[event.category]} · {event.registrants.length}/{event.capacity} registered</p><div className="cms-actions"><button type="button" disabled={busy} onClick={()=>edit(event)}>Edit</button><button type="button" disabled={busy} onClick={()=>void navigator.clipboard.writeText(link(event.id)).then(()=>setNotice(`Registration link copied: ${link(event.id)}`)).catch(()=>setError("Could not copy the link."))}>Copy registration link</button><button className="online-training-delete" type="button" disabled={busy} onClick={()=>void remove(event)} aria-label={`Delete ${event.title}`}>Delete training</button></div>
-   <h4>Registrants</h4>{event.registrants.map(reg=><div className="online-training-registrant" key={reg.id}><span><b>{reg.full_name}</b><small className={reg.confirmed?"online-training-account-active":undefined}>{reg.confirmed?`@${reg.username} · Account has active Chess Burger account`:reg.invited_at?"Invited · awaiting account confirmation":"Awaiting invitation and account confirmation"}</small></span><div className="online-training-registrant-actions">{!reg.confirmed&&<button disabled={busy} onClick={()=>void inviteRegistrant(reg,event)}>Invite & copy link</button>}{reg.confirmed&&<button disabled={busy||!reg.username} onClick={()=>void giftCredit(reg,event)}>Gift 1 CB Credit</button>}<button className="online-training-remove" type="button" disabled={busy} onClick={()=>void removeRegistrant(reg,event)} aria-label={`Remove ${reg.full_name} from ${event.title}`}>Remove</button></div></div>)}{!event.registrants.length&&<p>No registrants yet.</p>}</article>)}</div>
+  <label>Invitation and payment instructions<textarea value={message} maxLength={500} onChange={e=>setMessage(e.target.value)} placeholder="Describe the class and, if paid, tell students how to pay…"/></label>
+  <div className="cms-actions"><button disabled={busy||title.trim().length<3||!coach.trim()||!startsAt||!Number.isInteger(reward)||reward<0||reward>1000||(paymentMode==="paid"&&(!Number.isFinite(price)||price<=0||message.trim().length<10))} onClick={()=>void save()}>{busy?"Saving…":id?"Update online training":"Create training and room"}</button>{id&&<button onClick={reset}>Cancel edit</button>}</div>
+  <div className="online-training-managed">{events.map(event=><article key={event.id}><div className="online-training-managed-heading"><h3>{event.title}</h3><b>{event.payment_mode==="paid"?peso(event.price_php):"FREE"}</b></div><p>{new Date(event.starts_at).toLocaleString()} · Room {event.package_kind??"not linked"} · {event.registrants.filter(reg=>reg.approved).length}/{event.capacity} approved · {event.cbc_reward} CBC per approval</p><div className="cms-actions"><button type="button" disabled={busy} onClick={()=>edit(event)}>Edit</button><button type="button" disabled={busy} onClick={()=>void navigator.clipboard.writeText(link(event.id)).then(()=>setNotice(`Registration link copied: ${link(event.id)}`)).catch(()=>setError("Could not copy the link."))}>Copy link</button><button className="online-training-delete" type="button" disabled={busy} onClick={()=>void remove(event)}>Delete</button></div>
+   {event.room_code&&<p className="online-training-room-note">Classroom: {event.title} · room code {event.room_code}. Approved students see it in Classroom → Student portal.</p>}
+   <h4>Registrants</h4>{event.registrants.map(reg=><div className="online-training-registrant" key={reg.id}><span><b>{reg.full_name}</b><small className={reg.approved?"online-training-account-active":undefined}>{reg.approved?`@${reg.username} · Approved and enrolled`:reg.confirmed?`@${reg.username} · Awaiting approval`:reg.invited_at?"Invited · awaiting account":"Awaiting account"}</small></span><div className="online-training-registrant-actions">{!reg.confirmed&&<button disabled={busy} onClick={()=>void inviteRegistrant(reg,event)}>Invite & copy link</button>}{reg.confirmed&&!reg.approved&&<button disabled={busy} onClick={()=>void approve(reg,event)}>Approve · {event.cbc_reward} CBC</button>}<button className="online-training-remove" type="button" disabled={busy} onClick={()=>void removeRegistrant(reg,event)}>Remove</button></div></div>)}{!event.registrants.length&&<p>No registrants yet.</p>}</article>)}</div>
  </section>;
 }

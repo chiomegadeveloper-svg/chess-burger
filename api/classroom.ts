@@ -187,6 +187,9 @@ export default async function handler(req:Req,res:Res){
     if(action==="quit"){
       const roomId=String(body.room_id||"");
       if(!roomId)fail(400,"Classroom is required.");
+      const training=await client.from("cb_online_trainings").select("id").eq("room_id",roomId).maybeSingle();
+      if(training.error)fail(500,training.error.message);
+      if(training.data)fail(409,"Ask the training owner to remove your registration if you need to leave this class.");
       const enrollment=await client.from("cb_classroom_enrollments").select("student_id").eq("room_id",roomId).eq("student_id",userId).maybeSingle();
       if(enrollment.error)fail(500,enrollment.error.message);
       if(!enrollment.data)fail(404,"You are not enrolled in this classroom.");

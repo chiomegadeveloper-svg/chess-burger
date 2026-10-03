@@ -1046,15 +1046,7 @@ export default async function handler(req: Req, res: Res) {
       return res.status(200).json({ ok: true });
     }
     if (action === 'delete-online-training') {
-      if (account.profile.role !== 'owner') fail(403, 'Only an Owner can delete an online training.');
-      const id = String(body.id ?? '');
-      if (!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(id)) fail(400, 'Choose a valid online training.');
-      const removed = await client.from('cb_online_trainings').delete()
-        .eq('id', id).eq('owner_id', account.id).select('id,title').maybeSingle();
-      if (removed.error) fail(500, removed.error.message);
-      if (!removed.data) fail(404, 'Online training not found or owner access denied.');
-      await audit('training_delete', { id: removed.data.id, title: removed.data.title });
-      return res.status(200).json({ ok: true });
+      fail(409, 'Update Chess Burger and delete this training from the CMS to close its classroom safely.');
     }
     if (action === 'training-registrants' || action === 'gift-training-cbc' || action === 'remove-training-registrant') {
       if (account.profile.role !== 'owner') fail(403, 'Owner access is required.');
@@ -1065,15 +1057,7 @@ export default async function handler(req: Req, res: Res) {
       if (training.error) fail(500, training.error.message);
       if (!training.data) fail(404, 'Online training not found.');
       if (action === 'remove-training-registrant') {
-        if (training.data.owner_id !== account.id) fail(403, 'Only the training owner can remove a registrant.');
-        const registrationId = String(body.registration_id ?? '');
-        if (!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(registrationId)) fail(400, 'Choose a valid registrant.');
-        const removed = await client.from('cb_online_training_registrations').delete()
-          .eq('id', registrationId).eq('training_id', id).select('id,full_name').maybeSingle();
-        if (removed.error) fail(500, removed.error.message);
-        if (!removed.data) fail(404, 'Registrant not found in this training.');
-        await audit('training_registrant_remove', { id, registration_id: registrationId, full_name: removed.data.full_name });
-        return res.status(200).json({ ok: true });
+        fail(409, 'Update Chess Burger and remove this registrant from the CMS to revoke classroom access safely.');
       }
       if (action === 'training-registrants') {
         const found = await client.from('cb_online_training_registrations').select('id,user_id,full_name,invited_at,created_at')
