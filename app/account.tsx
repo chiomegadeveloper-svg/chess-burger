@@ -33,6 +33,7 @@ import { isProfileComplete } from "./profile-completion";
 import { isValidBirthdate, isWagerEligible } from "./age-rules";
 import ProfilePhotoBucket from "./profile-photo-bucket";
 import Portfolio from "./portfolio";
+import "./profile-photo-help.css";
 
 const emptyPhotos = ["", "", "", ""],
   countries = [
@@ -1006,6 +1007,12 @@ export default function Account({
           <p>Your birthday is required to enter Chess Burger. Players under 14 can play regular matches but cannot use wagers.</p>
         </div>
       )}
+      {registered === false && !profile.avatar_url && <aside className="profile-photo-help" aria-label="How to upload your profile photo">
+        <strong><Camera size={17}/> Add your profile photo</strong>
+        <p>Tap the photo circle below, choose a picture, and tap <b>Allow</b> if your phone asks for access. Then save your profile.</p>
+        <div><span><b>Android</b> Choose Photos or Files. Allow photo access if prompted.</span><span><b>iPhone / iPad</b> Choose Photo Library, Take Photo, or Browse. Allow access if prompted.</span></div>
+        <small>If you denied access earlier, open your device Settings and allow Photos or Camera for the browser, then try again.</small>
+      </aside>}
       <div className="account-toolbar">
         <label className="remember-login">
           <input
@@ -1037,11 +1044,12 @@ export default function Account({
           )}
           <i>
             <Camera />
-            Change
+            {profile.avatar_url ? "Change photo" : "Upload photo"}
           </i>
           <input
             type="file"
-            accept="image/jpeg,image/png,image/webp"
+            accept="image/*"
+            aria-label={profile.avatar_url ? "Change profile photo" : "Upload required profile photo"}
             disabled={busy}
             onChange={(e) => void chooseAvatar(e.currentTarget)}
           />
