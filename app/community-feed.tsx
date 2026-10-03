@@ -17,7 +17,6 @@ import {
   X,
   Ticket,
   Crown,
-  Newspaper, Radio, Compass, Flame,  GraduationCap, Megaphone, Gift,
 } from "lucide-react";
 import { toast } from "sonner";
 import { FeedEvent, getSupabase, type PlayerProfile } from "./supabase";
@@ -554,15 +553,15 @@ export default function CommunityFeed({
       </div>
       <div className="feed-tabs community-feed-tabs home-icon-tabs" role="tablist" aria-label="Home views">
         {([
-          ["recent","Recent feed",Newspaper],
-          ["online","Online",Radio],
-          ["quest","Daily Quest",Compass],
-          ["popular","Popular",Flame],
-          ["challenge","Challenge",Swords],
-          ["training","Online Trainings",GraduationCap],
-          ["announcement","Announcements",Megaphone],
-          ["rewards","Rewards",Gift],
-        ] as const).map(([id,label,Icon])=><button key={id} type="button" role="tab" aria-label={label} title={label} aria-selected={tab===id} onClick={()=>selectTab(id)}><span className="home-tab-art" aria-hidden="true"><Icon size={22} strokeWidth={2.3}/></span>{id==="online"&&<span className="home-online-badge" aria-label={`${onlineCount} users online`}>{onlineCount}</span>}</button>)}
+          ["recent","Recent feed"],
+          ["online","Online"],
+          ["quest","Daily Quest"],
+          ["popular","Popular"],
+          ["challenge","Challenge"],
+          ["training","Online Trainings"],
+          ["announcement","Announcements"],
+          ["rewards","Rewards"],
+        ] as const).map(([id,label])=><button key={id} type="button" role="tab" aria-label={label} title={label} aria-selected={tab===id} onClick={()=>selectTab(id)}><span className="home-tab-art" aria-hidden="true"><img src={`/home-tabs/${id}.webp`} width={44} height={44} alt="" loading="eager"/></span>{id==="online"&&<span className="home-online-badge" aria-label={`${onlineCount} users online`}>{onlineCount}</span>}</button>)}
       </div>
       <div className="home-selected-tab" role="status">{({recent:"Recent feed",online:"Online",quest:"Daily Quest",popular:"Popular",challenge:"Challenge",training:"Online Trainings",announcement:"Announcements",rewards:"Rewards"} as const)[tab]}</div>
       {tab === "quest" && <DailyQuest />}
