@@ -131,6 +131,14 @@ export default function Account({
   const [editing, setEditing] = useState(false);
   const [birthdateLocked, setBirthdateLocked] = useState(false);
   const [selectedFreeAvatar, setSelectedFreeAvatar] = useState<string>("");
+  const [referralInput, setReferralInput] = useState("");
+  useEffect(() => {
+    const incoming = new URLSearchParams(window.location.search).get("ref")?.trim().toUpperCase() ?? "";
+    try {
+      if (/^CB[A-F0-9]{16}$/.test(incoming)) sessionStorage.setItem("cb-pending-referral", incoming);
+      setReferralInput(/^CB[A-F0-9]{16}$/.test(incoming) ? incoming : sessionStorage.getItem("cb-pending-referral") ?? "");
+    } catch { if (/^CB[A-F0-9]{16}$/.test(incoming)) setReferralInput(incoming); }
+  }, []);
   const [cardSummary, setCardSummary] = useState<{cbc:number;tickets:number;guild_name:string;guild_logo_url:string}|null>(null);
   useEffect(() => {
     if (!profile?.user_id || guest) {setCardSummary(null);return;}
@@ -659,6 +667,7 @@ export default function Account({
         country_code: profile.country_code,
         featured_photos: profile.featured_photos,
         featured_badges: profile.featured_badges,
+        ...(registered === false && referralInput.trim() ? { referral_code: referralInput.trim().toUpperCase() } : {}),
       };
       const data = await profileRequest(client, "PUT", payload);
       if (!data) throw new Error("Profile save returned no data.");
@@ -667,14 +676,18 @@ export default function Account({
       setRegistered(true);
       setBirthdateLocked(true);
       setEditing(false);
+      try { sessionStorage.removeItem("cb-pending-referral"); } catch {}
       onMembershipChange?.(isProfileComplete(saved));
       authStorage.setItem("cb-staff-profile", JSON.stringify({...saved,birthdate:undefined}));
       onSaved(saved);
-      toast.success("Profile saved securely.");
+      if (saved.referral_notice) toast.error(saved.referral_notice);
+      else toast.success("Profile saved securely.");
     } catch (e) {
       const issue = e as { code?: string; message?: string };
       setError(
-        issue.code === "username_taken" ||
+          issue.code === "username_taken" ||
+          issue.code === "referral_invalid" ||
+          issue.code === "referral_locked" ||
           issue.code === "username_format" ||
           issue.code === "name_required" ||
           issue.code === "avatar_required" ||
@@ -1017,6 +1030,7 @@ export default function Account({
             <p>{profile.bio || "No profile description yet."}</p>
           </article>
         </div>
+        {profile.referral_code && <section className="profile-referral" aria-label="Your referral code"><div><span>INVITE A PLAYER</span><h3>Share Chess Burger</h3><p>Earn 100 CBG when a new player completes registration with your code. Up to 5 rewards each week.</p><small>{profile.referral_week_used ?? 0} / {profile.referral_week_limit ?? 5} successful referrals this week</small></div><div className="profile-referral-actions"><strong>{profile.referral_code}</strong><button type="button" onClick={() => { const link = new URL("/",window.location.origin);link.searchParams.set("ref",profile.referral_code!);void navigator.clipboard.writeText(link.toString()).then(()=>toast.success("Referral link copied."),()=>toast.error("Could not copy the link.")); }}>Copy referral link</button></div></section>}
         <ProfilePhotoBucket photos={profile.featured_photos} name={profile.display_name} busy={busy} onUpload={(file,index)=>upload(file,"photo",index)} />
         {!guest && <Portfolio userId={profile.user_id} owner openNotification={portfolioNotification} />}
         {showPasswordSecurity && passwordSecurity}
@@ -1168,6 +1182,7 @@ export default function Account({
             ))}
           </select>
         </label>
+        {registered === false && <label>Referral code <small>(optional)</small><input type="text" maxLength={18} autoCapitalize="characters" autoComplete="off" placeholder="CB1234567890ABCDEF" value={referralInput} onChange={e => setReferralInput(e.target.value.toUpperCase().replace(/[^A-F0-9]/g,""))}/><small>If another player invited you, enter their code here before saving your profile.</small></label>}
         <label>
           About
           <textarea

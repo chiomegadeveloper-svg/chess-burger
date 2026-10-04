@@ -50,6 +50,11 @@ async function framedView(client: any, row: Record<string, unknown> | null) {
   const frameId = String(item.data?.metadata?.frame_id ?? '');
   return { ...profile, avatar_frame_id: !item.error && itemId.startsWith(`af-${frameId}-`) && Date.parse(String(item.data?.metadata?.expires_at ?? '')) > Date.now() ? frameId : null };
 }
+async function referralView(client: any, userId: string) {
+  const result = await client.rpc('cb_referral_status', { p_user_id: userId });
+  if (result.error) return {};
+  return { referral_code: String(result.data?.code ?? ''), referral_week_used: Number(result.data?.week_used ?? 0), referral_week_limit: 5 };
+}
 
 export default async function handler(req: Req, res: Res) {
   res.setHeader('Cache-Control', 'no-store');
@@ -91,11 +96,18 @@ export default async function handler(req: Req, res: Res) {
           if (!recovered.error) row = recovered.data;
         }
       }
-      return res.status(200).json({ profile: row ? { ...(await framedView(client,row)), birthdate: storedBirthdate || null } : null });
+      return res.status(200).json({ profile: row ? { ...(await framedView(client,row)), ...(storedBirthdate ? await referralView(client,user.id) : {}), birthdate: storedBirthdate || null } : null });
     }
 
     const input = req.body && typeof req.body === 'object' ? req.body as Record<string, unknown> : {};
     if (JSON.stringify(input).length > 30000) return res.status(413).json({ error: 'Profile is too large.' });
+    const referralCode = String(input.referral_code ?? '').trim().toUpperCase();
+    if (referralCode && !/^CB[A-F0-9]{16}$/.test(referralCode)) return res.status(400).json({ error: 'Enter a valid Chess Burger referral code.', code: 'referral_invalid' });
+    if (referralCode && storedBirthdate) return res.status(409).json({ error: 'Referral codes can only be added during registration.', code: 'referral_locked' });
+    if (referralCode) {
+      const check = await client.rpc('cb_referral_check', { p_new_user_id: user.id, p_code: referralCode });
+      if (check.error) return res.status(/schema cache|function .* does not exist/i.test(check.error.message) ? 503 : 409).json({ error: check.error.message, code: 'referral_invalid' });
+    }
     const enteredBirthdate = String(input.birthdate ?? '').trim();
     if (storedBirthdate && enteredBirthdate && enteredBirthdate !== storedBirthdate) return res.status(409).json({ error: 'Birthday is already saved. Contact support if it needs correction.', code: 'birthday_locked' });
     if (!storedBirthdate && !validBirthdate(enteredBirthdate)) return res.status(400).json({ error: 'Enter a valid birthday before using Chess Burger.', code: 'birthday_required' });
@@ -133,7 +145,12 @@ export default async function handler(req: Req, res: Res) {
       const inserted = await client.from('cb_profile_birthdays').insert({user_id:user.id,birthdate});
       if (inserted.error) throw inserted.error;
     }
-    return res.status(200).json({ profile: { ...(await framedView(client,saved.data)), birthdate } });
+    let referralNotice = '';
+    if (referralCode) {
+      const claim = await client.rpc('cb_referral_claim', { p_new_user_id: user.id, p_code: referralCode });
+      if (claim.error) referralNotice = `Profile saved, but referral reward was not issued: ${claim.error.message}`;
+    }
+    return res.status(200).json({ profile: { ...(await framedView(client,saved.data)), ...(await referralView(client,user.id)), ...(referralNotice ? { referral_notice: referralNotice } : {}), birthdate } });
   } catch (error) {
     console.error('Chess Burger profile request failed', error);
     return res.status(500).json({ error: 'Profile could not be loaded or saved. Please retry.', code: 'profile_save_failed' });
