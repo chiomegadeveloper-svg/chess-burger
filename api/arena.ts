@@ -1199,7 +1199,18 @@ export default async function handler(req: Req, res: Res) {
       if(current.error)fail(503,`Could not read avatar settings: ${current.error.message}`);
       const previous=current.data;
       if(!avatarId&&!previous.active_shop_avatar)return res.status(200).json({active:null,avatar_url:previous.avatar_url});
-      const avatarUrl=avatarId?`/shop-avatars/${avatarId}.webp`:String(previous.shop_avatar_original_url??'');
+      let avatarUrl=String(previous.shop_avatar_original_url??'');
+      if(avatarId){
+        const image=await fetch(`https://chessburger.site/shop-avatars/${avatarId}.webp`);
+        if(!image.ok)fail(503,'Avatar artwork is temporarily unavailable. Please try again.');
+        const bytes=new Uint8Array(await image.arrayBuffer());
+        const webp=bytes.length>12&&bytes.length<200_000&&String.fromCharCode(...bytes.slice(0,4))==='RIFF'&&String.fromCharCode(...bytes.slice(8,12))==='WEBP';
+        if(!webp)fail(503,'Avatar artwork did not pass the image check. Please try again.');
+        const path=`${account.id}/avatar-shop-${avatarId}.webp`;
+        const uploaded=await client.storage.from('cb-profile-media').upload(path,bytes,{contentType:'image/webp',upsert:true});
+        if(uploaded.error)fail(503,`Could not prepare your avatar: ${uploaded.error.message}`);
+        avatarUrl=client.storage.from('cb-profile-media').getPublicUrl(path).data.publicUrl;
+      }
       const update=avatarId?{
         avatar_url:avatarUrl,active_shop_avatar:avatarId,
         shop_avatar_original_url:previous.active_shop_avatar?previous.shop_avatar_original_url:previous.avatar_url,

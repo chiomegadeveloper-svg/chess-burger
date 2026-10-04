@@ -120,7 +120,7 @@ export default async function handler(req: Req, res: Res) {
     if (!displayName || displayName.length > 60) return res.status(400).json({ error: 'Enter your name (up to 60 characters).', code: 'name_required' });
     const country = String(input.country_code ?? 'PH');
     const currentShopAvatar=String(existing.data?.active_shop_avatar??'');
-    const currentShopUrl=/^avatar-(0[1-9]|[1-3][0-9]|40)$/.test(currentShopAvatar)?`/shop-avatars/${currentShopAvatar}.webp`:'';
+    const currentShopUrl=/^avatar-(0[1-9]|[1-3][0-9]|40)$/.test(currentShopAvatar)?String(existing.data?.avatar_url??''):'';
     const avatar = input.avatar_url===currentShopUrl&&currentShopUrl?currentShopUrl:cleanUrl(input.avatar_url);
     const path = avatarPath(client, user.id, avatar);
     if (!path && (!currentShopUrl || avatar!==currentShopUrl)) return res.status(400).json({ error: 'Upload your profile picture before saving your profile.', code: 'avatar_required' });
