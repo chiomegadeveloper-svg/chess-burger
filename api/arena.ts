@@ -850,7 +850,9 @@ export default async function handler(req: Req, res: Res) {
     const avatarPath = `${account.id}/`;
     const avatarName = photo.split('/').pop() ?? '';
     const expectedPhoto = client.storage.from('cb-profile-media').getPublicUrl(`${avatarPath}${avatarName}`).data.publicUrl;
-    if (!/^avatar-[a-z0-9-]+\.webp$/i.test(avatarName) || photo !== expectedPhoto) fail(403,'Complete registration and save a profile picture to unlock Chess Burger.');
+    const activeShopAvatar=String(account.profile.active_shop_avatar??'');
+    const purchasedAvatar=/^avatar-(0[1-9]|[1-3][0-9]|40)$/.test(activeShopAvatar)&&photo===`/shop-avatars/${activeShopAvatar}.webp`;
+    if (!purchasedAvatar && (!/^avatar-[a-z0-9-]+\.webp$/i.test(avatarName) || photo !== expectedPhoto)) fail(403,'Complete registration and save a profile picture to unlock Chess Burger.');
     if (action === 'report-list') {
       const owner = account.profile.role === 'owner';
       if (body.scope === 'owner' && !owner) fail(403, 'Owner access is required.');
@@ -1171,7 +1173,26 @@ export default async function handler(req: Req, res: Res) {
       const error=banners.error??tickets.error??items.error??used.error;if(error)fail(503,'Run Supabase migrations through 0034, then reopen your Bag.');
       const available=(items.data??[]).filter((item:any)=>item.item_kind!=='avatar_frame'||Date.parse(String(item.metadata?.expires_at??''))>Date.now());
       const activeItem=String(account.profile.active_avatar_frame_item??'');
-      return res.status(200).json({banners:banners.data??[],tickets:Number(tickets.data?.quantity??0),items:available,active:account.profile.active_feed_banner??'',active_frame_item:available.some((item:any)=>item.item_kind==='avatar_frame'&&item.item_id===activeItem)?activeItem:null,gold:Number(account.profile.gold_points??0),cbr:Number(account.profile.cbr??0),bag_slots:Number(account.profile.bag_slots??10),used_slots:Number(used.data??0),server_now:now});
+      return res.status(200).json({banners:banners.data??[],tickets:Number(tickets.data?.quantity??0),items:available,active:account.profile.active_feed_banner??'',active_frame_item:available.some((item:any)=>item.item_kind==='avatar_frame'&&item.item_id===activeItem)?activeItem:null,active_shop_avatar:account.profile.active_shop_avatar??null,gold:Number(account.profile.gold_points??0),cbr:Number(account.profile.cbr??0),bag_slots:Number(account.profile.bag_slots??10),used_slots:Number(used.data??0),server_now:now});
+    }
+    if(action==='shop-avatar-state'){
+      const owned=await client.from('cb_inventory_items').select('item_id').eq('user_id',account.id).eq('item_kind','shop_avatar').gt('quantity',0);
+      if(owned.error)fail(503,'Apply supabase/0098_shop_avatars.sql to enable character avatars.');
+      return res.status(200).json({owned:(owned.data??[]).map((item:any)=>item.item_id),active:account.profile.active_shop_avatar??null,gold:Number(account.profile.gold_points??0)});
+    }
+    if(action==='buy-shop-avatar'){
+      const avatarId=String(body.avatar_id??''),requestId=String(body.request_id??'');
+      if(!/^avatar-(0[1-9]|[1-3][0-9]|40)$/.test(avatarId)||!/^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(requestId))fail(400,'Choose a valid avatar purchase.');
+      const result=await client.rpc('cb_buy_shop_avatar',{p_user_id:account.id,p_avatar_id:avatarId,p_request_id:requestId});
+      if(result.error){const message=String(result.error.message??'Avatar purchase failed.');if(/cb_buy_shop_avatar|schema cache|function|relation|column/i.test(message))fail(503,'Apply supabase/0098_shop_avatars.sql to enable character avatars.');fail(409,message)}
+      return res.status(200).json(result.data);
+    }
+    if(action==='equip-shop-avatar'){
+      const avatarId=body.avatar_id===null?null:String(body.avatar_id??'');
+      if(avatarId!==null&&!/^avatar-(0[1-9]|[1-3][0-9]|40)$/.test(avatarId))fail(400,'Choose a valid character avatar.');
+      const result=await client.rpc('cb_equip_shop_avatar',{p_user_id:account.id,p_avatar_id:avatarId});
+      if(result.error){const message=String(result.error.message??'Could not equip avatar.');if(/cb_equip_shop_avatar|schema cache|function|relation|column/i.test(message))fail(503,'Apply supabase/0098_shop_avatars.sql to enable character avatars.');fail(409,message)}
+      return res.status(200).json(result.data);
     }
     if(action==='avatar-frame-state'){
       const configured=await client.from('cb_profiles').select('active_avatar_frame_item').eq('user_id',account.id).maybeSingle();
@@ -1216,6 +1237,7 @@ export default async function handler(req: Req, res: Res) {
       const username=String(body.username??'').trim(),kind=String(body.item_kind??''),itemId=String(body.item_id??''),quantity=Number(body.quantity??1),requestId=String(body.request_id??'');
       if(!/^@?[a-z0-9_]{2,40}$/i.test(username)||!/^[a-z][a-z0-9_-]{1,40}$/i.test(kind)||!/^[a-z0-9][a-z0-9_-]{1,80}$/i.test(itemId)||!Number.isInteger(quantity)||quantity<1||!/^[a-f0-9-]{36}$/i.test(requestId))fail(400,'Choose a valid item, quantity, and recipient username.');
       if(kind==='feed_banner'&&itemId==='premium-supporter')fail(403,'Premium User is a personal supporter reward and cannot be gifted.');
+      if(kind==='shop_avatar')fail(403,'Purchased character avatars stay with their original owner.');
       if(kind==='avatar_frame'){
         if(quantity!==1)fail(400,'Gift one avatar frame rental at a time.');
         const owned=await client.from('cb_inventory_items').select('metadata').eq('user_id',account.id).eq('item_kind',kind).eq('item_id',itemId).gt('quantity',0).maybeSingle();

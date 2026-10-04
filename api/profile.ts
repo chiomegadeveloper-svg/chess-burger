@@ -80,7 +80,9 @@ export default async function handler(req: Req, res: Res) {
         const patch: Record<string, unknown> = {};
         const currentPath = avatarPath(client, user.id, row.avatar_url);
         const verified = currentPath ? await client.storage.from('cb-profile-media').download(currentPath) : null;
-        if (!verified?.data || verified.error) {
+        const activeShopAvatar=String(row.active_shop_avatar??'');
+        const trustedShopAvatar=/^avatar-(0[1-9]|[1-3][0-9]|40)$/.test(activeShopAvatar)&&row.avatar_url===`/shop-avatars/${activeShopAvatar}.webp`;
+        if (!trustedShopAvatar && (!verified?.data || verified.error)) {
           const storedAvatar = await recoverStoredAvatar(client, user.id);
           patch.avatar_url = storedAvatar;
         }
@@ -117,21 +119,26 @@ export default async function handler(req: Req, res: Res) {
     if (!/^[a-z0-9_]{3,24}$/.test(username)) return res.status(400).json({ error: 'Username must use 3–24 lowercase letters, numbers, or underscores.', code: 'username_format' });
     if (!displayName || displayName.length > 60) return res.status(400).json({ error: 'Enter your name (up to 60 characters).', code: 'name_required' });
     const country = String(input.country_code ?? 'PH');
-    const avatar = cleanUrl(input.avatar_url);
+    const currentShopAvatar=String(existing.data?.active_shop_avatar??'');
+    const currentShopUrl=/^avatar-(0[1-9]|[1-3][0-9]|40)$/.test(currentShopAvatar)?`/shop-avatars/${currentShopAvatar}.webp`:'';
+    const avatar = input.avatar_url===currentShopUrl&&currentShopUrl?currentShopUrl:cleanUrl(input.avatar_url);
     const path = avatarPath(client, user.id, avatar);
-    if (!path) return res.status(400).json({ error: 'Upload your profile picture before saving your profile.', code: 'avatar_required' });
-    const stored = await client.storage.from('cb-profile-media').download(path);
-    if (stored.error || !stored.data) return res.status(400).json({ error: 'Uploaded profile picture could not be read. Upload it again.', code: 'avatar_required' });
-    // Storage downloads may return application/octet-stream even for WebP objects.
-    const header = new Uint8Array(await stored.data.slice(0, 12).arrayBuffer());
-    const webp = header.length === 12 && String.fromCharCode(...header.slice(0, 4)) === 'RIFF' && String.fromCharCode(...header.slice(8, 12)) === 'WEBP';
-    if (!webp) return res.status(400).json({ error: 'Profile picture must be a valid WebP image. Upload it again.', code: 'avatar_required' });
+    if (!path && (!currentShopUrl || avatar!==currentShopUrl)) return res.status(400).json({ error: 'Upload your profile picture before saving your profile.', code: 'avatar_required' });
+    if(path){
+      const stored = await client.storage.from('cb-profile-media').download(path);
+      if (stored.error || !stored.data) return res.status(400).json({ error: 'Uploaded profile picture could not be read. Upload it again.', code: 'avatar_required' });
+      // Storage downloads may return application/octet-stream even for WebP objects.
+      const header = new Uint8Array(await stored.data.slice(0, 12).arrayBuffer());
+      const webp = header.length === 12 && String.fromCharCode(...header.slice(0, 4)) === 'RIFF' && String.fromCharCode(...header.slice(8, 12)) === 'WEBP';
+      if (!webp) return res.status(400).json({ error: 'Profile picture must be a valid WebP image. Upload it again.', code: 'avatar_required' });
+    }
     const payload = {
       user_id: user.id,
       username,
       display_name: displayName,
       bio: String(input.bio ?? '').trim().slice(0, 240),
       avatar_url: avatar,
+      ...(currentShopUrl&&avatar!==currentShopUrl?{active_shop_avatar:null,shop_avatar_original_url:null}:{}),
       country_code: /^[A-Z]{2}$/.test(country) ? country : 'PH',
       featured_photos: list(input.featured_photos, 4).map(cleanUrl),
       featured_badges: list(input.featured_badges, 10),

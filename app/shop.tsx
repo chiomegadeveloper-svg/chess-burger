@@ -30,6 +30,8 @@ import CbgShop from "./cbg-shop";
 import DonateShop from "./donate-shop";
 import {donations} from "./donations-client";
 import { AvatarFrameStore } from "./avatar-frame-store";
+import { ShopAvatarStore } from "./shop-avatar-store";
+import { shopAvatar } from "./shop-avatar-catalog";
 import { avatarFrame } from "./avatar-frame-catalog";
 import { AvatarFrameArt } from "./avatar-frame-art";
 import "./feed-banner-shop.css";
@@ -293,11 +295,13 @@ export function ShopPage({
   const [open, setOpen] = useState(false),
     [openBoards, setOpenBoards] = useState(false),
     [openFrames, setOpenFrames] = useState(false),
+    [openAvatars, setOpenAvatars] = useState(false),
     [busy, setBusy] = useState(""),
     [days, setDays] = useState<FeedBannerDuration>(7);
   const { state, setState, loading } = useShopState();
   if (openBoards) return <BoardThemeStore onBack={() => setOpenBoards(false)} onChanged={onChanged}/>;
   if (openFrames) return <AvatarFrameStore onBack={() => setOpenFrames(false)} onChanged={onChanged} photo={profile?.avatar_url}/>;
+  if (openAvatars) return <ShopAvatarStore onBack={() => setOpenAvatars(false)} onChanged={onChanged}/>;
   const act = async (banner: FeedBanner) => {
     if (busy) return;
     const rental = rentalFor(state, banner.id);
@@ -445,6 +449,7 @@ export function ShopPage({
         <ClassroomCreditStore />
         <BagSlotStore fallbackGold={state.gold || profile?.gold_points || 0}/>
       <div className="shop-grid">
+        <article className="shop-category-ready"><span className="shop-icon" aria-hidden="true">♛</span><div><h2>Character Avatars</h2><p>40 portraits from 2 to 8 CBG. Buy once and keep yours forever.</p></div><button type="button" onClick={() => setOpenAvatars(true)}>View avatars</button></article>
         <article className="shop-category-ready"><span className="shop-icon">♞</span><div><h2>Avatar frames</h2><p>40 chess designs to rent, equip, or gift from your Bag.</p></div><button type="button" onClick={() => setOpenFrames(true)}>View frames</button></article>
         <article className="shop-category-ready">
           <span className="shop-icon" aria-hidden="true">♛</span>
@@ -480,6 +485,7 @@ export function BagPage({ onChanged }: { onChanged: () => void }) {
     }>;
     active: string;
     active_frame_item?: string | null;
+    active_shop_avatar?: string | null;
     gold: number;
     cbr: number;
     bag_slots: number;
@@ -570,6 +576,16 @@ export function BagPage({ onChanged }: { onChanged: () => void }) {
       onChanged();
       toast.success(itemId ? "Avatar frame equipped." : "Avatar frame removed.");
     } catch (error) { toast.error(error instanceof Error ? error.message : "Unable to change avatar frame."); }
+    finally { setBusy(""); }
+  };
+  const equipShopAvatar = async (avatarId: string | null) => {
+    setBusy(avatarId ?? "remove-shop-avatar");
+    try {
+      await arena("equip-shop-avatar", { avatar_id: avatarId });
+      setState(current => ({ ...current, active_shop_avatar: avatarId }));
+      onChanged();
+      toast.success(avatarId ? "Character avatar equipped." : "Original profile photo restored.");
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Unable to change avatar."); }
     finally { setBusy(""); }
   };
   const openGift = (kind: string, id: string, name: string, max = 1) => {
@@ -712,7 +728,13 @@ export function BagPage({ onChanged }: { onChanged: () => void }) {
               </article>
             );
           })}
-          {state.items.map((item) => item.item_kind === "avatar_frame" && avatarFrame(item.metadata?.frame_id) ? (
+          {state.items.map((item) => item.item_kind === "shop_avatar" && shopAvatar(item.item_id) ? (
+            <article className={`bag-inventory-card generic rare ${state.active_shop_avatar === item.item_id ? "active" : ""}`} key={item.item_id}>
+              <div className="rpg-item-art"><img src={shopAvatar(item.item_id)!.image} alt=""/>{state.active_shop_avatar === item.item_id && <strong>Equipped</strong>}</div>
+              <div className="rpg-item-copy"><small>PERMANENT AVATAR</small><h3>{shopAvatar(item.item_id)!.name}</h3><span>Yours forever</span></div>
+              <div className="rpg-item-actions"><button type="button" disabled={!!busy} onClick={() => void equipShopAvatar(state.active_shop_avatar === item.item_id ? null : item.item_id)}>{state.active_shop_avatar === item.item_id ? "Unequip" : "Equip"}</button></div>
+            </article>
+          ) : item.item_kind === "avatar_frame" && avatarFrame(item.metadata?.frame_id) ? (
             <article className={`bag-inventory-card generic rare ${state.active_frame_item === item.item_id ? "active" : ""}`} key={item.item_id}>
               <div className="rpg-item-art"><AvatarFrameArt frameId={item.metadata!.frame_id!}/>{state.active_frame_item === item.item_id && <strong>Equipped</strong>}</div>
               <div className="rpg-item-copy"><small>{avatarFrame(item.metadata?.frame_id)?.tier} avatar frame</small><h3>{item.metadata?.name}</h3><span>{item.metadata?.expires_at ? rentalLabel(item.metadata.expires_at) : "Rental"}</span></div>
