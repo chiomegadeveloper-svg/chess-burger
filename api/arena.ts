@@ -1190,9 +1190,23 @@ export default async function handler(req: Req, res: Res) {
     if(action==='equip-shop-avatar'){
       const avatarId=body.avatar_id===null?null:String(body.avatar_id??'');
       if(avatarId!==null&&!/^avatar-(0[1-9]|[1-3][0-9]|40)$/.test(avatarId))fail(400,'Choose a valid character avatar.');
-      const result=await client.rpc('cb_equip_shop_avatar',{p_user_id:account.id,p_avatar_id:avatarId});
-      if(result.error){const message=String(result.error.message??'Could not equip avatar.');if(/cb_equip_shop_avatar|schema cache|function|relation|column/i.test(message))fail(503,'Apply supabase/0098_shop_avatars.sql to enable character avatars.');fail(409,message)}
-      return res.status(200).json(result.data);
+      if(avatarId){
+        const owned=await client.from('cb_inventory_items').select('item_id').eq('user_id',account.id).eq('item_kind','shop_avatar').eq('item_id',avatarId).gt('quantity',0).maybeSingle();
+        if(owned.error)fail(503,'Could not check your avatar purchase. Please try again.');
+        if(!owned.data)fail(403,'Buy this character avatar before equipping it.');
+      }
+      const current=await client.from('cb_profiles').select('avatar_url,active_shop_avatar,shop_avatar_original_url').eq('user_id',account.id).single();
+      if(current.error)fail(503,`Could not read avatar settings: ${current.error.message}`);
+      const previous=current.data;
+      if(!avatarId&&!previous.active_shop_avatar)return res.status(200).json({active:null,avatar_url:previous.avatar_url});
+      const avatarUrl=avatarId?`/shop-avatars/${avatarId}.webp`:String(previous.shop_avatar_original_url??'');
+      const update=avatarId?{
+        avatar_url:avatarUrl,active_shop_avatar:avatarId,
+        shop_avatar_original_url:previous.active_shop_avatar?previous.shop_avatar_original_url:previous.avatar_url,
+      }:{avatar_url:avatarUrl,active_shop_avatar:null,shop_avatar_original_url:null};
+      const saved=await client.from('cb_profiles').update(update).eq('user_id',account.id).select('avatar_url,active_shop_avatar').single();
+      if(saved.error)fail(503,`Could not equip character avatar: ${saved.error.message}`);
+      return res.status(200).json({active:saved.data.active_shop_avatar,avatar_url:saved.data.avatar_url});
     }
     if(action==='avatar-frame-state'){
       const configured=await client.from('cb_profiles').select('active_avatar_frame_item').eq('user_id',account.id).maybeSingle();
