@@ -852,7 +852,7 @@ function AppPage() {
           <section className="profile-page registration-gate">
             <div className="page-heading">
               <h1>Complete your registration</h1>
-              <p>Your birthday, name, username, country, and profile photo are required before you can enter Chess Burger.</p>
+              <p>Add your birthday, name, username, country, and a free Chess Burger avatar or your own photo to enter the app.</p>
             </div>
             <Account
               registrationOnly

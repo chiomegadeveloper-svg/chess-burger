@@ -35,6 +35,15 @@ import ProfilePhotoBucket from "./profile-photo-bucket";
 import Portfolio from "./portfolio";
 import "./profile-photo-help.css";
 
+const freeAvatars = [
+  { id: "lady", label: "Lady" },
+  { id: "robot", label: "Robot" },
+  { id: "smart-kid", label: "Smart kid" },
+  { id: "afro-man", label: "Afro man" },
+  { id: "grandpa", label: "Grandpa" },
+  { id: "fish-robot", label: "Fish robot" },
+] as const;
+
 const emptyPhotos = ["", "", "", ""],
   countries = [
     ["PH", "🇵🇭", "Philippines"],
@@ -121,6 +130,7 @@ export default function Account({
     [registered, setRegistered] = useState<boolean | null>(null);
   const [editing, setEditing] = useState(false);
   const [birthdateLocked, setBirthdateLocked] = useState(false);
+  const [selectedFreeAvatar, setSelectedFreeAvatar] = useState<string>("");
   const [cardSummary, setCardSummary] = useState<{cbc:number;tickets:number;guild_name:string;guild_logo_url:string}|null>(null);
   useEffect(() => {
     if (!profile?.user_id || guest) {setCardSummary(null);return;}
@@ -465,16 +475,16 @@ export default function Account({
       setBusy(false);
     }
   }
-  async function upload(file: File, kind: "avatar" | "photo", index = 0) {
+  async function upload(file: File, kind: "avatar" | "photo", index = 0, freePreset = false) {
     if (!profile || !user || !client || guest) {
       setError("Sign in to upload a profile photo.");
-      return;
+      return false;
     }
     try {
       validateImageFile(file);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Choose a valid photo.");
-      return;
+      return false;
     }
     setBusy(true);
     setError("");
@@ -486,7 +496,7 @@ export default function Account({
         session = refreshed.data.session;
       }
       if (!session || session.user.id !== user.id) throw new Error("session");
-      const blob = await (kind === "avatar" ? toWebpUnder500Kb(file) : toWebpUnder1Mb(file)),
+       const blob = freePreset ? file : await (kind === "avatar" ? toWebpUnder500Kb(file) : toWebpUnder1Mb(file)),
         path =
           user.id +
           "/" +
@@ -556,6 +566,7 @@ export default function Account({
           description: "Save your profile to keep this photo.",
         });
       }
+      return true;
     } catch (e) {
       setProfile(profile);
       const code = e instanceof Error ? e.message : String(e);
@@ -572,6 +583,7 @@ export default function Account({
                   ? code
                   : `Photo upload failed: ${code || "Connection interrupted"}. Please retry.`,
       );
+      return false;
     } finally {
       setBusy(false);
     }
@@ -580,11 +592,24 @@ export default function Account({
     const selected = input.files?.[0];
     if (!selected) return;
     try {
-      await upload(selected, "avatar");
+      if (await upload(selected, "avatar")) setSelectedFreeAvatar("");
     } finally {
       // Safari may keep Photos selections behind a temporary file handle.
       // Clear it only after conversion and upload have finished.
       input.value = "";
+    }
+  }
+  async function chooseFreeAvatar(id: (typeof freeAvatars)[number]["id"]) {
+    if (busy) return;
+    try {
+      setError("");
+      const response = await fetch(`/avatars/${id}.webp`, { cache: "force-cache" });
+      if (!response.ok) throw new Error("This avatar is temporarily unavailable. Please try again.");
+      const blob = await response.blob();
+      const file = new File([blob], `${id}.webp`, { type: "image/webp" });
+      if (await upload(file, "avatar", 0, true)) setSelectedFreeAvatar(id);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not select this avatar.");
     }
   }
   async function chooseFeaturedPhoto(input: HTMLInputElement, index: number) {
@@ -999,7 +1024,7 @@ export default function Account({
     );
   return (
     <section className="profile-editor">
-      {!profile.avatar_url&&<p className="auth-error" role="status">A profile picture is required. Upload one below and save your profile to unlock the app.</p>}
+      {!profile.avatar_url&&<p className="auth-error" role="status">Choose a free Chess Burger avatar or upload your own photo, then save your profile to unlock the app.</p>}
       {registered === false && (
         <div className="profile-registration-intro">
           <span>ACCOUNT SETUP</span>
@@ -1009,7 +1034,7 @@ export default function Account({
       )}
       {registered === false && !profile.avatar_url && <aside className="profile-photo-help" aria-label="How to upload your profile photo">
         <strong><Camera size={17}/> Add your profile photo</strong>
-        <p>Tap the photo circle below, choose a picture, and tap <b>Allow</b> if your phone asks for access. Then save your profile.</p>
+        <p>Choose a free avatar below, or tap the photo circle to upload your own picture. Tap <b>Allow</b> if your phone asks for access. Then save your profile.</p>
         <div><span><b>Android</b> Choose Photos or Files. Allow photo access if prompted.</span><span><b>iPhone / iPad</b> Choose Photo Library, Take Photo, or Browse. Allow access if prompted.</span></div>
         <small>If you denied access earlier, open your device Settings and allow Photos or Camera for the browser, then try again.</small>
       </aside>}
@@ -1079,6 +1104,10 @@ export default function Account({
           )}
         </div>
       </div>
+      {registered === false && <section className="free-avatar-picker" aria-label="Free Chess Burger avatars">
+        <div className="free-avatar-heading"><span>FREE PLAYER AVATARS</span><h3>Choose your character</h3><p>Select one of six avatars or upload your own photo. Your selection becomes your profile picture when you save.</p></div>
+        <div className="free-avatar-grid">{freeAvatars.map(avatar => <button type="button" key={avatar.id} className={selectedFreeAvatar === avatar.id ? "selected" : ""} aria-pressed={selectedFreeAvatar === avatar.id} aria-label={`Choose ${avatar.label} avatar`} disabled={busy} onClick={() => void chooseFreeAvatar(avatar.id)}><img src={`/avatars/${avatar.id}.webp`} alt=""/><span>{avatar.label}</span></button>)}</div>
+      </section>}
       <form className="profile-form" onSubmit={save}>
         <label>
           Username
