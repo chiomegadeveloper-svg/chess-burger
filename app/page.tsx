@@ -29,6 +29,7 @@ import Offline from "./offline";
 import SharedBoard from "./shared-board";
 import Account from "./account";
 import CommunityFeed from "./community-feed";
+import DailyQuestReminder from "./daily-quest-reminder";
 import RecentPlays from "./recent-plays";
 import { OnlineTrainings } from "./online-training";
 import { CertificateVerificationPage } from "./certificates";
@@ -119,6 +120,8 @@ function AppPage() {
   const [trainingId,setTrainingId]=useState(""),[trainingInvite,setTrainingInvite]=useState(""),[openTrainingAccount,setOpenTrainingAccount]=useState(false);
   const [feedTarget, setFeedTarget] = useState<"recent" | "announcement" | "rewards" | "challenge">("recent");
   const [ownerPending, setOwnerPending] = useState<OwnerPendingAlert[]>([]);
+  // Keep dismissal above the Home page so navigating back does not reopen it.
+  const [dailyQuestReminderDismissed, setDailyQuestReminderDismissed] = useState(false);
   const [tab, setTab] = useState("profile"),
     [profile, setProfile] = useState<PlayerProfile | null>(null),
     [replayGame, setReplayGame] = useState<SavedGame | null>(null),
@@ -1137,6 +1140,10 @@ function AppPage() {
         }}
       />
       <FloatingChatButton visible={tab === "home"} />
+      <DailyQuestReminder
+        open={tab === "home" && !showSplash && !showWelcome && !needsAgreement && member === true && isProfileComplete(profile) && !dailyQuestReminderDismissed}
+        onDismiss={() => setDailyQuestReminderDismissed(true)}
+      />
       <InstallPrompt active={!showSplash} />
       <Toaster theme="light" position="top-center" richColors closeButton />
     </main>
