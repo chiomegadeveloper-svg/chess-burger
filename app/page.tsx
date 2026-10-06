@@ -30,6 +30,7 @@ import SharedBoard from "./shared-board";
 import Account from "./account";
 import CommunityFeed from "./community-feed";
 import DailyQuestReminder from "./daily-quest-reminder";
+import LevelThreeReminder from "./level-three-reminder";
 import RecentPlays from "./recent-plays";
 import { OnlineTrainings } from "./online-training";
 import { CertificateVerificationPage } from "./certificates";
@@ -1151,6 +1152,14 @@ function AppPage() {
           setTab("home");
         }}
       />
+      {member === true && profile && isProfileComplete(profile) && profile.cbr >= 177 && (
+        <LevelThreeReminder
+          key={profile.user_id}
+          userId={profile.user_id}
+          open={tab === "home" && !showSplash && !showWelcome && !needsAgreement && dailyReminder === "done" && !summary}
+          onDonate={() => setTab("donate")}
+        />
+      )}
       <InstallPrompt active={!showSplash} />
       <Toaster theme="light" position="top-center" richColors closeButton />
     </main>

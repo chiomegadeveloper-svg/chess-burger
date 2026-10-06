@@ -1,0 +1,12 @@
+[data-slot="dialog-content"].level-three-reminder { width: min(480px, calc(100vw - 32px)); gap: 12px; padding: 24px; }
+.level-three-reminder img { width: 88px; height: 88px; object-fit: contain; }
+.level-three-reminder [data-slot="dialog-title"] { font-size: 22px; }
+.level-three-features { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; text-align: left; }
+.level-three-features li { display: flex; align-items: flex-start; gap: 12px; padding: 12px; border: 1px solid #49606a; border-radius: 12px; background: #ffffff05; }
+.level-three-features li > svg { width: 22px; height: 22px; flex: 0 0 22px; margin-top: 2px; color: #4be2f4; }
+.level-three-features strong { font-size: 14px; color: #f7f3e3; }
+.level-three-features p, .level-three-support p { margin: 5px 0 0; color: #cad5d8; font-size: 12px; line-height: 1.6; }
+.level-three-support { margin-top: 4px; padding-top: 16px; border-top: 1px solid #a48b5066; text-align: left; }
+.level-three-support h3 { display: flex; align-items: center; gap: 8px; margin: 0; color: #d9ba74; font-size: 15px; }
+.level-three-support button { width: 100%; margin-top: 14px; }
+@media (max-width: 380px) { [data-slot="dialog-content"].level-three-reminder { padding: 18px; }.level-three-reminder [data-slot="dialog-title"] { font-size: 20px; } }
