@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import type { PlayerProfile } from "./supabase";
 import { levelFor } from "./cbr";
 import type { ArenaPlayer } from "./game-rules";
-import { Coins, MessageCircle, RotateCcw, ShieldBan, Swords, Trash2, Users, Volume2, VolumeX, X } from "lucide-react";
+import { Coins, MessageCircle, Newspaper, RotateCcw, ShieldBan, Swords, Trash2, Users, Volume2, VolumeX, X } from "lucide-react";
 export type SocialView = "friends" | "followers" | "chat";
 type SocialOpenDetail = { view: SocialView; target?: string; mode?: "personal" | "community" | "group" | "requests" };
 let socialOpenHandler: ((detail: SocialOpenDetail) => void) | null = null;
@@ -175,7 +175,7 @@ export function SocialButtons({
   );
 }
 
-export function FloatingChatButton({ visible }: { visible: boolean }) {
+export function FloatingChatButton({ visible, onNews }: { visible: boolean; onNews: () => void }) {
   const [unread,setUnread]=useState(0),
     [position,setPosition]=useState<{x:number;y:number}|null>(null),
     positionRef=useRef<{x:number;y:number}|null>(null),
@@ -183,7 +183,7 @@ export function FloatingChatButton({ visible }: { visible: boolean }) {
     suppressClick=useRef(false);
   const clampPosition=useCallback((x:number,y:number)=>({
     x:Math.max(8,Math.min(window.innerWidth-52,x)),
-    y:Math.max(68,Math.min(window.innerHeight-118,y)),
+    y:Math.max(132,Math.min(window.innerHeight-118,y)),
   }),[]);
   useEffect(()=>{
     if(!visible)return;
@@ -207,6 +207,18 @@ export function FloatingChatButton({ visible }: { visible: boolean }) {
   useEffect(()=>{if(!visible)return;let active=true;const load=()=>void arena<ChatSummary>("chat-summary").then(data=>{if(active)setUnread(data.unread);}).catch(()=>{});load();const timer=setInterval(()=>{if(document.visibilityState==="visible")load();},45000);window.addEventListener("cb-chat-changed",load);document.addEventListener("visibilitychange",load);return()=>{active=false;clearInterval(timer);window.removeEventListener("cb-chat-changed",load);document.removeEventListener("visibilitychange",load);};},[visible]);
   if (!visible) return null;
   return (
+    <>
+    <button
+      type="button"
+      className="floating-chat-button floating-news-button"
+      style={position?{left:position.x,top:position.y-64}:undefined}
+      aria-label="News · replay Home reminders"
+      title="News · replay Home reminders"
+      onClick={onNews}
+    >
+      <Newspaper size={21} aria-hidden="true" />
+      <span>News</span>
+    </button>
     <button
       type="button"
       className="floating-chat-button"
@@ -240,6 +252,7 @@ export function FloatingChatButton({ visible }: { visible: boolean }) {
       <MessageCircle size={21} />
       {unread>0&&<b className="chat-notification" aria-label={`${unread} unread messages`}>{Math.min(99,unread)}</b>}
     </button>
+    </>
   );
 }
 export function SocialHub({

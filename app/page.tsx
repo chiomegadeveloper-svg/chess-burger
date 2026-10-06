@@ -1144,7 +1144,7 @@ function AppPage() {
           setTab("public-profile");
         }}
       />
-      <FloatingChatButton visible={tab === "home"} />
+      <FloatingChatButton visible={tab === "home"} onNews={() => setDailyReminder("quest")} />
       <ArenaReminder open={tab === "home" && !showSplash && !showWelcome && !needsAgreement && member === true && isProfileComplete(profile) && dailyReminder === "arena"} onDismiss={advanceDailyReminder} onOpen={() => { advanceDailyReminder(); setTab("grand-arena"); }} />
       <DailyQuestReminder
         open={tab === "home" && !showSplash && !showWelcome && !needsAgreement && member === true && isProfileComplete(profile) && (dailyReminder === "quest" || dailyReminder === "rewards")}
