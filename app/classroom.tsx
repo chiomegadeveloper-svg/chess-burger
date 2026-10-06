@@ -1,6 +1,6 @@
 "use client";
 import {useCallback,useEffect,useState} from "react";
-import {ArrowLeft,BookOpen,ChevronRight,Clock,Copy,GraduationCap,KeyRound,LogOut,RefreshCw,ShoppingBag,Users} from "lucide-react";
+import {ArrowLeft,BookOpen,Clock,Copy,GraduationCap,KeyRound,LogOut,RefreshCw,ShoppingBag,Users} from "lucide-react";
 import {toast} from "sonner";
 import {classroom} from "./classroom-client";
 import "./classroom.css";
@@ -8,7 +8,7 @@ import "./classroom-timed-access.css";
 import ClassroomWorkshop from "./classroom-workshop";
 import SebaTournament from "./seba-tournament";
 import ChessMath from "./chess-math";
-import "./chess-math-entry.css";
+import "./classroom-portals.css";
 
 const PACKAGES=[
   {kind:"pawn",name:"Room Pawn",slots:5,hours:12},
@@ -45,9 +45,10 @@ export default function Classroom({onBack,onOpenShop}:{onBack:()=>void;onOpenSho
     <button className="back-button" type="button" onClick={role?()=>setRole(""):onBack}><ArrowLeft size={15}/>{role?"Student Lobby":"Play selection"}</button>
     <header className="classroom-hero"><span>CHESSBURGER LEARNING</span><h1>Classroom</h1><p>Create welcoming chess rooms or join your instructor with a private code.</p></header>
     {!role?<><div className="classroom-role-grid">
-      <button onClick={()=>setRole("teacher")}><img src="/classroom/teacher.webp" alt="Chess instructor"/><span><small>CREATE & TEACH</small><strong>Teacher</strong><b>Open instructor tools</b></span></button>
-      <button onClick={()=>setRole("student")}><img src="/classroom/student.webp" alt="Chess student"/><span><small>JOIN & LEARN</small><strong>Student</strong><b>Enter a classroom</b></span></button>
-    </div><button type="button" className="chess-math-entry" onClick={()=>setChessMathOpen(true)}><span className="chess-math-entry-icon"><img src="/classroom/chess-math-mascot.webp" alt=""/></span><span className="chess-math-entry-copy"><small>NEW · TIMED CHALLENGE</small><strong>Chess Math</strong><b>Piece values, trade logic, and Top 10 rankings</b></span><span className="chess-math-entry-action">Play quiz <ChevronRight size={17}/></span></button></>:<>
+      <button type="button" onClick={()=>setRole("teacher")}><img src="/classroom/teacher-portal-v2.webp" width={1024} height={1024} alt="Chess coach explaining a move on a demonstration board"/><span><small>CREATE & TEACH</small><strong>Teacher</strong><b>Open instructor tools</b></span></button>
+      <button type="button" onClick={()=>setRole("student")}><img src="/classroom/student-portal-v2.webp" width={1024} height={1024} alt="Student practicing chess during an online lesson with the coach"/><span><small>JOIN & LEARN</small><strong>Student</strong><b>Enter a classroom</b></span></button>
+      <button type="button" onClick={()=>setChessMathOpen(true)}><img src="/classroom/chess-math-portal-v2.webp" width={1024} height={1024} alt="Chess Math: knight plus rook equals eight points"/><span><small>THINK & SOLVE</small><strong>Chess Math</strong><b>Play the math quiz</b></span></button>
+    </div></>:<>
       <div className="classroom-wallets">
         <article><img src="/classroom/cbc-token.webp" alt="CBC token"/><span><small>CLASSROOM CREDITS</small><strong>{state?.wallet?.cbc??0} CBC</strong></span></article>
         <article><span><small>CHESSBURGER GOLD</small><strong>{state?.gold??0} CBG</strong></span></article>
@@ -64,4 +65,3 @@ export default function Classroom({onBack,onOpenShop}:{onBack:()=>void;onOpenSho
     </>}
   </section>
 }
-
