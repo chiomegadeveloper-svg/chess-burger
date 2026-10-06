@@ -33,6 +33,7 @@ import "./feed-banner-shop.css";
 import "./v47.css";
 import "./grand-arena.css";
 import "./vanguard-card.css";
+import "./avatar-sizing.css";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://chessburger.site"),

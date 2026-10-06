@@ -1,0 +1,63 @@
+/* Portrait diameter is 1.65 times the previous size at each breakpoint. */
+body .feed-page .community-list .feed-cloud:not(.kind-announcement){--feed-avatar-size:59.4px}
+body .feed-page .community-list .feed-cloud.has-guild{grid-template-columns:var(--feed-avatar-size) 87px minmax(0,1fr) auto!important}
+body .feed-page .community-list .feed-cloud:not(.kind-announcement):not(.has-guild){grid-template-columns:var(--feed-avatar-size) 43px minmax(0,1fr) auto!important}
+body .feed-page .community-list .feed-cloud:not(.kind-announcement) .feed-player,
+body .feed-page .community-list .feed-cloud:not(.kind-announcement) .feed-avatar{width:var(--feed-avatar-size)!important;height:var(--feed-avatar-size)!important;flex-shrink:0}
+body .feed-page .pinned-challenge-versus>button{width:141.9px;height:141.9px}
+body .feed-page .pinned-challenge-versus>button .challenge-avatar{width:141.9px!important;height:141.9px!important;flex-shrink:0}
+body .feed-page .online-avatars{grid-template-columns:repeat(auto-fit,minmax(min(100%,100px),1fr))!important}
+body .feed-page .online-avatar-button{width:clamp(72.6px,9.9vw,99px)!important;height:clamp(72.6px,9.9vw,99px)!important}
+body .feed-page .online-avatar{width:clamp(69.3px,9.075vw,92.4px)!important;height:clamp(69.3px,9.075vw,92.4px)!important}
+body .feed-page .arena-feed-champion-avatar{width:82.5px;height:82.5px;flex-shrink:0}
+
+.profile-readonly .profile-hero{grid-template-columns:297px minmax(0,1fr)}
+.profile-readonly .profile-avatar-change{width:297px;height:297px;font-size:89px}
+.public-profile .public-profile-hero{grid-template-columns:297px minmax(0,1fr) 110px}
+.public-profile .public-profile-hero .public-avatar{width:297px;height:297px;font-size:109px}
+.public-profile .public-profile-hero>div{min-width:0;overflow-wrap:anywhere}
+.feed-card-snapshot .feed-snapshot-hero{grid-template-columns:255.75px minmax(0,1fr) 125px}
+.feed-card-snapshot .feed-snapshot-avatar{width:255.75px;height:255.75px}
+
+/* A taller card reserves real layout space for the enlarged portrait. */
+body .player-card.vanguard-template-card{aspect-ratio:1670/1554.3;padding:0}
+body .vanguard-template-card .vanguard-template-art{opacity:.3}
+body .vanguard-template-card .portrait-ring{left:4.5%;top:5%;width:51.15%;height:auto;aspect-ratio:1}
+body .vanguard-template-card .card-identity{left:58%;top:8%;width:38%;min-height:15%;padding:1.1cqw .8cqw}
+body .vanguard-template-card .card-level-insignia,
+body .vanguard-template-card .card-guild-insignia{top:29%;width:17%;height:20%}
+body .vanguard-template-card .card-level-insignia{left:58%}
+body .vanguard-template-card .card-guild-insignia{left:79%}
+body .vanguard-template-card .card-stats{left:4.5%;top:63%;width:91%;height:14%;grid-template-columns:repeat(5,minmax(0,1fr))}
+body .vanguard-template-card .card-achievements{left:4.5%;top:79%;width:91%;height:18%;border:1px solid #caa751;border-radius:.8cqw;background:#07141ded}
+body .vanguard-template-card .card-emblem-art{width:auto;height:100%;max-width:100%;max-height:100%}
+
+@media(max-width:800px){
+ .feed-card-snapshot .feed-snapshot-hero{grid-template-columns:255.75px minmax(0,1fr)}
+ .feed-card-snapshot .feed-snapshot-insignia{grid-column:2}
+ .public-profile .public-profile-hero{grid-template-columns:297px minmax(0,1fr)}
+ .public-profile .public-profile-hero .public-level{grid-column:2;grid-row:2}
+ .profile-readonly .profile-hero{grid-template-columns:1fr;justify-items:center;text-align:center;overflow:visible}
+ .profile-readonly .profile-hero>div{width:100%}
+ .profile-readonly .profile-social{justify-content:center}
+}
+@media(max-width:650px){
+ body .feed-page .community-list .feed-cloud:not(.kind-announcement){--feed-avatar-size:49.5px}
+ body .feed-page .community-list .feed-cloud.has-guild{grid-template-columns:var(--feed-avatar-size) 72px minmax(0,1fr) auto!important}
+ body .feed-page .community-list .feed-cloud:not(.kind-announcement):not(.has-guild){grid-template-columns:var(--feed-avatar-size) 36px minmax(0,1fr) auto!important}
+ body .feed-page .pinned-challenge-versus>img{width:24px}
+ body .feed-page .arena-feed-champion-avatar{width:62.7px;height:62.7px}
+ .profile-readonly .profile-avatar-change{width:222.75px;height:222.75px;font-size:67px}
+ .public-profile .public-profile-hero{grid-template-columns:1fr;justify-items:center;text-align:center}
+ .public-profile .public-profile-hero .public-level{grid-column:1;grid-row:auto}
+ .feed-card-snapshot .feed-snapshot-hero{grid-template-columns:145.2px minmax(0,1fr)}
+ .feed-card-snapshot .feed-snapshot-avatar{width:145.2px;height:145.2px}
+}
+@media(max-width:640px){.public-profile .public-profile-hero .public-avatar{width:193.05px;height:193.05px;font-size:60px}}
+@media(max-width:350px){
+ body .feed-page .community-list .feed-cloud:not(.kind-announcement){--feed-avatar-size:46.2px}
+ body .feed-page .community-list .feed-cloud.has-guild{grid-template-columns:var(--feed-avatar-size) 68px minmax(0,1fr) auto!important}
+ body .feed-page .community-list .feed-cloud:not(.kind-announcement):not(.has-guild){grid-template-columns:var(--feed-avatar-size) 34px minmax(0,1fr) auto!important}
+ .feed-card-snapshot .feed-snapshot-hero{grid-template-columns:1fr;justify-items:center;text-align:center}
+ .feed-card-snapshot .feed-snapshot-insignia{grid-column:1;justify-self:center}
+}
