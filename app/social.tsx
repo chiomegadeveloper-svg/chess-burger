@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import type { PlayerProfile } from "./supabase";
 import { levelFor } from "./cbr";
 import type { ArenaPlayer } from "./game-rules";
-import { Coins, MessageCircle, Newspaper, RotateCcw, ShieldBan, Swords, Trash2, Users, Volume2, VolumeX, X } from "lucide-react";
+import { Coins, MessageCircle, RotateCcw, ShieldBan, Swords, Trash2, Users, Volume2, VolumeX, X } from "lucide-react";
 export type SocialView = "friends" | "followers" | "chat";
 type SocialOpenDetail = { view: SocialView; target?: string; mode?: "personal" | "community" | "group" | "requests" };
 let socialOpenHandler: ((detail: SocialOpenDetail) => void) | null = null;
@@ -216,7 +216,13 @@ export function FloatingChatButton({ visible, onNews }: { visible: boolean; onNe
       title="News · replay Home reminders"
       onClick={onNews}
     >
-      <Newspaper size={21} aria-hidden="true" />
+      <svg className="floating-news-artwork" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+        <path d="M7 8H3v17a3 3 0 0 0 3 3h18V8Z" fill="#5fcbd3" />
+        <path d="M9 3h17a2 2 0 0 1 2 2v20a3 3 0 0 1-3 3H6a3 3 0 0 0 3-3Z" fill="#fff9e9" />
+        <rect x="12" y="7" width="13" height="4" rx="1" fill="#edbb51" />
+        <rect x="12" y="14" width="5" height="6" rx="1" fill="#167383" />
+        <path d="M20 15h5m-5 4h5m-13 5h13" fill="none" stroke="#167383" strokeWidth="2" strokeLinecap="round" />
+      </svg>
       <span>News</span>
     </button>
     <button

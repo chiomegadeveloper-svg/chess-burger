@@ -144,4 +144,4 @@
  .chat-dialog .chat-compose{padding:9px 2px 2px}
 }
 
-.floating-chat-button.floating-news-button{bottom:calc(150px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:1px;cursor:pointer;border-color:#66e8f2;background:linear-gradient(145deg,#236b78,#173f4a);color:#eafcff;box-shadow:0 9px 22px #0008,0 0 0 3px #38d5e526}.floating-news-button span{font-size:9px;font-weight:800;line-height:1.1}.floating-news-button:active{cursor:pointer}
+.floating-chat-button.floating-news-button{bottom:calc(150px + env(safe-area-inset-bottom));display:flex;flex-direction:column;justify-content:center;gap:2px;cursor:pointer;border:1.5px solid #70e0e6;background:linear-gradient(145deg,#227585,#103a46);color:#fff9e9;box-shadow:0 7px 18px #0007,0 0 0 2px #38d5e51f;touch-action:manipulation}.floating-news-button .floating-news-artwork{display:block;width:28px;height:28px;flex-shrink:0;filter:drop-shadow(0 1px 1px #001c2855)}.floating-news-button span{font-size:9px;font-weight:800;line-height:10px;letter-spacing:.15px}.floating-news-button:active{cursor:pointer}
