@@ -37,3 +37,14 @@ test("overnight session remains open after midnight; entry closes ten minutes be
   assert.equal(tomorrow.current, null);
   assert.equal(tomorrow.next?.date, "2026-09-28");
 });
+
+ test("upcoming sessions are future-only, chronological and include the next seven days", () => {
+  const now = Date.parse("2026-09-27T14:30:00Z");
+  const window = arenaWindow(now, config);
+  assert.deepEqual(window.upcoming.slice(0,2).map(slot => [slot.date, slot.slot]), [["2026-09-28",1],["2026-09-28",2]]);
+  assert.equal(window.upcoming.at(-1).date, "2026-10-04");
+  window.upcoming.forEach((slot,i) => {
+    assert.ok(Date.parse(slot.starts_at)>now);
+    if(i) assert.ok(Date.parse(slot.starts_at)>Date.parse(window.upcoming[i-1].starts_at));
+  });
+});

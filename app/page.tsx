@@ -29,6 +29,7 @@ import Offline from "./offline";
 import SharedBoard from "./shared-board";
 import Account from "./account";
 import CommunityFeed from "./community-feed";
+import ArenaReminder from "./arena-reminder";
 import DailyQuestReminder from "./daily-quest-reminder";
 import LevelThreeReminder from "./level-three-reminder";
 import RecentPlays from "./recent-plays";
@@ -122,8 +123,8 @@ function AppPage() {
   const [feedTarget, setFeedTarget] = useState<"recent" | "announcement" | "rewards" | "challenge" | "quest">("recent");
   const [ownerPending, setOwnerPending] = useState<OwnerPendingAlert[]>([]);
   // Keep the reminder sequence above Home so navigation does not restart it.
-  const [dailyReminder, setDailyReminder] = useState<"quest" | "rewards" | "done">("quest");
-  const advanceDailyReminder = () => setDailyReminder(current => current === "quest" ? "rewards" : "done");
+  const [dailyReminder, setDailyReminder] = useState<"quest" | "rewards" | "arena" | "done">("quest");
+  const advanceDailyReminder = () => setDailyReminder(current => current === "quest" ? "rewards" : current === "rewards" ? "arena" : "done");
   const [tab, setTab] = useState("profile"),
     [profile, setProfile] = useState<PlayerProfile | null>(null),
     [replayGame, setReplayGame] = useState<SavedGame | null>(null),
@@ -1142,8 +1143,9 @@ function AppPage() {
         }}
       />
       <FloatingChatButton visible={tab === "home"} />
+      <ArenaReminder open={tab === "home" && !showSplash && !showWelcome && !needsAgreement && member === true && isProfileComplete(profile) && dailyReminder === "arena"} onDismiss={advanceDailyReminder} onOpen={() => { advanceDailyReminder(); setTab("grand-arena"); }} />
       <DailyQuestReminder
-        open={tab === "home" && !showSplash && !showWelcome && !needsAgreement && member === true && isProfileComplete(profile) && dailyReminder !== "done"}
+        open={tab === "home" && !showSplash && !showWelcome && !needsAgreement && member === true && isProfileComplete(profile) && (dailyReminder === "quest" || dailyReminder === "rewards")}
         kind={dailyReminder === "rewards" ? "rewards" : "quest"}
         onDismiss={advanceDailyReminder}
         onOpen={() => {
