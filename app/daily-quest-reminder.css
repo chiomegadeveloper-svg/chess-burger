@@ -28,3 +28,5 @@
 .daily-quest-reminder-open { min-height: 46px; border: 1px solid #4be2f4; border-radius: 12px; background: #4be2f4; color: #15252d; font-size: 14px; font-weight: 800; cursor: pointer; }
 .daily-quest-reminder-open:hover { background: #a1f5ff; }
 .daily-quest-reminder-open:focus-visible { outline: 3px solid #d9ba74; outline-offset: 3px; }
+
+.arena-reminder-count { display: block; margin-top: 6px; color: #4be2f4; font-size: 12px; font-weight: 700; }
