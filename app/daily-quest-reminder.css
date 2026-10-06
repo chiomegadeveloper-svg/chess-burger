@@ -25,3 +25,6 @@
 .daily-quest-reminder-close { min-height: 46px; margin-top: 6px; border: 1px solid #d9ba74; border-radius: 12px; background: #d9ba74; color: #15252d; font-size: 14px; font-weight: 800; cursor: pointer; }
 .daily-quest-reminder-close:hover { background: #ecd39b; }
 .daily-quest-reminder-close:focus-visible { outline: 3px solid #4be2f4; outline-offset: 3px; }
+.daily-quest-reminder-open { min-height: 46px; border: 1px solid #4be2f4; border-radius: 12px; background: #4be2f4; color: #15252d; font-size: 14px; font-weight: 800; cursor: pointer; }
+.daily-quest-reminder-open:hover { background: #a1f5ff; }
+.daily-quest-reminder-open:focus-visible { outline: 3px solid #d9ba74; outline-offset: 3px; }

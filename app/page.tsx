@@ -118,7 +118,7 @@ function AppPage() {
   const [verificationCode,setVerificationCode]=useState("");
   useEffect(()=>{setVerificationCode(new URLSearchParams(window.location.search).get("verify-certificate")||"")},[]);
   const [trainingId,setTrainingId]=useState(""),[trainingInvite,setTrainingInvite]=useState(""),[openTrainingAccount,setOpenTrainingAccount]=useState(false);
-  const [feedTarget, setFeedTarget] = useState<"recent" | "announcement" | "rewards" | "challenge">("recent");
+  const [feedTarget, setFeedTarget] = useState<"recent" | "announcement" | "rewards" | "challenge" | "quest">("recent");
   const [ownerPending, setOwnerPending] = useState<OwnerPendingAlert[]>([]);
   // Keep dismissal above the Home page so navigating back does not reopen it.
   const [dailyQuestReminderDismissed, setDailyQuestReminderDismissed] = useState(false);
@@ -1143,6 +1143,11 @@ function AppPage() {
       <DailyQuestReminder
         open={tab === "home" && !showSplash && !showWelcome && !needsAgreement && member === true && isProfileComplete(profile) && !dailyQuestReminderDismissed}
         onDismiss={() => setDailyQuestReminderDismissed(true)}
+        onOpenQuest={() => {
+          setDailyQuestReminderDismissed(true);
+          setFeedTarget("quest");
+          setTab("home");
+        }}
       />
       <InstallPrompt active={!showSplash} />
       <Toaster theme="light" position="top-center" richColors closeButton />
