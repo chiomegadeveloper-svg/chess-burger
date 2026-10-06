@@ -6,6 +6,7 @@ import {Crown,Flag,FlagTriangleRight,LocateFixed,MapPin,MapPinned,Satellite,Shie
 import {arena} from './arena-client';
 import {TIME_CONTROLS,type ArenaMatch,type ArenaPlayer} from './game-rules';
 import type {Position} from './gps-presence';
+import ChessOpenPlay from './chess-open-play';
 import {Avatar} from './match-board';
 import {mapPlayerCard} from './map-player-card';
 import {mapCoordinates,normalizeNearby,type NearbyPlayer,type Zone} from './map-data';
@@ -21,7 +22,10 @@ class MapBoundary extends Component<{children:ReactNode},{failed:boolean;attempt
  componentDidCatch(error:Error,info:ErrorInfo){console.error('map.render-failed',{message:error.message,componentStack:info.componentStack});}
  render(){return this.state.failed?<section className="cloud-panel" role="alert"><h1>Map could not load</h1><p>You can retry or use the navigation below. Retrying does not claim or rename a kingdom.</p><button className="gold-button" onClick={()=>this.setState(state=>({failed:false,attempt:state.attempt+1}))}>Retry Map</button></section>:<Fragment key={this.state.attempt}>{this.props.children}</Fragment>;}
 }
-export default function NearbyMap(props:Props){return <MapBoundary><NearbyMapContent {...props}/></MapBoundary>;}
+export default function NearbyMap(props:Props){
+ const [view,setView]=useState<'open-play'|'kingdoms'>('open-play');
+ return <MapBoundary><div className="map-view-tabs" role="tablist" aria-label="Map view"><button role="tab" aria-selected={view==='open-play'} onClick={()=>setView('open-play')}>Chess Open Play</button><button role="tab" aria-selected={view==='kingdoms'} onClick={()=>setView('kingdoms')}>Kingdoms & Nearby</button></div>{view==='open-play'?<ChessOpenPlay {...props}/>:<NearbyMapContent {...props}/>}</MapBoundary>;
+}
 
 function NearbyMapContent({enabled,position,toggle,error:gpsError,onInvite,onOpenProfile,territory=true,onClaimed}:Props){
  const node=useRef<HTMLDivElement>(null),map=useRef<LeafletMap|null>(null),layer=useRef<LeafletLayerGroup|null>(null),playerLayer=useRef<LeafletLayerGroup|null>(null),pins=useRef(new Map<string,{marker:L.Marker;player:NearbyPlayer;frame?:number}>()),selfPin=useRef<L.CircleMarker|null>(null),centered=useRef(false),visiblePlayers=useRef(''),hoverCard=useRef<HTMLDivElement>(null);

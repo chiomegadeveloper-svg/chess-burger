@@ -1,3 +1,4 @@
+import {openPlay} from './_open-play.js';
 import { createClient } from '@supabase/supabase-js';
 import { Chess } from 'chess.js';
 import {PUZZLE_BANK_PROOFS,VERY_HARD_IDS,OTHER_IDS} from './_puzzles/_puzzle-bank.js';
@@ -832,6 +833,7 @@ export default async function handler(req: Req, res: Res) {
       fail(404, 'Unknown game request.');
     }
     const account = await signedIn(client, req);
+    if(action.startsWith('open-play-'))return res.status(200).json(await openPlay(client,account,action,body,fail));
     // The app refreshes this on sign-in to obtain the authoritative profile.
     // Keep it as a first-class migration action rather than falling through to
     // a 404 on every page load.

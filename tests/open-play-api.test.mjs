@@ -1,0 +1,14 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import ts from 'typescript';
+const source=readFileSync(new URL('../api/_open-play.ts',import.meta.url),'utf8');
+const code=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+const module={exports:{}};new Function('module','exports',code)(module,module.exports);
+const {openPlay}=module.exports;
+const owner={id:'00000000-0000-0000-0000-000000000001',profile:{role:'owner'}},user={id:'00000000-0000-0000-0000-000000000002',profile:{role:'player'}};
+const fail=(status,message)=>{throw Object.assign(Error(message),{status});};
+test('registration always uses authenticated account, list exposes counts and only own registration',async()=>{const calls=[];const db={rpc:async(name,args)=>{calls.push([name,args]);return {data:name==='cb_list_open_play'?[{id:'test',registrant_count:1234,registered:true}]:null};}};const list=await openPlay(db,user,'open-play-list',{},fail);assert.equal(list.sessions[0].registrant_count,1234);assert.equal(list.owner,false);await openPlay(db,user,'open-play-join',{id:owner.id,user_id:owner.id},fail);assert.deepEqual(calls[1],['cb_join_open_play',{p_user:user.id,p_session:owner.id,p_join:true}]);});
+test('save rejects non-owner and invalid coordinates before any database write',async()=>{const db={rpc(){throw Error('Must not write');}};await assert.rejects(openPlay(db,user,'open-play-save',{},fail),/Only an owner/);await assert.rejects(openPlay(db,owner,'open-play-save',{lat:null,lng:125,bonus_percent:20},fail),/valid pin/);await assert.rejects(openPlay(db,owner,'open-play-save',{lat:91,lng:125,bonus_percent:20},fail),/valid pin/);});
+test('location derives from coordinates even when geocoding fails, ignoring submitted address',async()=>{const original=global.fetch;global.fetch=async()=>{throw Error('No geocoder');};try{let saved;const db={rpc:async(name,args)=>{saved=args;return {data:{id:owner.id}};}};await openPlay(db,owner,'open-play-save',{lat:11.244,lng:125.003,location:'Fake address',starts_at:new Date(Date.now()+3600000).toISOString(),ends_at:new Date(Date.now()+7200000).toISOString(),bonus_percent:20,capacity:null},fail);assert.equal(saved.p_location,'11.244000, 125.003000');assert.equal(saved.p_owner,owner.id);assert.equal(saved.p_capacity,null);}finally{global.fetch=original;}});
+test('missing migration gives actionable error without silent empty schedules',async()=>{await assert.rejects(openPlay({rpc:async()=>({error:{message:'function does not exist'}})},user,'open-play-list',{},fail),/0102_chess_open_play/);});
