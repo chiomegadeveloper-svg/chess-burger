@@ -120,8 +120,9 @@ function AppPage() {
   const [trainingId,setTrainingId]=useState(""),[trainingInvite,setTrainingInvite]=useState(""),[openTrainingAccount,setOpenTrainingAccount]=useState(false);
   const [feedTarget, setFeedTarget] = useState<"recent" | "announcement" | "rewards" | "challenge" | "quest">("recent");
   const [ownerPending, setOwnerPending] = useState<OwnerPendingAlert[]>([]);
-  // Keep dismissal above the Home page so navigating back does not reopen it.
-  const [dailyQuestReminderDismissed, setDailyQuestReminderDismissed] = useState(false);
+  // Keep the reminder sequence above Home so navigation does not restart it.
+  const [dailyReminder, setDailyReminder] = useState<"quest" | "rewards" | "done">("quest");
+  const advanceDailyReminder = () => setDailyReminder(current => current === "quest" ? "rewards" : "done");
   const [tab, setTab] = useState("profile"),
     [profile, setProfile] = useState<PlayerProfile | null>(null),
     [replayGame, setReplayGame] = useState<SavedGame | null>(null),
@@ -1141,11 +1142,12 @@ function AppPage() {
       />
       <FloatingChatButton visible={tab === "home"} />
       <DailyQuestReminder
-        open={tab === "home" && !showSplash && !showWelcome && !needsAgreement && member === true && isProfileComplete(profile) && !dailyQuestReminderDismissed}
-        onDismiss={() => setDailyQuestReminderDismissed(true)}
-        onOpenQuest={() => {
-          setDailyQuestReminderDismissed(true);
-          setFeedTarget("quest");
+        open={tab === "home" && !showSplash && !showWelcome && !needsAgreement && member === true && isProfileComplete(profile) && dailyReminder !== "done"}
+        kind={dailyReminder === "rewards" ? "rewards" : "quest"}
+        onDismiss={advanceDailyReminder}
+        onOpen={() => {
+          setFeedTarget(dailyReminder === "rewards" ? "rewards" : "quest");
+          advanceDailyReminder();
           setTab("home");
         }}
       />
