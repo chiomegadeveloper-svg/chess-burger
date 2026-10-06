@@ -29,6 +29,7 @@ import Offline from "./offline";
 import SharedBoard from "./shared-board";
 import Account from "./account";
 import CommunityFeed from "./community-feed";
+import PublicArenaSessions from "./arena-sessions";
 import ArenaReminder from "./arena-reminder";
 import DailyQuestReminder from "./daily-quest-reminder";
 import LevelThreeReminder from "./level-three-reminder";
@@ -632,6 +633,7 @@ function AppPage() {
           <button className="play-destination puzzles" type="button" onClick={() => setTab("puzzles")}><img src="/play-selection/puzzle-quest.webp" alt="Chess Burger puzzle maze arena"/><span><strong>Puzzle Quest</strong><small>100 puzzles, Coach Patty and Gold rewards</small><b>Enter Puzzles <ChevronRight size={17}/></b></span></button>
           <button className="play-destination tournament" type="button" onClick={() => setTab("tournaments")}><img src="/play-selection/tournament.webp" alt="Cute chess characters competing for a gold tournament trophy"/><span><strong>Tournament</strong><small>Owner hosted sessions · free entry</small><b>Explore Tournament <ChevronRight size={17}/></b></span></button>
         </div>
+        <PublicArenaSessions onOpen={() => setTab("grand-arena")} />
       </section>
     );
   else if (tab === "play")

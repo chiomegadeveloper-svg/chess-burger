@@ -16,8 +16,9 @@ import "./grand-arena.css";
 import "./arena-enhancements.css";
 import "./arena-champion-history.css";
 import "./arena-registration.css";
+import {ArenaBattle, BattleCards, BattleRoster} from "./arena-sessions";
 
-type ArenaSlot = { date: string; slot: number; starts_at: string; ends_at: string };
+type ArenaSlot = { id: string; title: string; loss_limit: number; date: string; slot: number; starts_at: string; ends_at: string };
 type ArenaEntry = { status: string; losses: number; arena_points: number };
 type ArenaMatch = { id: string; status: string };
 type ArenaPlayer = { display_name: string; avatar_url: string };
@@ -43,19 +44,22 @@ type ArenaChampion = {
 type WindowState = {
   open: boolean;
   entry_open: boolean;
-  current: ArenaSlot | null;
+  current: ArenaBattle | null;
   next: ArenaSlot | null;
   server_now: string;
   settings: {
     prize_mode: "fixed" | "auto";
     fixed_prize_gold: number;
     match_control: string;
+    losses_to_eliminate: number;
   };
 };
 type ArenaState = {
-  upcoming: (ArenaSlot & { registered: boolean; players: { user_id: string; player?: ArenaPlayer }[] })[];
+  upcoming: ArenaBattle[];
   window: WindowState;
-  session: {
+  session: null | {
+    title: string;
+    loss_limit: number;
     prize_mode: "fixed" | "auto";
     prize_gold: number;
     ticket_gold_total: number;
@@ -162,10 +166,11 @@ export default function GrandArena({
     h = Math.floor(remaining / 3600000),
     m = Math.floor((remaining % 3600000) / 60000),
     s = Math.floor((remaining % 60000) / 1000),
+    lossLimit = state?.session?.loss_limit ?? state?.window.settings.losses_to_eliminate ?? 3,
     prize =
-      state?.session.prize_mode === "auto"
-        ? `${Math.floor((state.session.ticket_gold_total || 0) * 0.1)} Gold live pot`
-        : `${state?.session.prize_gold ?? state?.window.settings.fixed_prize_gold ?? 48} Gold`;
+      state?.session?.prize_mode === "auto"
+        ? `${Math.floor((state.session?.ticket_gold_total || 0) * 0.1)} Gold live pot`
+        : `${state?.session?.prize_gold ?? state?.window.settings.fixed_prize_gold ?? 48} Gold`;
   async function enter() {
     if (busy) return;
     setBusy(true);
@@ -184,11 +189,11 @@ export default function GrandArena({
       setBusy(false);
     }
   }
-  async function register(slot: ArenaSlot) {
+  async function register(slot: ArenaBattle) {
     if (busy) return;
     setBusy(true);
     try {
-      setState(await request<ArenaState>("register", { date: slot.date, slot: slot.slot }));
+      setState(await request<ArenaState>("register", { session_id: slot.id }));
       toast.success("Registered! Check in when the Arena opens. Your ticket is reserved.");
     } catch (error) { toast.error((error as Error).message); }
     finally { setBusy(false); }
@@ -205,7 +210,7 @@ export default function GrandArena({
           <span>LIVE COMPETITIVE ARENA</span>
           <h1>Grand Arena</h1>
           <p>
-            Score Arena points, stay in until your third loss, and finish inside the Arena
+            Score Arena points, survive until {lossLimit} losses, and finish inside the Arena
             as the points leader.
           </p>
         </div>
@@ -218,7 +223,7 @@ export default function GrandArena({
           <Clock />
           <span>
             <small>{state?.window.open ? "ARENA OPEN" : "NEXT SESSION"}</small>
-            <strong>{slot ? sessionLabel(slot) : "Loading schedule…"}</strong>
+            <strong>{slot ? sessionLabel(slot) : state ? "No battle published" : "Loading schedule…"}</strong>
           </span>
         </div>
         <b>
@@ -227,7 +232,7 @@ export default function GrandArena({
         </b>
         <small>
           Philippine time ·{" "}
-          {state?.session.match_control ??
+          {state?.session?.match_control ??
             state?.window.settings.match_control ??
             "5+0"}{" "}
           games · Entry closes 10 minutes before session end
@@ -255,7 +260,7 @@ export default function GrandArena({
               <Radio />
               <strong>Fair-match standby</strong>
               <small>
-                {state.entry.arena_points} points · {state.entry.losses}/3
+                {state.entry.arena_points} points · {state.entry.losses}/{lossLimit}
                 losses. Looking for the nearest points opponent.
               </small>
             </div>
@@ -263,12 +268,12 @@ export default function GrandArena({
             <>
               <div className="arena-status eliminated">
                 <ShieldCheck />
-                <strong>Three losses · eliminated</strong>
+                <strong>{lossLimit} losses · eliminated</strong>
                 <small>Use another ticket to begin a new Arena run.</small>
               </div>
               <button
                 className="gold-button wide"
-                disabled={!state.window.entry_open || (state.tickets < 1 && state.entry?.status !== "registered") || busy}
+                disabled={!state.window.entry_open || state.tickets < 1 || busy}
                 onClick={() => void enter()}
               >
                 {busy ? "Re-entering…" : "Re-enter with 1 ticket"}
@@ -305,7 +310,7 @@ export default function GrandArena({
             </span>
             <span>
               <Crown />
-              <b>Elimination</b>After 3 losses
+              <b>Elimination</b>After {lossLimit} losses
             </span>
           </div>
         </article>
@@ -313,15 +318,9 @@ export default function GrandArena({
       <section className="arena-upcoming" aria-label="Upcoming Arena sessions">
         <div className="arena-section-title"><div><span>RESERVE YOUR PLACE</span><h2>Upcoming Arena Chess Battles</h2></div><small>Philippine time</small></div>
         <p>Register with one ticket per session. Return and check in when the Arena opens; no extra ticket is charged. Reservations use your ticket now, even if you miss the session.</p>
-        {!state ? <p>Loading upcoming sessions…</p> : <div className="arena-schedule-list">{state.upcoming?.map(slot => (
-          <article key={`${slot.date}:${slot.slot}`}>
-            <h3>{new Date(slot.starts_at).toLocaleDateString([], { weekday: "short", month: "short", day: "numeric", timeZone: "Asia/Manila" })} · {sessionLabel(slot)}</h3>
-            <button type="button" className="gold-button" disabled={busy || slot.registered || state.tickets < 1} onClick={() => void register(slot)}>{slot.registered ? "Registered · waiting for Arena to open" : busy ? "Please wait…" : "Register now · 1 ticket"}</button>
-            <h4>{slot.players.length} registered {slot.players.length === 1 ? "player" : "players"} · waiting for Arena to open</h4>
-            {slot.players.length ? <ul>{slot.players.map(row => <li key={row.user_id}><img src={row.player?.avatar_url || "/cburger_logo.png"} alt="" /><span>{row.player?.display_name || "Player"}</span></li>)}</ul> : <p>Be the first to register for this session.</p>}
-          </article>
-        ))}</div>}
+        {!state ? <p>Loading upcoming sessions…</p> : <BattleCards battles={state.upcoming} tickets={state.tickets} busy={busy} onRegister={slot => void register(slot)} />}
       </section>
+      {state?.window.current && <section className="arena-upcoming"><h2>{state.window.current.title} · session roster</h2><BattleRoster battle={state.window.current}/></section>}
       <section className="arena-leaderboard">
         <div className="arena-section-title">
           <div>
@@ -418,7 +417,7 @@ export default function GrandArena({
         <h2>How the Arena works</h2>
         <div>
           <p>
-            <b>1.</b> One ticket admits one run; your third loss eliminates you.
+            <b>1.</b> One ticket admits one run; {lossLimit} losses eliminate you.
           </p>
           <p>
             <b>2.</b> Equal or nearest Arena points are paired first.

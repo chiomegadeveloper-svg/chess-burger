@@ -275,11 +275,11 @@ export default function CommunityFeed({
       return;
     }
     void fetch("/api/grand-arena?action=window", { cache: "no-store" })
-      .then(response => response.json())
+      .then(async response => await response.json() as {open?: boolean;current?: {title?:string;starts_at:string;ends_at:string}})
       .then(windowState => {
         if (seq !== request.current) return;
         setArenaOpen(windowState?.open ? {
-          content: `The ${windowState.current?.slot === 1 ? "7–9 PM" : "10 PM–12 MN"} Grand Arena is open. Use 1 Arena Ticket to enter.`,
+          content: `${windowState.current?.title || "Grand Arena"} is open. Use 1 Arena Ticket to enter, or check in with your reserved ticket.`,
         } : null);
       })
       .catch(() => { if (seq === request.current) setArenaOpen(null); });

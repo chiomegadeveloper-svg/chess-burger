@@ -4,7 +4,7 @@ import { Dialog as DialogPrimitive } from "radix-ui";
 import { Dialog, DialogClose, DialogDescription, DialogOverlay, DialogPortal, DialogTitle } from "@/components/ui/dialog";
 import "./daily-quest-reminder.css";
 
-type Schedule = { date: string; slot: number; starts_at: string; ends_at: string };
+type Schedule = { id: string; title: string; date: string; slot: number; starts_at: string; ends_at: string };
 export default function ArenaReminder({ open, onDismiss, onOpen }: { open: boolean; onDismiss: () => void; onOpen: () => void }) {
   const [schedules, setSchedules] = useState<Schedule[] | null>(null);
   const [failed, setFailed] = useState(false);
@@ -25,8 +25,8 @@ export default function ArenaReminder({ open, onDismiss, onOpen }: { open: boole
       <span className="daily-quest-reminder-label">UPCOMING ARENA CHESS BATTLE</span>
       <img src="/play-selection/grand-arena.webp" width={180} height={180} alt="Grand Arena chess battle castle" />
       <DialogTitle>Your next Arena battle awaits!</DialogTitle>
-      <DialogDescription>Bring your Arena ticket, reserve your place, and challenge other chess players. Stay in the battle until your third loss!</DialogDescription>
-      <div aria-live="polite">{failed ? <p>Open Arena to view the latest schedule.</p> : schedules === null ? <p>Loading upcoming sessions…</p> : schedules.length ? schedules.map(slot => <p key={`${slot.date}:${slot.slot}`} style={{ fontSize: 13, margin: "8px 0" }}>{new Date(slot.starts_at).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "Asia/Manila" })} – {new Date(slot.ends_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", timeZone: "Asia/Manila" })} · PH time</p>) : <p>No upcoming sessions scheduled.</p>}</div>
+      <DialogDescription>Bring your Arena ticket, reserve your place, and challenge other chess players in a battle scheduled by the owner.</DialogDescription>
+      <div aria-live="polite">{failed ? <p>Open Arena to view the latest schedule.</p> : schedules === null ? <p>Loading upcoming sessions…</p> : schedules.length ? schedules.map(slot => <p key={slot.id} style={{ fontSize: 13, margin: "8px 0" }}><strong>{slot.title}</strong><br/>{new Date(slot.starts_at).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "Asia/Manila" })} – {new Date(slot.ends_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", timeZone: "Asia/Manila" })} · PH time</p>) : <p>No upcoming sessions scheduled.</p>}</div>
       <button type="button" className="daily-quest-reminder-open" onClick={onOpen}>Register now!</button>
       <DialogClose className="daily-quest-reminder-close">Close</DialogClose>
     </DialogPrimitive.Content>
