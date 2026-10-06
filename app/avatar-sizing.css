@@ -19,19 +19,6 @@ body .feed-page .arena-feed-champion-avatar{width:82.5px;height:82.5px;flex-shri
 .feed-card-snapshot .feed-snapshot-hero{grid-template-columns:255.75px minmax(0,1fr) 125px}
 .feed-card-snapshot .feed-snapshot-avatar{width:255.75px;height:255.75px}
 
-/* A taller card reserves real layout space for the enlarged portrait. */
-body .player-card.vanguard-template-card{aspect-ratio:1670/1554.3;padding:0}
-body .vanguard-template-card .vanguard-template-art{opacity:.3}
-body .vanguard-template-card .portrait-ring{left:4.5%;top:5%;width:51.15%;height:auto;aspect-ratio:1}
-body .vanguard-template-card .card-identity{left:58%;top:8%;width:38%;min-height:15%;padding:1.1cqw .8cqw}
-body .vanguard-template-card .card-level-insignia,
-body .vanguard-template-card .card-guild-insignia{top:29%;width:17%;height:20%}
-body .vanguard-template-card .card-level-insignia{left:58%}
-body .vanguard-template-card .card-guild-insignia{left:79%}
-body .vanguard-template-card .card-stats{left:4.5%;top:63%;width:91%;height:14%;grid-template-columns:repeat(5,minmax(0,1fr))}
-body .vanguard-template-card .card-achievements{left:4.5%;top:79%;width:91%;height:18%;border:1px solid #caa751;border-radius:.8cqw;background:#07141ded}
-body .vanguard-template-card .card-emblem-art{width:auto;height:100%;max-width:100%;max-height:100%}
-
 @media(max-width:800px){
  .feed-card-snapshot .feed-snapshot-hero{grid-template-columns:255.75px minmax(0,1fr)}
  .feed-card-snapshot .feed-snapshot-insignia{grid-column:2}
@@ -60,4 +47,90 @@ body .vanguard-template-card .card-emblem-art{width:auto;height:100%;max-width:1
  body .feed-page .community-list .feed-cloud:not(.kind-announcement):not(.has-guild){grid-template-columns:var(--feed-avatar-size) 34px minmax(0,1fr) auto!important}
  .feed-card-snapshot .feed-snapshot-hero{grid-template-columns:1fr;justify-items:center;text-align:center}
  .feed-card-snapshot .feed-snapshot-insignia{grid-column:1;justify-self:center}
+}
+
+/* User card uses content-sized sections; portraits and badges never overlap. */
+body .player-card.vanguard-template-card{
+ display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);
+ grid-template-areas:"portrait identity" "portrait insignia" "stats stats" "achievements achievements";
+ gap:18px;aspect-ratio:auto;padding:clamp(14px,2.5vw,26px);
+ background:radial-gradient(ellipse at 15% 5%,#17404a77,transparent 50%),linear-gradient(135deg,#152027,#090f14 65%,#1b252b);
+ border:1px solid #b99a54;box-shadow:inset 0 0 0 3px #081015,inset 0 0 0 4px #ccb16a38,0 16px 38px #0007;
+}
+body .vanguard-template-card .vanguard-template-art{display:none}
+body .vanguard-template-card .card-main{display:contents}
+body .vanguard-template-card .portrait-ring{
+ grid-area:portrait;position:relative;inset:auto;align-self:center;justify-self:center;
+ width:100%;height:auto;aspect-ratio:1;min-width:0;
+}
+body .vanguard-template-card .portrait-circle{font-size:clamp(48px,12cqw,110px)}
+body .vanguard-template-card .card-identity{
+ grid-area:identity;position:relative;inset:auto;width:100%;min-height:0;
+ align-self:end;padding:14px 12px;text-align:left;border:0;border-radius:0;background:none;box-shadow:none;
+}
+body .vanguard-template-card .card-identity h2{
+ color:#fff7e3;font-size:clamp(20px,3.5cqw,34px);line-height:1.2;white-space:normal;overflow-wrap:anywhere;text-shadow:none;
+}
+body .vanguard-template-card .card-identity p{font-size:clamp(11px,1.7cqw,16px);line-height:1.5;overflow-wrap:anywhere}
+body .vanguard-template-card .card-identity p span{font-size:inherit}
+body .vanguard-template-card .card-status{font-size:clamp(10px,1.5cqw,14px);line-height:1.5;margin-top:8px;color:#eacb85}
+body .vanguard-template-card .card-insignia{
+ grid-area:insignia;display:grid;position:relative;inset:auto;
+ grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;align-self:start;pointer-events:auto;
+}
+body .vanguard-template-card .card-level-insignia,
+body .vanguard-template-card .card-guild-insignia{
+ position:relative;inset:auto;width:100%;height:auto;min-height:100px;aspect-ratio:auto;
+ display:flex;flex-direction:column;justify-content:center;align-items:center;gap:8px;padding:12px 8px;
+ border:1px solid #9f884949;border-radius:12px;background:#102029a8;box-shadow:none;
+}
+body .vanguard-template-card .identity-level-emblem,
+body .vanguard-template-card .card-guild-insignia img{width:clamp(48px,8cqw,78px);height:clamp(48px,8cqw,78px);object-fit:contain}
+body .vanguard-template-card .card-insignia small{
+ position:static;inset:auto;transform:none;width:100%;font-size:clamp(9px,1.3cqw,12px);line-height:1.4;
+ white-space:normal;overflow-wrap:anywhere;color:#efdaa7;text-shadow:none;
+}
+body .vanguard-template-card .empty-guild-emblem{width:48px;height:48px;flex:none}
+body .vanguard-template-card .card-stats{
+ grid-area:stats;position:relative;inset:auto;width:100%;height:auto;min-height:0;
+ display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:0;
+}
+body .vanguard-template-card .card-stats>div,
+body .vanguard-template-card .card-stats>div:first-child{
+ min-height:100px;grid-template-rows:34px auto auto;align-content:center;gap:6px;padding:12px 5px;
+ border:1px solid #9f884969;border-radius:12px;background:linear-gradient(150deg,#1a2d36,#0b171e);box-shadow:none;
+}
+body .vanguard-template-card .card-stats img,
+body .vanguard-template-card .card-stats i{width:32px;height:32px;font-size:28px}
+body .vanguard-template-card .card-stats span{font-size:clamp(8px,1.3cqw,11px);line-height:1.25;white-space:normal;color:#b7cdd4;letter-spacing:.02em}
+body .vanguard-template-card .card-stats strong{font-size:clamp(13px,2.3cqw,22px);line-height:1.2;text-shadow:none;overflow-wrap:anywhere}
+body .vanguard-template-card .card-achievements{
+ grid-area:achievements;position:relative;inset:auto;width:100%;height:auto;min-height:0;
+ padding:14px;border:1px solid #9f884969;border-radius:14px;background:#0b171ee6;
+}
+body .vanguard-template-card .card-emblem-collection{position:relative;inset:auto;width:100%;height:auto;padding:0;border:0;border-radius:0;background:none;box-shadow:none}
+body .vanguard-template-card .card-emblem-collection header{
+ position:relative;inset:auto;height:auto;min-height:30px;display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px;
+}
+body .vanguard-template-card .card-emblem-collection header>svg{width:17px;height:17px;flex:none}
+body .vanguard-template-card .card-emblem-collection header span{flex-wrap:wrap;gap:6px}
+body .vanguard-template-card .card-emblem-collection header strong{font-size:clamp(10px,1.5cqw,14px);white-space:normal;letter-spacing:.04em}
+body .vanguard-template-card .card-emblem-collection header small{font-size:10px;white-space:normal}
+body .vanguard-template-card .card-emblem-choose{font-size:10px;line-height:1.4;padding:6px 9px;border-radius:7px}
+body .vanguard-template-card .card-emblem-grid{
+ position:relative;inset:auto;grid-template-columns:repeat(5,minmax(0,1fr));grid-template-rows:auto auto;gap:8px;
+}
+body .vanguard-template-card .card-emblem{aspect-ratio:1;padding:5px;min-width:0;min-height:0;border-radius:10px}
+body .vanguard-template-card .card-emblem-art{display:block;width:100%;height:100%;max-width:100%;max-height:100%;aspect-ratio:1}
+body .vanguard-template-card .card-emblem-art img{display:block;width:100%;height:100%;object-fit:contain}
+@media(max-width:480px){
+ body .player-card.vanguard-template-card{grid-template-columns:minmax(0,1fr);grid-template-areas:"portrait" "identity" "insignia" "stats" "achievements";gap:14px}
+ body .vanguard-template-card .portrait-ring{width:min(100%,260px)}
+ body .vanguard-template-card .card-identity{align-self:auto;text-align:center;padding:0 4px}
+ body .vanguard-template-card .card-level-insignia,body .vanguard-template-card .card-guild-insignia{min-height:90px;padding:10px}
+ body .vanguard-template-card .card-stats{gap:4px}
+ body .vanguard-template-card .card-stats>div,body .vanguard-template-card .card-stats>div:first-child{padding:10px 3px;border-radius:9px}
+ body .vanguard-template-card .card-achievements{padding:10px}
+ body .vanguard-template-card .card-emblem-grid{gap:5px}
+ body .vanguard-template-card .card-emblem{padding:3px;border-radius:7px}
 }
