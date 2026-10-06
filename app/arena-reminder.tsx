@@ -27,7 +27,7 @@ export default function ArenaReminder({ open, onDismiss, onOpen }: { open: boole
       <span className="daily-quest-reminder-label">UPCOMING ARENA CHESS BATTLE</span>
       <img src="/play-selection/grand-arena.webp" width={180} height={180} alt="Grand Arena chess battle castle" />
       <DialogTitle>Your next Arena battle awaits!</DialogTitle>
-      <DialogDescription>Bring your Arena ticket, reserve your place, and challenge other chess players in a battle scheduled by the owner.</DialogDescription>
+      <DialogDescription>Bring your Arena ticket, reserve your place, and challenge other chess players in a scheduled Arena battle.</DialogDescription>
       <div aria-live="polite">{failed ? <p>Open Arena to view the latest schedule.</p> : schedules === null ? <p>Loading upcoming sessions…</p> : schedules.length ? schedules.map(slot => <p key={slot.id} style={{ fontSize: 13, margin: "8px 0" }}><strong>{slot.title}</strong><br/>{new Date(slot.starts_at).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "Asia/Manila" })} – {new Date(slot.ends_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", timeZone: "Asia/Manila" })} · PH time<br/><span className="arena-reminder-count">{slot.players.length} {slot.players.length === 1 ? "player registered" : "players registered"} · waiting for Arena to open</span></p>) : <p>No upcoming sessions scheduled.</p>}</div>
       <button type="button" className="daily-quest-reminder-open" onClick={onOpen}>Register now!</button>
       <DialogClose className="daily-quest-reminder-close">Close</DialogClose>
