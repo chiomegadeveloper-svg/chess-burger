@@ -29,6 +29,9 @@ test('teach edits are labelled and legal moves off turn retain SAN',()=>{
  const free=new Chess();free.remove('e2');free.put({type:'p',color:'w'},'e5');assert.equal(classroomNotation('start',free.fen()).notation,'Teach: e2–e5');
  assert.equal(classroomNotation('start','8/8/8/8/8/8/8/8 w - - 0 1').notation,'Position setup / restore');
 });
+test('teach move counters keep SAN numbered correctly when play continues',()=>{
+ const board=new Chess();board.move('e4');const before=board.fen();board.move('e5');const note=classroomNotation(before,board.fen());assert.equal(note.move_number,1);const next=board.fen();board.move('Nf3');assert.equal(classroomNotation(next,board.fen()).move_number,2);
+});
 test('triggers atomically capture both actors on shared and student boards without annotation duplicates',async()=>{const db=await fixture();try{
  const b=new Chess();b.move('e4');await db.query('update cb_classroom_workspaces set fen=$1,updated_by=$2 where room_id=$3',[b.fen(),student,room]);const before=b.fen();b.move('e5');await db.query('update cb_classroom_workspaces set fen=$1,updated_by=$2 where room_id=$3',[b.fen(),teacher,room]);
  await db.query('update cb_classroom_student_boards set fen=$1,updated_by=$2 where room_id=$3',[before,student,room]);
