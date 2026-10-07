@@ -1,0 +1,75 @@
+/* Map-only night theme. Tile shading never affects player avatars or map markers. */
+.map-dark-page {
+  --background: #101b23;
+  --foreground: #edf5f7;
+  --border: #34505e;
+  --popover: #152730;
+  --popover-foreground: #edf5f7;
+  color-scheme: dark;
+  color: var(--foreground);
+  background: linear-gradient(145deg, #14242e, #0b151c);
+  border: 1px solid #304b58;
+  border-radius: 22px;
+  padding: 18px;
+  min-width: 0;
+}
+.map-dark-page h1, .map-dark-page h2, .map-dark-page h3 { color: #edf5f7; }
+.map-dark-page .page-caption, .map-dark-page .account-note { color: #b8ccd5; }
+.map-dark-page .map-view-tabs { background: #0c1a22; border-color: #365464; }
+.map-dark-page .open-play-eyebrow { color: #74e2e8; }
+.map-dark-page .open-play-heading p { color: #bed1da; opacity: 1; }
+.map-dark-page .gps-toggle { background: #1a303d; color: #edf5f7; border-color: #4e7385; }
+.map-dark-page .gps-toggle.on { background: #16464c; color: #8df3ef; border-color: #4fa7ac; }
+.map-dark-page .open-play-summary > span { background: #18313b; color: #d2ebef; border-color: #39606b; }
+.map-dark-page .open-play-summary i { background: #61e0a6; }
+.map-dark-page .open-play-map, .map-dark-page .live-map { background: #101b23; border-color: #446271; box-shadow: 0 10px 28px #0004; }
+.map-dark-canvas.leaflet-container { background: #101b23; }
+.map-dark-canvas .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) saturate(.45) brightness(1.05) contrast(.9);
+}
+.map-dark-canvas .leaflet-control-zoom { border: 1px solid #466473; box-shadow: 0 3px 12px #0005; }
+.map-dark-canvas .leaflet-control-zoom a { background: #162a35; color: #edf5f7; border-color: #466473; }
+.map-dark-canvas .leaflet-control-zoom a:hover, .map-dark-canvas .leaflet-control-zoom a:focus-visible { background: #264554; color: #84f1f1; }
+.map-dark-canvas .leaflet-control-zoom a.leaflet-disabled { background: #162a35; color: #7c939f; }
+.map-dark-canvas .leaflet-control-attribution { background: #101b23ed; color: #c7d9e1; font-size: 9px; }
+.map-dark-canvas .leaflet-control-attribution a { color: #85e5ee; }
+.map-dark-canvas .leaflet-tooltip { background: #152b36; border-color: #527485; color: #edf5f7; box-shadow: 0 3px 12px #0005; }
+.map-dark-canvas .leaflet-tooltip-top:before { border-top-color: #527485; }
+.map-dark-canvas .leaflet-tooltip-bottom:before { border-bottom-color: #527485; }
+.map-dark-canvas .leaflet-tooltip-left:before { border-left-color: #527485; }
+.map-dark-canvas .leaflet-tooltip-right:before { border-right-color: #527485; }
+.map-dark-page .open-play-map-tools button { background: #18313f; color: #eaf6f7; border-color: #4b7484; }
+.map-dark-page .open-play-map-tools button.gold-button { background: #edc868; color: #332811; border-color: #d7ae4b; }
+.map-dark-page .open-play-map-legend { background: #102630ed; color: #e2f1f5; border: 1px solid #426573; }
+.map-dark-page .open-play-schedule, .map-dark-page .open-play-editor, .map-dark-page .open-play-detail, .map-dark-page .cloud-panel {
+  background: linear-gradient(145deg, #1a2d38, #11222c);
+  color: #edf5f7;
+  border-color: #3e5b6b;
+  box-shadow: 0 6px 20px #0003;
+}
+.map-dark-page .open-play-card { background: #152a35; color: #edf5f7; border-color: #3d5e6e; }
+.map-dark-page .open-play-card:hover, .map-dark-page .open-play-card.selected { border-color: #6ae0e7; background: #1b3642; box-shadow: 0 4px 16px #0004; }
+.map-dark-page .open-play-timezone, .map-dark-page .open-play-card-top small, .map-dark-page .open-play-detail small, .map-dark-page .open-play-editor small,
+.map-dark-page .open-play-schedule .section-title > span, .map-dark-page .open-play-empty { color: #bed1da; }
+.map-dark-page .open-play-card-top b, .map-dark-page .open-play-card-top b small, .map-dark-page .open-play-card-bottom strong, .map-dark-page .open-play-promo { color: #7aebe6; }
+.map-dark-page .open-play-card-bottom { border-color: #355463; }
+.map-dark-page .open-play-card-icon { background: #223e4d; color: #f2d581; border: 1px solid #55707a; }
+.map-dark-page .open-play-eligibility, .map-dark-page .open-play-status { background: #193d37; color: #b2f0d8; }
+.map-dark-page .open-play-actions button, .map-dark-page .open-play-actions a { background: #1b3543; color: #d8f5f6; border-color: #527b8c; }
+.map-dark-page .open-play-actions .gold-button, .map-dark-page .open-play-editor > .gold-button { background: #edc868; color: #332811; border-color: #d7ae4b; }
+.map-dark-page .open-play-fields label { color: #dcecf2; }
+.map-dark-page .open-play-fields input, .map-dark-page .kingdom-name input, .map-dark-page .king-challenge select { background: #0d202b; color: #edf5f7; border-color: #577d8f; }
+.map-dark-page input::placeholder { color: #abc1cd; opacity: 1; }
+.map-dark-page .open-play-page .section-title > button { color: #d5f2f4; }
+.map-dark-page .inline-error { background: #3c232a; border: 1px solid #936571; color: #ffd7de; border-radius: 10px; padding: 10px 12px; }
+.map-dark-page .section-title > span, .map-dark-page .nearby-player small { color: #bed1da; }
+.map-dark-page .nearby-player strong { color: #edf5f7; }
+.map-dark-page .cloud-panel p, .map-dark-page .selected-player-profile small { color: #bed1da; }
+.map-dark-page .selected-player-profile { background: transparent; color: #edf5f7; }
+.map-dark-page .kingdom-name { color: #bed1da; }
+.map-dark-page .cloud-panel .gold-button { background: #edc868; color: #332811; border-color: #d7ae4b; }
+.map-dark-page .selected-neighbor > button:last-child { background: #1b3543; color: #edf5f7; border-color: #527b8c; }
+.map-dark-page .cloud-panel button.nearby-player { border-bottom-color: #3e5b6b; }
+.map-dark-page button:focus-visible, .map-dark-page a:focus-visible { outline: 3px solid #79e8ed; outline-offset: 3px; }
+@media (max-width: 560px) { .map-dark-page { padding: 12px; border-radius: 17px; } }
+@media (max-width: 380px) { .map-dark-page { padding: 9px; } .map-dark-page .open-play-map-legend { padding: 6px 8px; font-size: 10px; } }
