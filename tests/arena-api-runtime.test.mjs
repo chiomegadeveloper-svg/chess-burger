@@ -1,0 +1,16 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync,mkdtempSync,writeFileSync,symlinkSync,realpathSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {pathToFileURL} from 'node:url';
+import ts from 'typescript';
+const source=readFileSync(new URL('../app/arena-response.ts',import.meta.url),'utf8');const mod={exports:{}};
+new Function('module','exports',ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText)(mod,mod.exports);
+const {readArenaResponse}=mod.exports;
+test('deployed-style Node ESM can load actual Grand Arena route and helper',async()=>{const folder=mkdtempSync(join(tmpdir(),'arena-esm-'));try{writeFileSync(join(folder,'package.json'),'{"type":"module"}');symlinkSync(realpathSync(new URL('../node_modules',import.meta.url)),join(folder,'node_modules'),'dir');for(const file of ['grand-arena','_arena-recurrence']){const src=readFileSync(new URL(`../api/${file}.ts`,import.meta.url),'utf8');writeFileSync(join(folder,`${file}.js`),ts.transpileModule(src,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText);}const route=await import(pathToFileURL(join(folder,'grand-arena.js')));assert.equal(typeof route.default,'function');const helper=await import(pathToFileURL(join(folder,'_arena-recurrence.js')));assert.equal(helper.arenaOccurrences('2030-12-30T11:00Z','2030-12-30T13:00Z','weekly',4).length,4);}finally{rmSync(folder,{recursive:true,force:true});}});
+test('successful roster JSON passes through unchanged',async()=>{const value={upcoming:[],current:null};assert.deepEqual(await readArenaResponse(new Response(JSON.stringify(value))),value);});
+test('plain server errors and HTML gateway errors produce readable retry message',async()=>{for(const body of ['A server error has occurred\nFUNCTION_INVOCATION_FAILED','<html>Bad Gateway</html>'])await assert.rejects(readArenaResponse(new Response(body,{status:500})),/Grand Arena is temporarily unavailable/);});
+test('empty or invalid successful payloads are rejected cleanly',async()=>{for(const body of ['', 'null','[]','"server error"'])await assert.rejects(readArenaResponse(new Response(body)),/temporarily unavailable/);});
+test('structured API errors preserve actionable migration and ticket messages',async()=>{for(const error of ['Run supabase/0103_arena_repeat_schedules.sql','You need one Arena Ticket.'])await assert.rejects(readArenaResponse(new Response(JSON.stringify({error}),{status:409})),e=>e.message===error);});
+test('non-string API errors use safe fallback',async()=>{await assert.rejects(readArenaResponse(new Response('{"error":{}}',{status:503}),'Arena controls are temporarily unavailable.'),/Arena controls are temporarily unavailable/);});

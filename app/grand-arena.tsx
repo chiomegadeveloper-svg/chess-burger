@@ -1,4 +1,5 @@
 "use client";
+import {readArenaResponse} from "./arena-response";
 import { useCallback, useEffect, useState } from "react";
 import {
   ArrowLeft,
@@ -89,8 +90,7 @@ async function request<T>(action: string, body: Record<string, unknown> = {}) {
       body: JSON.stringify({ action, ...body }),
       cache: "no-store",
     }),
-    data = (await response.json()) as T & { error?: string };
-  if (!response.ok) throw Error(data.error ?? "Grand Arena is unavailable.");
+    data = await readArenaResponse<T>(response);
   return data;
 }
 const sessionLabel = (slot: ArenaSlot) =>

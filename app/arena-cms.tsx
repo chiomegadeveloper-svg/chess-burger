@@ -1,4 +1,5 @@
 "use client";
+import {readArenaResponse} from "./arena-response";
 import {useEffect,useState} from "react";
 import {toast} from "sonner";
 import {getSupabase} from "./supabase";
@@ -14,7 +15,7 @@ async function request(action:string,body:Record<string,unknown>={}):Promise<Own
   const client=await getSupabase(),session=client?(await client.auth.getSession()).data.session:null;
   if(!session)throw Error("Sign in again.");
   const response=await fetch("/api/grand-arena",{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${session.access_token}`},body:JSON.stringify({action,...body}),cache:"no-store"});
-  const data=await response.json() as OwnerState & {error?:string};if(!response.ok)throw Error(data.error||"Arena controls are unavailable.");return data;
+  return readArenaResponse<OwnerState>(response,"Arena controls are temporarily unavailable. Please try again shortly.");
 }
 export default function ArenaCms(){
   const [state,setState]=useState<OwnerState|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState("");

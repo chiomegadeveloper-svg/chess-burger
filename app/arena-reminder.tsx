@@ -1,4 +1,5 @@
 "use client";
+import {readArenaResponse} from "./arena-response";
 import { useEffect, useState } from "react";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { Dialog, DialogClose, DialogDescription, DialogOverlay, DialogPortal, DialogTitle } from "@/components/ui/dialog";
@@ -14,7 +15,7 @@ export default function ArenaReminder({ open, onDismiss, onOpen }: { open: boole
     setFailed(false);
     const load = () => fetch("/api/grand-arena?action=window", { cache: "no-store", signal: controller.signal }).then(async response => {
       if (!response.ok) throw Error("Schedule unavailable");
-      const data = await response.json() as { upcoming: Schedule[] };
+      const data = await readArenaResponse<{upcoming:Schedule[]}>(response);
       if (!controller.signal.aborted) { setSchedules(data.upcoming.slice(0, 2)); setFailed(false); }
     }).catch(() => { if (!controller.signal.aborted) setFailed(true); });
     void load();

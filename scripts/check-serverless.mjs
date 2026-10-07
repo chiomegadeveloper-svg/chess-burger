@@ -1,5 +1,5 @@
-import { readFileSync, readdirSync } from "node:fs";
-import { join } from "node:path";
+import { readFileSync, readdirSync, existsSync } from "node:fs";
+import { join, dirname } from "node:path";
 import ts from "typescript";
 
 const apiDirectory = new URL("../api/", import.meta.url);
@@ -21,6 +21,20 @@ for (const name of files) {
     if (!hasHandler) {
       failed = true;
       console.error(`[serverless-check] ${name} has no default handler. Prefix utility files with _ so Vercel does not deploy them as functions.`);
+    }
+  }
+  // Node ESM does not resolve extensionless relative imports in deployed functions.
+  const parsedImports = ts.createSourceFile(name, source, ts.ScriptTarget.Latest, true);
+  for (const statement of parsedImports.statements) {
+    const specifier = statement.moduleSpecifier;
+    if (!specifier || !ts.isStringLiteral(specifier) || !specifier.text.startsWith(".")) continue;
+    const value = specifier.text;
+    if (!/\.(?:js|mjs|cjs|json)$/.test(value)) {
+      failed = true;
+      console.error(`[serverless-check] ${name}: relative import ${value} needs a runtime extension (use .js for TypeScript modules).`);
+    } else if (!existsSync(join(dirname(path), value)) && !existsSync(join(dirname(path), value.replace(/\.js$/, ".ts")))) {
+      failed = true;
+      console.error(`[serverless-check] ${name}: relative import ${value} has no source module.`);
     }
   }
   const corruption = /Warning: truncated output|tokens truncated|original token count/i.test(source);

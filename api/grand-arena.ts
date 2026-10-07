@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import {createClient} from '@supabase/supabase-js';
-import {arenaOccurrences} from './_arena-recurrence';
+import {arenaOccurrences} from './_arena-recurrence.js';
 
 type Req={method?:string;query?:Record<string,string|string[]|undefined>;body?:unknown;headers:Record<string,string|string[]|undefined>};
 type Res={status:(code:number)=>Res;json:(body:unknown)=>void;setHeader:(name:string,value:string)=>void};

@@ -1,4 +1,5 @@
 "use client";
+import {readArenaResponse} from "./arena-response";
 import {useEffect, useState} from "react";
 import "./arena-registration.css";
 
@@ -38,7 +39,7 @@ export default function PublicArenaSessions({onOpen}: {onOpen:()=>void}) {
   const [error,setError]=useState("");
   useEffect(()=>{
     const controller=new AbortController();
-    const load=async()=>{try{const response=await fetch("/api/grand-arena?action=window",{cache:"no-store",signal:controller.signal});const data=await response.json() as {upcoming:ArenaBattle[];current:ArenaBattle|null;error?:string};if(!response.ok)throw Error(data.error||"Arena schedules are unavailable.");setState(data);setError("");}catch(e){if(!controller.signal.aborted)setError((e as Error).message);}};
+    const load=async()=>{try{const response=await fetch("/api/grand-arena?action=window",{cache:"no-store",signal:controller.signal});const data=await readArenaResponse<{upcoming:ArenaBattle[];current:ArenaBattle|null}>(response,"Arena schedules are temporarily unavailable. Please try again shortly.");setState(data);setError("");}catch(e){if(!controller.signal.aborted)setError((e as Error).message);}};
     void load();const timer=setInterval(()=>void load(),15000);
     return()=>{controller.abort();clearInterval(timer);};
   },[]);
