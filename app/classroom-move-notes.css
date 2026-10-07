@@ -21,3 +21,16 @@
 .classroom-move-notes .move-note-more{margin-top:12px;text-align:center;color:#71dfde}
 .classroom-move-notes p.move-notes-error{color:#ffbfba}
 @media(max-width:900px){.classroom-board-with-notes{grid-template-columns:minmax(0,1fr)}.classroom-move-notes ol{max-height:300px}}
+
+.classroom-history-shell{container-type:inline-size;width:100%;min-width:0}
+.classroom-history-controls{margin:12px auto 0;padding:10px 12px;border:1px solid #354c50;border-radius:12px;background:#141d1c;color:#f0f5ed;width:fit-content;max-width:100%;text-align:center}
+.classroom-history-controls .history-controls-label{display:block;margin-bottom:7px;font-size:9px;font-weight:700;letter-spacing:.12em;color:#bccac0}
+.classroom-history-controls>div{display:flex;align-items:center;justify-content:center;gap:6px}
+.classroom-history-controls button{display:grid;place-items:center;min-width:40px;min-height:40px;padding:6px;border:1px solid transparent;border-radius:7px;background:transparent;color:#e3e8da;cursor:pointer}
+.classroom-history-controls button:hover:not(:disabled),.classroom-history-controls button:focus-visible{border-color:#71dfde;background:#25403e;color:#71dfde}
+.classroom-history-controls button:disabled{opacity:.3;cursor:default}
+.classroom-history-controls button svg{width:23px;height:23px;stroke-width:2.6}
+.classroom-history-controls output{font-size:12px;font-weight:600;min-width:65px;color:#ffd47a}
+.classroom-history-controls>small{display:block;margin-top:7px;font-size:10px;line-height:1.5;color:#bdccc7}
+@container (max-width:740px){.classroom-board-with-notes{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:380px){.classroom-history-controls{padding:8px}.classroom-history-controls>div{gap:3px}.classroom-history-controls button{min-width:36px;min-height:40px}.classroom-history-controls output{min-width:54px;font-size:11px}}

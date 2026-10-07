@@ -1809,3 +1809,5 @@
 .workshop-stage.teacher-view>.one-board,.workshop-stage.teacher-view>.focus-board{width:min(1120px,100%);min-width:0}
 .board-maximized .workshop-stage.teacher-view{height:auto;min-height:calc(100dvh - 65px);overflow:auto;align-items:start}
 .board-maximized .workshop-stage.teacher-view>.one-board,.board-maximized .workshop-stage.teacher-view>.focus-board{max-height:none}
+/* Keep teacher history visible below the board even in maximized overview. */
+.board-maximized .master-board-panel>.classroom-history-shell{display:block}
