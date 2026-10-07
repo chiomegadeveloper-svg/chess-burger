@@ -1,3 +1,19 @@
 .arena-upcoming{margin:20px 0;padding:20px;border:1px solid #d0aa5440;border-radius:20px;background:#101c24}.arena-upcoming>p{color:#b8c4ca;font-size:13px;margin:12px 0}.arena-schedule-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;max-height:560px;overflow:auto}.arena-schedule-list article{padding:16px;border:1px solid #ffffff18;border-radius:12px;background:#172832}.arena-schedule-list h3{font-size:15px;margin-bottom:12px;color:#ffe3a0}.arena-schedule-list h4{font-size:12px;margin:12px 0;color:#b8c4ca}.arena-schedule-list p{font-size:12px;color:#9eafb8}.arena-schedule-list ul{display:flex;flex-direction:column;gap:8px;max-height:180px;overflow:auto}.arena-schedule-list li{display:flex;gap:8px;align-items:center;font-size:13px}.arena-schedule-list li img{width:28px;height:28px;object-fit:cover;border-radius:50%}.arena-schedule-list button:disabled{opacity:.6}@media(max-width:600px){.arena-schedule-list{grid-template-columns:1fr}.arena-upcoming{padding:14px}}
 
 .arena-schedule-time{margin-bottom:12px}.arena-schedule-list li small{display:block;color:#67ddec;font-size:10px;margin-top:3px}.arena-live-roster{padding:16px;margin:14px 0;border:1px solid #4be2f466;border-radius:14px;background:#17323d}.arena-live-roster ul{display:grid;gap:8px;margin:12px 0}.arena-live-roster li{display:flex;gap:8px}.arena-live-roster li img{width:28px;height:28px;border-radius:50%}.arena-live-roster li small{display:block;font-size:11px;color:#67ddec}
+
+/* Shared roster styling applies to active, upcoming, and CMS sessions. */
+.arena-battle-roster{min-width:0;margin-top:16px;padding-top:14px;border-top:1px solid #ffffff18}
+.arena-battle-roster .arena-roster-heading{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px 12px;margin-bottom:12px}
+.arena-battle-roster .arena-roster-heading h4{margin:0;color:#f3dfaa;font-size:13px;font-weight:700}
+.arena-battle-roster .arena-roster-heading>span{color:#b7cbd3;font-size:11px;font-variant-numeric:tabular-nums}
+.arena-battle-roster .arena-roster-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:8px;max-height:320px;overflow:auto;overscroll-behavior:contain;margin:0;padding:0;list-style:none;scrollbar-width:thin;scrollbar-color:#4c727c #101c24}
+.arena-battle-roster .arena-roster-list>.arena-roster-player{display:flex;align-items:center;gap:12px;min-width:0;margin:0;padding:12px;border:1px solid #47616b66;border-radius:12px;background:#14262f;font-size:13px;line-height:1.4}
+.arena-battle-roster .arena-roster-player>.arena-roster-avatar{display:block;position:static;flex:0 0 44px;width:44px;height:44px;min-width:44px;max-width:44px;max-height:44px;aspect-ratio:1;object-fit:cover;border:2px solid #6ddce480;border-radius:50%}
+.arena-battle-roster .arena-roster-identity{display:grid;gap:3px;min-width:0}
+.arena-battle-roster .arena-roster-identity>strong{color:#f3f7f8;font-size:13px;font-weight:600;overflow-wrap:anywhere}
+.arena-battle-roster .arena-roster-identity>small{display:block;margin:0;color:#a9bec7;font-size:10px;overflow-wrap:anywhere}
+.arena-battle-roster .arena-roster-status{justify-self:start;color:#92e8ef;font-size:10px;overflow-wrap:anywhere}
+.arena-battle-roster .arena-roster-status-playing{color:#a3edbd}.arena-battle-roster .arena-roster-status-eliminated{color:#ffb3b3}.arena-battle-roster .arena-roster-status-champion{color:#f6d988}
+.arena-battle-roster .arena-roster-empty{margin:0;padding:16px;border:1px dashed #47616b;border-radius:12px;color:#b7cbd3;font-size:12px;line-height:1.5}
+@media(max-width:480px){.arena-battle-roster .arena-roster-list{grid-template-columns:1fr}.arena-battle-roster .arena-roster-list>.arena-roster-player{padding:10px;gap:10px}}

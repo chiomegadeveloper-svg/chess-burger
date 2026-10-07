@@ -13,9 +13,16 @@ export function battleLabel(battle: ArenaBattle) {
   return `${date} – ${end}`;
 }
 export function BattleRoster({battle}: {battle: ArenaBattle}) {
-  return <><h4>{battle.players.length} registered {battle.players.length===1?"player":"players"}</h4>
-    {battle.players.length ? <ul>{battle.players.map(row=><li key={row.user_id}><img src={row.player?.avatar_url||"/cburger_logo.png"} alt=""/><span>{row.player?.display_name||row.player?.username||"Player"}<small>{row.status==="registered"?"Waiting for Arena to open":row.status==="waiting"?"Checked in · standby":row.status==="playing"?"In match":row.status==="eliminated"?"Eliminated":"Champion"}</small></span></li>)}</ul> : <p>No registrations yet. Reserve your place!</p>}
-  </>;
+  return <div className="arena-battle-roster">
+    <div className="arena-roster-heading"><h4>Session roster</h4><span>{battle.players.length} registered {battle.players.length===1?"player":"players"}</span></div>
+    {battle.players.length ? <ul className="arena-roster-list">{battle.players.map(row=>{
+      const status = row.status==="registered"?"Waiting for Arena to open":row.status==="waiting"?"Checked in · standby":row.status==="playing"?"In match":row.status==="eliminated"?"Eliminated":row.status==="champion"?"Champion":"Registered";
+      return <li className="arena-roster-player" key={row.user_id}>
+        <img className="arena-roster-avatar" src={row.player?.avatar_url||"/cburger_logo.png"} alt="" width={44} height={44} loading="lazy" onError={event=>{event.currentTarget.onerror=null;event.currentTarget.src="/cburger_logo.png";}}/>
+        <span className="arena-roster-identity"><strong>{row.player?.display_name||row.player?.username||"Player"}</strong>{row.player?.username&&<small>@{row.player.username.replace(/^@/,"")}</small>}<span className={`arena-roster-status arena-roster-status-${row.status}`}>{status}</span></span>
+      </li>;
+    })}</ul> : <p className="arena-roster-empty">No registrations yet. Reserve your place!</p>}
+  </div>;
 }
 export function BattleCards({battles, onRegister, busy=false, tickets}: {battles:ArenaBattle[];onRegister:(battle:ArenaBattle)=>void;busy?:boolean;tickets?:number}) {
   if (!battles.length) return <p>No upcoming battles published. Check back for the owner’s next Arena schedule.</p>;
