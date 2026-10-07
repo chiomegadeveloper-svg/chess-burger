@@ -1,0 +1,23 @@
+.classroom-board-with-notes{display:grid;grid-template-columns:minmax(0,1fr) minmax(230px,290px);gap:18px;align-items:start;width:100%}
+.classroom-board-with-notes>div{min-width:0}
+.classroom-move-notes{min-width:0;background:#10212b;border:1px solid #36515b;border-radius:16px;padding:16px;color:#edf7f8;text-align:left}
+.classroom-move-notes header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.classroom-move-notes header small{font-size:10px;font-weight:700;letter-spacing:.12em;color:#71dfde}
+.classroom-move-notes h3{font-size:18px;margin:3px 0}
+.classroom-move-notes header>b{color:#ffd47a;font-size:14px}
+.classroom-move-notes p{color:#bdd1d8;font-size:12px;line-height:1.6;margin:10px 0}
+.classroom-move-notes ol{list-style:none;padding:0;margin:14px 0 0;max-height:520px;overflow-y:auto;scrollbar-width:thin}
+.classroom-move-notes li{border-top:1px solid #304751;padding:8px 0}
+.classroom-move-notes button{cursor:pointer;font:inherit;text-align:left;width:100%;border:1px solid transparent;border-radius:9px;background:#192e39;color:#edf7f8;padding:10px}
+.classroom-move-notes button:hover,.classroom-move-notes button:focus-visible{border-color:#71dfde;background:#223e49}
+.classroom-move-notes button:disabled{opacity:.55;cursor:wait}
+.classroom-move-notes button.current{border-color:#71dfde}
+.move-note-score{display:flex;gap:8px;align-items:baseline;overflow-wrap:anywhere}
+.move-note-score small{color:#ffd47a;font-size:12px}
+.move-note-score strong{font-size:16px}
+.move-note-meta{display:flex;flex-wrap:wrap;gap:6px 10px;font-size:10px;color:#bdd1d8;margin-top:6px}
+.move-note-meta>b{color:#71dfde}
+.classroom-move-notes .move-note-before{font-size:11px;color:#bdd1d8;background:transparent;padding:6px 10px;margin-top:3px}
+.classroom-move-notes .move-note-more{margin-top:12px;text-align:center;color:#71dfde}
+.classroom-move-notes p.move-notes-error{color:#ffbfba}
+@media(max-width:900px){.classroom-board-with-notes{grid-template-columns:minmax(0,1fr)}.classroom-move-notes ol{max-height:300px}}

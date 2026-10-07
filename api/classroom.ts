@@ -3,6 +3,7 @@ import { AccessToken, DataPacket_Kind, RoomServiceClient, TrackSource } from "li
 import { Chess } from "chess.js";
 import chessMathHandler from "./_chess-math.js";
 import chessMathAttackHandler from "./_chess-math-attack.js";
+import { classroomNotation } from "./_classroom-notation.js";
 
 /** Locked student boards accept one legal move by the room's approved student side. */
 function legalStudentMove(before:string,after:string,color:"w"|"b",strictTurn=false){
@@ -306,6 +307,28 @@ const activeEnrollment=async(roomId:string,studentId:string,now:string,free:bool
       const cleared=await client.from("cb_classroom_student_boards").update({flip_requested_at:null}).eq("room_id",roomId).not("flip_requested_at","is",null);
       if(cleared.error)fail(500,cleared.error.message);
       return res.status(200).json({workspace,student_color:workspace?.student_color??null});
+    }
+    if(action==="move-notes"||action==="restore-move-note"){
+      const roomId=String(body.room_id||""),now=new Date().toISOString();
+      const room=await client.from("cb_classroom_rooms").select("teacher_id").eq("id",roomId).eq("teacher_id",userId).eq("status","active").gt("expires_at",now).maybeSingle();
+      if(room.error)fail(500,room.error.message);
+      if(!room.data)fail(403,"Only the active teacher can read or restore move notes.");
+      const unavailable=(error:{code?:string;message:string})=>{if(["42P01","PGRST205","PGRST202"].includes(error.code||""))fail(503,"Move notes need the Classroom database update (0105).");fail(500,error.message)};
+      if(action==="restore-move-note"){
+        const noteId=Number(body.note_id),expected=String(body.expected_fen||"");
+        if(!Number.isSafeInteger(noteId)||noteId<1||!expected||expected.length>160)fail(400,"Choose a saved position and refresh the board.");
+        const restored=await client.rpc("cb_restore_classroom_move_note",{p_room:roomId,p_teacher:userId,p_note:noteId,p_before:body.before===true,p_expected_fen:expected});
+        if(restored.error){if(/board changed/i.test(restored.error.message))fail(409,restored.error.message);unavailable(restored.error)}
+        return res.status(200).json(restored.data);
+      }
+      const studentId=String(body.student_id||""),cursor=Number(body.before_id||0);
+      if(studentId&&!/^[a-f0-9-]{36}$/i.test(studentId)||!Number.isSafeInteger(cursor)||cursor<0)fail(400,"Invalid history selection.");
+      let query=client.from("cb_classroom_move_notes").select("*").eq("room_id",roomId).order("id",{ascending:false}).limit(101);
+      query=studentId?query.eq("student_id",studentId):query.is("student_id",null);
+      if(cursor)query=query.lt("id",cursor);
+      const notes=await query;if(notes.error)unavailable(notes.error);
+      const rows=(notes.data||[]).slice(0,100);
+      return res.status(200).json({notes:rows.map(row=>({...row,...classroomNotation(row.before_fen,row.fen),actor:row.actor_id===userId?"Teacher":"Student"})),has_more:(notes.data||[]).length>100});
     }
     if(action==="takeback-student"){
       const roomId=String(body.room_id||""),studentId=String(body.student_id||""),shared=body.shared===true,now=new Date().toISOString();

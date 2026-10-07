@@ -1804,3 +1804,8 @@
 @media(max-width:600px){.seba-board-modes{padding:8px;gap:6px}.seba-board-modes>span{width:100%}.seba-board-modes button{flex:1}}
 .classroom-workshop:not(.board-maximized) .workshop-stage.student-view.one-on-one{grid-template-columns:minmax(0,1fr)}
 .workshop-stage.student-view.one-on-one .student-shared-board{width:min(100%,700px);justify-self:center}
+
+/* Give the live board and private history their own readable columns. */
+.workshop-stage.teacher-view>.one-board,.workshop-stage.teacher-view>.focus-board{width:min(1120px,100%);min-width:0}
+.board-maximized .workshop-stage.teacher-view{height:auto;min-height:calc(100dvh - 65px);overflow:auto;align-items:start}
+.board-maximized .workshop-stage.teacher-view>.one-board,.board-maximized .workshop-stage.teacher-view>.focus-board{max-height:none}
