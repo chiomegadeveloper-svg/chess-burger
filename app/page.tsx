@@ -2,6 +2,7 @@
 const MAINTENANCE_MODE = false;
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import SplashScreen from "./splash-screen";
+import {useViewportHeight} from "./use-viewport-height";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import {
   Home,
@@ -1151,6 +1152,7 @@ function AppPage() {
 }
 
 export default function Page() {
+  useViewportHeight();
   if (MAINTENANCE_MODE) {
     return (
       <main

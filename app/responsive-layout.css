@@ -1,0 +1,69 @@
+/* Shared viewport frame: bars stay visible while only the middle page scrolls. */
+html,body,#root{width:100%;min-width:0;height:100%;margin:0}
+html{scrollbar-gutter:auto}
+body{overflow:hidden}
+.app-shell{width:100%;max-width:none;height:100vh;height:var(--app-viewport-height,100dvh);min-height:0;grid-template-rows:auto minmax(0,1fr) auto;overflow:hidden}
+.app-shell>.app-header,.app-shell>.bottom-nav{min-width:0;flex-shrink:0;width:100%;max-width:100%;box-sizing:border-box}
+.app-shell>.app-header{min-height:60px;gap:12px;padding:calc(10px + env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) 10px max(14px,env(safe-area-inset-left))}
+.app-header .brand{min-width:0;flex:0 1 auto}
+.app-header .brand img{flex-shrink:0}
+.app-header .header-actions{min-width:0;flex:0 0 auto;gap:clamp(5px,1vw,12px)}
+.app-shell>.scroll-area{width:100%;min-width:0;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior-y:contain;scrollbar-gutter:stable;padding:clamp(10px,2vw,26px) max(clamp(8px,2.4vw,32px),env(safe-area-inset-right)) clamp(18px,3vw,30px) max(clamp(8px,2.4vw,32px),env(safe-area-inset-left))}
+.scroll-area>:where(section,div,article,form){width:100%;max-width:1180px;min-width:0;margin-inline:auto;box-sizing:border-box}
+.scroll-area :where(section,article,form,fieldset){min-width:0;max-width:100%;box-sizing:border-box}
+.scroll-area :where(h1,h2,h3,p,label,strong){overflow-wrap:anywhere}
+.scroll-area :where(input,select,textarea){min-width:0;max-width:100%;box-sizing:border-box}
+.scroll-area :where(img,video,canvas){max-width:100%}
+.scroll-area :where(.page-heading,.section-title,.shop-main-heading,.guild-heading,.open-play-heading,.classroom-shop-heading){min-width:0;flex-wrap:wrap}
+.scroll-area :where(.page-heading,.section-title,.shop-main-heading,.guild-heading,.open-play-heading,.classroom-shop-heading)>div{min-width:0;max-width:100%}
+.scroll-area :where(.social-actions,.open-play-actions,.arena-session-actions,.account-actions){flex-wrap:wrap}
+.app-shell>.bottom-nav{display:grid;grid-template-columns:repeat(9,minmax(0,1fr));align-items:stretch;gap:0;min-height:64px;padding:6px max(4px,env(safe-area-inset-right)) calc(5px + env(safe-area-inset-bottom)) max(4px,env(safe-area-inset-left));overflow:visible}
+.app-shell>.bottom-nav>button{width:100%;min-width:0;min-height:48px;height:auto;margin:0;padding:4px 1px;gap:3px;font-size:clamp(8px,1.1vw,11px);letter-spacing:0;overflow:visible}
+.app-shell>.bottom-nav>button>span:last-child{display:block;font-size:inherit;line-height:1.2;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.app-shell>.bottom-nav>button>span:last-child:after{content:none}
+.app-shell>.bottom-nav .nav-icon-shell{width:28px;height:28px;flex:none}
+.app-shell>.bottom-nav .nav-icon-shell>svg{width:19px;height:19px}
+.app-shell>.bottom-nav .play-nav .nav-icon-shell{width:40px;height:40px;margin-top:-13px;margin-bottom:1px}
+.app-shell>.bottom-nav .play-nav .nav-icon-shell>svg{width:24px;height:24px}
+/* Large grids compress at the page level, without changing board square geometry. */
+@media(max-width:620px){
+ .app-shell>.app-header{display:flex;flex-wrap:wrap;min-height:0;gap:8px;padding-top:calc(8px + env(safe-area-inset-top));padding-bottom:8px}
+ .app-header .brand{flex:1 1 120px}
+ .app-header .brand .brand-name strong{font-size:12px}
+ .app-header .brand .brand-name small{font-size:8px}
+ .app-header .header-actions{display:flex;flex:1 1 100%;justify-content:space-between;gap:5px;max-width:100%}
+ .app-header .header-actions>button,.app-header .header-actions>.notification-bell-wrap>button{flex-shrink:0;min-width:36px;min-height:36px}
+ .app-header .header-actions>button:not(.header-avatar){width:auto;padding-inline:6px}
+ .scroll-area :where(.unified-bag-grid,.classroom-credit-products,.open-play-fields,.guild-content-grid,.account-columns,.shop-grid,.classroom-packages){grid-template-columns:minmax(0,1fr)}
+ .scroll-area table{display:block;min-width:0;width:100%;max-width:100%;overflow-x:auto;overscroll-behavior-x:contain}
+ .scroll-area :where(.feed-banner,.announcement-banner,.premium-banner)>img{width:100%;height:auto;object-fit:contain}
+}
+@media(max-width:380px){
+ .app-header .header-classroom-button>span,.app-header .header-report-button>span,.app-header .header-cms-button>span{display:none}
+ .app-header .header-actions>button:not(.header-avatar){width:36px;padding:5px}
+ .app-shell>.bottom-nav{min-height:59px;padding-inline:2px}
+ .app-shell>.bottom-nav>button{font-size:8px;letter-spacing:-.15px;min-height:44px}
+ .app-shell>.bottom-nav .nav-icon-shell{width:24px;height:24px}
+ .app-shell>.bottom-nav .nav-icon-shell>svg{width:17px;height:17px}
+ .app-shell>.bottom-nav .play-nav .nav-icon-shell{width:34px;height:34px;margin-top:-10px}
+ .app-shell>.bottom-nav .play-nav .nav-icon-shell>svg{width:21px;height:21px}
+}
+@media(max-height:500px) and (orientation:landscape){
+ .app-shell>.app-header{min-height:42px;padding-block:4px;flex-wrap:nowrap;gap:8px}
+ .app-header .brand .brand-name small{display:none}
+ .app-header .brand img{width:27px;height:27px}
+ .app-header .header-actions{flex:0 1 auto;gap:5px;justify-content:flex-end}
+ .app-header .header-classroom-button>span,.app-header .header-report-button>span,.app-header .header-cms-button>span{display:none}
+ .app-shell>.bottom-nav{min-height:44px;padding-top:2px;padding-bottom:calc(2px + env(safe-area-inset-bottom))}
+ .app-shell>.bottom-nav>button{min-height:38px;gap:1px;font-size:8px;padding:1px}
+ .app-shell>.bottom-nav .play-nav .nav-icon-shell{width:31px;height:31px;margin-top:-6px}
+ .app-shell>.bottom-nav .play-nav .nav-icon-shell>svg{width:20px;height:20px}
+}
+@media(max-width:620px){
+ .app-header .notification-panel{position:fixed;inset:auto max(12px,env(safe-area-inset-right)) auto auto;top:calc(100px + env(safe-area-inset-top));width:min(420px,calc(100vw - 24px));max-height:calc(var(--app-viewport-height,100dvh) - 124px - env(safe-area-inset-bottom))}
+ [data-slot="dialog-content"]{max-width:calc(100vw - 24px)!important;max-height:calc(var(--app-viewport-height,100dvh) - 24px)!important;overflow-y:auto}
+}
+@media(max-height:500px) and (orientation:landscape){.app-header .notification-panel{position:fixed;top:calc(50px + env(safe-area-inset-top));right:max(12px,env(safe-area-inset-right));width:min(420px,calc(100vw - 24px));max-height:calc(var(--app-viewport-height,100dvh) - 70px)}}
+@media(max-width:620px){
+ .scroll-area :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),select,textarea){font-size:16px}
+}

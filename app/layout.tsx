@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "@fontsource/poppins/latin-400.css";
 import "@fontsource/poppins/latin-500.css";
 import "@fontsource/poppins/latin-600.css";
@@ -34,6 +34,9 @@ import "./v47.css";
 import "./grand-arena.css";
 import "./vanguard-card.css";
 import "./avatar-sizing.css";
+import "./responsive-layout.css";
+
+export const viewport: Viewport = {width:"device-width",initialScale:1,viewportFit:"cover"};
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://chessburger.site"),

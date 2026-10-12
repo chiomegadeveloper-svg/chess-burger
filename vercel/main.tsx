@@ -32,6 +32,7 @@ import "../app/v46.css";
 import "../app/v47.css";
 import "../app/vanguard-card.css";
 import "../app/avatar-sizing.css";
+import "../app/responsive-layout.css";
 import Page from "../app/page";
 
 createRoot(document.getElementById("root")!).render(
