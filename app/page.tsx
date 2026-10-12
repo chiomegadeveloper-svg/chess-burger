@@ -1,6 +1,7 @@
 "use client";
 const MAINTENANCE_MODE = false;
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import SplashScreen from "./splash-screen";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import {
   Home,
@@ -375,9 +376,6 @@ function AppPage() {
     clockTap.volume = 0.65;
     clockTap.preload = "auto";
     void clockTap.play().catch(() => {});
-    const splash = setTimeout(() => {
-      setShowSplash(false);
-    }, 800);
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker
         .register("/sw.js")
@@ -455,7 +453,6 @@ function AppPage() {
     };
     window.addEventListener("cb-signed-out", clear);
     return () => {
-      clearTimeout(splash);
       clockTap.pause();
       unsubscribe();
       window.removeEventListener("online", refreshProfile);
@@ -875,24 +872,7 @@ function AppPage() {
     );
   return (
     <main className="app-shell">
-      {showSplash && (
-        <div
-          className="splash-screen"
-          role="status"
-          aria-label="Chess Burger is loading"
-        >
-          <div className="splash-brand-lockup">
-            <img src="/splash/chess-burger-logo.webp" alt="" />
-            <strong>CHESS <b>BURGER</b></strong>
-          </div>
-          <img
-            className="splash-battle-art"
-            src="/splash/chess-battle.webp"
-            alt="Chess Burger pieces charging into battle"
-          />
-          <small>CHESS BURGER ALL RIGHTS RESERVED 2026</small>
-        </div>
-      )}
+      {showSplash && <SplashScreen onDone={()=>setShowSplash(false)}/>}
       {(showWelcome || needsAgreement) && !showSplash && member === true && isProfileComplete(profile) && (
         <div className="welcome-menu-backdrop">
           <section
