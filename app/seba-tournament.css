@@ -61,3 +61,23 @@
 .seba-tournament .seba-name-actions button[type=submit]{border-color:#144537;background:#175747;color:#fff}
 .seba-tournament .seba-certificate-pending small{color:#f2d692}
 @media(max-width:580px){.seba-certificate-overlay .seba-certificate-border img.seba-certificate-logo{width:min(83%,330px);height:auto;max-height:125px}.seba-certificate-overlay .seba-certificate-border .seba-certificate-watermark{width:72%}.seba-name-dialog{padding:19px}}
+
+/* Equal tracks keep occupied and empty ranks identical at every board size. */
+.seba-game-board {
+  width: 100%;
+  min-width: 0;
+  height: auto;
+  aspect-ratio: 1;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  grid-template-rows: repeat(8, minmax(0, 1fr));
+  gap: 0;
+  container-type: inline-size;
+}
+.seba-game-board > button {
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-size: clamp(10px, 10cqw, 43px);
+}
