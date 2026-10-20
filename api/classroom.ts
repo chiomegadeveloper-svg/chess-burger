@@ -384,6 +384,9 @@ const activeEnrollment=async(roomId:string,studentId:string,now:string,free:bool
           if(!lastPuzzle.data)return fail(409,"Assign a puzzle before resetting student boards.");
           assignedFen=lastPuzzle.data.fen;
         }
+        let assignedColor:"w"|"b";
+        try{assignedColor=new Chess(assignedFen==="start"?new Chess().fen():assignedFen,{skipValidation:true}).turn()}
+        catch{return fail(400,"Invalid assigned board position.")}
         const targetStudentId=kind==="reset-puzzle"?String(body.student_id||""):"";
         if(targetStudentId&&!/^[a-f0-9-]{36}$/i.test(targetStudentId))fail(400,"Choose a valid student.");
         const enrollmentQuery=client.from("cb_classroom_enrollments").select("student_id").eq("room_id",roomId).gt("access_expires_at",free?"1970-01-01T00:00:00Z":now);
@@ -394,10 +397,18 @@ const activeEnrollment=async(roomId:string,studentId:string,now:string,free:bool
           const saved=await client.from("cb_classroom_student_boards").upsert(assignments,{onConflict:"room_id,student_id"});
           if(saved.error)fail(500,saved.error.message);
         }
+        // The solver's color follows the assigned starting position, not the room default.
+        // Resetting one student's board preserves the teacher's current class orientation.
+        let workspace=null;
+        if(kind!=="reset-puzzle"){
+          const updated=await client.from("cb_classroom_workspaces").update({student_color:assignedColor,...(kind==="assign-puzzle"?{fen:assignedFen,annotations:[]}:{}),updated_by:userId,updated_at:now}).eq("room_id",roomId).select("*").single();
+          if(updated.error)fail(500,updated.error.message);
+          workspace=updated.data;
+        }
         const label=kind==="assign-puzzle"?`Puzzle assigned to ${assignments.length} student${assignments.length===1?"":"s"}`:kind==="reset-puzzle"?`Puzzle reset for ${assignments.length} student${assignments.length===1?"":"s"}`:`Teacher board sent to ${assignments.length} student${assignments.length===1?"":"s"}`;
         const logged=await client.from("cb_classroom_lesson_events").insert({room_id:roomId,actor_id:userId,scope:"assignment",student_id:targetStudentId||null,fen:assignedFen,annotations:[],label});
         if(logged.error)fail(500,logged.error.message);
-        return res.status(200).json({assigned:assignments.length,fen:assignedFen});
+        return res.status(200).json({assigned:assignments.length,fen:assignedFen,workspace});
       }
       if(kind==="reset-own-board"){
         if(teacher)fail(403,"Only students can reset their own practice board.");
