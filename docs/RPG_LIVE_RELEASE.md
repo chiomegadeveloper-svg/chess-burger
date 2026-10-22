@@ -75,3 +75,11 @@ Hero and enemy skill slots show icons only. Hover/focus tooltips expose the skil
 Preload all five original effect atlases while preparing the hero. Start the hero's cosmetic skill animation on input, overlap it with the server request, and reconcile the confirmed hit at impact without replaying the same animation. Failed requests do not award damage/resources. Enemy response retains its 1–3 second delay. Presence requests use their independent record path, so pending map sharing cannot queue ahead of battle commands; profile/combat mutations stay serialized.
 
 Verified with delayed-response tests: animation starts before the request completes, HP stays unchanged until server confirmation and effect impact, hero effects play once, and pending presence does not block combat. Browser screenshot `rpg-responsive-battle.jpg` is a local practice preview with the tooltip focused.
+
+## v0.0616 — skill runes, larger headings and paired attributes
+
+Added 30 distinct, category-colored SVG skill rune icons for the battle loadouts and skill report. The new UI symbols use the full icon frame, remain sharp at any size, and retain the existing hover/focus details. Animation sheets and original hero/monster artwork are unchanged. `scripts/build-rpg-runes.mjs` generates every rune from the shared skill catalogue during the RPG build.
+
+Increased the top battle typography by 45%, with responsive wrapping and compact landscape sizes. Centered both stat labels and numbers in the monster attribute cards. Added the matching six hero attributes on the left, using the server's locked combat stats (including equipped bonuses). Compact landscape uses a three-column hero grid and keeps all six values visible with harvest and turn controls.
+
+Verified desktop and 844×390 browser layouts, full-frame rune fit, both six-stat grids against authoritative battle values, original hero identity and attack timing regression tests. Screenshot `rpg-battle-runes-stats.jpg` is a local practice preview.

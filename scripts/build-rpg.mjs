@@ -1,3 +1,4 @@
+import './build-rpg-runes.mjs';
 import {readFile,writeFile,mkdir} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 const root=new URL('../rpg/',import.meta.url),out=new URL('../public/rpg/',import.meta.url);

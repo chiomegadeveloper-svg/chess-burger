@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 const source=JSON.parse(readFileSync('rpg/sandbox-source.json','utf8'));
-test('sandbox battle template, styling, original heroes and all skill artwork are transferred byte-for-byte',()=>{
+test('retained sandbox source and artwork match their provenance hashes',()=>{
  for(const [path,expected] of Object.entries(source.sha256)){
   const local=path.startsWith('assets/')?'public/rpg/'+path:'rpg/'+path;
   assert.equal(createHash('sha256').update(readFileSync(local)).digest('hex'),expected,local);

@@ -131,3 +131,48 @@
 }
 @media(orientation:landscape) and (max-height:540px){.bt-playing:not(.bt-chess-mode) .bt-own #bt-bag{height:23dvh;width:auto;max-width:100%;margin:auto;aspect-ratio:1}.bt-playing:not(.bt-chess-mode) .bt-vitals{margin:8px 0}.bt-playing:not(.bt-chess-mode) .bt-extractors{margin-top:8px}.bt-playing:not(.bt-chess-mode) .bt-bag-label{font-size:7px;margin-bottom:4px}}
 @media(orientation:landscape) and (max-height:540px){.bt-playing:not(.bt-chess-mode) .bt-own #bt-bag,.bt-playing:not(.bt-chess-mode) .bt-own .bt-bag-label{display:none}.bt-playing:not(.bt-chess-mode) .bt-extractors button span{font-size:10px}.bt-playing:not(.bt-chess-mode) .bt-extractors button{min-height:38px}}
+
+/* Rune controls and paired, centered attribute cards. */
+.bt-loadouts .bt-skill-slot button,.bt-loadouts .bt-enemy-skill{padding:2px}
+.bt-loadouts .bt-skill-slot img{width:100%;height:100%;max-width:none;max-height:none;filter:drop-shadow(0 0 5px #93dce222)}
+.bt-hero-attributes{margin-top:16px}.bt-hero-attributes>h3{margin:0 0 8px;font:700 9px/1.4 system-ui;letter-spacing:.12em;color:#b5cdd3}
+.bt-side .bt-enemy-stats>div{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:5px;min-height:65px;padding:9px 4px}
+.bt-side .bt-enemy-stats>div>span{display:block;width:100%;text-align:center}
+.bt-side .bt-enemy-stats>div>b{display:block;width:100%;text-align:center;margin:0;line-height:1.15;font-variant-numeric:tabular-nums}
+.bt-playing:not(.bt-chess-mode) .bt-turn{font-size:clamp(13.05px,1.16vw,17.4px);min-height:58px;flex-wrap:wrap;gap:8px 12px;padding:10px 14px}
+.bt-playing:not(.bt-chess-mode) .bt-turn strong{font-size:clamp(17.4px,1.74vw,26.1px);line-height:1.2}
+.bt-playing:not(.bt-chess-mode) .bt-turn .bt-header-actions #bt-clock{font-size:17.4px}
+.bt-playing:not(.bt-chess-mode) .bt-turn .bt-header-actions button{font-size:17.4px;padding:9px 12px;min-height:42px}
+.bt-playing:not(.bt-chess-mode) .bt-loadouts h3{font-size:11.6px}
+@media(orientation:landscape) and (max-width:1000px){
+ .bt-playing:not(.bt-chess-mode) .bt-turn{font-size:11.6px;min-height:46px;gap:5px 8px;padding:6px 8px}
+ .bt-playing:not(.bt-chess-mode) .bt-turn strong{font-size:15.95px}
+ .bt-playing:not(.bt-chess-mode) .bt-turn .bt-header-actions #bt-clock{font-size:13.05px}
+ .bt-playing:not(.bt-chess-mode) .bt-turn .bt-header-actions button{font-size:13.05px;min-height:34px;padding:6px}
+}
+@media(orientation:landscape) and (max-height:620px){
+ .bt-hero-attributes{margin-top:8px}.bt-hero-attributes>h3{font-size:8px;margin-bottom:5px}
+ .bt-playing:not(.bt-chess-mode) .bt-own .bt-hero-stats{grid-template-columns:repeat(3,minmax(0,1fr));gap:4px}
+ .bt-side .bt-enemy-stats>div{min-height:38px;padding:5px 2px;gap:2px;font-size:8px}
+ .bt-playing:not(.bt-chess-mode) .bt-enemy-stats b{font-size:17px}
+ .bt-playing:not(.bt-chess-mode) .bt-loadouts h3{font-size:10px}
+}
+@media(orientation:portrait) and (max-width:900px){.bt-hero-stats{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.bt-loadouts .bt-skill-slot button{position:relative;overflow:hidden}
+.bt-loadouts .bt-skill-slot img{position:absolute;inset:0;display:block;min-width:0;min-height:0;max-width:100%;max-height:100%;object-fit:contain}
+@media(orientation:landscape) and (max-height:540px){
+ .bt-playing:not(.bt-chess-mode) .bt-own{padding:6px}
+ .bt-playing:not(.bt-chess-mode) .bt-own .bt-identity>div{min-width:0}
+ .bt-playing:not(.bt-chess-mode) .bt-own .bt-identity h2{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ .bt-playing:not(.bt-chess-mode) .bt-own .bt-identity>img{width:28px;height:28px;flex-shrink:0}
+ .bt-playing:not(.bt-chess-mode) .bt-own .bt-identity p{font-size:8px;margin:0}
+ .bt-playing:not(.bt-chess-mode) .bt-own .bt-vitals{margin:7px 0}
+ .bt-playing:not(.bt-chess-mode) .bt-own .bt-vital>span{font-size:8px;margin:6px 0 3px}
+ .bt-playing:not(.bt-chess-mode) .bt-own .bt-vital>div{height:4px}
+ .bt-playing:not(.bt-chess-mode) .bt-own .bt-extractors{gap:4px;margin-top:6px}
+ .bt-playing:not(.bt-chess-mode) .bt-own .bt-extractors button{min-height:32px;padding:4px;font-size:14px}
+ .bt-playing:not(.bt-chess-mode) .bt-own .bt-extractors button span{font-size:9px}
+ .bt-playing:not(.bt-chess-mode) .bt-own .bt-extractors button small{font-size:7px}
+ .bt-playing:not(.bt-chess-mode) .bt-own .bt-hero-stats>div{min-height:34px;padding:3px 1px;font-size:7px}
+ .bt-playing:not(.bt-chess-mode) .bt-own .bt-hero-stats b{font-size:15px}
+}
