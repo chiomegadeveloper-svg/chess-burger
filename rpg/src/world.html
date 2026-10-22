@@ -6,9 +6,10 @@
   <div class="world-vitals"><span>HEALTH <b id="world-hp"></b></span><div><i></i></div><span>MANA <b id="world-mp"></b></span><div class="world-mana"><i></i></div></div>
   <div class="rpg-xp-panel"><span id="world-xp-label"></span><progress id="world-xp" max="100" value="0" aria-label="Experience to next level"></progress></div><section class="world-bag-panel"><header><strong>▦ HERO BAG</strong><span id="world-bag-size"></span><button id="world-equipment" type="button" title="Manage equipment" aria-label="Manage equipment">↗</button></header><div id="world-bag" class="world-bag" aria-label="Equipped bag items"></div><p>Bag equipment powers your adventure.</p></section>
   <section class="world-attacks"><h2>ACTIVE ATTACKS</h2><div id="world-attacks"></div></section>
+  <button id="world-exit" class="world-btn" type="button">↗ <span>Exit RPG</span></button>
  </aside>
  <main class="world-main">
-  <header class="world-top"><div></div><button id="world-exit" class="world-btn" type="button">↗ <span>Exit RPG</span></button></header>
+
   <div class="world-map-shell">
    <div id="world-map" class="world-map" aria-label="Adventure map showing only roads, land and water"></div>
    <div id="world-map-fallback" class="world-map-fallback" hidden><strong>Map unavailable</strong><p>Check your connection, then try again.</p><button type="button" id="world-map-retry" class="world-btn">Retry map</button></div>

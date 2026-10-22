@@ -19,11 +19,14 @@
   }
   return data;
  }
- function frame(image,column,row){
+ const footprints=new Map();
+ function footprint(data,w,h,scale=1){let width=1,height=1;for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(data[(y*w+x)*4+3]>=24){width=Math.max(width,(Math.abs(x+.5-w/2)*2+1)*scale);height=Math.max(height,(Math.abs(y+.5-h/2)*2+1)*scale);}return {width,height};}
+ function fitScale(id,w,h,battle=true){const ink=footprints.get(id)||{width:144,height:144};return Math.min(w*(battle?.42:.86)/ink.width,h*.86/ink.height);}
+ function frame(image,column,row,skillId){
   const box=layout(image.width,image.height,column,row),tile=document.createElement('canvas');tile.width=box.w;tile.height=box.h;
   const ctx=tile.getContext('2d',{willReadFrequently:true});ctx.drawImage(image,box.x,box.y,box.w,box.h,0,0,box.w,box.h);
-  const pixels=ctx.getImageData(0,0,box.w,box.h);clean(pixels.data,box.w,box.h);ctx.putImageData(pixels,0,0);
+  const pixels=ctx.getImageData(0,0,box.w,box.h);clean(pixels.data,box.w,box.h);ctx.putImageData(pixels,0,0);if(skillId){const ink=footprint(pixels.data,box.w,box.h,box.width/box.w),old=footprints.get(skillId);footprints.set(skillId,{width:Math.max(old?.width||0,ink.width),height:Math.max(old?.height||0,ink.height)});}
   const canvas=document.createElement('canvas');canvas.width=512;canvas.height=512;const out=canvas.getContext('2d');out.imageSmoothingEnabled=true;out.drawImage(tile,(512-box.width)/2,(512-box.height)/2,box.width,box.height);return canvas;
  }
- root.RPGSkillFrames={layout,clean,frame};
+ root.RPGSkillFrames={layout,clean,frame,footprint,fitScale};
 })(globalThis);

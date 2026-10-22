@@ -314,7 +314,7 @@
   el('hr-back').addEventListener('click',()=>{save();hideTooltip();clearDrag();room.hidden=true;document.querySelector('.app').hidden=false;el('saveBtn').focus();});
   el('hr-save').addEventListener('click',()=>save(true));
   el('hr-collect').addEventListener('click',()=>{renderCatalog();showModal('hr-catalog-modal');});
-  el('hr-explore').addEventListener('click',()=>{clearDrag();save();window.RPGWorld.open(hero,state);});
+  el('hr-explore').addEventListener('click',async()=>{clearDrag();room.inert=true;try{if(!save())return;if(await window.RPGLive.flush?.()===false){feedback('Your inventory is still saving. Reconnect and try again.');return;}window.RPGWorld.open(hero,state);}finally{room.inert=false;}});
   el('hr-damage').addEventListener('click',()=>{clearDrag();lastTap=null;window.DamageSprites.open(hero.id);showModal('hr-damage-modal');});
   el('hr-book').addEventListener('click',()=>{clearDrag();lastTap=null;window.BabaylanBook.open();showModal('hr-book-modal');});
   el('hr-catalog-modal').addEventListener('click',event=>{
