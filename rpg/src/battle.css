@@ -203,3 +203,32 @@
 .rpg-battle.bt-playing:not(.bt-chess-mode) .bt-loadouts .bt-extractors{display:flex;flex-direction:row;align-items:center;justify-content:flex-end;margin:0;height:36px;grid-column:1;grid-row:1}
 #bt-turn-tools{display:flex;align-items:center;justify-content:flex-end;gap:6px;flex-wrap:wrap}#bt-sound{display:grid;place-items:center;padding:5px;min-width:32px;width:32px;min-height:32px;height:32px}#bt-sound svg{width:20px;height:20px}
 @media(orientation:landscape) and (max-height:540px){.rpg-battle.bt-playing:not(.bt-chess-mode) .bt-loadouts .bt-extractors{height:30px}}
+
+/* The animation frame spans the fighters; controls remain in the hero panel. */
+.bt-playing:not(.bt-chess-mode) .bt-center>.bt-turn{display:block;padding:0;border:0;background:none;min-height:clamp(68px,12vh,115px)}
+.bt-fx-bar{position:relative;width:100%;height:clamp(68px,12vh,115px);overflow:hidden;border:1px solid #6a8792;border-radius:12px;background:linear-gradient(90deg,#142d3b,#254650 50%,#142d3b);isolation:isolate}
+#bt-fx-idle{position:absolute;inset:0;display:grid;place-items:center;color:#94b6c2;font:700 10px/1.3 system-ui;letter-spacing:.18em}
+#bt-fx-idle[hidden]{display:none!important}.bt-fx-bar .rpg-skill-canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2}.bt-fx-bar .rpg-skill-caption{position:absolute;bottom:3px;left:50%;transform:translateX(-50%);z-index:3;padding:2px 8px;border-radius:6px;background:#071824ca;color:#f6dfab;font:700 11px system-ui;white-space:nowrap}
+.bt-stage-round{position:absolute;top:8px;left:12px;color:#b9d8dc;font:800 clamp(11px,1.1vw,16px) system-ui;z-index:5}
+.rpg-battle .bt-loadouts .bt-extractors>.bt-harvester-label{display:block;font:800 10px system-ui;color:#f2d59c;letter-spacing:.1em;margin-right:5px}
+.bt-own-actions #bt-global-tools{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:10px}.bt-own-actions #bt-clock{width:100%;text-align:center}.bt-own-actions #bt-global-tools button{flex:1;min-width:60px;font-size:12px;padding:8px}.bt-own-actions #bt-sound{width:32px;flex:none}.bt-own-actions{margin-top:auto;padding-top:10px}
+.bt-own .bt-hero-attributes{margin-bottom:10px}.bt-playing:not(.bt-chess-mode) .bt-own{display:flex;flex-direction:column}
+.bt-potion-item{cursor:grab;touch-action:none}.bt-potion-item[aria-disabled=true]{cursor:not-allowed;opacity:.5}.bt-potion-ghost{position:fixed;width:45px;height:45px;object-fit:contain;transform:translate(-50%,-50%);pointer-events:none;z-index:25000;filter:drop-shadow(0 0 7px #9ef7ba)}.bt-art-frame.bt-potion-target{outline:3px solid #9af6bd;box-shadow:inset 0 0 40px #51df8f44}
+.bt-chess-mode .bt-fx-bar{display:none}.bt-chess-mode .bt-stage-round{display:none}.bt-chess-mode .bt-turn{display:flex}
+@media(orientation:landscape) and (max-height:540px){.bt-playing:not(.bt-chess-mode) .bt-center>.bt-turn,.bt-fx-bar{height:58px;min-height:58px}.bt-stage-round{left:6px;top:5px;font-size:10px}.bt-stage-turn{font-size:12px;padding:4px 8px}.bt-own-actions #bt-global-tools{gap:3px;margin-top:3px}.bt-own-actions #bt-global-tools button{min-height:28px;padding:4px;font-size:9px}.bt-own-actions #bt-clock{font-size:10px}.bt-own-actions{padding-top:2px;margin-top:2px}.rpg-battle .bt-loadouts .bt-extractors>.bt-harvester-label{font-size:8px;letter-spacing:0}.bt-harvester-label{margin-right:0}}
+.bt-stage-round{left:50%;transform:translateX(-50%);top:6px}.bt-stage-turn{top:30px}
+.bt-playing:not(.bt-chess-mode) .bt-own #bt-bag{display:block;flex:none;width:100%;max-width:190px;height:auto;aspect-ratio:1;margin-inline:auto}.bt-playing:not(.bt-chess-mode) .bt-own .bt-bag-label{display:block}
+@media(orientation:landscape) and (max-height:540px){.bt-playing:not(.bt-chess-mode) .bt-own #bt-bag{width:98px;height:98px;min-height:98px;flex:none}.bt-playing:not(.bt-chess-mode) .bt-own .bt-bag-label{font-size:6px;line-height:1.2;margin:4px 0}.bt-playing:not(.bt-chess-mode) .bt-own .bt-hero-attributes{margin:4px 0}.bt-playing:not(.bt-chess-mode) .bt-own .bt-hero-stats>div{min-height:26px}.bt-stage-round{top:4px}.bt-stage-turn{top:20px}}
+@media(orientation:landscape) and (max-height:540px){
+ .bt-playing:not(.bt-chess-mode) .bt-own{gap:3px;padding:6px}
+ .bt-own-actions #bt-global-tools{display:grid;grid-template-columns:1fr 1fr 28px;gap:3px;margin:0}
+ .bt-own-actions #bt-clock{grid-column:1/-1;margin:0;line-height:12px}
+ .bt-own-actions #bt-global-tools button{width:auto;min-width:0;height:28px;min-height:28px;margin:0;padding:3px;font-size:8px}
+ .bt-own-actions #bt-sound{width:28px}.bt-own-actions #bt-sound svg{width:16px;height:16px}
+ .bt-playing:not(.bt-chess-mode) .bt-own #bt-bag{width:80px;height:80px;min-height:80px}
+ .bt-playing:not(.bt-chess-mode) .bt-own .bt-hero-stats{gap:3px}
+ .bt-playing:not(.bt-chess-mode) .bt-own .bt-hero-stats>div{min-height:26px;padding:3px}
+ .bt-playing:not(.bt-chess-mode) .bt-own .bt-hero-stats>div span{font-size:7px;line-height:1.1}
+ .bt-playing:not(.bt-chess-mode) .bt-own .bt-hero-stats>div b{font-size:13px;line-height:1.1}
+ .bt-playing:not(.bt-chess-mode) .bt-own .bt-hero-attributes{margin:0}
+}

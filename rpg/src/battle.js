@@ -10,17 +10,18 @@
  const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const uci=m=>({from:m.slice(0,2),to:m.slice(2,4),promotion:m[4]||'q'}),moveId=m=>m.from+m.to+(m.promotion||'');
  const loadout=()=>({heroId:hero.id,name:state.name,level:state.level,stats:C.totals(state,hero.stats),bonuses:C.bagBonus(state).map((n,i)=>n+C.spellBonus(state)[i]),active:state.active.slice()});
- async function api(input,signal){const r=await fetch('/api/battle',{signal,method:input?'POST':'GET',credentials:'same-origin',cache:'no-store',...(input?{headers:{'Content-Type':'application/json'},body:JSON.stringify(input)}:{})});let data;try{data=await r.json();}catch{throw Error('Battle service unavailable. Try again.');}if(!r.ok)throw Object.assign(Error(data.error||'Battle request failed.'),{code:data.code,distance:data.distance});if(data.battle?.harvestResult&&data.battle.harvestResult.id!==battle?.harvestResult?.id&&data.battle.harvestResult.side===(data.battle.me??0))pendingHarvest={...data.battle.harvestResult};if(data.game&&state){Object.assign(state,data.game);localStorage.setItem(window.RPGLive.key(state.heroId),JSON.stringify(state));window.RPGRoom.refresh?.();}if(data.drops)lastDrops=data.drops;if(data.defeatedEncounterId)window.RPGWorld.consume(data.defeatedEncounterId);if(data.progression&&data.progression.heroId===hero?.id)pendingProgress=data.progression;return data;}
+ async function api(input,signal){const r=await fetch('/api/battle',{signal,method:input?'POST':'GET',credentials:'same-origin',cache:'no-store',...(input?{headers:{'Content-Type':'application/json'},body:JSON.stringify(input)}:{})});let data;try{data=await r.json();}catch{throw Error('Battle service unavailable. Try again.');}if(!r.ok)throw Object.assign(Error(data.error||'Battle request failed.'),{code:data.code,distance:data.distance});receiveHarvest(data.battle,!!battle&&battle.id===data.battle?.id);if(data.game&&state){Object.assign(state,data.game);localStorage.setItem(window.RPGLive.key(state.heroId),JSON.stringify(state));window.RPGRoom.refresh?.();}if(data.drops)lastDrops=data.drops;if(data.defeatedEncounterId)window.RPGWorld.consume(data.defeatedEncounterId);if(data.progression&&data.progression.heroId===hero?.id)pendingProgress=data.progression;return data;}
  function show(){if(encounterDialog?.open){encounterDialog.close();previewTarget=null;}dismissed=false;if(battle)window.RPGWorld.pauseForBattle?.();root.hidden=false;el('rpg-world').inert=true;el('bt-close').focus();}
  function stopEngine(){engine?.terminate();engine=null;engineReady=null;clearTimeout(engineTimer);engineResolve?.reject(Error('Engine stopped.'));engineResolve=null;aiThinking=false;}
- function close(){cancelPresentation();root.hidden=true;window.RPGWorld.resumeAfterBattle?.();el('bt-rules').hidden=true;el('rpg-world').inert=false;dismissed=true;el('world-battle-lab')?.focus();if(pendingHarvest)showHarvest();else if(battle?.status==='finished')openReport(battle);}
+ function close(){clearPotionDrag();cancelPresentation();root.hidden=true;window.RPGWorld.resumeAfterBattle?.();el('bt-rules').hidden=true;el('rpg-world').inert=false;dismissed=true;el('world-battle-lab')?.focus();if(pendingHarvest)showHarvest();else if(battle?.status==='finished')openReport(battle);}
  function skillDamage(a,d,s){let n=Math.max(1,Math.round(a.stats[s.magic?2:1]*s.scale+2-d.stats[3]*.15));return d.defending?Math.max(1,Math.ceil(n/2)):n;}
  function vitals(a){return [['Health','hp','maxHp','#7bc89f'],['Mana','mp','maxMp','#58c8dd'],['Attack points','ap','maxAp','#f29b65']].map(([label,key,max,color])=>`<div class="bt-vital"><span>${label.toUpperCase()} <b>${a[key]} / ${a[max]}</b></span><div><i style="--vital-color:${color};width:${Math.max(0,a[key]/a[max]*100)}%"></i></div></div>`).join('');}
  function sprite(a,facing){return window.DamageSprites.sprite(a.heroId,a.hp===0?0:a.hp/a.maxHp*100,facing);}
  const harvestModal=el('bt-harvest-modal');let pendingHarvest=null;
+ function receiveHarvest(next,live){const result=next?.harvestResult;if(!result||result.side!==(next.me??0))return;const key=window.RPGLive.key(hero.id)+':harvest:'+next.id;let seen=0;try{seen=Number(localStorage.getItem(key)||0);}catch{}if(result.id<=seen)return;if(!live){try{localStorage.setItem(key,String(result.id));}catch{}return;}pendingHarvest={...result,key};}
  function showHarvest(){
   if(!pendingHarvest||!harvestModal.hidden)return;
-  const r=pendingHarvest;harvestModal.dataset.success=String(r.success);
+  const r=pendingHarvest;try{localStorage.setItem(r.key,String(r.id));}catch{}harvestModal.dataset.success=String(r.success);
   el('bt-harvest-title').textContent=r.success?'Harvest successful':'Harvest unsuccessful';
   el('bt-harvest-reason').textContent=r.reason;
   el('bt-harvest-gain').textContent=r.success?`+${r.amount} ${r.resource.toUpperCase()}${r.amount<20?' · resource cap reached':''}`:`No ${r.resource.toUpperCase()} gained`;
@@ -80,12 +81,12 @@
  function cancelPresentation(){
   root.classList.remove('bt-hero-windup');
   presentationToken++;attackQueue=[];presenting=false;enemyThinking=false;enemyCasting=null;
-  window.RPGSkillFX?.stop(el('bt-stage'));
+  window.RPGSkillFX?.stop(el('bt-fx-bar'));
   shownHp=battle?.actors.map(a=>a.hp)||[];seenBattle=battle?.id||'';seenEvent=battle?.eventSeq||0;lastImpact=seenEvent;
  }
  function observeHits(){
   if(!battle){if(seenBattle||presenting)cancelPresentation();return false;}
-  if(seenBattle!==battle.id){cancelPresentation();return false;}
+  if(seenBattle!==battle.id){cancelPresentation();void window.RPGSkillFX?.warm?.(battle.actors.flatMap(a=>a.active));return false;}
   const events=(battle.events||[]).filter(e=>e.id>seenEvent);
   if(events.length){
    if(root.hidden||document.hidden||events[0].id!==seenEvent+1){cancelPresentation();return false;}
@@ -96,7 +97,7 @@
  }
  function revealImpact(event,token){
   if(token!==presentationToken||event.id<=lastImpact||!battle)return;
-  lastImpact=event.id;window.RPGSound?.hit();const target=event.target??(1-event.side);
+  lastImpact=event.id;if(event.kind!=='potion')window.RPGSound?.hit();const target=event.target??(1-event.side);
   shownHp[target]=Number.isFinite(event.hpAfter)?event.hpAfter:Math.max(0,shownHp[target]-event.damage);
   draw();
   const me=battle.me??0,node=el(target===me?'bt-hero-art':'bt-enemy-art').parentElement;
@@ -106,14 +107,14 @@
   const token=++presentationToken;
   try{
    while(attackQueue.length&&token===presentationToken){
-    const events=attackQueue.splice(0),me=battle.me??0;
-    if(events.length&&window.RPGSkillFX?.sequence)await window.RPGSkillFX.sequence(el('bt-stage'),events.map(e=>({...e,reverse:e.side!==me,delayMs:battle.kind!=='pvp'&&e.side!==me?1000+Math.floor(Math.random()*1001):0})),{onPrepare:e=>{if(token!==presentationToken)return;enemyThinking=e.delayMs>0;enemyCasting=e.side!==me?e.skill:null;draw();},onAttack:e=>{if(token!==presentationToken)return;enemyThinking=false;enemyCasting=e.side!==me?e.skill:null;root.classList.remove('bt-hero-windup');window.RPGSound?.cast(R.SKILLS[e.skill]?.category);draw();},onImpact:e=>revealImpact(e,token)});
+    let events=attackQueue.splice(0);const me=battle.me??0;for(const event of events.filter(e=>e.kind==='potion')){revealImpact(event,token);notice(`Potion used · +${event.amount} ${event.resource.toUpperCase()}.`);}events=events.filter(e=>e.kind!=='potion');
+    if(events.length&&window.RPGSkillFX?.sequence)await window.RPGSkillFX.sequence(el('bt-fx-bar'),events.map(e=>({...e,reverse:e.side!==me,delayMs:battle.kind!=='pvp'&&e.side!==me?1000+Math.floor(Math.random()*1001):0})),{onPrepare:e=>{if(token!==presentationToken)return;el('bt-fx-idle').hidden=true;enemyThinking=e.delayMs>0;enemyCasting=e.side!==me?e.skill:null;draw();},onAttack:e=>{if(token!==presentationToken)return;enemyThinking=false;enemyCasting=e.side!==me?e.skill:null;root.classList.remove('bt-hero-windup');window.RPGSound?.cast(R.SKILLS[e.skill]?.category);draw();},onImpact:e=>revealImpact(e,token)});
     // Missing/failed effects must still reconcile health and release the controls.
     if(token!==presentationToken)return;
     for(const event of events)revealImpact(event,token);
    }
   }catch(error){attackQueue=[];lastImpact=seenEvent;console.warn('Battle presentation interrupted:',error.message);}
-  finally{if(token===presentationToken){presenting=false;enemyThinking=false;enemyCasting=null;shownHp=battle?.actors.map(a=>a.hp)||[];draw();}}
+  finally{if(token===presentationToken){presenting=false;enemyThinking=false;enemyCasting=null;el('bt-fx-idle').hidden=false;shownHp=battle?.actors.map(a=>a.hp)||[];draw();}}
  }
  document.addEventListener('visibilitychange',()=>{if(document.hidden&&presenting){cancelPresentation();draw();}});
  function draw(){
@@ -121,8 +122,8 @@
   root.classList.toggle('bt-playing',!!battle);
   const ownChallenge=!!battle?.challenge&&battle.challenge.side===(battle.me??0);
   root.classList.toggle('bt-chess-mode',ownChallenge);
-  const turnLabel=el('bt-turn-label'),turnHome=ownChallenge?el('bt-round').parentElement:el('bt-stage');if(turnLabel.parentElement!==turnHome){if(ownChallenge)turnHome.insertBefore(turnLabel,el('bt-turn-tools'));else turnHome.append(turnLabel);}
-  const tools=el('bt-global-tools'),toolHome=battle?el('bt-turn-tools'):root.querySelector('.bt-header');if(tools.parentElement!==toolHome)toolHome.appendChild(tools);
+  const turnLabel=el('bt-turn-label'),turnHome=ownChallenge?root.querySelector('.bt-turn'):el('bt-stage');if(turnLabel.parentElement!==turnHome){if(ownChallenge)turnHome.insertBefore(turnLabel,el('bt-turn-tools'));else turnHome.append(turnLabel);}
+  const tools=el('bt-global-tools'),toolHome=battle?el('bt-own-actions'):root.querySelector('.bt-header');if(tools.parentElement!==toolHome)toolHome.appendChild(tools);const sound=el('bt-sound');if(sound&&sound.parentElement!==tools)tools.appendChild(sound);
   const runHome=ownChallenge?el('bt-own-actions'):root.querySelector('.bt-actions');if(el('bt-run').parentElement!==runHome)runHome.prepend(el('bt-run'));
   const abandonHome=ownChallenge?el('bt-own-actions'):el('bt-challenge').querySelector('header');if(el('bt-abandon').parentElement!==abandonHome)abandonHome.prepend(el('bt-abandon'));
   el('bt-lobby').hidden=!!battle;el('bt-fight').hidden=!battle;if(!battle){el('bt-title').textContent='Battle';el('bt-clock').textContent='';return;}
@@ -131,7 +132,7 @@
   el('bt-own-name').textContent=a.name;el('bt-own-level').textContent=`Level ${a.level} · ${(HEROES.find(h=>h.id===a.heroId)?.heroClass||hero.heroClass)}`;el('bt-head').src=HERO_HEADS[a.heroId]||HERO_HEADS[hero.id];el('bt-own-vitals').innerHTML=vitals(a);
   el('bt-enemy-name').textContent=enemy.name;el('bt-enemy-level').textContent=`Level ${enemy.level} · ${battle.kind==='pvp'?'Adventurer':enemy.boss?'Boss':'Monster'}`;el('bt-enemy-vitals').innerHTML=vitals(enemy);
   el('bt-hero-art').src=sprite(a,'right');el('bt-hero-art').alt=`${a.name} · ${a.hp} health`;el('bt-enemy-art').src=sprite(enemy,'left');el('bt-enemy-art').alt=`${enemy.name} · ${enemy.hp} health`;el('bt-enemy-kind').textContent=enemy.name.toUpperCase();
-  for(const [id,actor] of [['bt-own-stats',a],['bt-enemy-stats',enemy]])el(id).innerHTML=['Health','Attack','Magic','Armor','Mana','Wisdom'].map((name,i)=>`<div><span>${name}</span><b>${actor.stats[i]}</b></div>`).join('');el('bt-bag').innerHTML=el('world-bag').innerHTML;el('bt-bag').style.aspectRatio=el('world-bag').style.aspectRatio;
+  for(const [id,actor] of [['bt-own-stats',a],['bt-enemy-stats',enemy]])el(id).innerHTML=['Health','Attack','Magic','Armor','Mana','Wisdom'].map((name,i)=>`<div><span>${name}</span><b>${actor.stats[i]}</b></div>`).join('');window.RPGWorld.refresh?.(hero,state);el('bt-bag').innerHTML=el('world-bag').innerHTML;el('bt-bag').style.aspectRatio=el('world-bag').style.aspectRatio;for(const node of el('bt-bag').querySelectorAll('[data-item-uid]')){const item=state.items.find(i=>i.uid===node.dataset.itemUid);if(C.isConsumable(item||{})){node.setAttribute('role','button');node.tabIndex=0;node.setAttribute('aria-label',`${C.itemMap[item.defId].name} · restores 20 ${item.defId==='health_potion'?'HP':'mana'} · uses your turn`);node.setAttribute('aria-disabled',String(busy||presenting||!mine||challenge));node.classList.add('bt-potion-item');}}
   el('bt-round').textContent=`ROUND ${battle.round}`;el('bt-turn-label').textContent=(presenting||busy)?(enemyThinking?`${enemy.name} is choosing a skill…`:'Attacking…'):pending?'Challenge pending':active?(mine?'Your turn':`${enemy.name}’s turn`):battle.status==='cancelled'?'Challenge closed':'Battle complete';el('bt-mode').textContent=local?'DEVICE PRACTICE':battle.training?'ONLINE PRACTICE':battle.kind==='pvp'?'PLAYER DUEL':'MONSTER BATTLE';
   el('bt-stage').hidden=ownChallenge;el('bt-challenge').hidden=!ownChallenge;el('bt-pending').hidden=!pending;
   el('bt-pending-title').textContent=me===1?`${enemy.name} challenges you.`:`Waiting for ${enemy.name}…`;el('bt-accept').hidden=me!==1;el('bt-accept').disabled=busy;el('bt-decline').disabled=busy;
@@ -160,7 +161,7 @@
  }
  function tick(){if(!battle||!['pending','active'].includes(battle.status)){el('bt-clock').textContent='';return;}const seconds=Math.max(0,Math.ceil((Math.min(battle.deadline,battle.battleEndsAt??Infinity)-Date.now())/1000));el('bt-clock').textContent=`${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')} left`;const c=battle.challenge;if(c?.kind==='ap'&&c.clocks&&chess){const clocks=c.clocks.slice(),turn=c.moves.length%2;clocks[turn]=Math.max(0,clocks[turn]-(Date.now()-c.clockAt));el('bt-chess-clock').textContent=clocks.map((n,i)=>`${i?'AI':'You'} ${Math.floor(Math.ceil(n/1000)/60)}:${String(Math.ceil(n/1000)%60).padStart(2,'0')}`).join(' · ');if(!clocks[turn]&&!local&&!clockRequest){clockRequest=true;refresh().finally(()=>clockRequest=false);}}if(local&&R.timeout(battle)){notice('Time expired.');draw();}}
  async function refresh(){if(!hero||local||busy||refreshing||el('rpg-world').hidden)return;refreshing=true;const requestedBattle=battle?.id;try{const data=await api();if(local||battle?.id!==requestedBattle||(data.battle?.id===battle?.id&&data.battle?.version<battle?.version))return;if(data.spawnStatus)window.RPGWorld.syncEncounters?.(data);if(pendingProgress&&!data.battle){C.applyProgress(state,pendingProgress.totalXp);pendingProgress=null;window.RPGRoom.persist?.();window.RPGWorld.refresh?.();}if(data.battle&&(['active','pending','finished'].includes(data.battle.status)||battle?.id===data.battle.id)){const changed=!battle||data.battle.version!==battle.version||data.battle.id!==battle.id;battle=data.battle;if(changed)draw();if(['pending','active'].includes(battle.status)&&!dismissed)show();}else if(!data.battle&&battle){battle=null;draw();}}catch(e){if(!root.hidden&&!local)notice(battle?e.message:'Your login expired. Reopen RPG after signing in.',true);}finally{refreshing=false;}}
- function connect(h,s){hero=h;state=s;void window.RPGSkillFX?.warm?.(Object.keys(R.SKILLS));local=false;dismissed=false;if(pollTimer)clearInterval(pollTimer);pollTimer=setInterval(refresh,3000);if(!clockTimer)clockTimer=setInterval(tick,1000);api({action:'progress',heroId:hero.id}).then(()=>{if(!local&&pendingProgress&&!battle){C.applyProgress(state,pendingProgress.totalXp);pendingProgress=null;window.RPGRoom.persist?.();window.RPGWorld.refresh?.();}}).catch(()=>{});refresh();}
+ function connect(h,s){hero=h;state=s;void window.RPGSkillFX?.warm?.(s.active.filter(Boolean));local=false;dismissed=false;if(pollTimer)clearInterval(pollTimer);pollTimer=setInterval(refresh,3000);if(!clockTimer)clockTimer=setInterval(tick,1000);api({action:'progress',heroId:hero.id}).then(()=>{if(!local&&pendingProgress&&!battle){C.applyProgress(state,pendingProgress.totalXp);pendingProgress=null;window.RPGRoom.persist?.();window.RPGWorld.refresh?.();}}).catch(()=>{});refresh();}
  function openLab(){show();if(battle&&['pending','active'].includes(battle.status)){draw();return;}battle=null;local=false;notice('Choose a monster or boss to test your current hero.');draw();}
  function encounterStatus(message,error=false){
   if(!encounterDialog)return;const status=encounterDialog.querySelector('[data-encounter-status]');status.textContent=message;status.classList.toggle('error',error);
@@ -228,6 +229,7 @@
    const game=new Chess();input.moves.forEach(m=>game.move(uci(m)));if(!game.isGameOver())throw Error('Finish the chess game first.');if(game.isCheckmate()&&game.turn()==='b'){R.harvestResult(b,0,'ap',true,'Chess victory');R.note(b,'Chess victory · +20 AP (up to cap).');}else{R.harvestResult(b,0,'ap',false,game.isCheckmate()?'Chess game lost':'Chess game drawn');R.note(b,'Chess lost or drawn. No AP gained.');}R.finishTurn(b);
   }else if(input.action==='abandon'){R.harvestResult(b,0,b.challenge.kind,false,'Harvest abandoned');R.note(b,'Challenge abandoned. No resource gained.');R.finishTurn(b);}
   else if(input.action==='attack'){R.attack(b,0,input.skill);R.finishTurn(b);}
+  else if(input.action==='usePotion'){const item=state.items.find(i=>i.uid===input.uid&&i.where==='bag'&&C.isConsumable(i));if(!item)throw Error('Choose a potion in your bag.');R.potion(b,0,item.defId==='health_potion'?'hp':'mp');state.items=state.items.filter(i=>i.uid!==item.uid);R.finishTurn(b);}
   else if(input.action==='defend'){R.defend(b,0);R.finishTurn(b);}else throw Error('Unknown action.');b.version++;
  }
  async function action(input){if(busy||presenting||pendingHarvest||!battle)return;
@@ -236,7 +238,7 @@
    root.classList.add('bt-hero-windup');
 
   }
-  const priorHarvest=battle.harvestResult?.id;busy=true;draw();try{if(local)await localAction(input);else{const data=await api({...input,version:battle.version,...(input.action==='accept'?{profile:loadout()}:{} )});battle=input.action==='leave'?(data.report||data.battle):data.battle;}if(input.action==='leave'){const ended=battle;stopEngine();close();battle=null;dismissed=true;if(ended?.status==='finished')openReport(ended);}}catch(e){root.classList.remove('bt-hero-windup');notice(e.message,true);if(!local){try{const d=await api();battle=d.battle;}catch{}}}finally{if(battle?.harvestResult&&battle.harvestResult.id!==priorHarvest&&battle.harvestResult.side===(battle.me??0))pendingHarvest={...battle.harvestResult};busy=false;root.classList.remove('bt-hero-windup');draw();}}
+  const priorHarvest=battle.harvestResult?.id;busy=true;draw();try{if(local)await localAction(input);else{const data=await api({...input,version:battle.version,...(input.action==='accept'?{profile:loadout()}:{} )});battle=input.action==='leave'?(data.report||data.battle):data.battle;}if(input.action==='leave'){const ended=battle;stopEngine();close();battle=null;dismissed=true;if(ended?.status==='finished')openReport(ended);}}catch(e){root.classList.remove('bt-hero-windup');notice(e.message,true);if(!local){try{const d=await api();battle=d.battle;}catch{}}}finally{if(battle?.harvestResult&&battle.harvestResult.id!==priorHarvest)receiveHarvest(battle,true);busy=false;root.classList.remove('bt-hero-windup');draw();}}
  const pieceNames={p:'pawn',n:'knight',b:'bishop',r:'rook',q:'queen',k:'king'};
  function board(){if(!chess)return;const color=battle.challenge.kind==='ap'?'w':chess.turn(),flip=color==='b',ranks=flip?[1,2,3,4,5,6,7,8]:[8,7,6,5,4,3,2,1],files=flip?'hgfedcba':'abcdefgh',legal=selected?chess.moves({square:selected,verbose:true}).map(m=>m.to):[];let html='';
   for(const rank of ranks)for(const file of files){
@@ -249,6 +251,7 @@
   el('bt-board').innerHTML=html;
  }
  function challengeView(){const c=battle.challenge,key=battle.id+'|'+c.kind+'|'+(c.puzzleId||c.elo);if(chessKey!==key){stopEngine();chessKey=key;selected=null;premove=null;engineBroken=false;chess=new Chess(c.fen);if(c.kind==='ap'&&c.moves?.length){chess=new Chess();c.moves.forEach(m=>chess.move(uci(m)));}}
+  else if(c.kind==='ap'&&!busy&&!aiThinking&&JSON.stringify(chess.history({verbose:true}).map(moveId))!==JSON.stringify(c.moves||[])){chess=new Chess();for(const move of c.moves||[])chess.move(uci(move));selected=null;}
   else if(c.kind==='mp'&&chess.fen()!==c.fen){chess=new Chess(c.fen);selected=null;}
   el('bt-challenge-kind').textContent='';el('bt-challenge-title').textContent=c.kind==='ap'?'Chess · +20 AP':'Puzzle · +20 mana';el('bt-turn-label').textContent=el('bt-challenge-title').textContent;
   el('bt-engine-note').textContent=c.kind==='ap'?'Stockfish.js · White is yours. Win by checkmate for +20 AP. Draws and losses give no AP. Targets below 1320 use reduced skill plus extra mistakes; ratings are approximate.':'Lichess CC0 puzzle. Tap a piece, then a highlighted destination. One wrong legal move ends the harvest.';
@@ -261,7 +264,7 @@
   engine.onerror=()=>{clearTimeout(timeout);reject(Error('AI could not load.'));engineResolve?.reject(Error('AI failed.'));};
   engine.onmessage=event=>{const line=String(event.data);if(line==='uciok'){engine.postMessage('setoption name Hash value 16');engine.postMessage('isready');}if(line==='readyok'){clearTimeout(timeout);resolve(engine);}if(line.startsWith('bestmove ')&&engineResolve){const pending=engineResolve;engineResolve=null;clearTimeout(engineTimer);pending.resolve(line.split(' ')[1]);}};engine.postMessage('uci');
  });return engineReady;}
- async function computerMove(){aiThinking=true;el('bt-chess-status').textContent='AI is thinking… · you can premove';const key=chessKey,game=chess;try{
+ async function computerMove(){if(busy)return;aiThinking=true;el('bt-chess-status').textContent='AI is thinking… · you can premove';const key=chessKey,game=chess;try{
   const c=battle.challenge,w=await getEngine();if(chessKey!==key)return;
   let move;const mistakes=c.elo<1320?Math.max(0,(1320-c.elo)/900):0;
   if(Math.random()<mistakes){const legal=game.moves({verbose:true});move=moveId(legal[Math.floor(Math.random()*legal.length)]);}
@@ -278,5 +281,13 @@
  el('bt-ap').addEventListener('click',()=>action({action:'harvest',resource:'ap'}));el('bt-mp').addEventListener('click',()=>action({action:'harvest',resource:'mp'}));el('bt-defend').addEventListener('click',()=>action({action:'defend'}));el('bt-run').addEventListener('click',()=>action({action:'leave'}));el('bt-abandon').addEventListener('click',()=>action({action:'abandon'}));el('bt-accept').addEventListener('click',()=>action({action:'accept'}));el('bt-decline').addEventListener('click',()=>action({action:'decline'}));
  el('bt-board').addEventListener('click',e=>{const b=e.target.closest('[data-bt-square]');if(b)squareClick(b.dataset.btSquare);});el('bt-rules-toggle').addEventListener('click',()=>{el('bt-rules').hidden=false;el('bt-rules-done').focus();});el('bt-rules-done').addEventListener('click',()=>{el('bt-rules').hidden=true;el('bt-rules-toggle').focus();});
  root.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!el('bt-rules').hidden){el('bt-rules').hidden=true;el('bt-rules-toggle').focus();}else close();}if(e.key==='Tab'){const scope=el('bt-rules').hidden?root:el('bt-rules');const nodes=[...scope.querySelectorAll('button:not([disabled]),select')].filter(n=>n.getClientRects().length);if(!nodes.length)return;const first=nodes[0],last=nodes.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}});
- window.RPGBattle={connect,openLab,encounter,spawn,stop(){closeEncounter();clearInterval(pollTimer);pollTimer=null;stopEngine();close();}};
+ let potionDrag=null,potionGhost=null;
+ const clearPotionDrag=()=>{potionGhost?.remove();potionGhost=null;potionDrag=null;el('bt-hero-art').parentElement.classList.remove('bt-potion-target');};
+ function canDrink(uid){const item=state?.items.find(i=>i.uid===uid&&i.where==='bag');return !busy&&!presenting&&!pendingHarvest&&battle?.status==='active'&&battle.turn===(battle.me??0)&&!battle.challenge&&C.isConsumable(item||{});}
+ root.addEventListener('pointerdown',event=>{const node=event.target.closest('#bt-bag [data-item-uid]');if(!node||event.button!==0)return;const uid=node.dataset.itemUid;if(!canDrink(uid)){notice('Use a bag potion only on your turn, outside a harvest.',true);return;}event.preventDefault();potionDrag={uid,pointer:event.pointerId};potionGhost=node.querySelector('img').cloneNode();potionGhost.className='bt-potion-ghost';document.body.append(potionGhost);root.setPointerCapture?.(event.pointerId);});
+ root.addEventListener('pointermove',event=>{if(!potionDrag||event.pointerId!==potionDrag.pointer)return;potionGhost.style.left=event.clientX+'px';potionGhost.style.top=event.clientY+'px';const r=el('bt-hero-art').parentElement.getBoundingClientRect();el('bt-hero-art').parentElement.classList.toggle('bt-potion-target',event.clientX>=r.left&&event.clientX<=r.right&&event.clientY>=r.top&&event.clientY<=r.bottom);});
+ root.addEventListener('pointerup',event=>{if(!potionDrag||event.pointerId!==potionDrag.pointer)return;const {uid}=potionDrag,r=el('bt-hero-art').parentElement.getBoundingClientRect(),inside=event.clientX>=r.left&&event.clientX<=r.right&&event.clientY>=r.top&&event.clientY<=r.bottom;clearPotionDrag();if(root.hasPointerCapture?.(event.pointerId))root.releasePointerCapture(event.pointerId);if(inside&&canDrink(uid))void action({action:'usePotion',battlePotion:true,uid});});
+ root.addEventListener('pointercancel',clearPotionDrag);
+ el('bt-bag').addEventListener('keydown',event=>{const node=event.target.closest('[data-item-uid]');if(node&&['Enter',' '].includes(event.key)){event.preventDefault();if(canDrink(node.dataset.itemUid))void action({action:'usePotion',battlePotion:true,uid:node.dataset.itemUid});}});
+ window.RPGBattle={connect,openLab,encounter,spawn,stop(){pendingHarvest=null;harvestModal.hidden=true;root.inert=false;closeEncounter();clearInterval(pollTimer);pollTimer=null;stopEngine();close();battle=null;}};
 })();

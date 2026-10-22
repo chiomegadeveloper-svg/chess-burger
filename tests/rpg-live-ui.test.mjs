@@ -72,10 +72,10 @@ test('battle pauses the actual GPS watch and returning to the map starts it agai
 });
 
 
-test('all eight heroes keep their original artwork at every health threshold and in both directions',async()=>{
+test('all eight heroes preserve full-health identity and restore the sandbox injury and death poses',async()=>{
  const a=open(database());try{await pause();await pause();
  for(const id of ['rogue','theft','assassin','mage','tank','archer','queen','crusader'])for(const hp of [100,80,60,40,20,1,0])for(const facing of ['left','right']){
-  assert.equal(a.w.DamageSprites.sprite(id,hp,facing),`assets/heroes/${id}-${facing}.webp`);
+  assert.equal(a.w.DamageSprites.sprite(id,hp,facing),hp>80?`assets/heroes/${id}-${facing}.webp`:`assets/damage/frames/${id}-${hp<=1?1:hp<=20?20:hp<=40?40:hp<=60?60:80}-${facing}.webp`);
  }
  assert.equal(a.w.DamageSprites.sprite('chaanack',40,'right'),'assets/damage/frames/chaanack-40-left.webp');
  }finally{a.close();}
@@ -144,4 +144,20 @@ test('dragging health and mana potions from inventory onto the hero consumes eac
  await drag(hp.uid);let saved=await read(db,'player-a');assert.equal(saved.state.currentHp,20);assert.equal(saved.state.items.some(i=>i.uid===hp.uid),false);
  await drag(mp.uid);saved=await read(db,'player-a');assert.equal(saved.state.currentMp,20);assert.equal(saved.state.items.some(i=>i.uid===mp.uid),false);assert.equal(a.messages.filter(m=>m.body?.action==='usePotion').length,2);assert.deepEqual(a.errors,[]);
  }finally{a.close();}
+});
+
+test('battle bag potion drag uses one turn, empties its slot and presents enemy damage after the potion heal',async()=>{
+ const db=database();await gameRequest(db,'player-a','POST',{action:'register',heroId:'assassin',name:'Battle Potion',skill:'punch'});const C=(await import('../api/_rpg/src/inventory-core.js')).default,doc=[...db.rows.values()].find(r=>r.item_kind==='rpg_profile').metadata;doc.state.currentHp=5;doc.state.currentMp=3;const potion=doc.state.items[0];C.place(doc.state,potion,'bag',0,0);
+ const gps={lat:11.26,lng:125,accuracy:40,time:Date.now()},batch=await gameRequest(db,'player-a','POST',{action:'spawn',gps},{roadPoints:async()=>[{lat:11.26,lng:125}]}),enemy=batch.encounters[0],a=open(db);
+ try{await pause();await pause();a.w.RPGBattle.connect({id:'assassin',name:'Assassin',heroClass:'Rogue',stats:[20,4,4,4,20,4]},(await read(db,'player-a')).state);a.w.RPGWorld.position=()=>({...gps,time:Date.now()});a.w.RPGWorld.monster=()=>enemy;await a.w.RPGBattle.encounter(enemy.id);await pause();a.d.querySelector('[data-attack]').click();await pause();await pause();
+ const bag=a.d.querySelector(`#bt-bag [data-item-uid="${potion.uid}"]`),root=a.d.querySelector('#rpg-battle'),frame=a.d.querySelector('#bt-hero-art').parentElement;assert.ok(bag);root.setPointerCapture=()=>{};root.hasPointerCapture=()=>false;frame.getBoundingClientRect=()=>({left:0,top:0,right:100,bottom:100});
+ let impact,release;a.w.RPGSkillFX={sequence:async(host,events,options)=>{assert.equal(host.id,'bt-fx-bar');assert.equal(events.length,1);options.onPrepare?.(events[0]);await new Promise(resolve=>{release=resolve;impact=()=>options.onImpact(events[0]);});},stop(){}};
+ const send=(target,type,x,y)=>{const event=new a.w.MouseEvent(type,{bubbles:true,button:0,clientX:x,clientY:y});Object.defineProperties(event,{pointerId:{value:2},pointerType:{value:'mouse'}});target.dispatchEvent(event);};send(bag,'pointerdown',200,200);send(root,'pointermove',50,50);assert.equal(frame.classList.contains('bt-potion-target'),true);send(root,'pointerup',50,50);await pause();await pause();assert.ok(a.d.querySelector('#bt-hero-art').alt.endsWith('20 health'));assert.equal(a.d.querySelector(`#bt-bag [data-item-uid="${potion.uid}"]`),null);impact();release();await pause();await pause();const saved=await read(db,'player-a');assert.equal(saved.battle.ply,2);assert.ok(a.d.querySelector('#bt-hero-art').alt.endsWith(`${saved.battle.actors[0].hp} health`));assert.equal(a.messages.filter(m=>m.body?.action==='usePotion').length,1);assert.equal(a.d.querySelector('#bt-close').closest('#bt-own-actions')?.id,'bt-own-actions');assert.equal(a.d.querySelector('.bt-harvester-label').textContent,'HARVESTER');assert.deepEqual(a.errors,[]);
+ }finally{a.close();}
+});
+
+test('saved harvest feedback stays closed after RPG reopening while a new harvest still shows immediately',async()=>{
+ const db=database(),saved=await gameRequest(db,'player-a','POST',{action:'register',heroId:'rogue',name:'No Replay',skill:'punch'}),row=[...db.rows.values()].find(r=>r.item_kind==='rpg_profile').metadata;row.state.currentMp=2;const gps={lat:11.26,lng:125,accuracy:40,time:Date.now()},batch=await gameRequest(db,'player-a','POST',{action:'spawn',gps},{roadPoints:async()=>[{lat:11.26,lng:125}]});let result=await gameRequest(db,'player-a','POST',{action:'encounter',target:batch.encounters[0].id,gps});result=await gameRequest(db,'player-a','POST',{action:'harvest',resource:'mp',version:result.battle.version});await gameRequest(db,'player-a','POST',{action:'abandon',version:result.battle.version});
+ const a=open(db);try{await pause();await pause();a.d.querySelector('#rpg-world').hidden=false;a.w.RPGBattle.connect({id:'rogue',name:'Varkesh',stats:[20,4,4,4,20,4]},saved.game);await pause();await pause();assert.equal(a.d.querySelector('#bt-harvest-modal').hidden,true);a.d.querySelector('#bt-mp').click();await pause();await pause();a.d.querySelector('#bt-abandon').click();await pause();await pause();assert.equal(a.d.querySelector('#bt-harvest-modal').hidden,false);a.d.querySelector('#bt-harvest-done').click();await pause();a.w.RPGBattle.stop();a.d.querySelector('#rpg-world').hidden=false;a.w.RPGBattle.connect({id:'rogue',name:'Varkesh',stats:[20,4,4,4,20,4]},saved.game);await pause();await pause();assert.equal(a.d.querySelector('#bt-harvest-modal').hidden,true);assert.deepEqual(a.errors,[]);}finally{a.close();}
+ const reopened=open(db);try{await pause();await pause();reopened.d.querySelector('#rpg-world').hidden=false;reopened.w.RPGBattle.connect({id:'rogue',name:'Varkesh',stats:[20,4,4,4,20,4]},saved.game);await pause();await pause();assert.equal(reopened.d.querySelector('#bt-harvest-modal').hidden,true);}finally{reopened.close();}
 });

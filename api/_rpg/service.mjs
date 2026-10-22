@@ -58,14 +58,15 @@ export async function gameRequest(client,user,method,input={},services={}){
   if(incoming.data){shared=incoming.data.metadata;if(!await validShared(shared.state))return null;doc.pvpId=shared.state.id;await persist();if(R.timeout(shared.state,now))await save(shared.state);return shared.state;}
   const b=doc.battle||null;if(b&&R.timeout(b,now))await save(b);return b;
  }
- const result=async b=>{
+ const settlePotions=async b=>{if(b?.kind!=='pvp')return;const side=me(b),receipts=doc.battlePotionReceipts||[],debits=(b.potions||[]).filter(p=>p.side===side&&!receipts.includes(b.id+':'+p.uid));if(!debits.length)return;for(const debit of debits){doc.state.items=doc.state.items.filter(item=>item.uid!==debit.uid);receipts.push(b.id+':'+debit.uid);}doc.battlePotionReceipts=receipts.slice(-200);doc.state.inventoryRevision=(doc.state.inventoryRevision||0)+1;await persist();};
+ const result=async b=>{await settlePotions(b);
   if(b?.status==='finished'&&me(b)>=0&&doc.healthBattle!==b.id){doc.state.currentHp=b.actors[me(b)].hp;doc.state.currentMp=b.actors[me(b)].mp;doc.healthBattle=b.id;await persist();}
   if(b?.status==='finished'&&b.winner===me(b)&&b.kind==='monster'&&!b.training&&b.encounterId&&b.endReason==='knockout'&&!doc.awards.some(a=>a.id===b.id)){
    const xp=Math.min(P.threshold(88)-doc.state.totalXp,P.victoryXp(doc.state.level,b.actors[1].level));C.gainXp(doc.state,xp);const encounter=doc.encounters.find(e=>e.id===b.encounterId);if(encounter)encounter.consumed=true;const drops=loot(b.actors[1].level,services.rng);doc.pendingLoot=[...(doc.pendingLoot||[]),...drops];stash(doc);doc.awards=[...doc.awards,{id:b.id,xp,drops}].slice(-100);await persist();
   }
   return {game:doc.state,pendingLoot:doc.pendingLoot||[],drops:doc.awards.find(a=>a.id===b?.id)?.drops||[],battle:b?visible(b):null,progression:progression(doc,b),defeatedEncounterId:b?.kind==='monster'&&b.status==='finished'&&b.winner===me(b)&&b.endReason==='knockout'?b.encounterId:null};
  };
- if(['drinkPotion','usePotion'].includes(input.action)){await result(await current());
+ if(['drinkPotion','usePotion'].includes(input.action)&&!input.battlePotion){await result(await current());
   const ongoing=await read(client,user,'rpg_profile','hero');let active=ongoing?.battle?.status==='active';if(ongoing?.pvpId){const rows=await client.from('cb_inventory_items').select('metadata').eq('item_kind','rpg_battle').eq('item_id',ongoing.pvpId).contains('metadata',{participants:[user]}).maybeSingle();if(rows.error)fail('Battle unavailable.',503);active=['pending','active'].includes(rows.data?.metadata?.status);}if(active)fail('Finish your battle before using a potion.');
   const index=doc.state.items.findIndex(i=>input.action==='usePotion'?i.uid===input.uid&&C.isConsumable(i):i.defId==='health_potion');if(index<0)fail('This potion is no longer available.');
   const item=doc.state.items[index],resource=item.defId==='health_potion'?'hp':'mp',balance=resource==='hp'?health(doc.state):mana(doc.state),cap=resource==='hp'?healthCap(doc.state):manaCap(doc.state);
@@ -105,7 +106,7 @@ export async function gameRequest(client,user,method,input={},services={}){
   else{doc.pvpId=null;doc.selection=null;doc.battle=battle;await persist();}
   return await result(battle);
  }
- const b=await current();if(!b)fail('No current battle.',404);const side=me(b);if(side<0)fail('This is not your battle.',403);
+ const b=await current();await settlePotions(b);if(!b)fail('No current battle.',404);const side=me(b);if(side<0)fail('This is not your battle.',403);
  if(input.action==='leave'){
   if(['active','pending'].includes(b.status)){if(b.status==='pending'){b.status='cancelled';b.winner=null;b.challenge=null;}else R.endBattle(b,1-side,'forfeit',now);R.note(b,`${b.actors[side].name} left the encounter.`);await save(b);}
   const settled=await result(b);if(doc.pvpId){doc.pvpId=null;await persist();}else{doc.battle=null;await persist();}return {battle:null,report:b.status==='finished'?visible(b):null,progression:settled.progression};
@@ -153,7 +154,11 @@ export async function gameRequest(client,user,method,input={},services={}){
   if(!b.challenge)fail('No harvest challenge in progress.');R.harvestResult(b,side,b.challenge.kind,false,'Harvest abandoned');R.note(b,`${a.name} abandoned the challenge. No resource gained.`);R.finishTurn(b,now);
  }else{
   if(b.challenge)fail('Finish or abandon your harvest first.');
-  if(input.action==='attack')R.attack(b,side,input.skill,now);
+  if(input.action==='usePotion'&&input.battlePotion){
+   const index=doc.state.items.findIndex(item=>item.uid===input.uid&&item.where==='bag'&&C.isConsumable(item));if(index<0)fail('Choose an owned potion from your hero bag.');
+   if((b.potions||[]).some(p=>p.side===side&&p.uid===input.uid))fail('This potion was already used.');R.potion(b,side,doc.state.items[index].defId==='health_potion'?'hp':'mp');
+   if(b.kind==='pvp')b.potions=[...(b.potions||[]),{side,uid:input.uid}];else{doc.state.items.splice(index,1);doc.state.inventoryRevision=(doc.state.inventoryRevision||0)+1;}
+  }else if(input.action==='attack')R.attack(b,side,input.skill,now);
   else if(input.action==='defend')R.defend(b,side);
   else fail('Unknown battle action.');
   R.finishTurn(b,now);

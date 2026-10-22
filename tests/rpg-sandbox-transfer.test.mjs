@@ -9,13 +9,13 @@ test('retained sandbox source and artwork match their provenance hashes',()=>{
   assert.equal(createHash('sha256').update(readFileSync(local)).digest('hex'),expected,local);
  }
 });
-test('original ct.js animation loader resolves all five sheets under the live RPG base path',()=>{
+test('ct.js resolves the five supplied sheets and isolates padded animation frames',()=>{
  const runtime=readFileSync('public/rpg/vendor/ctjs-skill-fx.js','utf8');
  assert.ok(!runtime.includes('/assets/skills/sheets/'),'no sandbox-root URLs in live animation bundle');
- assert.ok(runtime.includes('assets/skills/sheets/'));
+ assert.ok(runtime.includes('assets/skills/sources/'));assert.ok(runtime.includes('canvas.width=400'));assert.ok(runtime.includes('bt-fx-bar'));
  for(const category of ['physical','elemental','wind','fire','lightning']){
-  const url=new URL(`assets/skills/sheets/${category}.webp`,'https://chessburger.site/rpg/');
-  assert.equal(url.pathname,`/rpg/assets/skills/sheets/${category}.webp`);
+  const url=new URL(`assets/skills/sources/${category}.png`,'https://chessburger.site/rpg/');
+  assert.equal(url.pathname,`/rpg/assets/skills/sources/${category}.png`);
   assert.ok(readFileSync('public'+url.pathname).length>0);
  }
 });

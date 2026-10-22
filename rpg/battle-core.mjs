@@ -21,6 +21,13 @@ export function gainResource(b,side,resource,amount=20){
  const a=b.actors[side],before=a[resource];a[resource]+=Math.min(amount,Math.max(0,a[resource==='ap'?'maxAp':'maxMp']-a[resource]));
  const gained=a[resource]-before;reportFor(b,side)[resource+'Gained']+=gained;return gained;
 }
+export function potion(b,side,resource,amount=20){
+ if(b.status!=='active'||b.turn!==side||b.challenge||!['hp','mp'].includes(resource))throw Error('Use a potion only on your turn, outside a harvest.');
+ const actor=b.actors[side],cap=actor[resource==='hp'?'maxHp':'maxMp'];if(actor.hp<=0||actor[resource]>=cap)throw Error(resource==='hp'?'Health is already full.':'Mana is already full.');
+ const restored=resource==='mp'?gainResource(b,side,'mp',amount):Math.min(amount,cap-actor.hp);if(resource==='hp')actor.hp+=restored;
+ b.eventSeq=(b.eventSeq||0)+1;b.events=[...(b.events||[]),{id:b.eventSeq,kind:'potion',resource,side,target:side,amount:restored,hpAfter:actor.hp}].slice(-12);
+ note(b,`${actor.name} used a ${resource==='hp'?'health':'mana'} potion · +${restored} ${resource.toUpperCase()} · turn ended.`);return restored;
+}
 export function harvestResult(b,side,resource,success,reason){
  const amount=success?gainResource(b,side,resource):0;
  b.harvestResult={id:(b.harvestResult?.id||0)+1,side,resource,success,amount,reason};

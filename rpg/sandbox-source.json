@@ -235,7 +235,7 @@
   "integrationOverrides": {
     "src/damage-sprites.js": {
       "sandboxSha256": "d6ea9025ce50057a9ae37cc040a5e3db49e0c85b9b383d09293c5470b7ea1774",
-      "reason": "Generated hero damage atlases differ from the canonical hero selector artwork. Use original hero images at every HP threshold; monster damage frames remain unchanged."
+      "reason": "Generated hero damage atlases differ from the canonical hero selector artwork. Keep canonical full-health hero images and restore original sandbox injury and death frames at 80/60/40/20/1 percent as requested; monster damage frames remain unchanged."
     },
     "src/hero-heads.json": {
       "sandboxSha256": "62a119a22f9d3132e7a30a7eed2cf429bfed91c33b89c66e9374d5fcdd629cf3",
