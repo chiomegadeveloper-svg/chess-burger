@@ -1,0 +1,33 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {gameRequest} from '../api/_rpg/service.mjs';
+import {read} from '../api/_rpg/store.mjs';
+import {database} from './helpers/rpg-db.mjs';
+const at={lat:11.26,lng:125};
+function fixture(){const db=database();let now=Date.now(),loads=0;const roads=async()=>{loads++;return Array.from({length:20},(_,i)=>({lat:at.lat+(i+1)*.0002,lng:at.lng}));};const call=(input,method='POST',user='a')=>gameRequest(db,user,method,input,{now:()=>now,roadPoints:roads});const gps=(offset=0)=>({...at,lat:at.lat+offset/111195,accuracy:40,time:now});return {db,call,gps,time:n=>now=n,now:()=>now,loads:()=>loads};}
+const register=f=>f.call({action:'register',heroId:'rogue',name:'GPS Warrior',skill:'punch'});
+test('pinned sets last a full rolling 30 minutes across clock boundaries and movement, and reopen without fetching roads',async()=>{
+ const f=fixture();await register(f);const start=Math.floor(f.now()/3600000)*3600000+3590000;f.time(start);
+ const first=await f.call({action:'spawn',gps:f.gps()});assert.equal(first.encounters.length,16);assert.equal(first.refreshAt,start+1800000);assert.ok(first.encounters.every(e=>e.expires_at===first.refreshAt));
+ f.time(start+1200000);const moved=await f.call({action:'spawn',gps:f.gps(400)});assert.deepEqual(moved.encounters,first.encounters);assert.equal(f.loads(),1);
+ const init=await f.call({action:'init'});assert.deepEqual(init.spawnCache.encounters,first.encounters);assert.equal(init.spawnCache.refreshAt,first.refreshAt);
+ f.time(first.refreshAt);const next=await f.call({action:'spawn',gps:f.gps()});assert.equal(next.refreshAt,first.refreshAt+1800000);assert.ok(next.encounters.every(e=>!first.encounters.some(old=>old.id===e.id)));assert.equal(f.loads(),1,'valid saved road coordinates avoid a second map request');
+});
+test('200-meter monster attack boundary is enforced, and forfeits keep monsters while victories remove them once',async()=>{
+ const f=fixture();await register(f);const batch=await f.call({action:'spawn',gps:f.gps()}),enemy=batch.encounters[0];
+ const fix=meters=>({lat:enemy.lat+meters/111195,lng:enemy.lng,accuracy:40,time:f.now()});
+ await assert.rejects(f.call({action:'encounter',target:enemy.id,gps:fix(201)}),e=>e.code==='out_of_range'&&e.distance>200);
+ let b=(await f.call({action:'encounter',target:enemy.id,gps:fix(199)})).battle;assert.equal(b.status,'active');assert.equal((await read(f.db,'a')).encounters.find(e=>e.id===enemy.id).consumed,false);
+ await f.call({action:'leave'});assert.ok((await f.call({action:'spawn',gps:f.gps()})).encounters.some(e=>e.id===enemy.id));
+ b=(await f.call({action:'encounter',target:enemy.id,gps:fix(199)})).battle;
+ const row=[...f.db.rows.values()].find(r=>r.item_kind==='rpg_profile');row.metadata.battle.actors[1].hp=1;
+ const win=await f.call({action:'attack',skill:'basic',version:b.version});assert.equal(win.defeatedEncounterId,enemy.id);
+ assert.ok(!(await f.call({action:'init'})).spawnCache.encounters.some(e=>e.id===enemy.id));assert.equal((await read(f.db,'a')).awards.length,1);
+});
+test('nearby online players can challenge and accept within 200 meters and are rejected beyond it',async()=>{
+ const f=fixture();await register(f);await f.call({action:'register',heroId:'mage',name:'Other Warrior',skill:'punch'},'POST','b');
+ for(const [user,offset]of[['a',0],['b',199]])await f.call({channel:'presence',...f.gps(offset)},'POST',user);
+ const target=(await f.call({channel:'presence'},'GET')).players[0];let b=(await f.call({action:'challenge',target:target.peerId})).battle;
+ b=(await f.call({action:'accept',version:b.version},'POST','b')).battle;assert.equal(b.status,'active');await f.call({action:'leave'});
+ await f.call({channel:'presence',...f.gps(201)},'POST','b');await assert.rejects(f.call({action:'challenge',target:target.peerId}),e=>e.code==='out_of_range');
+});

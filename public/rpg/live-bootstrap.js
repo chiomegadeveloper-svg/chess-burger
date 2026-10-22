@@ -32,7 +32,7 @@
  async function exit(){message('Saving your hero…');try{await queue;}catch{}parent.postMessage({type:'CB_RPG_EXIT'},location.origin);}
  async function initialize(){
   const button=document.getElementById('saveBtn');button.disabled=true;
-  try{const data=await api({action:'init'});generation=data.generation||null;if(data.game){localStorage.setItem(key(data.game.heroId),JSON.stringify(data.game));const hero=HEROES.find(h=>h.id===data.game.heroId);window.RPGRoom.open(hero,data.game.name);}else{document.getElementById('heroName').value='';document.getElementById('heroName').focus();}button.disabled=false;document.getElementById('live-loading').remove();}
+  try{const data=await api({action:'init'});generation=data.generation||null;window.RPGWorld.primeEncounters(data.spawnCache);if(data.game){localStorage.setItem(key(data.game.heroId),JSON.stringify(data.game));const hero=HEROES.find(h=>h.id===data.game.heroId);window.RPGRoom.open(hero,data.game.name);}else{document.getElementById('heroName').value='';document.getElementById('heroName').focus();}button.disabled=false;document.getElementById('live-loading').remove();}
   catch(error){const loading=document.getElementById('live-loading');loading.textContent=error.message;const retry=document.createElement('button');retry.textContent='Retry';retry.onclick=()=>{loading.textContent='Loading your hero…';initialize();};loading.append(retry);}
  }
  document.addEventListener('DOMContentLoaded',()=>{

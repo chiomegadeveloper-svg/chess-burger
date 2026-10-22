@@ -1,7 +1,7 @@
 (function(){
  'use strict';
  const el=id=>document.getElementById(id),world=el('rpg-world'),C=window.RPGInventory,images=window.RPG_ITEM_IMAGES;
- let monsterRows=[],monsterOrigin=null,monsterRefreshAt=0,monsterRequest=false,lastMonsterAttempt=0,monsterTimer=null,rangeCircle=null,gpsTimer=null,authoritativeUntil=0,fallbackKey=null;
+ let monsterRows=[],monsterRefreshAt=0,monsterRequest=false,lastMonsterAttempt=0,monsterTimer=null,rangeCircle=null,gpsTimer=null;
  let hero,state,map,tileLayer,mapLoadingTimer,basemapVersion=0,selfMarker,accuracyCircle,peerMarkers=[],watch=null,timer=null,position=null,sharing=false,busy=false,follow=true,requestVersion=0,onlineVersion=0,apiQueue=Promise.resolve();
  const status=text=>{el('world-gps-status').textContent=text;};
  const safe=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -41,7 +41,7 @@
  function drawPosition(){if(!map||!position)return;const ll=[position.lat,position.lng];
   if(!selfMarker){selfMarker=L.marker(ll,{icon:L.divIcon({className:'world-player-pin world-self-pin',html:`<div class="world-self-avatar"><img src="${HERO_HEADS[hero.id]}" alt="${safe(hero.name)}"><b>YOU</b></div>`,iconSize:[56,66],iconAnchor:[28,64],tooltipAnchor:[0,-58]}),alt:`Your hero: ${hero.name}`,zIndexOffset:500}).addTo(map);const tooltip=document.createElement('span');tooltip.textContent=`You · ${hero.name}`;selfMarker.bindTooltip(tooltip);accuracyCircle=L.circle(ll,{radius:position.accuracy,color:'#65c9de',weight:1,fillColor:'#4dc6dd',fillOpacity:.08}).addTo(map);}
   else{selfMarker.setLatLng(ll);accuracyCircle.setLatLng(ll).setRadius(position.accuracy);}
-  if(!rangeCircle)rangeCircle=L.circle(ll,{radius:600,color:'#d4b263',weight:1,dashArray:'6 6',fillOpacity:.015,interactive:false}).addTo(map);else rangeCircle.setLatLng(ll);
+  if(!rangeCircle)rangeCircle=L.circle(ll,{radius:200,color:'#d4b263',weight:1,dashArray:'6 6',fillOpacity:.015,interactive:false}).addTo(map);else rangeCircle.setLatLng(ll);
   if(follow)map.setView(ll,Math.max(map.getZoom(),16),{animate:false});
  }
  function queue(operation){const next=apiQueue.catch(()=>{}).then(operation);apiQueue=next;return next;}
@@ -50,7 +50,7 @@
   const wasSharing=sharing;sharing=false;onlineVersion++;if(timer!==null)clearInterval(timer);timer=null;clearPeers();el('world-share').textContent='Go online';el('world-online-status').textContent=message;if(wasSharing)forgetPresence();
  }
  function stopGPS(message='GPS is off. Your location is not being shared.'){
-  clearInterval(gpsTimer);gpsTimer=null;authoritativeUntil=0;fallbackKey=null;requestVersion++;monsterRequest=false;lastMonsterAttempt=0;monsterOrigin=null;monsterRefreshAt=0;clearInterval(monsterTimer);monsterTimer=null;monsterRows=[];encounters([]);if(rangeCircle){rangeCircle.remove();rangeCircle=null;}if(watch!==null)navigator.geolocation?.clearWatch(watch);watch=null;position=null;offline();if(selfMarker){selfMarker.remove();selfMarker=null;accuracyCircle.remove();accuracyCircle=null;}
+  clearInterval(gpsTimer);gpsTimer=null;requestVersion++;monsterRequest=false;lastMonsterAttempt=0;clearInterval(monsterTimer);monsterTimer=null;for(const pin of encounterPins.values())pin.remove();encounterPins.clear();if(rangeCircle){rangeCircle.remove();rangeCircle=null;}if(watch!==null)navigator.geolocation?.clearWatch(watch);watch=null;position=null;offline();if(selfMarker){selfMarker.remove();selfMarker=null;accuracyCircle.remove();accuracyCircle=null;}
   el('world-gps').textContent='◎ Enable GPS';el('world-share').disabled=true;el('world-map-mode').textContent='PREVIEW AREA';el('world-position').textContent='Enable GPS to find your place in the realm.';status(message);
  }
  function gpsError(error){
@@ -61,13 +61,13 @@
   if(watch!==null)return;
   if(!navigator.geolocation){status('This browser does not support GPS location.');return;}
   if(!window.isSecureContext){status('GPS needs a secure HTTPS connection. Open the published account to enable it.');return;}
-  if(!monsterTimer)monsterTimer=setInterval(discoverMonsters,10000);
+  if(!monsterTimer)monsterTimer=setInterval(discoverMonsters,2000);
   const version=++requestVersion;status('Finding your GPS location…');el('world-gps').textContent='◎ Refresh GPS';follow=true;clearInterval(gpsTimer);gpsTimer=setInterval(()=>{if(!world.hidden&&!document.hidden&&(!position||Date.now()-position.time>20000))refreshGPS();},10000);
   try{watch=navigator.geolocation.watchPosition(value=>{
    if(version!==requestVersion||world.hidden)return;const {latitude:lat,longitude:lng,accuracy}=value.coords;if(!Number.isFinite(lat)||!Number.isFinite(lng)||!Number.isFinite(accuracy)||(Number.isFinite(value.timestamp)&&Date.now()-value.timestamp>30000))return;
    position={lat,lng,accuracy,time:Date.now()};el('world-map-mode').textContent='LIVE GPS';el('world-share').disabled=accuracy>1000;el('world-position').textContent=`${lat.toFixed(5)}, ${lng.toFixed(5)} · accuracy ±${Math.round(accuracy)} m`;
    status(accuracy>1000?'GPS accuracy is low. Move to an open area before going online.':`Live GPS · accuracy ±${Math.round(accuracy)} m. ${sharing?'Sharing with nearby players.':'Monster discovery uses this GPS fix. Player sharing is off.'}`);drawPosition();roadFallback();discoverMonsters();
-  },error=>{if(version===requestVersion&&!world.hidden)gpsError(error);},{enableHighAccuracy:true,maximumAge:0,timeout:20000});}catch{stopGPS('GPS could not start. Check location permissions and try again.');}
+  },error=>{if(version===requestVersion&&!world.hidden)gpsError(error);},{enableHighAccuracy:true,maximumAge:10000,timeout:20000});}catch{stopGPS('GPS could not start. Check location permissions and try again.');}
  }
  function refreshGPS(){
   if(watch!==null)navigator.geolocation?.clearWatch(watch);watch=null;
@@ -92,7 +92,7 @@
   finally{busy=false;}
  }
  function online(){if(sharing){offline();status(position?'Live GPS · player sharing is off.':'GPS is off.');return;}if(!position||position.accuracy>1000||Date.now()-position.time>30000){status('Wait for a fresh, accurate GPS location before going online.');return;}sharing=true;onlineVersion++;el('world-share').textContent='Go offline';el('world-online-status').textContent='Connecting to nearby adventurers…';sync();timer=setInterval(sync,8000);}
- function open(nextHero,nextState){refresh(nextHero,nextState);el('hr-room').hidden=true;world.hidden=false;document.querySelector('.app').hidden=true;initMap();el('world-exit').focus();startGPS();window.RPGBattle?.connect(hero,state);clearInterval(monsterTimer);monsterTimer=setInterval(discoverMonsters,10000);}
+ function open(nextHero,nextState){refresh(nextHero,nextState);el('hr-room').hidden=true;world.hidden=false;document.querySelector('.app').hidden=true;initMap();el('world-exit').focus();startGPS();window.RPGBattle?.connect(hero,state);clearInterval(monsterTimer);monsterTimer=setInterval(discoverMonsters,2000);}
  function leave(exit){window.RPGBattle?.stop();stopGPS();world.hidden=true;el('hr-room').hidden=false;window.RPGRoom.refresh();el('hr-explore').focus();if(exit){window.dispatchEvent(new CustomEvent('chessburger:rpg-exit'));if(window.parent!==window)window.parent.postMessage({type:'CHESS_BURGER_RPG_EXIT'},location.origin);}}
  el('world-gps').addEventListener('click',refreshGPS);el('world-share').addEventListener('click',online);el('world-exit').addEventListener('click',()=>leave(true));
  for(const id of ['world-equipment','world-bag-open'])el(id).addEventListener('click',()=>leave(false));
@@ -100,33 +100,33 @@
  el('world-center').addEventListener('click',()=>{if(!position){status('Enable GPS to center the map on your location.');return;}follow=true;drawPosition();});el('world-zoom-in').addEventListener('click',()=>map?.zoomIn());el('world-zoom-out').addEventListener('click',()=>map?.zoomOut());
  el('world-map-retry').addEventListener('click',()=>{if(!map){initMap();return;}el('world-map-fallback').hidden=true;loadBasemap();});
  document.addEventListener('visibilitychange',()=>{if(world.hidden)return;if(document.hidden){offline();status('GPS tracking remains enabled. Your browser may pause updates in the background.');}else refreshGPS();});window.addEventListener('pageshow',()=>{if(!world.hidden)refreshGPS();});window.addEventListener('pagehide',()=>{if(!world.hidden)stopGPS();});window.addEventListener('offline',()=>{if(!world.hidden){offline('Network offline. Player sharing has stopped.');status('Network offline. GPS can continue on this device.');}});
+ let rangeNotice=null,rangeDismissTimer=null,rangeHideTimer=null;
+ function dismissRangeNotice(){if(!rangeNotice)return;clearTimeout(rangeDismissTimer);clearTimeout(rangeHideTimer);rangeNotice.classList.add('leaving');rangeHideTimer=setTimeout(()=>{rangeNotice.hidden=true;},350);}
+ function outOfRange(distance,pvp=false){
+  if(!rangeNotice){rangeNotice=document.createElement('section');rangeNotice.className='world-range-notice';rangeNotice.setAttribute('role','status');rangeNotice.setAttribute('aria-live','polite');rangeNotice.innerHTML='<button type="button" aria-label="Close attack range message">×</button><span aria-hidden="true">◎</span><h2>Outside attack range</h2><p></p><small>Attack range · 200 meters</small>';rangeNotice.querySelector('button').onclick=dismissRangeNotice;document.body.append(rangeNotice);}
+  clearTimeout(rangeDismissTimer);clearTimeout(rangeHideTimer);rangeNotice.classList.remove('leaving');rangeNotice.hidden=false;
+  rangeNotice.querySelector('p').textContent=`This ${pvp?'player':'monster'} is too far away${Number.isFinite(distance)?` (about ${Math.ceil(distance)} m)`:''}. Move within 200 meters to battle.`;
+  rangeDismissTimer=setTimeout(dismissRangeNotice,10000);
+ }
  const encounterPins=new Map();
  function meters(a,b){const r=Math.PI/180,x=Math.sin((b.lat-a.lat)*r/2)**2+Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin((b.lng-a.lng)*r/2)**2;return 6371000*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));}
- function roadFallback(){
-  return; // Live encounters are assigned and saved by the server.
-  if(world.hidden||!position||Date.now()-position.time>30000||!tileLayer?.rpgRoads)return;
-  const now=Date.now(),moved=monsterOrigin&&meters(monsterOrigin,position)>300;
-  if(authoritativeUntil>now&&!moved)return;
-  const points=window.RPGEncounterLayout.roadPoints(tileLayer.rpgRoads(),position);
-  if(!points.length)return;
-  const key=`${Math.floor(now/3600000)}:${Math.round(position.lat*1000)}:${Math.round(position.lng*1000)}`;
-  if(fallbackKey===key&&monsterRows.length)return;
-  fallbackKey=key;encounters(window.RPGEncounterLayout.create(position,state.level,window.RPGBattleRules.MONSTERS.filter(m=>!m.boss),now,points));
-  el('world-monster-status').textContent=`${monsterRows.length} monsters along visible roads · device practice. Online encounters sync separately.`;
+ function roadFallback(){} // Encounter coordinates are always assigned by the server.
+ function primeEncounters(cache){
+  if(!cache||cache.refreshAt<=Date.now())return;
+  monsterRefreshAt=cache.refreshAt;encounters(cache.encounters||[]);
  }
  function syncEncounters(data){
-  if(data.spawnStatus==='ready'&&(data.encounters?.length||data.exhausted)){authoritativeUntil=data.refreshAt||((Math.floor(Date.now()/3600000)+1)*3600000);encounters(data.encounters||[]);if(data.message)el('world-monster-status').textContent=data.message;}
-  else roadFallback();
+  if(data.spawnStatus==='ready'){monsterRefreshAt=data.refreshAt||Date.now()+1800000;encounters(data.encounters||[]);if(data.message)el('world-monster-status').textContent=data.message;}
  }
  async function discoverMonsters(force=false){
-  if(monsterRequest||world.hidden||!position||Date.now()-position.time>30000)return;
-  const now=Date.now(),moved=monsterOrigin&&meters(monsterOrigin,position)>300;
-  if(!force&&now<monsterRefreshAt&&!moved){encounters(monsterRows);return;}
-  if(now-lastMonsterAttempt<10000)return;
+  if(world.hidden||!position||Date.now()-position.time>30000)return;
+  const now=Date.now();encounters(monsterRows);
+  if(monsterRequest||(!force&&now<monsterRefreshAt))return;
+  if(now-lastMonsterAttempt<2000)return;
   lastMonsterAttempt=now;monsterRequest=true;const version=requestVersion,fix={...position};
-  el('world-monster-status').textContent='Finding monsters along nearby roads…';
-  try{const data=await window.RPGBattle.spawn(fix);if(!data||version!==requestVersion||world.hidden)return;monsterOrigin=fix;monsterRefreshAt=data.refreshAt||(data.spawnStatus==='ready'?(Math.floor(now/3600000)+1)*3600000:now+60000);syncEncounters(data);if(!monsterRows.length)el('world-monster-status').textContent=data.message||'Loading roads and nearby monsters…';}
-  catch(error){if(version===requestVersion){monsterRefreshAt=now+15000;if(moved)encounters([]);roadFallback();if(!monsterRows.length)el('world-monster-status').textContent='Loading road encounters · retrying automatically. GPS remains on.';}}
+  el('world-monster-status').textContent='Loading fixed monster locations…';
+  try{const data=await window.RPGBattle.spawn(fix);if(!data||version!==requestVersion||world.hidden)return;monsterRefreshAt=data.refreshAt||now+5000;syncEncounters(data);if(!monsterRows.length)el('world-monster-status').textContent=data.message||'Loading roads and nearby monsters…';}
+  catch(error){if(version===requestVersion){monsterRefreshAt=now+5000;if(!monsterRows.length)el('world-monster-status').textContent='Loading road encounters · retrying automatically. GPS remains on.';}}
   finally{if(version===requestVersion)monsterRequest=false;}
  }
  function encounters(rows){
@@ -136,5 +136,5 @@
   for(const e of visible){if(encounterPins.has(e.id))continue;const src=window.DamageSprites.sprite(e.monsterId,100,'left');const icon=L.divIcon({className:'world-monster-pin',html:`<div class="world-monster-marker"><b class="world-monster-level">LVL ${Number(e.level)}</b><img src="${src}" alt=""><span>${safe(e.name)}</span></div>`,iconSize:[84,108],iconAnchor:[42,87]});const pin=L.marker([e.lat,e.lng],{icon,alt:`${e.name}, LVL ${e.level}`}).addTo(map);pin.on('click',()=>window.RPGBattle.encounter(e.id));encounterPins.set(e.id,pin);}
  }
  el('world-battle-lab').addEventListener('click',()=>window.RPGBattle.openLab());
- window.RPGWorld={open,refresh,stop:stopGPS,encounters,syncEncounters,offline,position:()=>position&&({...position}),monster:id=>monsterRows.find(e=>e.id===id),consume(id){encounters(monsterRows.filter(e=>e.id!==id));}};
+ window.RPGWorld={open,refresh,primeEncounters,outOfRange,stop:stopGPS,encounters,syncEncounters,offline,position:()=>position&&({...position}),monster:id=>monsterRows.find(e=>e.id===id),consume(id){encounters(monsterRows.filter(e=>e.id!==id));}};
 })();

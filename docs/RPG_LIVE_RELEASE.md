@@ -23,3 +23,13 @@ CMS → Users → Reset RPG hero is restricted to the current database Owner rol
 The starting-skill dropdown is replaced with all 30 existing skill icons in a responsive dialog. Basic Tackle is already included; the player chooses one of the other 29 skills. Hover, keyboard focus or touch inspect AP, MP and estimated level-1 attack damage using the combat formula against 4 armor. Selecting an icon and pressing Use skill confirms the choice.
 
 Ten server/API/DOM tests pass, including owner authorization, approval/revision guards, concurrent reset/reselection, old-session rejection, old PvP cancellation and icon selection. Browser review used local sample data, with no production account reset. Preview fixture files are removed before deployment.
+
+## GPS battleground update (v0.0568)
+
+Monster and player battle start/acceptance range is now 200 m, enforced server-side. Fresh GPS accuracy within ±100 m is required. PvP still needs acceptance and both players online. The map circle shows the attack radius; monster discovery remains within 600 m of the set's original location.
+
+Monsters have fixed coordinates and a rolling 30-minute lifetime from generation. Player movement no longer replaces a set. Winning by knockout consumes the encounter; starting, losing or forfeiting does not. Expired sets renew on the next valid GPS update. Cached sets are returned with account initialization and retained between Hero Room/map visits, rendering after the first location fix without refetching roads. Valid road coordinates are reused for six hours near the same location. First-time GPS permission/fix and uncached road loading still depend on the device and connection. No monster coordinates come from client-generated spawns.
+
+Tapping an out-of-range monster shows a centered notice with approximate distance and the 200 m limit. The notice fades after 10 seconds and has a manual close button. The server also returns a structured range error for online player movement/races.
+
+Tests cover the 199/201 m boundary for monsters and PvP, full lifetime across clock boundaries and movement, initialization cache, cached road reuse, defeat-only removal, and popup timing/close behavior.

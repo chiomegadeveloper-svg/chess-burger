@@ -26,7 +26,7 @@ test('revision updates reject stale windows and keep the winning save',async()=>
 test('map encounters remain road-based, require proximity, award XP once, and ignore forged battle stats',async()=>{
  const db=database();await register(db);const call=(input,method='POST')=>gameRequest(db,'a',method,input,{roadPoints});
  const world=await call({action:'spawn',gps:gps()});assert.equal(world.encounters.length,16);assert.ok(world.encounters.every(e=>e.lng===125&&!e.id.startsWith('guest')));
- const enemy=world.encounters[0];await assert.rejects(call({action:'encounter',target:enemy.id,gps:{...gps(),lat:12},profile:{level:88,stats:[999,999,999,999,999,999]}}),/10 meters/);
+ const enemy=world.encounters[0];await assert.rejects(call({action:'encounter',target:enemy.id,gps:{...gps(),lat:12},profile:{level:88,stats:[999,999,999,999,999,999]}}),/200 meters/);
  let result=await call({action:'encounter',target:enemy.id,gps:{...gps(),lat:enemy.lat,lng:enemy.lng},profile:{level:88,stats:[999,999,999,999,999,999]}});assert.equal(result.battle.actors[0].level,1);
  const row=[...db.rows.values()].find(r=>r.item_kind==='rpg_profile');row.metadata.battle.actors[1].hp=1;
  result=await call({action:'attack',skill:'basic',version:result.battle.version});assert.equal(result.battle.status,'finished');assert.ok(result.progression.totalXp>0);const xp=result.progression.totalXp;

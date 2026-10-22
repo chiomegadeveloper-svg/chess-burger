@@ -21,5 +21,5 @@ export default async function handler(req:Req,res:Res){
   if(req.method==='GET')body={channel:req.query?.channel,action:req.query?.action,generation:req.query?.generation};
   if(String(body.action||'').startsWith('owner_')){if(req.method!=='POST')return res.status(405).json({error:'Method not allowed.'});return res.status(200).json(await ownerRequest(client,auth.data.user.id,profile.data.role,body));}
   return res.status(200).json(await gameRequest(client,auth.data.user.id,req.method||'GET',body));
- }catch(error){const e=error as Error&{status?:number;code?:string};return res.status(e.status||503).json({error:e.status?e.message:'RPG service is temporarily unavailable. Please retry.',...(e.code?{code:e.code}:{})});}
+ }catch(error){const e=error as Error&{status?:number;code?:string;distance?:number};return res.status(e.status||503).json({error:e.status?e.message:'RPG service is temporarily unavailable. Please retry.',...(e.code?{code:e.code}:{}),...(Number.isFinite(e.distance)?{distance:e.distance}:{})});}
 }
