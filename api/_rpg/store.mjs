@@ -24,6 +24,9 @@ export function makeHero(input){
 }
 export function saveInventory(doc,input){
  const next=structuredClone(input),old=doc.state;
+ if(doc.battle?.status==='active')fail('Equipment is locked during battle.');
+ next.currentHp=old.currentHp;
+ if((next.inventoryRevision||0)!==(old.inventoryRevision||0))fail('Your inventory changed. Reopen Hero Room before saving.');
  if(!C.validState(next,doc.heroId)||next.heroId!==doc.heroId||next.name!==doc.name)fail('Your chosen hero and name are locked.',400);
  if(JSON.stringify(next.items)!==JSON.stringify(old.items)||JSON.stringify(next.grids)!==JSON.stringify(old.grids)){
   // Only rearrangement, rotation, storage transfers, and discards of owned gear are accepted.

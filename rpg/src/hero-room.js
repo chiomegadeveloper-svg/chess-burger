@@ -93,9 +93,9 @@
     const item=itemById(selectedItem),node=el('hr-inspector');
     if(!item){node.innerHTML='<h3>Make room for adventure.</h3><p>Collect equipment, then move it from the stash into your bag.</p><p class="hr-bonus-summary">Select an item to rotate or move it.</p>';return;}
     const def=C.itemMap[item.defId],rarity=C.rarityMap[item.rarity],locked=!C.canEquip(state,item);
-    node.innerHTML=`<h3 style="color:${rarity.color}">${def.name}</h3><p>${rarity.name} · iLvl ${item.iLvl} · <span class="${locked?'hr-requirement-locked':''}">Req. L${item.requiredLevel}</span> · T${item.gearTier}</p><p class="hr-bonus-summary">${compactBonuses(C.itemBonus(item))}</p><p>✧ ${escape(item.enhancement.name)} +${item.enhancement.value} ${abbreviations[item.enhancement.stat]} · ${item.where==='bag'?'Active':'Stored'}</p><div class="hr-actions"><button class="hr-btn" type="button" data-item-action="rotate" title="Rotate 90 degrees clockwise">↻ Rotate</button><button class="hr-btn" type="button" data-item-action="transfer" ${item.where==='stash'&&locked?'disabled':''}>To ${item.where==='bag'?'stash':'bag'}</button><button class="hr-btn" type="button" data-item-action="details">Details</button><button class="hr-btn ghost" type="button" data-item-action="discard">Remove</button></div>`;
+    node.innerHTML=`<h3 style="color:${rarity.color}">${def.name}</h3><p>${rarity.name} · iLvl ${item.iLvl} · <span class="${locked?'hr-requirement-locked':''}">Req. L${item.requiredLevel}</span> · T${item.gearTier}</p><p class="hr-bonus-summary">${compactBonuses(C.itemBonus(item))}</p><p>✧ ${escape(item.enhancement.name)} +${item.enhancement.value} ${abbreviations[item.enhancement.stat]} · ${item.where==='bag'?'Active':'Stored'}</p><div class="hr-actions"><button class="hr-btn" type="button" data-item-action="rotate" title="Rotate 90 degrees clockwise">↻ Rotate</button><button class="hr-btn" type="button" data-item-action="transfer" ${item.where==='stash'&&locked?'disabled':''}>To ${item.where==='bag'?'stash':'bag'}</button><button class="hr-btn" type="button" data-item-action="details">Details</button><button class="hr-btn ghost" type="button" data-item-action="discard">Throw away</button></div>`;
   }
-  function render(){hideTooltip();renderStats();renderGrid('bag');renderGrid('stash');renderSpells();renderInspector();}
+  function render(){const cap=C.totals(state,hero.stats)[0];el('hr-current-hp').textContent=`Health ${Math.min(cap,state.currentHp??cap)} / ${cap}`;el('hr-drink-potion').disabled=state.currentHp>=cap||!state.items.some(i=>i.defId==='health_potion');hideTooltip();renderStats();renderGrid('bag');renderGrid('stash');renderSpells();renderInspector();}
   function selectItem(uid){
     selectedItem=uid;selectedSpell=null;
     // Keep the touched element connected throughout the pointer gesture.
@@ -295,7 +295,7 @@
     if(action==='rotate')rotate();
     if(action==='transfer')transfer();
     if(action==='details')showDetails();
-    if(action==='discard'){state.items=state.items.filter(i=>i.uid!==selectedItem);selectedItem=null;changed('Item removed.');}
+    if(action==='discard'){state.items=state.items.filter(i=>i.uid!==selectedItem);selectedItem=null;changed('Item thrown away. You can now accept drops that fit in the freed space.');}
   });
   room.addEventListener('pointerover',event=>{if(event.pointerType==='mouse'){const node=event.target.closest('.hr-item');if(node)showTooltip(node);}});
   room.addEventListener('pointerout',event=>{if(tooltipAnchor&&!tooltipAnchor.contains(event.relatedTarget))hideTooltip();});
@@ -376,6 +376,7 @@
   });
   for(const node of document.querySelectorAll('[data-room-icon]'))node.src=images[node.dataset.roomIcon];
   el('hr-rarity-legend').innerHTML=C.rarities.map(r=>`<span class="hr-rarity-tag" style="--rarity:${r.color}">${r.name} <small>${r.range[0]===r.range[1]?r.range[0]:r.range.join('–')} bonus</small></span>`).join('');
-  window.RPGRoom={persist:save,open,refresh:render,utility(kind){if(kind==='book'){window.BabaylanBook.open();showModal('hr-book-modal');}if(kind==='shop'){renderShop();el('hr-shop-status').textContent='Each purchase adds 6 tiles to your chosen inventory.';showModal('hr-shop-modal');}}};
+  for(const [id,action] of [['hr-drink-potion','drinkPotion'],['hr-claim-loot','claimLoot']])el(id).onclick=async()=>{el(id).disabled=true;try{const response=await fetch('/api/battle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action})}),data=await response.json();if(!response.ok)throw Error(data.error);Object.assign(state,data.game);localStorage.setItem(key(),JSON.stringify(state));feedback(action==='drinkPotion'?'Health potion used · restored 50% of maximum health.':data.pendingLoot?.length?'Stash full. Throw away unwanted items, then collect the remaining drops.':'Saved drops collected.');render();}catch(error){feedback(error.message);render();}};
+ window.RPGRoom={persist:save,open,refresh:render,utility(kind){if(kind==='book'){window.BabaylanBook.open();showModal('hr-book-modal');}if(kind==='shop'){renderShop();el('hr-shop-status').textContent='Each purchase adds 6 tiles to your chosen inventory.';showModal('hr-shop-modal');}}};
   el('saveBtn').addEventListener('click',()=>{const name=el('heroName').value.trim();if(name.length>=2)open(selected,name);});
 })();

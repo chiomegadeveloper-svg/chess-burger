@@ -3,13 +3,14 @@
  const el=id=>document.getElementById(id),root=el('rpg-battle'),R=window.RPGBattleRules,C=window.RPGInventory;
  let seenBattle='',seenEvent=0,shownHp=[],lastImpact=0,presenting=false,presentationToken=0;
  let pendingProgress=null,refreshing=false,encounterDialog=null,previewTarget=null,selectionPromise=null;
- let attackQueue=[],enemyThinking=false,enemyCasting=null,attackPreview=null;
+ let premove=null,clockRequest=false,lastDrops=[];
+ let attackQueue=[],enemyThinking=false,enemyCasting=null;
  let hero,state,battle=null,local=false,busy=false,pollTimer=null,clockTimer=null,dismissed=false,selected=null,chess=null,chessKey='',engine=null,engineReady=null,engineResolve=null,engineTimer=null,aiThinking=false,engineBroken=false,puzzleData=null,lastLog='';
  const notice=(s,important=false)=>{el('bt-notice').textContent=s;root.classList.toggle('bt-has-notice',important&&!!s);};
  const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const uci=m=>({from:m.slice(0,2),to:m.slice(2,4),promotion:m[4]||'q'}),moveId=m=>m.from+m.to+(m.promotion||'');
  const loadout=()=>({heroId:hero.id,name:state.name,level:state.level,stats:C.totals(state,hero.stats),bonuses:C.bagBonus(state).map((n,i)=>n+C.spellBonus(state)[i]),active:state.active.slice()});
- async function api(input,signal){const r=await fetch('/api/battle',{signal,method:input?'POST':'GET',credentials:'same-origin',cache:'no-store',...(input?{headers:{'Content-Type':'application/json'},body:JSON.stringify(input)}:{})});let data;try{data=await r.json();}catch{throw Error('Battle service unavailable. Try again.');}if(!r.ok)throw Object.assign(Error(data.error||'Battle request failed.'),{code:data.code,distance:data.distance});if(data.defeatedEncounterId)window.RPGWorld.consume(data.defeatedEncounterId);if(data.progression&&data.progression.heroId===hero?.id)pendingProgress=data.progression;return data;}
+ async function api(input,signal){const r=await fetch('/api/battle',{signal,method:input?'POST':'GET',credentials:'same-origin',cache:'no-store',...(input?{headers:{'Content-Type':'application/json'},body:JSON.stringify(input)}:{})});let data;try{data=await r.json();}catch{throw Error('Battle service unavailable. Try again.');}if(!r.ok)throw Object.assign(Error(data.error||'Battle request failed.'),{code:data.code,distance:data.distance});if(data.battle?.harvestResult&&data.battle.harvestResult.id!==battle?.harvestResult?.id&&data.battle.harvestResult.side===(data.battle.me??0))pendingHarvest={...data.battle.harvestResult};if(data.game&&state){Object.assign(state,data.game);localStorage.setItem(window.RPGLive.key(state.heroId),JSON.stringify(state));window.RPGRoom.refresh?.();}if(data.drops)lastDrops=data.drops;if(data.defeatedEncounterId)window.RPGWorld.consume(data.defeatedEncounterId);if(data.progression&&data.progression.heroId===hero?.id)pendingProgress=data.progression;return data;}
  function show(){if(encounterDialog?.open){encounterDialog.close();previewTarget=null;}dismissed=false;if(battle)window.RPGWorld.pauseForBattle?.();root.hidden=false;el('rpg-world').inert=true;el('bt-close').focus();}
  function stopEngine(){engine?.terminate();engine=null;engineReady=null;clearTimeout(engineTimer);engineResolve?.reject(Error('Engine stopped.'));engineResolve=null;aiThinking=false;}
  function close(){cancelPresentation();root.hidden=true;window.RPGWorld.resumeAfterBattle?.();el('bt-rules').hidden=true;el('rpg-world').inert=false;dismissed=true;el('world-battle-lab')?.focus();if(pendingHarvest)showHarvest();else if(battle?.status==='finished')openReport(battle);}
@@ -18,14 +19,14 @@
  function sprite(a,facing){return window.DamageSprites.sprite(a.heroId,a.hp===0?0:a.hp/a.maxHp*100,facing);}
  const harvestModal=el('bt-harvest-modal');let pendingHarvest=null;
  function showHarvest(){
-  if(!pendingHarvest||presenting||!harvestModal.hidden)return;
+  if(!pendingHarvest||!harvestModal.hidden)return;
   const r=pendingHarvest;harvestModal.dataset.success=String(r.success);
   el('bt-harvest-title').textContent=r.success?'Harvest successful':'Harvest unsuccessful';
   el('bt-harvest-reason').textContent=r.reason;
   el('bt-harvest-gain').textContent=r.success?`+${r.amount} ${r.resource.toUpperCase()}${r.amount<20?' · resource cap reached':''}`:`No ${r.resource.toUpperCase()} gained`;
   root.inert=true;el('rpg-world').inert=true;harvestModal.hidden=false;el('bt-harvest-done').focus();
  }
- function dismissHarvest(){pendingHarvest=null;harvestModal.hidden=true;root.inert=false;el('rpg-world').inert=!root.hidden;draw();if(reportModal.hidden)el(root.hidden?'world-battle-lab':'bt-defend').focus();}
+ function dismissHarvest(){pendingHarvest=null;if(presenting&&attackQueue.length)void playHits();harvestModal.hidden=true;root.inert=false;el('rpg-world').inert=!root.hidden;draw();if(reportModal.hidden)el(root.hidden?'world-battle-lab':'bt-defend').focus();}
  el('bt-harvest-done').addEventListener('click',dismissHarvest);
  harvestModal.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();dismissHarvest();}else if(e.key==='Tab'){e.preventDefault();el('bt-harvest-done').focus();}});
  const reportModal=el('bt-report-modal');
@@ -41,11 +42,12 @@
   if(local&&ended.winner===(ended.me??0)&&ended.endReason==='knockout'){state.practiceAwards=state.practiceAwards||[];const receipt=state.practiceAwards.find(r=>r.id===ended.id);earned=receipt?.xp??Math.min(1218290-(state.totalXp||0),window.RPGProgression.victoryXp(you.level,enemy.level));if(!receipt){C.gainXp(state,earned);state.practiceAwards.push({id:ended.id,xp:earned});state.practiceAwards=state.practiceAwards.slice(-50);}}
   else if(pendingProgress?.heroId===hero.id){earned=pendingProgress.battleId===ended.id?pendingProgress.awarded||0:0;C.applyProgress(state,pendingProgress.totalXp);pendingProgress=null;}
   window.RPGRoom.persist?.();window.RPGWorld.refresh?.();
-  el('bt-summary-xp').textContent=`${local?'Device practice · ':''}+${earned} XP${state.level>before?` · LEVEL UP ${before} → ${state.level} · attributes restored for your next battle`:''}${state.level===88?' · MAX LEVEL':''}`;
+  el('bt-summary-xp').textContent=`${local?'Device practice · ':''}+${earned} XP${state.level>before?` · LEVEL UP ${before} → ${state.level} · stats increased`:''}${state.level===88?' · MAX LEVEL':''}`;
 
   reportModal.dataset.outcome=summary.winner?'victory':'defeat';
-  el('bt-summary-title').textContent=summary.winner?'Victory':'Defeat';
-  const reason=summary.reason==='forfeit'?(summary.winner?'Your opponent forfeited.':'You forfeited this encounter.'):summary.reason==='timeout'?(summary.winner?'Your opponent ran out of time.':'You ran out of time.'):summary.reason==='knockout'?(summary.winner?`You defeated ${enemy.name}.`:`${enemy.name} won this encounter.`):'This encounter has ended.';
+  el('bt-summary-title').textContent=summary.reason==='battle_limit'?'Time’s up':summary.winner?'Victory':'Defeat';
+  el('bt-drops-list').innerHTML=lastDrops.length?lastDrops.map(item=>`<span style="color:${C.rarityMap[item.rarity].color}">${esc(C.rarityMap[item.rarity].name)} · ${esc(C.itemMap[item.defId].name)}</span>`).join(''):'No item drops.';
+  const reason=summary.reason==='battle_limit'?'Five minute limit reached. No victory rewards.':summary.reason==='forfeit'?(summary.winner?'Your opponent forfeited.':'You forfeited this encounter.'):summary.reason==='timeout'?(summary.winner?'Your opponent ran out of time.':'You ran out of time.'):summary.reason==='knockout'?(summary.winner?`You defeated ${enemy.name}.`:`${enemy.name} won this encounter.`):'This encounter has ended.';
   el('bt-summary-reason').textContent=reason;
   for(const [id,actor,facing] of [['hero',you,'right'],['enemy',enemy,'left']]){el('bt-summary-'+id).src=sprite(actor,facing);el('bt-summary-'+id).alt=actor.name;}
   for(const [id,actor] of [['bt-summary-health',you],['bt-summary-enemy-health',enemy]]){el(id).max=actor.maxHp;el(id).value=actor.hp;}
@@ -76,7 +78,7 @@
  });
  // The server owns combat; this queue only controls when damage becomes visible.
  function cancelPresentation(){
-  attackPreview=null;root.classList.remove('bt-hero-windup');
+  root.classList.remove('bt-hero-windup');
   presentationToken++;attackQueue=[];presenting=false;enemyThinking=false;enemyCasting=null;
   window.RPGSkillFX?.stop(el('bt-stage'));
   shownHp=battle?.actors.map(a=>a.hp)||[];seenBattle=battle?.id||'';seenEvent=battle?.eventSeq||0;lastImpact=seenEvent;
@@ -94,7 +96,7 @@
  }
  function revealImpact(event,token){
   if(token!==presentationToken||event.id<=lastImpact||!battle)return;
-  lastImpact=event.id;const target=event.target??(1-event.side);
+  lastImpact=event.id;window.RPGSound?.hit();const target=event.target??(1-event.side);
   shownHp[target]=Number.isFinite(event.hpAfter)?event.hpAfter:Math.max(0,shownHp[target]-event.damage);
   draw();
   const me=battle.me??0,node=el(target===me?'bt-hero-art':'bt-enemy-art').parentElement;
@@ -105,13 +107,7 @@
   try{
    while(attackQueue.length&&token===presentationToken){
     const events=attackQueue.splice(0),me=battle.me??0;
-    // The hero's cosmetic animation starts on tap; reconcile its confirmed hit once.
-    const preview=attackPreview,first=events[0];
-    if(preview&&first?.side===me&&first.skill===preview.skill){
-     events.shift();await preview.impact;if(token!==presentationToken)return;
-     revealImpact(first,token);await preview.finished;if(attackPreview===preview)attackPreview=null;
-    }
-    if(events.length&&window.RPGSkillFX?.sequence)await window.RPGSkillFX.sequence(el('bt-stage'),events.map(e=>({...e,reverse:e.side!==me,delayMs:battle.kind!=='pvp'&&e.side!==me?1000+Math.floor(Math.random()*2001):0})),{onPrepare:e=>{if(token!==presentationToken)return;enemyThinking=e.delayMs>0;enemyCasting=null;draw();},onAttack:e=>{if(token!==presentationToken)return;enemyThinking=false;enemyCasting=e.side!==me?e.skill:null;draw();},onImpact:e=>revealImpact(e,token)});
+    if(events.length&&window.RPGSkillFX?.sequence)await window.RPGSkillFX.sequence(el('bt-stage'),events.map(e=>({...e,reverse:e.side!==me,delayMs:battle.kind!=='pvp'&&e.side!==me?1000+Math.floor(Math.random()*1001):0})),{onPrepare:e=>{if(token!==presentationToken)return;enemyThinking=e.delayMs>0;enemyCasting=e.side!==me?e.skill:null;draw();},onAttack:e=>{if(token!==presentationToken)return;enemyThinking=false;enemyCasting=e.side!==me?e.skill:null;root.classList.remove('bt-hero-windup');window.RPGSound?.cast(R.SKILLS[e.skill]?.category);draw();},onImpact:e=>revealImpact(e,token)});
     // Missing/failed effects must still reconcile health and release the controls.
     if(token!==presentationToken)return;
     for(const event of events)revealImpact(event,token);
@@ -125,6 +121,7 @@
   root.classList.toggle('bt-playing',!!battle);
   const ownChallenge=!!battle?.challenge&&battle.challenge.side===(battle.me??0);
   root.classList.toggle('bt-chess-mode',ownChallenge);
+  const turnLabel=el('bt-turn-label'),turnHome=ownChallenge?el('bt-round').parentElement:el('bt-stage');if(turnLabel.parentElement!==turnHome){if(ownChallenge)turnHome.insertBefore(turnLabel,el('bt-turn-tools'));else turnHome.append(turnLabel);}
   const tools=el('bt-global-tools'),toolHome=battle?el('bt-turn-tools'):root.querySelector('.bt-header');if(tools.parentElement!==toolHome)toolHome.appendChild(tools);
   const runHome=ownChallenge?el('bt-own-actions'):root.querySelector('.bt-actions');if(el('bt-run').parentElement!==runHome)runHome.prepend(el('bt-run'));
   const abandonHome=ownChallenge?el('bt-own-actions'):el('bt-challenge').querySelector('header');if(el('bt-abandon').parentElement!==abandonHome)abandonHome.prepend(el('bt-abandon'));
@@ -135,7 +132,7 @@
   el('bt-enemy-name').textContent=enemy.name;el('bt-enemy-level').textContent=`Level ${enemy.level} · ${battle.kind==='pvp'?'Adventurer':enemy.boss?'Boss':'Monster'}`;el('bt-enemy-vitals').innerHTML=vitals(enemy);
   el('bt-hero-art').src=sprite(a,'right');el('bt-hero-art').alt=`${a.name} · ${a.hp} health`;el('bt-enemy-art').src=sprite(enemy,'left');el('bt-enemy-art').alt=`${enemy.name} · ${enemy.hp} health`;el('bt-enemy-kind').textContent=enemy.name.toUpperCase();
   for(const [id,actor] of [['bt-own-stats',a],['bt-enemy-stats',enemy]])el(id).innerHTML=['Health','Attack','Magic','Armor','Mana','Wisdom'].map((name,i)=>`<div><span>${name}</span><b>${actor.stats[i]}</b></div>`).join('');el('bt-bag').innerHTML=el('world-bag').innerHTML;el('bt-bag').style.aspectRatio=el('world-bag').style.aspectRatio;
-  el('bt-round').textContent=`ROUND ${battle.round}`;el('bt-turn-label').textContent=(presenting||(busy&&attackPreview))?(enemyThinking?`${enemy.name} is choosing a skill…`:'Attacking…'):pending?'Challenge pending':active?(mine?'Your turn':`${enemy.name}’s turn`):battle.status==='cancelled'?'Challenge closed':'Battle complete';el('bt-mode').textContent=local?'DEVICE PRACTICE':battle.training?'ONLINE PRACTICE':battle.kind==='pvp'?'PLAYER DUEL':'MONSTER BATTLE';
+  el('bt-round').textContent=`ROUND ${battle.round}`;el('bt-turn-label').textContent=(presenting||busy)?(enemyThinking?`${enemy.name} is choosing a skill…`:'Attacking…'):pending?'Challenge pending':active?(mine?'Your turn':`${enemy.name}’s turn`):battle.status==='cancelled'?'Challenge closed':'Battle complete';el('bt-mode').textContent=local?'DEVICE PRACTICE':battle.training?'ONLINE PRACTICE':battle.kind==='pvp'?'PLAYER DUEL':'MONSTER BATTLE';
   el('bt-stage').hidden=ownChallenge;el('bt-challenge').hidden=!ownChallenge;el('bt-pending').hidden=!pending;
   el('bt-pending-title').textContent=me===1?`${enemy.name} challenges you.`:`Waiting for ${enemy.name}…`;el('bt-accept').hidden=me!==1;el('bt-accept').disabled=busy;el('bt-decline').disabled=busy;
   el('bt-skills').innerHTML=Array.from({length:4},(_,i)=>a.active[i]||null).map(id=>{
@@ -152,16 +149,16 @@
   }).join('');
   for(const id of ['bt-ap','bt-mp','bt-defend'])el(id).disabled=busy||presenting||!mine||challenge;
   el('bt-ap').disabled ||=a.ap>=a.maxAp;el('bt-mp').disabled ||=a.mp>=a.maxMp;el('bt-run').disabled=busy||presenting||!['active','pending'].includes(battle.status);el('bt-abandon').disabled=busy||presenting;
-  el('bt-result').textContent=presenting||active||pending?'':battle.status==='cancelled'?'Challenge closed':battle.winner===me?'Victory!':'Defeat · try again';
+  el('bt-result').textContent=presenting||active||pending?'':battle.status==='cancelled'?'Challenge closed':battle.endReason==='battle_limit'?'Five minute limit reached':battle.winner===me?'Victory!':'Defeat · try again';
   const log=battle.log.join('|');if(!presenting&&log!==lastLog){el('bt-log').innerHTML=battle.log.map(s=>`<p>${esc(s)}</p>`).join('');el('bt-log').scrollTop=el('bt-log').scrollHeight;lastLog=log;}
   if(ownChallenge)challengeView();else{chessKey='';chess=null;selected=null;stopEngine();}
   el('bt-review-report').hidden=presenting||battle.status!=='finished';
   tick();
-  if(startHits)void playHits();
+  if(startHits&&!pendingHarvest)void playHits();
   showHarvest();
   if(battle.status==='finished'&&!presenting&&!pendingHarvest)openReport(battle);
  }
- function tick(){if(!battle||!['pending','active'].includes(battle.status)){el('bt-clock').textContent='';return;}const seconds=Math.max(0,Math.ceil((battle.deadline-Date.now())/1000));el('bt-clock').textContent=`${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')} left`;if(local&&R.timeout(battle)){notice('Time expired.');draw();}}
+ function tick(){if(!battle||!['pending','active'].includes(battle.status)){el('bt-clock').textContent='';return;}const seconds=Math.max(0,Math.ceil((Math.min(battle.deadline,battle.battleEndsAt??Infinity)-Date.now())/1000));el('bt-clock').textContent=`${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')} left`;const c=battle.challenge;if(c?.kind==='ap'&&c.clocks&&chess){const clocks=c.clocks.slice(),turn=c.moves.length%2;clocks[turn]=Math.max(0,clocks[turn]-(Date.now()-c.clockAt));el('bt-chess-clock').textContent=clocks.map((n,i)=>`${i?'AI':'You'} ${Math.floor(Math.ceil(n/1000)/60)}:${String(Math.ceil(n/1000)%60).padStart(2,'0')}`).join(' · ');if(!clocks[turn]&&!local&&!clockRequest){clockRequest=true;refresh().finally(()=>clockRequest=false);}}if(local&&R.timeout(battle)){notice('Time expired.');draw();}}
  async function refresh(){if(!hero||local||busy||refreshing||el('rpg-world').hidden)return;refreshing=true;const requestedBattle=battle?.id;try{const data=await api();if(local||battle?.id!==requestedBattle||(data.battle?.id===battle?.id&&data.battle?.version<battle?.version))return;if(data.spawnStatus)window.RPGWorld.syncEncounters?.(data);if(pendingProgress&&!data.battle){C.applyProgress(state,pendingProgress.totalXp);pendingProgress=null;window.RPGRoom.persist?.();window.RPGWorld.refresh?.();}if(data.battle&&(['active','pending','finished'].includes(data.battle.status)||battle?.id===data.battle.id)){const changed=!battle||data.battle.version!==battle.version||data.battle.id!==battle.id;battle=data.battle;if(changed)draw();if(['pending','active'].includes(battle.status)&&!dismissed)show();}else if(!data.battle&&battle){battle=null;draw();}}catch(e){if(!root.hidden&&!local)notice(battle?e.message:'Your login expired. Reopen RPG after signing in.',true);}finally{refreshing=false;}}
  function connect(h,s){hero=h;state=s;void window.RPGSkillFX?.warm?.(Object.keys(R.SKILLS));local=false;dismissed=false;if(pollTimer)clearInterval(pollTimer);pollTimer=setInterval(refresh,3000);if(!clockTimer)clockTimer=setInterval(tick,1000);api({action:'progress',heroId:hero.id}).then(()=>{if(!local&&pendingProgress&&!battle){C.applyProgress(state,pendingProgress.totalXp);pendingProgress=null;window.RPGRoom.persist?.();window.RPGWorld.refresh?.();}}).catch(()=>{});refresh();}
  function openLab(){show();if(battle&&['pending','active'].includes(battle.status)){draw();return;}battle=null;local=false;notice('Choose a monster or boss to test your current hero.');draw();}
@@ -219,14 +216,14 @@
   if(b.status!=='active'||b.turn!==0)throw Error('This battle has ended.');
   if(input.action==='harvest'){
    if(b.challenge)throw Error('Finish the current harvest first.');
-   if(input.resource==='ap'){const elo=b.actors[1].boss?1480+Math.floor(Math.random()*621):750+Math.floor(Math.random()*731);b.challenge={kind:'ap',side:0,elo,fen:new Chess().fen(),moves:[]};}
+   if(input.resource==='ap'){const elo=b.actors[1].boss?1480+Math.floor(Math.random()*621):750+Math.floor(Math.random()*731);b.challenge={kind:'ap',side:0,elo,fen:new Chess().fen(),moves:[],clocks:[60000,60000],clockAt:Date.now()};}
    else{const seen=new Set(history()),data=await pool(),eligible=data.filter(p=>p.pool===(b.actors[1].boss?'hard':'regular')&&!seen.has(p.id));const p=eligible[Math.floor(Math.random()*eligible.length)],game=new Chess(p.fen);game.move(uci(p.moves[0]));b.challenge={kind:'mp',side:0,puzzleId:p.id,pool:p.pool,rating:p.rating,fen:game.fen(),moves:[],step:1,puzzle:p};}
    R.note(b,`${a.name} chose ${input.resource.toUpperCase()} harvest. No other action this turn.`);b.deadline=Date.now()+1800000;
   }else if(input.action==='puzzleMove'){
    const c=b.challenge,p=c.puzzle,game=new Chess(c.fen);game.move(uci(input.move));
    if(input.move!==p.moves[c.step]&&!game.isCheckmate()){R.harvestResult(b,0,'mp',false,'Puzzle missed');R.note(b,'Puzzle missed. No mana gained.');R.finishTurn(b);}
    else{c.moves.push(input.move);c.step++;if(c.step>=p.moves.length||game.isCheckmate()){R.harvestResult(b,0,'mp',true,'Puzzle solved perfectly');R.note(b,'Puzzle solved perfectly · +20 MP (up to cap).');try{localStorage.setItem('chessburger_rpg_puzzle_history_v1',JSON.stringify([...history().filter(id=>id!==p.id),p.id].slice(-1000)));}catch{notice('Mana awarded, but puzzle history could not save on this device.');}R.finishTurn(b);}else{const reply=p.moves[c.step++];game.move(uci(reply));c.moves.push(reply);c.fen=game.fen();}}
-  }else if(input.action==='chessSave'){b.challenge.moves=input.moves.slice();
+  }else if(input.action==='chessSave'){const c=b.challenge;if(c.clocks){c.clocks[c.moves.length%2]-=Date.now()-c.clockAt;c.clockAt=Date.now();}b.challenge.moves=input.moves.slice();
   }else if(input.action==='chessFinish'){
    const game=new Chess();input.moves.forEach(m=>game.move(uci(m)));if(!game.isGameOver())throw Error('Finish the chess game first.');if(game.isCheckmate()&&game.turn()==='b'){R.harvestResult(b,0,'ap',true,'Chess victory');R.note(b,'Chess victory · +20 AP (up to cap).');}else{R.harvestResult(b,0,'ap',false,game.isCheckmate()?'Chess game lost':'Chess game drawn');R.note(b,'Chess lost or drawn. No AP gained.');}R.finishTurn(b);
   }else if(input.action==='abandon'){R.harvestResult(b,0,b.challenge.kind,false,'Harvest abandoned');R.note(b,'Challenge abandoned. No resource gained.');R.finishTurn(b);}
@@ -237,11 +234,9 @@
   if(input.action==='attack'){
    if(!R.usable(battle,battle.me??0,input.skill))return;
    root.classList.add('bt-hero-windup');
-   if(window.RPGSkillFX?.play){let impact;const preview={skill:input.skill,impact:new Promise(resolve=>impact=resolve),finished:null};attackPreview=preview;
-    preview.finished=Promise.resolve(window.RPGSkillFX.play(el('bt-stage'),input.skill,{onAttack:()=>root.classList.remove('bt-hero-windup'),onImpact:()=>impact()})).catch(()=>{}).finally(()=>{impact();root.classList.remove('bt-hero-windup');});
-   }
+
   }
-  const priorHarvest=battle.harvestResult?.id;busy=true;draw();try{if(local)await localAction(input);else{const data=await api({...input,version:battle.version,...(input.action==='accept'?{profile:loadout()}:{} )});battle=input.action==='leave'?(data.report||data.battle):data.battle;}if(input.action==='leave'){const ended=battle;stopEngine();close();battle=null;dismissed=true;if(ended?.status==='finished')openReport(ended);}}catch(e){if(attackPreview){attackPreview=null;window.RPGSkillFX?.stop(el('bt-stage'));root.classList.remove('bt-hero-windup');}notice(e.message,true);if(!local){try{const d=await api();battle=d.battle;}catch{}}}finally{if(battle?.harvestResult&&battle.harvestResult.id!==priorHarvest&&battle.harvestResult.side===(battle.me??0))pendingHarvest={...battle.harvestResult};busy=false;draw();}}
+  const priorHarvest=battle.harvestResult?.id;busy=true;draw();try{if(local)await localAction(input);else{const data=await api({...input,version:battle.version,...(input.action==='accept'?{profile:loadout()}:{} )});battle=input.action==='leave'?(data.report||data.battle):data.battle;}if(input.action==='leave'){const ended=battle;stopEngine();close();battle=null;dismissed=true;if(ended?.status==='finished')openReport(ended);}}catch(e){root.classList.remove('bt-hero-windup');notice(e.message,true);if(!local){try{const d=await api();battle=d.battle;}catch{}}}finally{if(battle?.harvestResult&&battle.harvestResult.id!==priorHarvest&&battle.harvestResult.side===(battle.me??0))pendingHarvest={...battle.harvestResult};busy=false;root.classList.remove('bt-hero-windup');draw();}}
  const pieceNames={p:'pawn',n:'knight',b:'bishop',r:'rook',q:'queen',k:'king'};
  function board(){if(!chess)return;const color=battle.challenge.kind==='ap'?'w':chess.turn(),flip=color==='b',ranks=flip?[1,2,3,4,5,6,7,8]:[8,7,6,5,4,3,2,1],files=flip?'hgfedcba':'abcdefgh',legal=selected?chess.moves({square:selected,verbose:true}).map(m=>m.to):[];let html='';
   for(const rank of ranks)for(const file of files){
@@ -253,11 +248,11 @@
   root.querySelector('.bt-board-footer').hidden=!chess.moves({verbose:true}).some(move=>move.promotion);
   el('bt-board').innerHTML=html;
  }
- function challengeView(){const c=battle.challenge,key=battle.id+'|'+c.kind+'|'+(c.puzzleId||c.elo);if(chessKey!==key){stopEngine();chessKey=key;selected=null;engineBroken=false;chess=new Chess(c.fen);if(c.kind==='ap'&&c.moves?.length){chess=new Chess();c.moves.forEach(m=>chess.move(uci(m)));}}
+ function challengeView(){const c=battle.challenge,key=battle.id+'|'+c.kind+'|'+(c.puzzleId||c.elo);if(chessKey!==key){stopEngine();chessKey=key;selected=null;premove=null;engineBroken=false;chess=new Chess(c.fen);if(c.kind==='ap'&&c.moves?.length){chess=new Chess();c.moves.forEach(m=>chess.move(uci(m)));}}
   else if(c.kind==='mp'&&chess.fen()!==c.fen){chess=new Chess(c.fen);selected=null;}
   el('bt-challenge-kind').textContent='';el('bt-challenge-title').textContent=c.kind==='ap'?'Chess · +20 AP':'Puzzle · +20 mana';el('bt-turn-label').textContent=el('bt-challenge-title').textContent;
   el('bt-engine-note').textContent=c.kind==='ap'?'Stockfish.js · White is yours. Win by checkmate for +20 AP. Draws and losses give no AP. Targets below 1320 use reduced skill plus extra mistakes; ratings are approximate.':'Lichess CC0 puzzle. Tap a piece, then a highlighted destination. One wrong legal move ends the harvest.';
-  if(c.kind==='ap'){el('bt-chess-status').textContent=engineBroken?'AI failed to load. Abandon this turn and retry when connected.':aiThinking?'AI is thinking…':chess.turn()==='w'?`White to move${chess.isCheck()?' · check':''}`:'Black to move';el('bt-moves').textContent=chess.history().slice(-12).join(' ');}else{el('bt-chess-status').textContent=`${chess.turn()==='w'?'White':'Black'} to move${chess.isCheck()?' · check':''}`;el('bt-moves').textContent=`Puzzle ${c.puzzleId}`;}
+  el('bt-chess-clock').hidden=c.kind!=='ap';if(c.kind==='ap'){el('bt-chess-status').textContent=engineBroken?'AI failed to load. Abandon this turn and retry when connected.':aiThinking?'AI is thinking… · you can premove':chess.turn()==='w'?`White to move${chess.isCheck()?' · check':''}`:'Black to move';el('bt-moves').textContent=chess.history().slice(-12).join(' ');}else{el('bt-chess-status').textContent=`${chess.turn()==='w'?'White':'Black'} to move${chess.isCheck()?' · check':''}`;el('bt-moves').textContent=`Puzzle ${c.puzzleId}`;}
   board();if(c.kind==='ap'&&chess.turn()==='b'&&!aiThinking&&!chess.isGameOver()&&!engineBroken)computerMove();
  }
  async function getEngine(){if(engineReady)return engineReady;engineReady=new Promise((resolve,reject)=>{
@@ -266,17 +261,17 @@
   engine.onerror=()=>{clearTimeout(timeout);reject(Error('AI could not load.'));engineResolve?.reject(Error('AI failed.'));};
   engine.onmessage=event=>{const line=String(event.data);if(line==='uciok'){engine.postMessage('setoption name Hash value 16');engine.postMessage('isready');}if(line==='readyok'){clearTimeout(timeout);resolve(engine);}if(line.startsWith('bestmove ')&&engineResolve){const pending=engineResolve;engineResolve=null;clearTimeout(engineTimer);pending.resolve(line.split(' ')[1]);}};engine.postMessage('uci');
  });return engineReady;}
- async function computerMove(){aiThinking=true;el('bt-chess-status').textContent='AI is thinking…';const key=chessKey,game=chess;try{
+ async function computerMove(){aiThinking=true;el('bt-chess-status').textContent='AI is thinking… · you can premove';const key=chessKey,game=chess;try{
   const c=battle.challenge,w=await getEngine();if(chessKey!==key)return;
   let move;const mistakes=c.elo<1320?Math.max(0,(1320-c.elo)/900):0;
   if(Math.random()<mistakes){const legal=game.moves({verbose:true});move=moveId(legal[Math.floor(Math.random()*legal.length)]);}
   else{w.postMessage(`setoption name UCI_LimitStrength value ${c.elo>=1320?'true':'false'}`);if(c.elo>=1320)w.postMessage(`setoption name UCI_Elo value ${c.elo}`);else w.postMessage('setoption name Skill Level value 0');w.postMessage('position fen '+game.fen());move=await new Promise((resolve,reject)=>{engineResolve={resolve,reject};engineTimer=setTimeout(()=>{engineResolve=null;reject(Error('AI search timed out.'));},10000);w.postMessage('go movetime 400');});}
-  if(chessKey!==key)return;game.move(uci(move));aiThinking=false;if(game.isGameOver()){board();await action({action:'chessFinish',moves:game.history({verbose:true}).map(moveId)});}else await action({action:'chessSave',moves:game.history({verbose:true}).map(moveId)});
+  if(chessKey!==key||battle?.status!=='active'||battle.challenge?.kind!=='ap')return;game.move(uci(move));aiThinking=false;if(game.isGameOver()){board();await action({action:'chessFinish',moves:game.history({verbose:true}).map(moveId)});}else{await action({action:'chessSave',moves:game.history({verbose:true}).map(moveId)});const queued=premove;premove=null;if(queued&&chess?.turn()==='w'&&battle?.challenge?.kind==='ap'){try{chess.move(uci(queued));await action({action:chess.isGameOver()?'chessFinish':'chessSave',moves:chess.history({verbose:true}).map(moveId)});}catch{notice('Premove cancelled: move is no longer legal.');}}}
  }catch(e){if(chessKey===key){engineBroken=true;aiThinking=false;notice(e.message,true);challengeView();}}}
- async function squareClick(square){if(!chess||busy||aiThinking||engineBroken||!battle?.challenge)return;const c=battle.challenge;if(c.kind==='ap'&&chess.turn()!=='w')return;const piece=chess.get(square);
+ async function squareClick(square){if(!chess||engineBroken||!battle?.challenge)return;const c=battle.challenge,piece=chess.get(square);if(c.kind==='ap'&&(chess.turn()==='b'||aiThinking||busy)){if(piece?.color==='w'){selected=square;board();return;}if(selected){premove=selected+square+(chess.get(selected)?.type==='p'&&square.endsWith('8')?'q':'');selected=null;board();el('bt-chess-status').textContent='Premove queued';}return;}if(busy)return;
   if(piece?.color===chess.turn()){selected=square;board();return;}if(!selected)return;const available=chess.moves({square:selected,verbose:true}).filter(m=>m.to===square);if(!available.length){selected=null;board();return;}
   const promotion=available.some(m=>m.promotion)?el('bt-promotion').value:undefined,input=selected+square+(promotion||'');selected=null;
-  if(c.kind==='mp')await action({action:'puzzleMove',move:input});else{chess.move(uci(input));if(chess.isGameOver()){board();await action({action:'chessFinish',moves:chess.history({verbose:true}).map(moveId)});}else{board();challengeView();}}
+  if(c.kind==='mp')await action({action:'puzzleMove',move:input});else{chess.move(uci(input));if(chess.isGameOver()){board();await action({action:'chessFinish',moves:chess.history({verbose:true}).map(moveId)});}else{board();await action({action:'chessSave',moves:chess.history({verbose:true}).map(moveId)});}}
  }
  el('bt-monster-select').innerHTML=R.MONSTERS.map(m=>`<option value="${m.id}">${m.name}${m.boss?' · BOSS':''}</option>`).join('');const preview=()=>{el('bt-lobby-art').src=window.DamageSprites.sprite(el('bt-monster-select').value,100,'left');};el('bt-monster-select').addEventListener('change',preview);preview();
  el('bt-practice').addEventListener('click',practice);el('bt-close').addEventListener('click',close);el('bt-skills').addEventListener('click',e=>{const button=e.target.closest('[data-bt-skill]');if(button&&!button.disabled)action({action:'attack',skill:button.dataset.btSkill});});

@@ -11,7 +11,7 @@ function sheet(group){
 async function frames(s){
  if(textures.has(s.id))return;
  const base=await sheet(s.category);
- const list=Array.from({length:s.animation.frames},(_,i)=>new PIXI.Texture(base.baseTexture,new PIXI.Rectangle(i*256,s.animation.row*256,256,256)));
+ const list=Array.from({length:s.animation.frames},(_,i)=>new PIXI.Texture(base.baseTexture,new PIXI.Rectangle(i*256,s.animation.row*256,256,256),new PIXI.Rectangle(0,0,640,640),new PIXI.Rectangle(192,192,256,256)));
  for(const frame of list)frame.defaultAnchor.set(.5,.5);
  textures.set(s.id,list);
 }

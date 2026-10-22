@@ -54,6 +54,10 @@ test('monster tap previews hero versus monster; Run makes no battle and Attack o
  const actors=(await read(db,'player-a')).battle.actors;
  for(const [id,actor] of [['bt-own-stats',actors[0]],['bt-enemy-stats',actors[1]]]){assert.equal(a.d.querySelector('#'+id).children.length,6);assert.deepEqual([...a.d.querySelectorAll('#'+id+' b')].map(n=>Number(n.textContent)),actor.stats);}
  for(const img of a.d.querySelectorAll('#bt-skills img,#bt-enemy-skills img'))assert.match(img.getAttribute('src'),/^assets\/skills\/runes\/[a-z_]+\.svg$/);
+ assert.equal(a.d.querySelector('#bt-turn-label').parentElement.id,'bt-stage');
+ for(const id of ['bt-ap','bt-mp']){const control=a.d.getElementById(id);assert.equal(control.textContent,'');assert.ok(control.closest('.bt-loadouts'));assert.equal(control.closest('.bt-own'),null);assert.match(control.parentElement.dataset.tooltip,/Harvest/);}
+ a.d.querySelector('[data-bt-skill="basic"]').click();await pause();await pause();a.d.querySelector('#bt-mp').click();await pause();await pause();assert.equal(a.d.querySelector('#bt-turn-label').parentElement.className,'bt-turn');assert.match(a.d.querySelector('#bt-turn-label').textContent,/Puzzle/);
+ a.d.querySelector('#bt-abandon').click();await pause();await pause();assert.equal(a.d.querySelector('#bt-turn-label').parentElement.id,'bt-stage');
  a.d.querySelector('#bt-close').click();assert.ok(resumes>0);
  assert.equal(a.messages.filter(m=>m.type==='CB_RPG_API'&&m.body.action==='encounter').length,1);assert.deepEqual(a.errors,[]);
  }finally{a.close();}
@@ -77,18 +81,18 @@ test('all eight heroes keep their original artwork at every health threshold and
  }finally{a.close();}
 });
 
-test('attack starts its visual immediately, waits for confirmed impact, and does not replay the hero skill',async()=>{
+test('confirmed attacks change damage sprites at the hit frame and show the selected monster skill during its 1–2s reply',async()=>{
  const db=database(),saved=await gameRequest(db,'player-a','POST',{action:'register',heroId:'crusader',name:'Quick Hero',skill:'punch'});
  const gps={lat:11.26,lng:125,accuracy:40,time:Date.now()},batch=await gameRequest(db,'player-a','POST',{action:'spawn',gps},{roadPoints:async()=>[{lat:11.2602,lng:125}]}),enemy=batch.encounters[0];
  const a=open(db);try{await pause();await pause();a.w.RPGBattle.connect({id:'crusader',name:'Aurex',stats:[20,4,4,4,20,4]},saved.game);a.w.RPGWorld.position=()=>({...gps,time:Date.now()});a.w.RPGWorld.monster=()=>enemy;
  await a.w.RPGBattle.encounter(enemy.id);await pause();a.d.querySelector('[data-attack]').click();await pause();await pause();
- let start=0,impact,finish,release;const queued=[];
- a.w.RPGSkillFX={play:(host,id,options)=>{start++;impact=options.onImpact;return new Promise(resolve=>finish=resolve);},sequence:async(host,events,options)=>{queued.push(...events);for(const event of events)options.onImpact(event);},stop(){}};
+ let impact,finish,release;const queued=[];
+ a.w.RPGSkillFX={sequence:async(host,events,options)=>{queued.push(...events);for(const event of events){options.onPrepare?.(event);if(event.side!==0){assert.ok(event.delayMs>=1000&&event.delayMs<=2000);assert.ok(a.d.querySelector('#bt-enemy-skills .bt-casting'));}options.onAttack?.(event);if(event.side===0)await new Promise(resolve=>{impact=()=>options.onImpact(event);finish=resolve;});else options.onImpact(event);}},stop(){}};
  const fetch=a.w.fetch;a.w.fetch=(input,options)=>JSON.parse(options?.body||'{}').action==='attack'?new Promise(resolve=>{release=()=>resolve(fetch(input,options));}):fetch(input,options);
- const beforeImpact=a.d.querySelector('#bt-enemy-art').alt;const button=a.d.querySelector('[data-bt-skill="basic"]');assert.equal(button.textContent,'');assert.equal(button.children.length,1);assert.match(button.getAttribute('aria-label'),/Basic Tackle.*4 AP.*2 MP.*Damage/);assert.match(button.parentElement.dataset.tooltip,/Basic Tackle/);
- button.click();assert.equal(start,1);assert.equal(a.messages.filter(m=>m.body?.action==='attack').length,0);assert.equal(a.d.querySelector('#bt-enemy-art').alt,beforeImpact);
- release();await pause();await pause();assert.equal(a.d.querySelector('#bt-enemy-art').alt,beforeImpact);
- impact();finish();await pause();await pause();assert.ok(queued.every(e=>e.side!==0),'hero effect must not replay after server response');assert.ok(a.d.querySelector('#bt-enemy-art').alt.endsWith(`${(await read(db,'player-a')).battle.actors[1].hp} health`));assert.equal(a.d.querySelectorAll('#bt-skills strong,#bt-skills small,#bt-skills em').length,0);
+ const beforeImpact=a.d.querySelector('#bt-enemy-art').alt;const button=a.d.querySelector('[data-bt-skill="basic"]');assert.equal(button.textContent,'');assert.equal(button.children.length,1);assert.match(button.getAttribute('aria-label'),/Basic Tackle.*4 AP.*2 MP.*Damage/);
+ button.click();assert.equal(queued.length,0);assert.ok(a.d.querySelector('#rpg-battle').classList.contains('bt-hero-windup'));assert.equal(a.d.querySelector('#bt-enemy-art').alt,beforeImpact);
+ release();await pause();await pause();assert.equal(queued.filter(e=>e.side===0).length,1);assert.equal(a.d.querySelector('#bt-enemy-art').alt,beforeImpact);
+ impact();assert.ok(a.d.querySelector('#bt-enemy-art').alt.endsWith(`${(await read(db,'player-a')).battle.actors[1].hp} health`));finish();await pause();await pause();assert.equal(queued.filter(e=>e.side===0).length,1);assert.equal(a.d.querySelectorAll('#bt-skills strong,#bt-skills small,#bt-skills em').length,0);
  }finally{a.close();}
 });
 
@@ -114,5 +118,18 @@ test('hero room, library, picker and map use runes; map GPS and player presence 
  Object.defineProperty(a.w.navigator,'onLine',{value:true,configurable:true});a.w.dispatchEvent(new a.w.Event('online'));assert.equal(callbacks.length,2);callbacks[1](fix());await pause();await pause();assert.ok(await read(db,'player-a','rpg_presence','live'));
  a.w.RPGWorld.pauseForBattle();await pause();assert.equal(await read(db,'player-a','rpg_presence','live'),null);callbacks[1](fix());await pause();assert.equal(await read(db,'player-a','rpg_presence','live'),null);
  a.w.RPGWorld.resumeAfterBattle();assert.equal(callbacks.length,3);callbacks[2](fix());await pause();await pause();assert.ok(await read(db,'player-a','rpg_presence','live'));assert.ok(cleared.includes(2));a.w.RPGWorld.stop();
+ }finally{a.close();}
+});
+
+
+test('harvest result appears before the enemy reply animation and premove survives an AI turn',async()=>{
+ const db=database(),saved=await gameRequest(db,'player-a','POST',{action:'register',heroId:'rogue',name:'Chess Tester',skill:'punch'}),gps={lat:11.26,lng:125,accuracy:40,time:Date.now()};
+ const batch=await gameRequest(db,'player-a','POST',{action:'spawn',gps},{roadPoints:async()=>[{lat:11.26,lng:125}]}),enemy=batch.encounters[0],a=open(db);
+ try{await pause();await pause();a.w.RPGBattle.connect({id:'rogue',name:'Tester',stats:[20,4,4,4,20,4]},saved.game);a.w.RPGWorld.position=()=>({...gps,time:Date.now()});a.w.RPGWorld.monster=()=>enemy;await a.w.RPGBattle.encounter(enemy.id);await pause();a.d.querySelector('[data-attack]').click();await pause();await pause();a.d.querySelector('[data-bt-skill="basic"]').click();await pause();await pause();
+ let reply;a.w.Worker=class{postMessage(command){if(command==='uci')setTimeout(()=>this.onmessage({data:'uciok'}),0);if(command==='isready')setTimeout(()=>this.onmessage({data:'readyok'}),0);if(command.startsWith('go '))reply=()=>this.onmessage({data:'bestmove e7e5'});}terminate(){}};
+ // Use regular engine search, rather than the low-Elo random mistake branch.
+ a.w.Math.random=()=>.99;a.d.querySelector('#bt-ap').click();await pause();await pause();
+ const tap=square=>a.d.querySelector(`[data-bt-square="${square}"]`).click();tap('e2');tap('e4');await pause();await pause();assert.ok(reply);tap('g1');tap('f3');assert.match(a.d.querySelector('#bt-chess-status').textContent,/Premove queued/);reply();await pause();await pause();await pause();const doc=await read(db,'player-a');assert.deepEqual(doc.battle.challenge.moves.slice(0,3),['e2e4','e7e5','g1f3']);
+ let animation=0;a.w.RPGSkillFX={sequence:async()=>{animation++;},stop(){}};a.d.querySelector('#bt-abandon').click();await pause();await pause();assert.equal(a.d.querySelector('#bt-harvest-modal').hidden,false);assert.equal(animation,0);a.d.querySelector('#bt-harvest-done').click();await pause();assert.ok(animation>0);
  }finally{a.close();}
 });

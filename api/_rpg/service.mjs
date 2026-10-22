@@ -1,3 +1,4 @@
+import {health,healthCap,loot,stash,recovery} from './rewards.mjs';
 import {Chess} from 'chess.js';
 import puzzles from './puzzles.json' with {type:'json'};
 import * as R from './core.mjs';
@@ -13,19 +14,21 @@ export async function gameRequest(client,user,method,input={},services={}){
  const now=services.now?.()??Date.now();let doc=await read(client,user),shared=null;
  const persist=()=>write(client,user,'rpg_profile','hero',doc);
  const cachedSet=()=>doc?.monsterSet?.refreshAt>now?{encounters:(doc.encounters||[]).filter(e=>!e.consumed&&e.expires_at>now),refreshAt:doc.monsterSet.refreshAt}:null;
+ if(input.action==='init'&&doc?.state&&recovery(doc))await persist();
  if(input.action==='init')return {game:doc?.state||null,generation:doc?.generation||null,spawnCache:cachedSet()};
  const resetError=()=>{throw Object.assign(Error('Your RPG hero was reset by an owner. Reopen RPG to choose your hero.'),{status:409,code:'hero_reset'});};
  if(doc?.generation&&input.generation!==doc.generation)resetError();
  if(input.action==='register'){
   if(doc?.state){if(doc.heroId!==input.heroId||doc.name!==String(input.name).trim()||doc.starterSkill!==input.skill)fail('Your hero has already been chosen and cannot be changed.');return {game:doc.state,generation:doc.generation||null};}
-  const proposed=makeHero(input);
+  const proposed=makeHero(input);recovery(proposed);
   if(doc){Object.assign(proposed,{revision:doc.revision,generation:doc.generation,lastReset:doc.lastReset});await write(client,user,'rpg_profile','hero',proposed);}
   else await insert(client,user,'rpg_profile','hero',proposed);
   doc=await read(client,user);
   if(!doc?.state||doc.heroId!==proposed.heroId||doc.name!==proposed.name||doc.starterSkill!==proposed.starterSkill)fail('A hero was already confirmed in another window. Reopen RPG to continue.');return {game:doc.state,generation:doc.generation||null};
  }
  if(!doc?.state){if(doc?.generation)resetError();fail('Choose your hero first.',409);}
- if(input.action==='save'){saveInventory(doc,input.state);await persist();return {game:doc.state};}
+ if(input.action==='claimLoot'){stash(doc);await persist();return {game:doc.state,pendingLoot:doc.pendingLoot};}
+ if(input.action==='save'){if(doc.pvpId){const rows=await client.from('cb_inventory_items').select('metadata').eq('item_kind','rpg_battle').eq('item_id',doc.pvpId).contains('metadata',{participants:[user]}).maybeSingle();if(rows.error||['active','pending'].includes(rows.data?.metadata?.status))fail('Equipment is locked during battle.');}saveInventory(doc,input.state);await persist();return {game:doc.state};}
  const near=(a,b)=>{if(!a)fail('Use a fresh map location to select an encounter.');const distance=distanceMeters(a,b);if(distance>200)throw Object.assign(Error('Outside attack range. Move within 200 meters to battle.'),{status:409,code:'out_of_range',distance:Math.ceil(distance)});};
  const getPresence=async id=>{const p=await read(client,id,'rpg_presence','live');if(!p||now-p.updatedAt>30000)fail('This player needs a fresh online GPS position.');return p;};
  if(input.channel==='presence'){
@@ -36,7 +39,7 @@ export async function gameRequest(client,user,method,input={},services={}){
   const rows=await client.from('cb_inventory_items').select('user_id,metadata').eq('item_kind','rpg_presence').gt('updated_at',new Date(now-45000).toISOString()).neq('user_id',user).limit(200);if(rows.error)fail('Nearby players unavailable.',503);
   return {players:(rows.data||[]).map(r=>r.metadata).filter(p=>now-p.updatedAt<45000&&distanceMeters(p,old)<=5000).sort((a,b)=>distanceMeters(a,old)-distanceMeters(b,old)).slice(0,100)};
  }
- const player=async (id=user)=>{const d=id===user?doc:await read(client,id);if(!d?.state)fail('This player has not chosen a hero.');const s=d.state;return {...R.profile({heroId:d.heroId,name:d.name,level:s.level,stats:C.totals(s,P.baseStats(s.level)),active:s.active}),userId:id,heroGeneration:d.generation||null};};
+ const player=async (id=user)=>{const d=id===user?doc:await read(client,id);if(!d?.state)fail('This player has not chosen a hero.');const s=d.state;return {...R.profile({heroId:d.heroId,name:d.name,level:s.level,stats:C.totals(s,P.baseStats(s.level)),active:s.active}),hp:health(s),userId:id,heroGeneration:d.generation||null};};
  const me=b=>b.actors.findIndex(a=>a.userId===user),visible=b=>R.publicBattle(b,me(b));
  const save=async (b,solvedId=null)=>{
   b.version++;if(solvedId){doc.history=[solvedId,...doc.history.filter(id=>id!==solvedId)].slice(0,1000);}
@@ -56,11 +59,16 @@ export async function gameRequest(client,user,method,input={},services={}){
   const b=doc.battle||null;if(b&&R.timeout(b,now))await save(b);return b;
  }
  const result=async b=>{
+  if(b?.status==='finished'&&me(b)>=0&&doc.healthBattle!==b.id){doc.state.currentHp=b.actors[me(b)].hp;doc.healthBattle=b.id;await persist();}
   if(b?.status==='finished'&&b.winner===me(b)&&b.kind==='monster'&&!b.training&&b.encounterId&&b.endReason==='knockout'&&!doc.awards.some(a=>a.id===b.id)){
-   const xp=Math.min(P.threshold(88)-doc.state.totalXp,P.victoryXp(doc.state.level,b.actors[1].level));C.gainXp(doc.state,xp);const encounter=doc.encounters.find(e=>e.id===b.encounterId);if(encounter)encounter.consumed=true;doc.awards=[...doc.awards,{id:b.id,xp}].slice(-100);await persist();
+   const xp=Math.min(P.threshold(88)-doc.state.totalXp,P.victoryXp(doc.state.level,b.actors[1].level));C.gainXp(doc.state,xp);const encounter=doc.encounters.find(e=>e.id===b.encounterId);if(encounter)encounter.consumed=true;const drops=loot(b.actors[1].level,services.rng);doc.pendingLoot=[...(doc.pendingLoot||[]),...drops];stash(doc);doc.awards=[...doc.awards,{id:b.id,xp,drops}].slice(-100);await persist();
   }
-  return {battle:b?visible(b):null,progression:progression(doc,b),defeatedEncounterId:b?.kind==='monster'&&b.status==='finished'&&b.winner===me(b)&&b.endReason==='knockout'?b.encounterId:null};
+  return {game:doc.state,pendingLoot:doc.pendingLoot||[],drops:doc.awards.find(a=>a.id===b?.id)?.drops||[],battle:b?visible(b):null,progression:progression(doc,b),defeatedEncounterId:b?.kind==='monster'&&b.status==='finished'&&b.winner===me(b)&&b.endReason==='knockout'?b.encounterId:null};
  };
+ if(input.action==='drinkPotion'){await result(await current());
+  const ongoing=await read(client,user,'rpg_profile','hero');let active=ongoing?.battle?.status==='active';if(ongoing?.pvpId){const rows=await client.from('cb_inventory_items').select('metadata').eq('item_kind','rpg_battle').eq('item_id',ongoing.pvpId).contains('metadata',{participants:[user]}).maybeSingle();if(rows.error)fail('Battle unavailable.',503);active=rows.data?.metadata?.status==='active';}if(active)fail('Finish your battle before using a potion.');
+  if(health(doc.state)>=healthCap(doc.state))fail('Health is already full.');const index=doc.state.items.findIndex(i=>i.defId==='health_potion');if(index<0)fail('No health potion available.');doc.state.items.splice(index,1);doc.state.inventoryRevision=(doc.state.inventoryRevision||0)+1;doc.state.currentHp=Math.min(healthCap(doc.state),health(doc.state)+Math.max(1,Math.ceil(healthCap(doc.state)*.5)));stash(doc);await persist();return {game:doc.state,pendingLoot:doc.pendingLoot};
+ }
  if(input.action==='progress')return {progression:progression(doc)};
  if(method==='GET')return await result(await current());
  if(input.action==='spawn'){
@@ -83,8 +91,8 @@ export async function gameRequest(client,user,method,input={},services={}){
  }
  if(['practice','encounter','challenge'].includes(input.action)){
   if(input.action==='practice')fail('Choose a nearby monster on the map.');
-  const existing=await current();if(existing&&['active','pending'].includes(existing.status))fail('Finish your current battle first.');
-  const a=await player();if(!a.active.length)fail('Equip an attack skill first.');let enemy,kind='monster',encounter;
+  const existing=await current();if(existing?.status==='finished')await result(existing);if(existing&&['active','pending'].includes(existing.status))fail('Finish your current battle first.');
+  const a=await player();if(a.hp<=0)fail('Drink a health potion in Hero Room before entering another battle.');if(!a.active.length)fail('Equip an attack skill first.');let enemy,kind='monster',encounter;
   if(input.action==='encounter'){encounter=doc.encounters.find(e=>e.id===input.target&&!e.consumed&&e.expires_at>now);if(!encounter)fail('This monster expired or has already been battled.');
    const selected=doc.selection&&doc.selection.target===input.target&&doc.selection.token===input.selectionToken&&doc.selection.expiresAt>now;
    if(!selected){const gps=validateFix(input.gps,now);if(!gps)fail('Select this monster on the map again.');near(gps,encounter);}enemy=R.monster(encounter.monsterId,encounter.level);}
@@ -102,7 +110,7 @@ export async function gameRequest(client,user,method,input={},services={}){
  if(input.version!==b.version)fail('Battle changed. Refresh and try again.',409);
  if(b.status==='pending'){
   if(input.action==='decline'){b.status='cancelled';R.note(b,'Challenge declined.');}
-  else if(input.action==='accept'&&side===1){b.actors[1]=await player();if(!b.actors[1].active.length)fail('Equip a skill first.');b.status='active';b.startedAt=now;b.deadline=now+90000;R.note(b,'Challenge accepted. Challenger takes the first turn.');}
+  else if(input.action==='accept'&&side===1){b.actors[1]=await player();if(b.actors[1].hp<=0)fail('Drink a health potion before accepting.');if(!b.actors[1].active.length)fail('Equip a skill first.');b.status='active';b.startedAt=now;b.battleEndsAt=now+300000;b.deadline=now+90000;R.note(b,'Challenge accepted. Challenger takes the first turn.');}
   else fail('Waiting for the other player to accept.');await save(b);return await result(b);
  }
  if(b.status!=='active')fail('This battle has ended.',409);
@@ -113,7 +121,7 @@ export async function gameRequest(client,user,method,input={},services={}){
   if(!['ap','mp'].includes(input.resource))fail('Choose AP or mana.');
   if(a[input.resource]>=a[input.resource==='ap'?'maxAp':'maxMp'])fail('That resource is already full.');
   if(input.resource==='ap'){
-   const boss=b.actors[1-side].boss,elo=boss?1480+rand(621):750+rand(731);b.challenge={kind:'ap',side,elo,fen:new Chess().fen(),moves:[]};
+   const boss=b.actors[1-side].boss,elo=boss?1480+rand(621):750+rand(731);b.challenge={kind:'ap',side,elo,fen:new Chess().fen(),moves:[],clocks:[60000,60000],clockAt:now};
   }else{
    const history=doc.history.map(puzzle_id=>({puzzle_id})),seen=new Set(history.map(h=>h.puzzle_id)),pool=b.actors[1-side].boss?'hard':'regular',eligible=puzzles.filter(p=>p.pool===pool&&!seen.has(p.id)),p=eligible[rand(eligible.length)];if(!p)fail('Puzzle pool unavailable. Try again later.',503);
    const chess=new Chess(p.fen);chess.move(uci(p.moves[0]));b.challenge={kind:'mp',side,puzzleId:p.id,pool,rating:p.rating,fen:chess.fen(),moves:[],step:1};
@@ -133,6 +141,7 @@ export async function gameRequest(client,user,method,input={},services={}){
   const c=b.challenge;if(!c||c.kind!=='ap'||c.side!==side||!Array.isArray(input.moves)||input.moves.length>1000||input.moves.some(m=>typeof m!=='string'||!/^[a-h][1-8][a-h][1-8][qrbn]?$/.test(m)))fail('Invalid chess game.');
   const chess=new Chess();try{for(const m of input.moves)chess.move(uci(m));}catch{fail('Invalid chess move history.');}
   if(c.moves.some((m,i)=>input.moves[i]!==m))fail('Chess history cannot be rewritten.');
+  if(c.clocks){if(input.moves.length!==c.moves.length+1)fail('Submit one chess move at a time.');const turn=c.moves.length%2;c.clocks[turn]=Math.max(0,c.clocks[turn]-(now-c.clockAt));c.clockAt=now;}
   if(input.action==='chessSave'){if(chess.isGameOver())fail('Submit the completed game.');c.moves=input.moves.slice();c.fen=new Chess().fen();await save(b);return await result(b);}
   if(!chess.isGameOver())fail('Finish the chess game first.');
   if(chess.isCheckmate()&&chess.turn()==='b'){R.harvestResult(b,side,'ap',true,'Chess victory');R.note(b,`${a.name} won the chess game · +20 AP (up to cap).`);}else{R.harvestResult(b,side,'ap',false,chess.isCheckmate()?'Chess game lost':'Chess game drawn');R.note(b,'Chess game lost or drawn. No AP gained.');}

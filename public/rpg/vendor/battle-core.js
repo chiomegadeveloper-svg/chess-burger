@@ -8,6 +8,7 @@
  function victoryXp(heroLevel,monsterLevel){return Math.round((40+12*clampLevel(monsterLevel))*Math.max(.5,Math.min(1.6,1+(monsterLevel-heroLevel)*.15)));}
  const api={MAX_LEVEL,clampLevel,nextXp,threshold,progress,baseStats,maxAp,victoryXp};root.RPGProgression=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(globalThis);
+
 // Single catalogue shared by room, server combat, browser combat, and ct.js effects.
 (function(root){
  const skills=[
@@ -795,9 +796,9 @@
  root.RPG_ATTACK_SKILLS=skills;
  if(typeof module!=="undefined"&&module.exports)module.exports=skills;
 })(globalThis);
+
+const attackSkills=globalThis.RPG_ATTACK_SKILLS,P=globalThis.RPGProgression;
 // Shared deterministic rules. The server owns all combat mutations.
-const attackSkills=window.RPG_ATTACK_SKILLS;
-const P=window.RPGProgression;
 const SKILLS=Object.fromEntries(attackSkills.map(s=>[s.id,s]));
 const MONSTERS=[['chaanack','Chaanack'],['erpack','Erpack'],['donkuber','Donkuber'],['windee','Windee'],['kalaagg','Kalaagg'],['pektu','Pektu'],['mhakiduk','Mhakiduk'],['odeksa','Odeksa'],['buhokba','Buhokba'],['muraduk','Muraduk'],['punsuck','Punsuck'],['conchita','Conchita'],['jengot','Jengot'],['draguu','Draguu'],['baluu','Baluu'],['kassag','Kassag']].map(([id,name],i)=>({id,name,boss:i>=10}));
 function profile(input){
@@ -828,7 +829,7 @@ function battleSummary(b,side=0){
  return {winner:b.winner===side,reason:b.endReason||'unknown',rounds:b.round,durationMs:Number.isFinite(b.startedAt)&&Number.isFinite(b.endedAt)?Math.max(0,b.endedAt-b.startedAt):null,complete:b.report?.complete===true,
   actors:[side,1-side].map(i=>{const a=b.actors[i],r=b.report?.actors[i];return {name:a.name,heroId:a.heroId,level:a.level,hp:a.hp,maxHp:a.maxHp,ap:a.ap,mp:a.mp,stats:r?{damage:r.damage,damageTaken:b.report?.actors[1-i]?.damage??null,attacks:r.attacks,apSpent:r.apSpent,mpSpent:r.mpSpent,apGained:r.apGained,mpGained:r.mpGained,defends:r.defends}:null,skills:r?Object.entries(r.skills).map(([id,v])=>({id,name:SKILLS[id]?.name||id,...v})):[]};})};
 }
-function createBattle(a,b,kind='monster',now=Date.now()){a.turns=1;return {startedAt:kind==='pvp'?null:now,endedAt:null,endReason:null,report:{complete:true,actors:[emptyReport(),emptyReport()]},kind,status:kind==='pvp'?'pending':'active',actors:[a,b],turn:0,round:1,ply:0,version:0,deadline:now+(kind==='pvp'?60000:1800000),events:[],eventSeq:0,log:['Battle ready. Equipment and skills are locked for this encounter.'],challenge:null,winner:null};}
+function createBattle(a,b,kind='monster',now=Date.now()){a.turns=1;return {startedAt:kind==='pvp'?null:now,endedAt:null,endReason:null,report:{complete:true,actors:[emptyReport(),emptyReport()]},kind,status:kind==='pvp'?'pending':'active',actors:[a,b],turn:0,round:1,ply:0,version:0,battleEndsAt:kind==='pvp'?null:now+300000,deadline:now+(kind==='pvp'?60000:300000),events:[],eventSeq:0,log:['Battle ready. Equipment and skills are locked for this encounter.'],challenge:null,winner:null};}
 function note(b,s){b.log.push(s);b.log=b.log.slice(-30);}
 function usable(b,side,id){const a=b.actors[side],s=SKILLS[id];return b.status==='active'&&b.turn===side&&!b.challenge&&s&&a.active.includes(id)&&a.ap>=s.ap&&a.mp>=s.mp&&(a.ready[id]||0)<=a.turns;}
 function attack(b,side,id,now=Date.now()){if(!usable(b,side,id))throw Error('Skill unavailable: check AP, mana, cooldown, and whose turn it is.');const a=b.actors[side],d=b.actors[1-side],s=SKILLS[id];a.ap-=s.ap;a.mp-=s.mp;a.ready[id]=a.turns+s.cooldown+1;let damage=Math.max(1,Math.round((a.stats[s.magic?2:1]*s.scale+2)-d.stats[3]*.15));if(d.defending)damage=Math.max(1,Math.ceil(damage/2));const hpBefore=d.hp,effective=Math.min(d.hp,damage);d.hp=Math.max(0,d.hp-damage);const r=reportFor(b,side);r.damage+=effective;r.attacks++;r.apSpent+=s.ap;r.mpSpent+=s.mp;const use=r.skills[id]||(r.skills[id]={uses:0,damage:0});use.uses++;use.damage+=effective;b.eventSeq=(b.eventSeq||0)+1;b.events=[...(b.events||[]),{id:b.eventSeq,skill:id,side,target:1-side,damage,hpBefore,hpAfter:d.hp}].slice(-12);note(b,`${a.name} used ${s.name} · ${damage} damage.`);if(d.hp===0){endBattle(b,side,'knockout',now);note(b,`${a.name} wins.`);}return damage;}
@@ -851,9 +852,12 @@ function enemyTurn(b,now=Date.now()){
 function finishTurn(b,now=Date.now()){advance(b,now);enemyTurn(b,now);}
 function defend(b,side){b.actors[side].defending=true;reportFor(b,side).defends++;const ap=gainResource(b,side,'ap',8),mp=gainResource(b,side,'mp',8);note(b,`${b.actors[side].name} defends · +${ap} AP, +${mp} MP for the next turn (up to cap) · next incoming damage halved.`);}
 function timeout(b,now=Date.now()){
- if(!['active','pending'].includes(b.status)||now<=b.deadline)return false;
+ if(!['active','pending'].includes(b.status))return false;
+ if(b.status==='active'&&now>=(b.battleEndsAt??b.startedAt+300000)){endBattle(b,null,'battle_limit',b.battleEndsAt??b.startedAt+300000);note(b,'Five minute battle limit reached. No victory rewards.');return true;}
+ const c=b.challenge;if(c?.kind==='ap'&&c.clocks){const turn=c.moves.length%2;if(now-c.clockAt>=c.clocks[turn]){harvestResult(b,c.side,'ap',turn===1,'Chess clock expired');finishTurn(b,now);return true;}}
+ if(now<=b.deadline)return false;
  if(b.status==='pending'){b.status='cancelled';note(b,'Challenge expired.');}else{endBattle(b,1-b.turn,'timeout',now);note(b,`${b.actors[b.turn].name} ran out of time and forfeited.`);}return true;
 }
-function publicBattle(b,me){if(!b)return null;const c=b.challenge;return {...b,me,actors:b.actors.map(a=>{const {userId,...visible}=a;return visible;}),challenge:c?{kind:c.kind,side:c.side,...(c.side===me?{fen:c.fen,moves:c.moves||[],elo:c.elo,puzzleId:c.puzzleId,rating:c.rating,pool:c.pool}:{} )}:null};}
+function publicBattle(b,me){if(!b)return null;const c=b.challenge;return {...b,me,actors:b.actors.map(a=>{const {userId,...visible}=a;return visible;}),challenge:c?{kind:c.kind,side:c.side,clocks:c.clocks,clockAt:c.clockAt,...(c.side===me?{fen:c.fen,moves:c.moves||[],elo:c.elo,puzzleId:c.puzzleId,rating:c.rating,pool:c.pool}:{} )}:null};}
 
-window.RPGBattleRules={SKILLS,MONSTERS,profile,monster,createBattle,usable,attack,advance,enemyTurn,finishTurn,defend,timeout,note,endBattle,gainResource,harvestResult,battleSummary};})();
+globalThis.RPGBattleRules={SKILLS,MONSTERS,profile,monster,createBattle,usable,attack,advance,enemyTurn,finishTurn,defend,timeout,note,endBattle,gainResource,harvestResult,battleSummary,publicBattle};})();
