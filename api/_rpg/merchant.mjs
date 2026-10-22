@@ -13,16 +13,17 @@ export function stock(user,day,level,generation=''){
 export async function merchantRequest(client,user,doc,input,now){
  const wallet=await client.from('cb_profiles').select('gold_points').eq('user_id',user).maybeSingle();if(wallet.error||!wallet.data)fail('Your CBG balance is unavailable.',503);doc.state.cbg=Number(wallet.data.gold_points||0);
  const day=merchantDay(now);if(doc.merchant?.day!==day){doc.merchant={day,level:doc.state.level,sold:[],offers:stock(user,day,doc.state.level,doc.generation||'')};await write(client,user,'rpg_profile','hero',doc);}
- let tradingReady=true;const response=()=>({game:doc.state,merchant:{tradingReady,day,refreshAt:new Date(day+'T00:00:00+08:00').getTime()+86400000,level:doc.merchant.level,offers:doc.merchant.offers.map(o=>({...o,sold:doc.merchant.sold.includes(o.id)})),potions:['health_potion','mana_potion'].map(id=>({id,item:{defId:id,rarity:'common'},price:8})),sellPrices:Object.fromEntries(doc.state.items.map(i=>[i.uid,sellPrice(i)]))}});
+ let tradingReady=true;const response=()=>({game:doc.state,merchant:{bagUpgrade:{price:488,slots:12,purchased:Math.max(0,(doc.state.grids.bag.rows-6)/2),remaining:Math.max(0,(12-doc.state.grids.bag.rows)/2)},tradingReady,day,refreshAt:new Date(day+'T00:00:00+08:00').getTime()+86400000,level:doc.merchant.level,offers:doc.merchant.offers.map(o=>({...o,sold:doc.merchant.sold.includes(o.id)})),potions:['health_potion','mana_potion'].map(id=>({id,item:{defId:id,rarity:'common'},price:8})),sellPrices:Object.fromEntries(doc.state.items.map(i=>[i.uid,sellPrice(i)]))}});
  if(input.action==='merchant'){const probe=await client.rpc('cb_rpg_merchant_trade',{p_user_id:user,p_request_id:null,p_revision:doc.revision,p_delta:0,p_document:null});tradingReady=!probe.error;return response();}
  if(!/^[0-9a-f-]{36}$/i.test(input.requestId||''))fail('Please retry this trade.',400);
  if((doc.merchantReceipts||[]).includes(input.requestId))return response();
  const next=structuredClone(doc);let delta;
  if(input.action==='merchantBuy'){
-  if(input.day!==day)fail('The merchant has new stock. Reopen the shop.');let item;
-  if(['health_potion','mana_potion'].includes(input.offerId)){const def=C.itemMap[input.offerId];item={uid:crypto.randomUUID(),defId:def.id,rotation:0,rotated:false,...C.rollItem(def,1,Math.random,{rarity:'common'})};delta=-8;}
+  if(input.day!==day)fail('The merchant has new stock. Reopen the shop.');let item;const quantity=input.quantity??1;if(!Number.isInteger(quantity)||quantity<1||quantity>99)fail('Choose 1–99 potions.',400);
+  if(input.offerId==='bag_upgrade'){if(next.state.grids.bag.rows>=12)fail('Your bag already has all 36 additional slots.');next.state.grids.bag.rows+=2;delta=-488;}
+  else if(['health_potion','mana_potion'].includes(input.offerId)){const def=C.itemMap[input.offerId];item={uid:crypto.randomUUID(),defId:def.id,rotation:0,rotated:false,...C.rollItem(def,1,Math.random,{rarity:'common'})};delta=-8*quantity;}
   else{const offer=next.merchant.offers.find(o=>o.id===input.offerId);if(!offer||next.merchant.sold.includes(offer.id))fail('This item is sold out.');item={...structuredClone(offer.item),uid:crypto.randomUUID()};delta=-offer.price;next.merchant.sold.push(offer.id);}
-  const spot=C.findSpace(next.state,item,'stash');if(!spot)fail('Your stash is full. Sell or move an item first.');C.place(next.state,item,'stash',spot.x,spot.y,spot.rotation);
+  for(let i=0;item&&i<(C.isConsumable(item)?quantity:1);i++){const copy={...item,uid:crypto.randomUUID()},spot=C.findSpace(next.state,copy,'stash');if(!spot)fail('Your stash cannot fit this purchase. Sell or move items first.');C.place(next.state,copy,'stash',spot.x,spot.y,spot.rotation);}
  }else if(input.action==='merchantSell'){
   const index=next.state.items.findIndex(i=>i.uid===input.uid);if(index<0)fail('This item is no longer in your inventory.');delta=sellPrice(next.state.items[index]);next.state.items.splice(index,1);
  }else fail('Unknown merchant action.',400);

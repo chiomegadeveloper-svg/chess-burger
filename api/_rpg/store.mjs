@@ -25,17 +25,17 @@ export function makeHero(input){
 export function saveInventory(doc,input){
  const next=structuredClone(input),old=doc.state;
  if(doc.battle?.status==='active')fail('Equipment is locked during battle.');
- next.currentHp=old.currentHp;next.currentMp=old.currentMp;
+ next.currentHp=old.currentHp;next.currentMp=old.currentMp;next.currentAp=old.currentAp;
  if((next.inventoryRevision||0)!==(old.inventoryRevision||0))fail('Your inventory changed. Reopen Hero Room before saving.');
  if(!C.validState(next,doc.heroId)||next.heroId!==doc.heroId||next.name!==doc.name)fail('Your chosen hero and name are locked.',400);
  if(JSON.stringify(next.items)!==JSON.stringify(old.items)||JSON.stringify(next.grids)!==JSON.stringify(old.grids)){
   // Only rearrangement, rotation, storage transfers, and discards of owned gear are accepted.
   if(JSON.stringify(next.grids)!==JSON.stringify(old.grids))fail('Inventory expansions are not available yet.');
-  for(const item of next.items){const original=old.items.find(i=>i.uid===item.uid);if(!original)fail('Unknown equipment.');for(const key of Object.keys(original).filter(k=>!['where','x','y','rotation','rotated'].includes(k)))if(JSON.stringify(item[key])!==JSON.stringify(original[key]))fail('Equipment attributes cannot be changed.');}
+  for(const item of next.items){const original=old.items.find(i=>i.uid===item.uid);if(!original)fail('Unknown equipment.');for(const key of [...new Set([...Object.keys(original),...Object.keys(item)])].filter(k=>!['where','x','y','rotation','rotated'].includes(k)))if(JSON.stringify(item[key])!==JSON.stringify(original[key]))fail('Equipment attributes cannot be changed.');}
  }
  const missing=old.learned.some(id=>!next.learned.includes(id));
  if(missing||next.learned.length>Math.min(30,2+Math.floor(old.level/2)))fail('No skill choices are available.');
- next.level=old.level;next.totalXp=old.totalXp;next.cbg=old.cbg;next.points=0;next.upgrades=[0,0,0,0,0,0];
+ next.level=old.level;next.totalXp=old.totalXp;next.cbg=old.cbg;next.points=old.points;next.upgrades=old.upgrades.slice();
  next.learnCredits=Math.max(0,Math.floor(old.level/2)-(next.learned.length-2));
  if(!C.validState(next,doc.heroId))fail('Invalid equipment layout.',400);doc.state=next;return doc;
 }

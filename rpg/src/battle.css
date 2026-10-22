@@ -240,3 +240,7 @@
 #bt-drops-list .bt-drop-tooltip{position:absolute;bottom:calc(100% + 7px);left:0;z-index:3;width:max-content;max-width:210px;padding:6px 9px;border:1px solid #617d89;border-radius:6px;background:#071620;color:#f2f5f6;font:600 11px/1.4 system-ui;box-shadow:0 3px 12px #0006;opacity:0;visibility:hidden;pointer-events:none}
 #bt-drops-list .bt-drop-icon:hover .bt-drop-tooltip,#bt-drops-list .bt-drop-icon:focus .bt-drop-tooltip{opacity:1;visibility:visible}
 #bt-drops-list .bt-drop-icon:focus-visible{outline:2px solid #f2c369;outline-offset:3px}
+
+.bt-cbg-drop{align-self:center;color:#ffd67d;font-size:16px;font-weight:800}
+
+.encounter-portrait{position:relative}.encounter-portrait>small{position:absolute;bottom:12px;right:12px;font-size:18px;font-weight:900;color:#ffe4a0;background:#122430;border:1px solid #c5a465;border-radius:8px;padding:5px 9px}

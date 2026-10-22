@@ -14,5 +14,5 @@ export function database(){
   }
   maybeSingle(){return this.run(true);}then(resolve,reject){return this.run().then(resolve,reject);}
  }
- return {rows,from(){return new Query();}};
+ return {rows,from(){return new Query();},async rpc(){return {data:null,error:{code:'PGRST202',message:'Function is not installed in this fixture'}};}};
 }

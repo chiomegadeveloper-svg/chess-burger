@@ -103,3 +103,11 @@
 .hr-recovery{display:flex;flex-wrap:wrap;gap:7px;align-items:center;padding:8px 0}.hr-recovery strong{color:#9ee8b0}.hr-recovery button{font-size:11px;padding:6px 9px}
 
 .hr-hero-scene.hr-potion-ready{outline:3px solid #8df2b1;outline-offset:-3px;background:#40d78a28;box-shadow:inset 0 0 35px #52f79b55}.hr-hero-scene.hr-potion-ready::after{content:"Release to use potion";position:absolute;bottom:10px;left:50%;transform:translateX(-50%);padding:6px 10px;border-radius:7px;background:#102c24;color:#b6ffd3;font-size:12px;white-space:nowrap;pointer-events:none}
+
+/* Readable vitals and compact equipment controls. */
+.hr-recovery{display:flex;flex-wrap:wrap;gap:8px}#hr-current-hp{width:100%;display:grid;gap:10px}.hr-resource span{display:flex;justify-content:space-between;font-size:14px}.hr-resource>div{height:9px;background:#07141c;border:1px solid #47616e;border-radius:8px;overflow:hidden}.hr-resource i{display:block;height:100%;transition:width .25s}#hr-level{font-size:16px;padding:7px 12px}.hr-stat>span,.hr-section-label{font-size:14px}.hr-stat-total{font-size:20px}#hr-learn{font-size:27px;min-width:48px;min-height:44px}#hr-points:empty{display:none}
+
+.hr-learn-list{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}.hr-catalog-rune{position:relative;aspect-ratio:1;background:#12252f;border:1px solid #aa956c;border-radius:10px;padding:3px;cursor:pointer}.hr-catalog-rune img{width:100%;height:100%;object-fit:contain}.hr-catalog-rune:disabled{opacity:.55;cursor:default}.hr-catalog-rune span{position:absolute;right:5px;bottom:3px;color:#8eedac}.hr-catalog-rune:focus-visible{outline:3px solid #6ae1ee}
+
+#rpg-autosave-status{font:600 12px system-ui;color:#9adbb5;min-width:65px;text-align:center}
+.hr-hero-figure{position:absolute;inset:0;width:100%;height:100%}.hr-hero-img{position:absolute;inset:0;width:100%;height:100%;max-height:100%;object-fit:contain}

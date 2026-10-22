@@ -54,6 +54,11 @@
   const isConsumable=item=>['health_potion','mana_potion'].includes(item.defId||item.id);
   const potionRoll=(def,rarity='common')=>({rarity,consumable:true,restore:{resource:(def.defId||def.id)==='health_potion'?'hp':'mp',amount:20}});
   function normalizePotions(state){let changed=false;for(const item of state.items||[]){if(!isConsumable(item))continue;const roll=potionRoll(item,rarityMap[item.rarity]?item.rarity:'common');if(JSON.stringify(item.restore)!==JSON.stringify(roll.restore)||!item.consumable||['enhancement','attributes','baseBonus','iLvl','requiredLevel','gearTier'].some(k=>k in item)){for(const key of ['enhancement','attributes','baseBonus','iLvl','requiredLevel','gearTier'])delete item[key];Object.assign(item,roll);changed=true;}}return changed;}
+  const affixes=[['cbgChance','CBG luck',88,88],['cbgGain','CBG gain',28,68],['attack','Attack',8,48],['ap','Attack Points',2,10],['mana','Mana Points',8,28],['monsterDamage','Monster damage',2,8],['health','Health',2,8],['magic','Magic',2,8],['armor','Armor',2,8],['wisdom','Wisdom',2,8],['physicalDamage','Physical damage',2,8],['magicDamage','Magic damage',2,8],['damageReduction','Damage resistance',2,8],['potionPower','Potion effectiveness',2,8]].map(([id,name,min,max])=>({id,name,min,max}));
+  const affixMap=Object.fromEntries(affixes.map(a=>[a.id,a]));
+  const affixText=item=>item.affix?`${item.affix.id==='cbgChance'?'':'+'}${item.affix.value}% ${affixMap[item.affix.id]?.name||''}`:'';
+  const passives=state=>state.items.filter(i=>i.where==='bag'&&canEquip(state,i)&&i.affix).reduce((out,item)=>{const a=item.affix;out[a.id]=a.id==='cbgChance'?Math.max(out[a.id]||0,a.value):Math.min(a.id==='damageReduction'?60:200,(out[a.id]||0)+a.value);return out;},{});
+  const maxAp=state=>Math.round(P.maxAp(state.level)*(1+(passives(state).ap||0)/100));
   function rollItem(def,level,rng=Math.random,options={}){
     if(isConsumable(def))return potionRoll(def,options.rarity??rollRarity(rng));
     const iLvl=options.iLvl??integer(Math.max(1,level-3),Math.max(5,level+4),rng);
@@ -68,7 +73,8 @@
     for(let i=indices.length-1;i>0;i--){const j=integer(0,i,rng);[indices[i],indices[j]]=[indices[j],indices[i]];}
     const attributes=indices.slice(0,count).map(stat=>({stat,value:integer(1,Math.ceil(iLvl/4)+rarities.indexOf(definition),rng)}));
     const stat=integer(0,5,rng);
-    return {iLvl,requiredLevel,gearTier:gearTier(requiredLevel),rarity,baseBonus,attributes,enhancement:{stat,name:enhancements[stat],value:integer(1,Math.ceil(iLvl/6)+1,rng)}};
+    const affix=affixes[integer(0,affixes.length-1,rng)];
+    return {affix:{id:affix.id,value:integer(affix.min,affix.max,rng)},iLvl,requiredLevel,gearTier:gearTier(requiredLevel),rarity,baseBonus,attributes,enhancement:{stat,name:enhancements[stat],value:integer(1,Math.ceil(iLvl/6)+1,rng)}};
   }
   const itemBonus=item=>{
     if(isConsumable(item))return [0,0,0,0,0,0];
@@ -177,8 +183,8 @@
   function addTestCBG(state){if(!Number.isSafeInteger(state.cbg+100))return false;state.cbg+=100;return true;}
   const bagBonus=state=>state.items.filter(i=>i.where==='bag'&&canEquip(state,i)).reduce((sum,item)=>{const bonus=itemBonus(item);return sum.map((v,i)=>v+bonus[i]);},[0,0,0,0,0,0]);
   const spellBonus=state=>state.active.filter(Boolean).reduce((sum,id)=>sum.map((v,i)=>v+spellMap[id].bonus[i]),[0,0,0,0,0,0]);
-  const totals=(state,base)=>P.baseStats(state.level).map((v,i)=>v+bagBonus(state)[i]+spellBonus(state)[i]);
-  function applyProgress(state,totalXp){const before=state.level,p=P.progress(totalXp);state.level=p.level;state.totalXp=p.totalXp;for(const item of state.items.filter(i=>i.where==='bag'&&!canEquip(state,i))){let spot=findSpace(state,item,'stash');while(!spot){state.grids.stash.rows++;spot=findSpace(state,item,'stash');}place(state,item,'stash',spot.x,spot.y,spot.rotation);}const credits=Math.floor(p.level/2)-Math.floor(before/2);state.learnCredits=Math.max(0,Math.min(spells.length-state.learned.length,state.learnCredits+credits));return p.level-before;}
+  const totals=(state,base)=>{const p=passives(state),bag=bagBonus(state),spells=spellBonus(state);return P.baseStats(state.level).map((v,i)=>Math.round((v+(state.upgrades?.[i]||0)+bag[i]+spells[i])*(1+(p[['health','attack','magic','armor','mana','wisdom'][i]]||0)/100)));};
+  function applyProgress(state,totalXp){const before=state.level,p=P.progress(totalXp);state.level=p.level;state.totalXp=p.totalXp;state.points+=Math.max(0,p.level-before);for(const item of state.items.filter(i=>i.where==='bag'&&!canEquip(state,i))){let spot=findSpace(state,item,'stash');while(!spot){state.grids.stash.rows++;spot=findSpace(state,item,'stash');}place(state,item,'stash',spot.x,spot.y,spot.rotation);}const credits=Math.floor(p.level/2)-Math.floor(before/2);state.learnCredits=Math.max(0,Math.min(spells.length-state.learned.length,state.learnCredits+credits));return p.level-before;}
   function gainXp(state,amount){return applyProgress(state,(state.totalXp??P.threshold(state.level))+Math.max(0,amount));}
   function levelUp(state){if(state.level>=88)return false;applyProgress(state,P.threshold(state.level+1));return true;}
   function upgrade(state,index){if(!Number.isInteger(index)||index<0||index>=6||state.points<1)return false;state.upgrades[index]++;state.points--;return true;}
@@ -204,6 +210,7 @@
   }
   function validRoll(item){
     if(isConsumable(item))return !!rarityMap[item.rarity]&&item.consumable===true&&item.restore?.resource===(item.defId==='health_potion'?'hp':'mp')&&item.restore?.amount===20&&!['enhancement','attributes','baseBonus','iLvl','requiredLevel','gearTier'].some(k=>k in item)&&Number.isInteger(item.rotation)&&item.rotation>=0&&item.rotation<4&&item.rotated===Boolean(item.rotation%2);
+    if(item.affix){const a=affixMap[item.affix.id];if(!a||!Number.isInteger(item.affix.value)||item.affix.value<a.min||item.affix.value>a.max)return false;}
     const rarity=rarityMap[item.rarity],positive=v=>Number.isSafeInteger(v)&&v>0;
     if(!rarity||!positive(item.iLvl)||!positive(item.requiredLevel)||item.requiredLevel>item.iLvl||item.gearTier!==gearTier(item.requiredLevel)||!Number.isInteger(item.rotation)||item.rotation<0||item.rotation>3||item.rotated!==Boolean(item.rotation%2)||!Array.isArray(item.baseBonus)||item.baseBonus.length!==6||item.baseBonus.some(v=>!Number.isSafeInteger(v)||v<0)||item.baseBonus.reduce((a,b)=>a+b,0)!==item.iLvl+3||!Array.isArray(item.attributes)||item.attributes.length<rarity.range[0]||item.attributes.length>rarity.range[1])return false;
     const validAttribute=a=>a&&Number.isInteger(a.stat)&&a.stat>=0&&a.stat<6&&positive(a.value);
@@ -217,7 +224,7 @@
   }
   function migrate(old,heroId,rng=Math.random){
     if(old){old=clone(old);normalizePotions(old);}
-    if(validState(old,heroId)){const state=clone(old);state.version=3;state.level=P.clampLevel(state.level);state.totalXp=P.progress(state.totalXp??P.threshold(state.level)).totalXp;state.points=0;state.spellStorage.push(...Array(30-state.spellStorage.length).fill(null));return state;}
+    if(validState(old,heroId)){const state=clone(old);state.version=3;state.level=P.clampLevel(state.level);state.totalXp=P.progress(state.totalXp??P.threshold(state.level)).totalXp;state.points=Math.max(0,state.level-1-state.upgrades.reduce((a,b)=>a+b,0));state.spellStorage.push(...Array(30-state.spellStorage.length).fill(null));return state;}
     if(!validShape(old,heroId)||old.version!==1)return null;
     const seen=new Set();for(const item of old.items){if(typeof item.uid!=='string'||seen.has(item.uid)||!canPlace(old,item,item.where,item.x,item.y,item.rotated))return null;seen.add(item.uid);}
     const state={...clone(old),version:3,spellStorage:[...old.spellStorage,...Array(22).fill(null)],grids:{bag:{cols:6,rows:8},stash:{cols:6,rows:11}},cbg:STARTING_CBG,items:[]};
@@ -229,6 +236,6 @@
     }
     return validState(state,heroId)?state:null;
   }
-  const api={isConsumable,normalizePotions,stats,tiers,types,items,itemMap,spells,spellMap,grids,rarities,rarityMap,enhancements,BAG_PRICE,STARTING_CBG,newState,size,rotationOf,gridFor,gearTier,rollItem,itemBonus,canEquip,canPlace,place,findSpace,collect,rotateItem,addTestGear,autoArrange,buyBag,addTestCBG,bagBonus,spellBonus,totals,applyProgress,gainXp,levelUp,upgrade,learn,moveSpell,validState,migrate};
+  const api={affixes,affixMap,affixText,passives,maxAp,isConsumable,normalizePotions,stats,tiers,types,items,itemMap,spells,spellMap,grids,rarities,rarityMap,enhancements,BAG_PRICE,STARTING_CBG,newState,size,rotationOf,gridFor,gearTier,rollItem,itemBonus,canEquip,canPlace,place,findSpace,collect,rotateItem,addTestGear,autoArrange,buyBag,addTestCBG,bagBonus,spellBonus,totals,applyProgress,gainXp,levelUp,upgrade,learn,moveSpell,validState,migrate};
   root.RPGInventory=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(globalThis);
