@@ -9,7 +9,7 @@ export default async function handler(req:Req,res:Res){
   const url=process.env.NEXT_PUBLIC_SUPABASE_URL??process.env.VITE_SUPABASE_URL,key=process.env.SUPABASE_SERVICE_ROLE_KEY;
   if(!url||!key)return res.status(503).json({error:'RPG account service is unavailable.'});
   const client=createClient(url,key,{auth:{persistSession:false,autoRefreshToken:false}});
-  if(req.method==='GET'&&req.query?.health==='1'){const r=await client.from('cb_inventory_items').select('user_id').limit(0);return res.status(r.error?503:200).json({ready:!r.error});}
+  if(req.method==='GET'&&req.query?.health==='1'){const r=await client.from('cb_inventory_items').select('user_id').limit(0);let merchantReady:boolean|undefined;if(req.query?.merchant==='1'){const probe=await client.rpc('cb_rpg_merchant_trade',{p_user_id:null,p_request_id:null,p_revision:0,p_delta:0,p_document:null});merchantReady=!probe.error||probe.error.message==='Your CBG account is unavailable';}return res.status(r.error?503:200).json({ready:!r.error,...(merchantReady===undefined?{}:{merchantReady})});}
   if(!['GET','POST','DELETE'].includes(req.method||''))return res.status(405).json({error:'Method not allowed.'});
   const origin=req.headers.origin,host=req.headers.host;
   if(req.headers['sec-fetch-site']==='cross-site'||(origin&&new URL(String(origin)).host!==String(host)))return res.status(403).json({error:'Request not allowed.'});

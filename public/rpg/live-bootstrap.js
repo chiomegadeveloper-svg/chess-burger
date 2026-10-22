@@ -38,7 +38,7 @@
  document.addEventListener('DOMContentLoaded',()=>{
   started=true;document.documentElement.dataset.live='true';
   const loading=document.createElement('div');loading.id='live-loading';loading.textContent='Loading your hero…';document.body.append(loading);
-  for(const id of ['hr-collect','hr-damage','hr-levelup','hr-test-cbg','world-battle-lab','bt-practice','hr-shop','world-shop','world-wallet']){const el=document.getElementById(id);if(el){el.hidden=true;el.setAttribute('aria-hidden','true');}}
+  for(const id of ['hr-collect','hr-damage','hr-levelup','hr-test-cbg','world-battle-lab','bt-practice','world-shop','world-wallet']){const el=document.getElementById(id);if(el){el.hidden=true;el.setAttribute('aria-hidden','true');}}
   const header=document.querySelector('.topbar');const leave=document.createElement('button');leave.type='button';leave.className='live-exit';leave.textContent='← Exit RPG';leave.onclick=exit;header.append(leave);
   const pill=document.querySelector('.topbar .badge');if(pill)pill.remove();
   const block=document.createElement('div');block.className='live-starter';

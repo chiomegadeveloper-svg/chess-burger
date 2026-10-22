@@ -33,6 +33,7 @@ import Account from "./account";
 import CommunityFeed from "./community-feed";
 import PublicArenaSessions from "./arena-sessions";
 import ArenaReminder from "./arena-reminder";
+import {reminderDay,nextHomeReminder,markHomeReminder} from "./home-reminder-state";
 import DailyQuestReminder from "./daily-quest-reminder";
 import LevelThreeReminder from "./level-three-reminder";
 import RecentPlays from "./recent-plays";
@@ -130,7 +131,9 @@ function AppPage() {
   const [feedTarget, setFeedTarget] = useState<"recent" | "announcement" | "rewards" | "challenge" | "quest">("recent");
   const [ownerPending, setOwnerPending] = useState<OwnerPendingAlert[]>([]);
   // Keep the reminder sequence above Home so navigation does not restart it.
-  const [dailyReminder, setDailyReminder] = useState<"quest" | "rewards" | "arena" | "done">("quest");
+  const [dailyReminder, setDailyReminder] = useState<"quest" | "rewards" | "arena" | "done">("done");
+  const [reminderOwner,setReminderOwner]=useState("");
+  const [reminderDate,setReminderDate]=useState(()=>reminderDay());
   const advanceDailyReminder = () => setDailyReminder(current => current === "quest" ? "rewards" : current === "rewards" ? "arena" : "done");
   const [tab, setTab] = useState("profile"),
     [profile, setProfile] = useState<PlayerProfile | null>(null),
@@ -138,6 +141,10 @@ function AppPage() {
     [showSplash, setShowSplash] = useState(true),
     [showWelcome, setShowWelcome] = useState(false),
     [member, setMember] = useState<boolean | null>(null);
+  const remindersReady=!!profile&&reminderOwner===profile.user_id+':'+reminderDate;
+  useEffect(()=>{const timer=setInterval(()=>setReminderDate(reminderDay()),60000);return()=>clearInterval(timer);},[]);
+  useEffect(()=>{if(!profile?.user_id){setReminderOwner('');setDailyReminder('done');return;}setReminderOwner(profile.user_id+':'+reminderDate);setDailyReminder(nextHomeReminder(localStorage,profile.user_id));},[profile?.user_id,reminderDate]);
+  useEffect(()=>{if(remindersReady&&profile&&tab==='home'&&!showSplash&&!showWelcome&&member===true&&isProfileComplete(profile)&&profile.agreement_version!==null)markHomeReminder(localStorage,profile.user_id,dailyReminder);},[remindersReady,profile,tab,showSplash,showWelcome,member,dailyReminder]);
   const [agreementChecked,setAgreementChecked]=useState(false), [agreementExpanded,setAgreementExpanded]=useState(false), [agreementSaving,setAgreementSaving]=useState(false);
   const [matchId, setMatchId] = useState(""),
     [target, setTarget] = useState<ArenaPlayer | null>(null),
@@ -628,7 +635,7 @@ function AppPage() {
       />
     );
   else if (tab === "rpg-coming")
-    content = <RpgGame onBack={closeRpg} />;
+    content = <RpgGame onBack={closeRpg} onWalletChange={refreshProfile} />;
   else if (tab === "play-select")
     content = (
       <section className="play-select-page" aria-labelledby="play-select-title">
@@ -1138,9 +1145,9 @@ function AppPage() {
         }}
       />
       <FloatingChatButton visible={tab === "home"} onNews={() => setDailyReminder("quest")} />
-      <ArenaReminder open={tab === "home" && !showSplash && !showWelcome && !needsAgreement && member === true && isProfileComplete(profile) && dailyReminder === "arena"} onDismiss={advanceDailyReminder} onOpen={() => { advanceDailyReminder(); setTab("grand-arena"); }} />
+      <ArenaReminder open={remindersReady && tab === "home" && !showSplash && !showWelcome && !needsAgreement && member === true && isProfileComplete(profile) && dailyReminder === "arena"} onDismiss={advanceDailyReminder} onOpen={() => { advanceDailyReminder(); setTab("grand-arena"); }} />
       <DailyQuestReminder
-        open={tab === "home" && !showSplash && !showWelcome && !needsAgreement && member === true && isProfileComplete(profile) && (dailyReminder === "quest" || dailyReminder === "rewards")}
+        open={remindersReady && tab === "home" && !showSplash && !showWelcome && !needsAgreement && member === true && isProfileComplete(profile) && (dailyReminder === "quest" || dailyReminder === "rewards")}
         kind={dailyReminder === "rewards" ? "rewards" : "quest"}
         onDismiss={advanceDailyReminder}
         onOpen={() => {
@@ -1153,7 +1160,7 @@ function AppPage() {
         <LevelThreeReminder
           key={profile.user_id}
           userId={profile.user_id}
-          open={tab === "home" && !showSplash && !showWelcome && !needsAgreement && dailyReminder === "done" && !summary}
+          open={remindersReady && tab === "home" && !showSplash && !showWelcome && !needsAgreement && dailyReminder === "done" && !summary}
           onDonate={() => setTab("donate")}
         />
       )}

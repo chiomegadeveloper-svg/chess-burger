@@ -323,7 +323,7 @@
     changed(`${requested.map(id=>C.rarityMap[id].name).join(', ')} test armor added to your bag. Select it and use Remove when finished.`);
     const item=el('hr-bag').querySelector(`[data-uid="${created[0].uid}"]`);item?.scrollIntoView?.({block:'nearest',inline:'nearest'});
   });
-  el('hr-shop').addEventListener('click',()=>{renderShop();el('hr-shop-status').textContent='Each purchase adds 6 tiles to your chosen inventory.';showModal('hr-shop-modal');});
+  el('hr-shop').addEventListener('click',()=>{clearDrag();save();window.RPGMerchant.open(state);});
   el('hr-shop-destination').addEventListener('change',renderShop);
   el('hr-buy-bag').addEventListener('click',()=>{
     const where=el('hr-shop-destination').value;
@@ -386,6 +386,6 @@
   el('hr-drink-potion').onclick=()=>{const item=state.items.find(i=>i.defId==='health_potion');if(item)void consumePotion(item.uid);};
   el('hr-claim-loot').onclick=async()=>{el('hr-claim-loot').disabled=true;try{const response=await fetch('/api/battle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'claimLoot'})}),data=await response.json();if(!response.ok)throw Error(data.error);Object.assign(state,data.game);localStorage.setItem(key(),JSON.stringify(state));feedback(data.pendingLoot?.length?'Stash full. Throw away unwanted items, then collect the remaining drops.':'Saved drops collected.');}catch(error){feedback(error.message);}finally{el('hr-claim-loot').disabled=false;render();}};
 
- window.RPGRoom={persist:save,open,refresh:render,utility(kind){if(kind==='book'){window.BabaylanBook.open();showModal('hr-book-modal');}if(kind==='shop'){renderShop();el('hr-shop-status').textContent='Each purchase adds 6 tiles to your chosen inventory.';showModal('hr-shop-modal');}}};
+ window.RPGRoom={persist:save,open,refresh:render,utility(kind){if(kind==='book'){window.BabaylanBook.open();showModal('hr-book-modal');}if(kind==='shop'){save();window.RPGMerchant.open(state);}}};
   el('saveBtn').addEventListener('click',()=>{const name=el('heroName').value.trim();if(name.length>=2)open(selected,name);});
 })();

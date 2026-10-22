@@ -35,7 +35,7 @@ export function saveInventory(doc,input){
  }
  const missing=old.learned.some(id=>!next.learned.includes(id));
  if(missing||next.learned.length>Math.min(30,2+Math.floor(old.level/2)))fail('No skill choices are available.');
- next.level=old.level;next.totalXp=old.totalXp;next.cbg=0;next.points=0;next.upgrades=[0,0,0,0,0,0];
+ next.level=old.level;next.totalXp=old.totalXp;next.cbg=old.cbg;next.points=0;next.upgrades=[0,0,0,0,0,0];
  next.learnCredits=Math.max(0,Math.floor(old.level/2)-(next.learned.length-2));
  if(!C.validState(next,doc.heroId))fail('Invalid equipment layout.',400);doc.state=next;return doc;
 }

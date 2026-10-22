@@ -4,7 +4,7 @@ import {createPortal} from 'react-dom';
 import {ArrowLeft,RotateCw,Maximize2} from 'lucide-react';
 import {getSupabase} from './supabase';
 import {requestRpgLandscape} from './rpg-orientation';
-export default function RpgGame({onBack}:{onBack:()=>void}){
+export default function RpgGame({onBack,onWalletChange}:{onBack:()=>void;onWalletChange:()=>void}){
  const frame=useRef<HTMLIFrameElement>(null),[error,setError]=useState(''),[ready,setReady]=useState(false),[generation,setGeneration]=useState(0);
  const boot=useCallback(async()=>{try{const client=await getSupabase();const result=await client?.auth.getSession();const user=result?.data.session?.user;if(!user)throw Error('Sign in again before opening RPG.');frame.current?.contentWindow?.postMessage({type:'CB_RPG_BOOT',userId:user.id},location.origin);setReady(true);}catch(e){setError((e as Error).message);}},[]);
  useEffect(()=>{
@@ -13,6 +13,7 @@ export default function RpgGame({onBack}:{onBack:()=>void}){
    if(event.origin!==location.origin||event.source!==frame.current?.contentWindow)return;
    const message=event.data;if(message?.type==='CB_RPG_READY'){void boot();return;}
    if(message?.type==='CB_RPG_EXIT'){onBack();return;}
+   if(message?.type==='CB_RPG_WALLET_CHANGED'){onWalletChange();return;}
    if(message?.type!=='CB_RPG_API'||typeof message.id!=='string'||!['GET','POST','DELETE'].includes(message.method))return;
    let status=503,data:unknown={error:'RPG connection failed. Please retry.'};
    try{
@@ -25,7 +26,7 @@ export default function RpgGame({onBack}:{onBack:()=>void}){
   };
   window.addEventListener('message',receive);
   return ()=>{window.removeEventListener('message',receive);document.body.style.overflow=overflow;screen.orientation?.unlock?.();if(document.fullscreenElement)void document.exitFullscreen().catch(()=>{});previous?.focus();};
- },[boot,onBack]);
+ },[boot,onBack,onWalletChange]);
  const panel=<section className="rpg-live-shell" aria-label="Chess Burger RPG">
   {!ready&&!error&&<div className="rpg-live-loading" role="status">Opening your adventure…</div>}
   {error?<div className="rpg-live-loading" role="alert"><p>{error}</p><button type="button" onClick={onBack}><ArrowLeft size={17}/>Back to Chess Burger</button><button type="button" onClick={()=>{setError('');setReady(false);setGeneration(v=>v+1);}}>Retry</button></div>:<iframe key={generation} ref={frame} src="/rpg/index.html" title="Chess Burger RPG game" allow="geolocation; fullscreen" allowFullScreen onLoad={()=>void boot()}/>}
