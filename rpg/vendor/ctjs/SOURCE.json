@@ -1,0 +1,6 @@
+{
+  "repository": "https://github.com/ct-js/ct-js",
+  "commit": "63791a05b7ecb6ced3c14de72b0649e4eb54574b",
+  "version": "5.3.1",
+  "component": "src/ct.release/templateBaseClasses/PixiAnimatedSprite.ts"
+}

@@ -5,7 +5,7 @@ import {textures} from './resources.mjs';
 const sessions=new Map(),sheetPromises=new Map();
 const skill=id=>window.RPG_ATTACK_SKILLS.find(s=>s.id===id);
 function sheet(group){
- if(!sheetPromises.has(group))sheetPromises.set(group,new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>resolve(PIXI.Texture.from(image));image.onerror=()=>reject(Error('Skill sheet could not load.'));image.src=`/assets/skills/sheets/${group}.webp`;}).catch(e=>{sheetPromises.delete(group);throw e;}));
+ if(!sheetPromises.has(group))sheetPromises.set(group,new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>resolve(PIXI.Texture.from(image));image.onerror=()=>reject(Error('Skill sheet could not load.'));image.src=`assets/skills/sheets/${group}.webp`;}).catch(e=>{sheetPromises.delete(group);throw e;}));
  return sheetPromises.get(group);
 }
 async function frames(s){

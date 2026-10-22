@@ -47,3 +47,13 @@ Map selection checks the 200 m distance using the map's location and creates a s
 The encounter remains visible while starting a battle. Errors appear inside that dialog instead of opening an empty Battle Lab screen. Successful creation opens the full battle interface against the selected monster. The empty-screen fallback is titled Battle. GPS watches and sharing pause while the battle interface is open, then resume on return to the map. Monster expiry, authoritative XP and battle turns remain server-side.
 
 Validation includes a selected encounter starting and taking a turn with no further GPS, forged ticket rejection, full battle render after ATTACK, and actual watch pause/restart. Browser transition review uses a local sample service, not a production account battle.
+
+## v0.0592 — restore the sandbox battle transfer
+
+Canonical source: RPG Sandbox version 35, commit `c5ea179a61409943297626dd13f7febc2e2e86b7`.
+
+Reimported the battle HTML verbatim from the sandbox, keeping production-only route and wording adaptation in the packaging script. The original battle CSS, hero identity/head images, damage poses, skill icons and animation sheets are verified against sandbox SHA-256 hashes in `rpg/sandbox-source.json`. No hero designs or battle layout were replaced. The existing server/account adapter and map selection remain in place; combat stays GPS-free.
+
+Fixed the ct.js animation texture loader: sandbox-root `/assets/skills/sheets/` requests were failing in the main app, which hosts the game at `/rpg/`. Both source and shipped engine now resolve sheets relative to the RPG document base. Preserved original frame timing, attack travel, impact callback, enemy delay and damage pose transitions. Included original upstream ct.js component and license for reproducibility.
+
+Verification: byte-level artwork/template transfer checks; live map-to-battle integration; actual browser combat with Basic Tackle and enemy Ember, texture animation and delayed HP impact; production build. Browser screenshot in `rpg-original-battle-restored.jpg` uses a local practice fixture, not a production account.

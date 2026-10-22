@@ -15,6 +15,14 @@ html=html.replace('</head>','<link rel="stylesheet" href="vendor/leaflet/leaflet
 const names=['skill-catalog','progression','encounter-layout','inventory-core','item-images','babaylan-data','babaylan-images','hero-room','babaylan-book','damage-data','damage-sprites','map-basemap','world','battle'];
 const scripts=await Promise.all(names.map(async f=>'<script>\n'+await read('src/'+f+'.js')+'\n</script>'));
 const parts=await Promise.all(['hero-room','babaylan-book','world','battle'].map(f=>read('src/'+f+'.html')));
+// Preserve the imported sandbox battle template; adapt only production copy and routes.
+parts[3]=parts[3].replace('Battle Lab','Battle').replaceAll('10 m','200 m')
+ .replace('Both players must be online and within 200 m to begin.','Nearby player selection happens on the map. Accept to begin the duel.')
+ .replace('GPS victories earn hero XP; device practice progress stays on this device.','Victories earn hero XP. Combat does not require GPS.')
+ .replace('History is saved on the server for online battles, and on this device for practice.','Puzzle history is saved to your account.')
+ .replace('Map encounters require fresh GPS and accuracy within ±200 m, plus a measured distance of 200 m or less. GPS readings are estimates. PvP also requires the other player to accept.','The map checks the 200 m range when selecting an encounter. Combat needs no GPS updates. GPS resumes when you return to the map. PvP requires the other player to accept.')
+ .replace('Sandbox battles use local hero loadouts and award no competitive or monetary rewards.','RPG battles award hero XP. They do not change Chess Burger ratings or CBG balances.')
+ .replaceAll('href="/assets/','href="/rpg/assets/').replaceAll('href="/vendor/','href="/rpg/vendor/');
 html=html.replace('</body>',parts.join('\n')+'<script src="vendor/ctjs-skill-fx.js"></script><script src="vendor/chess.js"></script><script src="vendor/battle-core.js"></script><script src="vendor/leaflet/leaflet.js"></script><script src="vendor/leaflet/Leaflet.VectorGrid.bundled.js"></script>'+scripts.join('\n')+'</body>');
 html=html.replaceAll('{{BABAYLAN_BOOK_ICON}}','data:image/svg+xml;base64,'+Buffer.from(await read('babaylan-book.svg')).toString('base64'));
 html=html.replaceAll('RPG SANDBOX','RPG').replaceAll('SANDBOX','ADVENTURE');
