@@ -24,8 +24,8 @@
     ['helm','Helm',2,2,'Armor',[0,0,0,2,0,2]]
   ];
   const items=types.flatMap(([id,name,w,h,category,bonus])=>tiers.map((tier,i)=>({id:`${id}_v${i+1}`,type:id,name:`${tier} ${name}`,w,h,category,tier:i+1,sprite:`${id}_v${i+1}`,bonus:bonus.map(v=>v*(i+1))})));
-  items.push({id:'health_potion',type:'health_potion',name:'Health Potion',w:1,h:1,category:'Potions',tier:1,sprite:'health_potion',bonus:[3,0,0,0,0,0]},
-    {id:'mana_potion',type:'mana_potion',name:'Mana Potion',w:1,h:1,category:'Potions',tier:1,sprite:'mana_potion',bonus:[0,0,0,0,3,0]});
+  items.push({id:'health_potion',type:'health_potion',name:'Health Potion',w:1,h:1,category:'Potions',tier:1,sprite:'health_potion',bonus:[0,0,0,0,0,0]},
+    {id:'mana_potion',type:'mana_potion',name:'Mana Potion',w:1,h:1,category:'Potions',tier:1,sprite:'mana_potion',bonus:[0,0,0,0,0,0]});
   const spells=root.RPG_ATTACK_SKILLS||(typeof require==='function'?require('./skill-catalog.js'):[]);
   const itemMap=Object.fromEntries(items.map(i=>[i.id,i]));
   const spellMap=Object.fromEntries(spells.map(s=>[s.id,s]));
@@ -51,7 +51,11 @@
   const integer=(low,high,rng=Math.random)=>low+Math.floor(Math.max(0,Math.min(1-Number.EPSILON,rng()))*(high-low+1));
   const gearTier=required=>Math.floor(required/10)+1;
   function rollRarity(rng){let ticket=integer(1,1000,rng);for(const rarity of rarities){ticket-=rarity.weight;if(ticket<=0)return rarity.id;}return 'divine';}
+  const isConsumable=item=>['health_potion','mana_potion'].includes(item.defId||item.id);
+  const potionRoll=(def,rarity='common')=>({rarity,consumable:true,restore:{resource:(def.defId||def.id)==='health_potion'?'hp':'mp',amount:20}});
+  function normalizePotions(state){let changed=false;for(const item of state.items||[]){if(!isConsumable(item))continue;const roll=potionRoll(item,rarityMap[item.rarity]?item.rarity:'common');if(JSON.stringify(item.restore)!==JSON.stringify(roll.restore)||!item.consumable||['enhancement','attributes','baseBonus','iLvl','requiredLevel','gearTier'].some(k=>k in item)){for(const key of ['enhancement','attributes','baseBonus','iLvl','requiredLevel','gearTier'])delete item[key];Object.assign(item,roll);changed=true;}}return changed;}
   function rollItem(def,level,rng=Math.random,options={}){
+    if(isConsumable(def))return potionRoll(def,options.rarity??rollRarity(rng));
     const iLvl=options.iLvl??integer(Math.max(1,level-3),Math.max(5,level+4),rng);
     const requiredLevel=options.requiredLevel??integer(Math.max(1,iLvl-6),iLvl,rng);
     const rarity=options.rarity??rollRarity(rng),definition=rarityMap[rarity];
@@ -67,6 +71,7 @@
     return {iLvl,requiredLevel,gearTier:gearTier(requiredLevel),rarity,baseBonus,attributes,enhancement:{stat,name:enhancements[stat],value:integer(1,Math.ceil(iLvl/6)+1,rng)}};
   }
   const itemBonus=item=>{
+    if(isConsumable(item))return [0,0,0,0,0,0];
     const result=[...item.baseBonus];
     for(const attribute of item.attributes)result[attribute.stat]+=attribute.value;
     result[item.enhancement.stat]+=item.enhancement.value;return result;
@@ -198,6 +203,7 @@
     return true;
   }
   function validRoll(item){
+    if(isConsumable(item))return !!rarityMap[item.rarity]&&item.consumable===true&&item.restore?.resource===(item.defId==='health_potion'?'hp':'mp')&&item.restore?.amount===20&&!['enhancement','attributes','baseBonus','iLvl','requiredLevel','gearTier'].some(k=>k in item)&&Number.isInteger(item.rotation)&&item.rotation>=0&&item.rotation<4&&item.rotated===Boolean(item.rotation%2);
     const rarity=rarityMap[item.rarity],positive=v=>Number.isSafeInteger(v)&&v>0;
     if(!rarity||!positive(item.iLvl)||!positive(item.requiredLevel)||item.requiredLevel>item.iLvl||item.gearTier!==gearTier(item.requiredLevel)||!Number.isInteger(item.rotation)||item.rotation<0||item.rotation>3||item.rotated!==Boolean(item.rotation%2)||!Array.isArray(item.baseBonus)||item.baseBonus.length!==6||item.baseBonus.some(v=>!Number.isSafeInteger(v)||v<0)||item.baseBonus.reduce((a,b)=>a+b,0)!==item.iLvl+3||!Array.isArray(item.attributes)||item.attributes.length<rarity.range[0]||item.attributes.length>rarity.range[1])return false;
     const validAttribute=a=>a&&Number.isInteger(a.stat)&&a.stat>=0&&a.stat<6&&positive(a.value);
@@ -210,6 +216,7 @@
     const seen=new Set();for(const item of state.items){if(!validRoll(item)||typeof item.uid!=='string'||seen.has(item.uid)||!canPlace(state,item,item.where,item.x,item.y,item.rotation))return false;seen.add(item.uid);}return true;
   }
   function migrate(old,heroId,rng=Math.random){
+    if(old){old=clone(old);normalizePotions(old);}
     if(validState(old,heroId)){const state=clone(old);state.version=3;state.level=P.clampLevel(state.level);state.totalXp=P.progress(state.totalXp??P.threshold(state.level)).totalXp;state.points=0;state.spellStorage.push(...Array(30-state.spellStorage.length).fill(null));return state;}
     if(!validShape(old,heroId)||old.version!==1)return null;
     const seen=new Set();for(const item of old.items){if(typeof item.uid!=='string'||seen.has(item.uid)||!canPlace(old,item,item.where,item.x,item.y,item.rotated))return null;seen.add(item.uid);}
@@ -222,6 +229,6 @@
     }
     return validState(state,heroId)?state:null;
   }
-  const api={stats,tiers,types,items,itemMap,spells,spellMap,grids,rarities,rarityMap,enhancements,BAG_PRICE,STARTING_CBG,newState,size,rotationOf,gridFor,gearTier,rollItem,itemBonus,canEquip,canPlace,place,findSpace,collect,rotateItem,addTestGear,autoArrange,buyBag,addTestCBG,bagBonus,spellBonus,totals,applyProgress,gainXp,levelUp,upgrade,learn,moveSpell,validState,migrate};
+  const api={isConsumable,normalizePotions,stats,tiers,types,items,itemMap,spells,spellMap,grids,rarities,rarityMap,enhancements,BAG_PRICE,STARTING_CBG,newState,size,rotationOf,gridFor,gearTier,rollItem,itemBonus,canEquip,canPlace,place,findSpace,collect,rotateItem,addTestGear,autoArrange,buyBag,addTestCBG,bagBonus,spellBonus,totals,applyProgress,gainXp,levelUp,upgrade,learn,moveSpell,validState,migrate};
   root.RPGInventory=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(globalThis);

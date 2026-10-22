@@ -133,3 +133,15 @@ test('harvest result appears before the enemy reply animation and premove surviv
  let animation=0;a.w.RPGSkillFX={sequence:async()=>{animation++;},stop(){}};a.d.querySelector('#bt-abandon').click();await pause();await pause();assert.equal(a.d.querySelector('#bt-harvest-modal').hidden,false);assert.equal(animation,0);a.d.querySelector('#bt-harvest-done').click();await pause();assert.ok(animation>0);
  }finally{a.close();}
 });
+
+
+test('dragging health and mana potions from inventory onto the hero consumes each once and shows consumable-only descriptions',async()=>{
+ const db=database();await gameRequest(db,'player-a','POST',{action:'register',heroId:'rogue',name:'Potion User',skill:'punch'});
+ const doc=[...db.rows.values()].find(r=>r.item_kind==='rpg_profile').metadata;doc.state.currentHp=1;doc.state.currentMp=2;
+ const C=(await import('../api/_rpg/src/inventory-core.js')).default,mp={uid:'mana-drag',defId:'mana_potion',rotation:0,rotated:false,...C.rollItem(C.itemMap.mana_potion,1,()=>0,{rarity:'rare'})};C.place(doc.state,mp,'bag',0,0);const hp=doc.state.items.find(i=>i.defId==='health_potion');
+ const a=open(db);try{await pause();await pause();const room=a.d.querySelector('#hr-room'),scene=a.d.querySelector('.hr-hero-scene');room.setPointerCapture=()=>{};room.hasPointerCapture=()=>false;scene.getBoundingClientRect=()=>({left:0,top:0,right:100,bottom:100,width:100,height:100});
+ const drag=async uid=>{const node=a.d.querySelector(`[data-uid="${uid}"]`);node.getBoundingClientRect=()=>({left:200,top:200,right:220,bottom:220,width:20,height:20});node.focus();assert.match(a.d.querySelector('#hr-item-tooltip').textContent,/Consumable.*Restores 20/);assert.doesNotMatch(a.d.querySelector('#hr-item-tooltip').textContent,/Enhancement|Insight|Base attributes|Requires level/i);const send=(target,type,x,y)=>{const event=new a.w.MouseEvent(type,{bubbles:true,button:0,clientX:x,clientY:y});Object.defineProperties(event,{pointerId:{value:1},pointerType:{value:'mouse'}});target.dispatchEvent(event);};send(node,'pointerdown',210,210);send(room,'pointermove',50,50);assert.equal(scene.classList.contains('hr-potion-ready'),true);send(room,'pointerup',50,50);await pause();await pause();};
+ await drag(hp.uid);let saved=await read(db,'player-a');assert.equal(saved.state.currentHp,20);assert.equal(saved.state.items.some(i=>i.uid===hp.uid),false);
+ await drag(mp.uid);saved=await read(db,'player-a');assert.equal(saved.state.currentMp,20);assert.equal(saved.state.items.some(i=>i.uid===mp.uid),false);assert.equal(a.messages.filter(m=>m.body?.action==='usePotion').length,2);assert.deepEqual(a.errors,[]);
+ }finally{a.close();}
+});

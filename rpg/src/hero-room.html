@@ -13,14 +13,14 @@
     <section class="hr-panel hr-hero-panel" aria-label="Hero and attributes">
       <div class="hr-hero-head"><div><h2 id="hr-name"></h2><small id="hr-class"></small></div><span class="hr-pill" id="hr-level"></span></div>
       <div class="hr-hero-scene"><div class="hr-hero-figure"><img class="hr-hero-img" id="hr-portrait" alt=""></div></div>
-      <div class="hr-stats" id="hr-stats"></div><div class="hr-recovery"><strong id="hr-current-hp"></strong><button type="button" class="hr-btn" id="hr-drink-potion">Drink health potion</button><button type="button" class="hr-btn" id="hr-claim-loot">Collect saved drops</button></div>
+      <div class="hr-stats" id="hr-stats"></div><div class="hr-recovery"><strong id="hr-current-hp"></strong><button type="button" class="hr-btn" id="hr-drink-potion">Drink health potion · +20 HP</button><button type="button" class="hr-btn" id="hr-claim-loot">Collect saved drops</button></div>
       <div class="rpg-xp-panel"><span id="hr-xp-label"></span><progress id="hr-xp" max="100" value="0" aria-label="Experience to next level"></progress><small>Each level: +4 HP · +2 AP · +3 MP · +1 ATK / MAG / ARM / WIS</small></div><div class="hr-level-row"><span id="hr-points"></span><button type="button" class="hr-btn" id="hr-levelup" title="Device practice only: simulate one level. Online XP is server verified.">Test level +</button></div>
       <p class="hr-base-note">Totals include bonuses. Matching colors merge into one + value; Mythic is purple, spells are cyan. Hover for the item breakdown.</p>
     </section>
     <section class="hr-panel hr-bag-panel" aria-label="Bag inventory">
       <div class="hr-panel-title"><img data-room-icon="bag_icon" alt=""><div><strong>HERO BAG</strong><small id="hr-bag-size">6 × 6 · Equipped bonuses</small></div><button type="button" class="hr-arrange-button" id="hr-arrange-bag" data-arrange="bag" aria-label="Auto-arrange bag" data-tooltip="Auto-arrange bag"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><rect x="3" y="3" width="6" height="6" rx="1.5"/><rect x="3" y="13" width="6" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/><path d="M17 2v8m-4-4h8M14 3l6 6m0-6-6 6"/></svg></button><span id="hr-bag-count"></span></div>
       <div class="hr-grid-wrap"><div class="hr-inventory" id="hr-bag" role="group" aria-label="Bag, 6 columns by 6 rows"></div></div>
-      <div class="hr-grid-note">Double-tap to rotate clockwise. Hover for details. Drag or select an item and tap a tile.</div>
+      <div class="hr-grid-note">Drag a potion onto your hero to restore 20 HP or mana. Double-tap equipment to rotate; hover for details.</div>
       <div class="hr-active-section"><h2 class="hr-section-label"><img data-room-icon="active_icon" alt="">ACTIVE ATTACKS <span>4 slots</span></h2><div class="hr-active-slots" id="hr-active" role="group" aria-label="Active attacks"></div></div>
     </section>
     <section class="hr-panel hr-stash-panel" aria-label="Stash inventory">

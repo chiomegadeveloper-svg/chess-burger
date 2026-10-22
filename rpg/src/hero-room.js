@@ -6,12 +6,12 @@
   const bonusColors={common:'#c1cbd1',uncommon:'#7ee49a',rare:'#8cbdff',epic:'#ffbd82',mythic:'#d4a5ff',divine:'#f8d879'};
   let hero,state,selectedItem=null,selectedSpell=null,drag=null,ghost=null,preview=null;
   let suppressClickUntil=0,suppressedSource=null,modal=null,returnFocus=null;
-  let lastTap=null,tooltipAnchor=null;
+  let lastTap=null,tooltipAnchor=null,consumeBusy=false;
   const key=()=>window.RPGLive.key(hero.id);
   const escape=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const bonuses=list=>list.map((value,i)=>value?`+${value} ${C.stats[i]}`:'').filter(Boolean).join(' · ')||'No attribute bonus';
   const itemById=uid=>state.items.find(item=>item.uid===uid);
-  const itemName=item=>`${C.itemMap[item.defId].name} of ${item.enhancement.name}${item.sandboxTest?' (Test)':''}`;
+  const itemName=item=>`${C.itemMap[item.defId].name}${C.isConsumable(item)?'':' of '+item.enhancement.name}${item.sandboxTest?' (Test)':''}`;
   const compactBonuses=list=>list.map((v,i)=>v?`+${v} ${abbreviations[i]}`:'').filter(Boolean).join(' · ');
   function feedback(message){el('hr-feedback').textContent=message;}
   function save(notify=false){
@@ -69,7 +69,7 @@
     let occupied=0;
     for(const item of state.items.filter(i=>i.where===where)){
       const def=C.itemMap[item.defId],size=C.size(def,item.rotation),rarity=C.rarityMap[item.rarity],locked=!C.canEquip(state,item);occupied+=size.w*size.h;
-      html+=`<button type="button" class="hr-item rarity-${item.rarity}${item.rotated?' rotated':''}${locked?' level-locked':''}${selectedItem===item.uid?' selected':''}" data-uid="${item.uid}" aria-pressed="${selectedItem===item.uid}" aria-label="${escape(itemName(item))}, ${rarity.name}, item level ${item.iLvl}, requires level ${item.requiredLevel}, ${size.w} by ${size.h} cells, in ${where}" style="--rarity:${rarity.color};--angle:${item.rotation*90}deg;--cols:${size.w};--rows:${size.h};left:${item.x/grid.cols*100}%;top:${item.y/grid.rows*100}%;width:${size.w/grid.cols*100}%;height:${size.h/grid.rows*100}%"><img class="hr-item-img" src="${images[def.sprite]}" alt="" draggable="false"><span class="hr-tier">${item.iLvl}</span>${locked?`<span class="hr-item-lock">L${item.requiredLevel}</span>`:''}</button>`;
+      html+=`<button type="button" class="hr-item rarity-${item.rarity}${item.rotated?' rotated':''}${locked?' level-locked':''}${selectedItem===item.uid?' selected':''}" data-uid="${item.uid}" aria-pressed="${selectedItem===item.uid}" aria-label="${escape(itemName(item))}, ${rarity.name}, ${C.isConsumable(item)?'consumable, restores 20 '+(item.defId==='health_potion'?'HP':'mana'):'item level '+item.iLvl+', requires level '+item.requiredLevel}, ${size.w} by ${size.h} cells, in ${where}" style="--rarity:${rarity.color};--angle:${item.rotation*90}deg;--cols:${size.w};--rows:${size.h};left:${item.x/grid.cols*100}%;top:${item.y/grid.rows*100}%;width:${size.w/grid.cols*100}%;height:${size.h/grid.rows*100}%"><img class="hr-item-img" src="${images[def.sprite]}" alt="" draggable="false">${C.isConsumable(item)?'':'<span class="hr-tier">'+item.iLvl+'</span>'}${locked?`<span class="hr-item-lock">L${item.requiredLevel}</span>`:''}</button>`;
     }
     node.innerHTML=html;node.parentElement.scrollTop=scroll;el(`hr-${where}-count`).textContent=`${occupied}/${grid.cols*grid.rows}`;
   }
@@ -93,9 +93,10 @@
     const item=itemById(selectedItem),node=el('hr-inspector');
     if(!item){node.innerHTML='<h3>Make room for adventure.</h3><p>Collect equipment, then move it from the stash into your bag.</p><p class="hr-bonus-summary">Select an item to rotate or move it.</p>';return;}
     const def=C.itemMap[item.defId],rarity=C.rarityMap[item.rarity],locked=!C.canEquip(state,item);
+    if(C.isConsumable(item)){node.innerHTML=description(item)+`<div class="hr-actions"><button class="hr-btn primary" type="button" data-item-action="consume" ${consumeBusy?'disabled':''}>Use potion</button><button class="hr-btn" type="button" data-item-action="transfer">To ${item.where==='bag'?'stash':'bag'}</button><button class="hr-btn ghost" type="button" data-item-action="discard">Throw away</button></div>`;return;}
     node.innerHTML=`<h3 style="color:${rarity.color}">${def.name}</h3><p>${rarity.name} · iLvl ${item.iLvl} · <span class="${locked?'hr-requirement-locked':''}">Req. L${item.requiredLevel}</span> · T${item.gearTier}</p><p class="hr-bonus-summary">${compactBonuses(C.itemBonus(item))}</p><p>✧ ${escape(item.enhancement.name)} +${item.enhancement.value} ${abbreviations[item.enhancement.stat]} · ${item.where==='bag'?'Active':'Stored'}</p><div class="hr-actions"><button class="hr-btn" type="button" data-item-action="rotate" title="Rotate 90 degrees clockwise">↻ Rotate</button><button class="hr-btn" type="button" data-item-action="transfer" ${item.where==='stash'&&locked?'disabled':''}>To ${item.where==='bag'?'stash':'bag'}</button><button class="hr-btn" type="button" data-item-action="details">Details</button><button class="hr-btn ghost" type="button" data-item-action="discard">Throw away</button></div>`;
   }
-  function render(){const cap=C.totals(state,hero.stats)[0];el('hr-current-hp').textContent=`Health ${Math.min(cap,state.currentHp??cap)} / ${cap}`;el('hr-drink-potion').disabled=state.currentHp>=cap||!state.items.some(i=>i.defId==='health_potion');hideTooltip();renderStats();renderGrid('bag');renderGrid('stash');renderSpells();renderInspector();}
+  function render(){const cap=C.totals(state,hero.stats)[0];el('hr-current-hp').textContent=`HP ${Math.max(0,Math.min(cap,state.currentHp??cap))} / ${cap} · MP ${Math.max(0,Math.min(C.totals(state,hero.stats)[4],state.currentMp??C.totals(state,hero.stats)[4]))} / ${C.totals(state,hero.stats)[4]}`;el('hr-drink-potion').disabled=consumeBusy||state.currentHp===undefined||state.currentHp>=cap||!state.items.some(i=>i.defId==='health_potion');hideTooltip();renderStats();renderGrid('bag');renderGrid('stash');renderSpells();renderInspector();}
   function selectItem(uid){
     selectedItem=uid;selectedSpell=null;
     // Keep the touched element connected throughout the pointer gesture.
@@ -138,7 +139,7 @@
   function renderCatalog(){
     const query=el('hr-search').value.trim().toLowerCase(),category=el('hr-category').value,tier=Number(el('hr-tier-filter').value);
     const defs=C.items.filter(d=>(!query||d.name.toLowerCase().includes(query))&&(!category||d.category===category)&&(!tier||d.tier===tier));
-    el('hr-catalog').innerHTML=defs.length?defs.map(def=>`<article class="hr-catalog-card"><img src="${images[def.sprite]}" alt="${def.name}" loading="lazy"><h3>${def.name}</h3><p>${def.w} × ${def.h} tiles · ${def.category}</p><p>Random rarity, item level & enhancement</p><button class="hr-btn" type="button" data-collect="${def.id}">Find → Stash</button></article>`).join(''):'<p class="hr-empty-note">No equipment matches these filters.</p>';
+    el('hr-catalog').innerHTML=defs.length?defs.map(def=>`<article class="hr-catalog-card"><img src="${images[def.sprite]}" alt="${def.name}" loading="lazy"><h3>${def.name}</h3><p>${def.w} × ${def.h} tiles · ${def.category}</p><p>${def.category==='Potions'?'Consumable · Restores 20 '+(def.id==='health_potion'?'HP':'mana'):'Random rarity, item level & enhancement'}</p><button class="hr-btn" type="button" data-collect="${def.id}">Find → Stash</button></article>`).join(''):'<p class="hr-empty-note">No equipment matches these filters.</p>';
   }
   function playSkillPreview(){
     const spell=C.spellMap[previewSkill];if(!spell)return;
@@ -158,6 +159,7 @@
   }
   function description(item){
     const def=C.itemMap[item.defId],rarity=C.rarityMap[item.rarity],size=C.size(def,item.rotation),allowed=C.canEquip(state,item);
+    if(C.isConsumable(item))return `<div class="hr-description-head"><img src="${images[def.sprite]}" alt=""><div><h3>${def.name}</h3><p>Consumable · 1 × 1 tile</p></div></div><p class="hr-description-total">Restores 20 ${item.defId==='health_potion'?'Health':'mana'}, up to your maximum.</p><p>Drag onto your hero to use. Consumed after activation.</p>`;
     const start=item.gearTier===1?1:(item.gearTier-1)*10,end=item.gearTier*10-1;
     const list=values=>values.map((v,i)=>v?`<li>+${v} ${C.stats[i]}</li>`:'').join('');
     return `<div class="hr-description-head"><img src="${images[def.sprite]}" alt=""><div><span class="hr-rarity-tag" style="--rarity:${rarity.color}">${rarity.name}${item.rarity==='mythic'?' / Legendary':item.rarity==='divine'?' / Artifact':''}</span><h3>${escape(itemName(item))}</h3><p>${def.category} · ${size.w} × ${size.h} tiles</p></div></div><dl class="hr-item-metrics"><div><dt>Item level</dt><dd>${item.iLvl}</dd></div><div><dt>Requires level</dt><dd class="${allowed?'':'hr-requirement-locked'}">${item.requiredLevel}${allowed?'':' · Locked'}</dd></div><div><dt>Gear tier</dt><dd>T${item.gearTier} · L${start}–${end}</dd></div></dl><section><h4>Base attributes · ${item.iLvl+3} power</h4><ul>${list(item.baseBonus)}</ul></section><section class="hr-additional-attributes"><h4>Additional attributes · ${item.attributes.length}</h4>${item.attributes.length?`<ul>${item.attributes.map(a=>`<li>+${a.value} ${C.stats[a.stat]}</li>`).join('')}</ul>`:'<p>Common gear has no rarity bonus attributes.</p>'}</section><section class="hr-enhancement"><h4>One enhancement</h4><p>✧ ${escape(item.enhancement.name)} · +${item.enhancement.value} ${C.stats[item.enhancement.stat]}</p></section><p class="hr-description-total">Total: ${compactBonuses(C.itemBonus(item))}</p><p class="hr-description-status">${item.where==='bag'?'Equipped in bag · All bonuses active.':allowed?'Stored in stash · No bonuses active.':`Stored in stash · Reach level ${item.requiredLevel} to equip.`}</p>`;
@@ -189,8 +191,9 @@
     el('hr-buy-bag').textContent=balance<C.BAG_PRICE?`Need ${C.BAG_PRICE-balance} more CBG`:`Buy +6 ${where} tiles · ${C.BAG_PRICE} CBG`;
     el('hr-buy-bag').disabled=balance<C.BAG_PRICE;
   }
-  function clearDrag(){ghost?.remove();preview?.remove();ghost=null;preview=null;drag=null;}
+  function clearDrag(){el('hr-portrait').closest('.hr-hero-scene').classList.remove('hr-potion-ready');ghost?.remove();preview?.remove();ghost=null;preview=null;drag=null;}
   function candidate(x,y){
+    if(drag?.kind==='item'&&C.isConsumable(itemById(drag.uid)||{})){const rect=el('hr-portrait').closest('.hr-hero-scene').getBoundingClientRect();if(x>=rect.left&&x<=rect.right&&y>=rect.top&&y<=rect.bottom)return {hero:true};}
     for(const where of ['bag','stash']){
       const node=el(`hr-${where}`),r=node.getBoundingClientRect(),visible=node.parentElement.getBoundingClientRect(),grid=C.gridFor(state,where);
       if(x>=Math.max(r.left,visible.left)&&x<Math.min(r.right,visible.right)&&y>=Math.max(r.top,visible.top)&&y<Math.min(r.bottom,visible.bottom))return {where,x:Math.floor((x-r.left)/r.width*grid.cols)-drag.anchorX,y:Math.floor((y-r.top)/r.height*grid.rows)-drag.anchorY};
@@ -210,7 +213,8 @@
       image.style.width=drag.rotation%2?`${90*size.h/size.w}%`:'90%';image.style.height=drag.rotation%2?`${90*size.w/size.h}%`:'90%';
       image.style.transform=`rotate(${drag.rotation*90}deg)`;
       drag.target=candidate(x,y);preview?.remove();preview=null;
-      if(drag.target){
+      el('hr-portrait').closest('.hr-hero-scene').classList.toggle('hr-potion-ready',!!drag.target?.hero);
+      if(drag.target&&!drag.target.hero){
         const target=drag.target,grid=C.gridFor(state,target.where),valid=C.canPlace(state,item,target.where,target.x,target.y,drag.rotation);
         preview=document.createElement('div');preview.className=`hr-placement${valid?'':' invalid'}`;
         Object.assign(preview.style,{left:`${target.x/grid.cols*100}%`,top:`${target.y/grid.rows*100}%`,width:`${size.w/grid.cols*100}%`,height:`${size.h/grid.rows*100}%`});
@@ -220,7 +224,7 @@
     ghost.style.left=`${x+10}px`;ghost.style.top=`${y+10}px`;
   }
   room.addEventListener('pointerdown',event=>{
-    if(event.button!==0)return;
+    if(event.button!==0||consumeBusy)return;
     hideTooltip();
     const itemNode=event.target.closest('.hr-item'),spellNode=event.target.closest('.hr-spell-slot.filled');
     if(!itemNode&&!spellNode)return;
@@ -242,15 +246,16 @@
   room.addEventListener('pointermove',event=>{if(drag&&event.pointerId===drag.pointerId)updateDrag(event.clientX,event.clientY);});
   room.addEventListener('pointerup',event=>{
     if(!drag||event.pointerId!==drag.pointerId)return;
-    const current=drag;
+    const current=drag;if(current.kind==='item'&&current.moved)current.target=candidate(event.clientX,event.clientY);
     const finish=action=>event.pointerType==='touch'?requestAnimationFrame(action):action();
     suppressedSource=current;
     if(current.moved){
       suppressClickUntil=Date.now()+300;
       if(current.kind==='item'){
         const target=current.target,item=itemById(current.uid);
+        if(target?.hero){clearDrag();void consumePotion(item.uid);}else{
         const success=target&&C.place(state,item,target.where,target.x,target.y,current.rotation);
-        clearDrag();if(success)finish(()=>changed(`Item moved to ${target.where}.`));else feedback(target?.where==='bag'&&!C.canEquip(state,item)?`Reach level ${item.requiredLevel} to equip this item.`:'That space is blocked or outside the grid. Your item stays in its original position.');
+        clearDrag();if(success)finish(()=>changed(`Item moved to ${target.where}.`));else feedback(target?.where==='bag'&&!C.canEquip(state,item)?`Reach level ${item.requiredLevel} to equip this item.`:'That space is blocked or outside the grid. Your item stays in its original position.');}
       }else{
         const target=document.elementFromPoint(event.clientX,event.clientY)?.closest('.hr-spell-slot');
         clearDrag();
@@ -292,6 +297,7 @@
     const upgrade=event.target.closest('[data-upgrade]');
     if(upgrade&&C.upgrade(state,Number(upgrade.dataset.upgrade)))changed(`${C.stats[Number(upgrade.dataset.upgrade)]} increased by 1.`);
     const action=event.target.closest('[data-item-action]')?.dataset.itemAction;
+    if(action==='consume')void consumePotion(selectedItem);
     if(action==='rotate')rotate();
     if(action==='transfer')transfer();
     if(action==='details')showDetails();
@@ -376,7 +382,10 @@
   });
   for(const node of document.querySelectorAll('[data-room-icon]'))node.src=images[node.dataset.roomIcon];
   el('hr-rarity-legend').innerHTML=C.rarities.map(r=>`<span class="hr-rarity-tag" style="--rarity:${r.color}">${r.name} <small>${r.range[0]===r.range[1]?r.range[0]:r.range.join('–')} bonus</small></span>`).join('');
-  for(const [id,action] of [['hr-drink-potion','drinkPotion'],['hr-claim-loot','claimLoot']])el(id).onclick=async()=>{el(id).disabled=true;try{const response=await fetch('/api/battle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action})}),data=await response.json();if(!response.ok)throw Error(data.error);Object.assign(state,data.game);localStorage.setItem(key(),JSON.stringify(state));feedback(action==='drinkPotion'?'Health potion used · restored 50% of maximum health.':data.pendingLoot?.length?'Stash full. Throw away unwanted items, then collect the remaining drops.':'Saved drops collected.');render();}catch(error){feedback(error.message);render();}};
+  async function consumePotion(uid){if(consumeBusy||!C.isConsumable(itemById(uid)||{}))return;consumeBusy=true;hideTooltip();render();try{const response=await fetch('/api/battle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'usePotion',uid})}),data=await response.json();if(!response.ok)throw Error(data.error);Object.assign(state,data.game);selectedItem=null;localStorage.setItem(key(),JSON.stringify(state));window.RPGWorld.refresh?.();feedback(`Potion used · +${data.restored.amount} ${data.restored.resource==='hp'?'Health':'mana'}.`);}catch(error){feedback(error.message);}finally{consumeBusy=false;render();}}
+  el('hr-drink-potion').onclick=()=>{const item=state.items.find(i=>i.defId==='health_potion');if(item)void consumePotion(item.uid);};
+  el('hr-claim-loot').onclick=async()=>{el('hr-claim-loot').disabled=true;try{const response=await fetch('/api/battle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'claimLoot'})}),data=await response.json();if(!response.ok)throw Error(data.error);Object.assign(state,data.game);localStorage.setItem(key(),JSON.stringify(state));feedback(data.pendingLoot?.length?'Stash full. Throw away unwanted items, then collect the remaining drops.':'Saved drops collected.');}catch(error){feedback(error.message);}finally{el('hr-claim-loot').disabled=false;render();}};
+
  window.RPGRoom={persist:save,open,refresh:render,utility(kind){if(kind==='book'){window.BabaylanBook.open();showModal('hr-book-modal');}if(kind==='shop'){renderShop();el('hr-shop-status').textContent='Each purchase adds 6 tiles to your chosen inventory.';showModal('hr-shop-modal');}}};
   el('saveBtn').addEventListener('click',()=>{const name=el('heroName').value.trim();if(name.length>=2)open(selected,name);});
 })();

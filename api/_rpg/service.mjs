@@ -1,4 +1,4 @@
-import {health,healthCap,loot,stash,recovery} from './rewards.mjs';
+import {health,healthCap,mana,manaCap,normalize,loot,stash,recovery} from './rewards.mjs';
 import {Chess} from 'chess.js';
 import puzzles from './puzzles.json' with {type:'json'};
 import * as R from './core.mjs';
@@ -14,7 +14,7 @@ export async function gameRequest(client,user,method,input={},services={}){
  const now=services.now?.()??Date.now();let doc=await read(client,user),shared=null;
  const persist=()=>write(client,user,'rpg_profile','hero',doc);
  const cachedSet=()=>doc?.monsterSet?.refreshAt>now?{encounters:(doc.encounters||[]).filter(e=>!e.consumed&&e.expires_at>now),refreshAt:doc.monsterSet.refreshAt}:null;
- if(input.action==='init'&&doc?.state&&recovery(doc))await persist();
+ if(doc?.state){const normalized=normalize(doc),recovered=input.action==='init'&&recovery(doc);if(normalized||recovered)await persist();}
  if(input.action==='init')return {game:doc?.state||null,generation:doc?.generation||null,spawnCache:cachedSet()};
  const resetError=()=>{throw Object.assign(Error('Your RPG hero was reset by an owner. Reopen RPG to choose your hero.'),{status:409,code:'hero_reset'});};
  if(doc?.generation&&input.generation!==doc.generation)resetError();
@@ -39,7 +39,7 @@ export async function gameRequest(client,user,method,input={},services={}){
   const rows=await client.from('cb_inventory_items').select('user_id,metadata').eq('item_kind','rpg_presence').gt('updated_at',new Date(now-45000).toISOString()).neq('user_id',user).limit(200);if(rows.error)fail('Nearby players unavailable.',503);
   return {players:(rows.data||[]).map(r=>r.metadata).filter(p=>now-p.updatedAt<45000&&distanceMeters(p,old)<=5000).sort((a,b)=>distanceMeters(a,old)-distanceMeters(b,old)).slice(0,100)};
  }
- const player=async (id=user)=>{const d=id===user?doc:await read(client,id);if(!d?.state)fail('This player has not chosen a hero.');const s=d.state;return {...R.profile({heroId:d.heroId,name:d.name,level:s.level,stats:C.totals(s,P.baseStats(s.level)),active:s.active}),hp:health(s),userId:id,heroGeneration:d.generation||null};};
+ const player=async (id=user)=>{const d=id===user?doc:await read(client,id);if(!d?.state)fail('This player has not chosen a hero.');const s=d.state;return {...R.profile({heroId:d.heroId,name:d.name,level:s.level,stats:C.totals(s,P.baseStats(s.level)),active:s.active}),hp:health(s),mp:mana(s),userId:id,heroGeneration:d.generation||null};};
  const me=b=>b.actors.findIndex(a=>a.userId===user),visible=b=>R.publicBattle(b,me(b));
  const save=async (b,solvedId=null)=>{
   b.version++;if(solvedId){doc.history=[solvedId,...doc.history.filter(id=>id!==solvedId)].slice(0,1000);}
@@ -59,15 +59,18 @@ export async function gameRequest(client,user,method,input={},services={}){
   const b=doc.battle||null;if(b&&R.timeout(b,now))await save(b);return b;
  }
  const result=async b=>{
-  if(b?.status==='finished'&&me(b)>=0&&doc.healthBattle!==b.id){doc.state.currentHp=b.actors[me(b)].hp;doc.healthBattle=b.id;await persist();}
+  if(b?.status==='finished'&&me(b)>=0&&doc.healthBattle!==b.id){doc.state.currentHp=b.actors[me(b)].hp;doc.state.currentMp=b.actors[me(b)].mp;doc.healthBattle=b.id;await persist();}
   if(b?.status==='finished'&&b.winner===me(b)&&b.kind==='monster'&&!b.training&&b.encounterId&&b.endReason==='knockout'&&!doc.awards.some(a=>a.id===b.id)){
    const xp=Math.min(P.threshold(88)-doc.state.totalXp,P.victoryXp(doc.state.level,b.actors[1].level));C.gainXp(doc.state,xp);const encounter=doc.encounters.find(e=>e.id===b.encounterId);if(encounter)encounter.consumed=true;const drops=loot(b.actors[1].level,services.rng);doc.pendingLoot=[...(doc.pendingLoot||[]),...drops];stash(doc);doc.awards=[...doc.awards,{id:b.id,xp,drops}].slice(-100);await persist();
   }
   return {game:doc.state,pendingLoot:doc.pendingLoot||[],drops:doc.awards.find(a=>a.id===b?.id)?.drops||[],battle:b?visible(b):null,progression:progression(doc,b),defeatedEncounterId:b?.kind==='monster'&&b.status==='finished'&&b.winner===me(b)&&b.endReason==='knockout'?b.encounterId:null};
  };
- if(input.action==='drinkPotion'){await result(await current());
-  const ongoing=await read(client,user,'rpg_profile','hero');let active=ongoing?.battle?.status==='active';if(ongoing?.pvpId){const rows=await client.from('cb_inventory_items').select('metadata').eq('item_kind','rpg_battle').eq('item_id',ongoing.pvpId).contains('metadata',{participants:[user]}).maybeSingle();if(rows.error)fail('Battle unavailable.',503);active=rows.data?.metadata?.status==='active';}if(active)fail('Finish your battle before using a potion.');
-  if(health(doc.state)>=healthCap(doc.state))fail('Health is already full.');const index=doc.state.items.findIndex(i=>i.defId==='health_potion');if(index<0)fail('No health potion available.');doc.state.items.splice(index,1);doc.state.inventoryRevision=(doc.state.inventoryRevision||0)+1;doc.state.currentHp=Math.min(healthCap(doc.state),health(doc.state)+Math.max(1,Math.ceil(healthCap(doc.state)*.5)));stash(doc);await persist();return {game:doc.state,pendingLoot:doc.pendingLoot};
+ if(['drinkPotion','usePotion'].includes(input.action)){await result(await current());
+  const ongoing=await read(client,user,'rpg_profile','hero');let active=ongoing?.battle?.status==='active';if(ongoing?.pvpId){const rows=await client.from('cb_inventory_items').select('metadata').eq('item_kind','rpg_battle').eq('item_id',ongoing.pvpId).contains('metadata',{participants:[user]}).maybeSingle();if(rows.error)fail('Battle unavailable.',503);active=['pending','active'].includes(rows.data?.metadata?.status);}if(active)fail('Finish your battle before using a potion.');
+  const index=doc.state.items.findIndex(i=>input.action==='usePotion'?i.uid===input.uid&&C.isConsumable(i):i.defId==='health_potion');if(index<0)fail('This potion is no longer available.');
+  const item=doc.state.items[index],resource=item.defId==='health_potion'?'hp':'mp',balance=resource==='hp'?health(doc.state):mana(doc.state),cap=resource==='hp'?healthCap(doc.state):manaCap(doc.state);
+  if(balance>=cap)fail(resource==='hp'?'Health is already full.':'Mana is already full.');
+  doc.state.items.splice(index,1);doc.state.inventoryRevision=(doc.state.inventoryRevision||0)+1;doc.state[resource==='hp'?'currentHp':'currentMp']=Math.min(cap,balance+20);stash(doc);await persist();return {game:doc.state,pendingLoot:doc.pendingLoot,restored:{resource,amount:Math.min(20,cap-balance)}};
  }
  if(input.action==='progress')return {progression:progression(doc)};
  if(method==='GET')return await result(await current());
