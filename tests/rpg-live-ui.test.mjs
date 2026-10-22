@@ -38,3 +38,16 @@ test('out-of-range message is centered, lasts ten seconds, fades out and can clo
  a.w.RPGWorld.outOfRange(450);assert.equal(popup.hidden,false);assert.equal(popup.classList.contains('leaving'),false);popup.querySelector('button').click();assert.equal(popup.classList.contains('leaving'),true);a.w.setTimeout=original;
  }finally{a.close();}
 });
+
+test('monster tap previews hero versus monster; Run makes no battle and Attack alone starts one after a fresh range check',async()=>{
+ const db=database(),saved=await gameRequest(db,'player-a','POST',{action:'register',heroId:'rogue',name:'Preview Warrior',skill:'punch'});
+ const gps={lat:11.26,lng:125,accuracy:40,time:Date.now()};
+ const batch=await gameRequest(db,'player-a','POST',{action:'spawn',gps},{roadPoints:async()=>[{lat:11.2602,lng:125}]});const enemy=batch.encounters[0];
+ const a=open(db);try{await pause();await pause();a.w.RPGBattle.connect({id:'rogue',name:'Varkesh',stats:[20,4,4,4,20,4]},saved.game);
+ a.w.RPGWorld.position=()=>({...gps,time:Date.now()});a.w.RPGWorld.monster=()=>enemy;
+ await a.w.RPGBattle.encounter(enemy.id);const dialog=a.d.querySelector('.world-encounter-choice');assert.equal(dialog.open,true);assert.equal(dialog.querySelector('[data-hero-name]').textContent,'Preview Warrior');assert.equal(dialog.querySelector('[data-monster-name]').textContent,enemy.name);assert.match(dialog.querySelector('[data-hero]').src,/rogue-100-right/);assert.match(dialog.querySelector('[data-monster]').src,/-100-left/);
+ assert.equal((await read(db,'player-a')).battle,undefined);dialog.querySelector('[data-run]').click();assert.equal(dialog.open,false);assert.equal((await read(db,'player-a')).battle,undefined);
+ await a.w.RPGBattle.encounter(enemy.id);a.w.RPGWorld.position=()=>({...gps,lat:12,time:Date.now()});dialog.querySelector('[data-attack]').click();await pause();assert.equal((await read(db,'player-a')).battle,undefined);assert.equal(a.d.querySelector('.world-range-notice').hidden,false);
+ a.w.RPGWorld.position=()=>({...gps,time:Date.now()});await a.w.RPGBattle.encounter(enemy.id);dialog.querySelector('[data-attack]').click();await pause();await pause();assert.equal(dialog.open,false);assert.equal((await read(db,'player-a')).battle.encounterId,enemy.id);assert.equal(a.messages.filter(m=>m.type==='CB_RPG_API'&&m.body.action==='encounter').length,1);assert.deepEqual(a.errors,[]);
+ }finally{a.close();}
+});

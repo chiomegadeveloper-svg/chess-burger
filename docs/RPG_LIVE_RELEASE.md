@@ -33,3 +33,9 @@ Monsters have fixed coordinates and a rolling 30-minute lifetime from generation
 Tapping an out-of-range monster shows a centered notice with approximate distance and the 200 m limit. The notice fades after 10 seconds and has a manual close button. The server also returns a structured range error for online player movement/races.
 
 Tests cover the 199/201 m boundary for monsters and PvP, full lifetime across clock boundaries and movement, initialization cache, cached road reuse, defeat-only removal, and popup timing/close behavior.
+
+## Monster encounter choice (v0.0576)
+
+Tapping an in-range monster opens a responsive native dialog with the hero on the left, VS in the center and the monster on the right. Both full-health sprites face one another; names and levels identify each side. RUN dismisses without creating a battle or changing resources. ATTACK rechecks the current GPS/range and starts the authenticated encounter. Out-of-range taps retain the ten-second distance notice. Native Escape dismisses the preview, and incoming active battles close it.
+
+The new integration test verifies left/right sprites, no server battle on preview/Run, movement outside range before Attack, and exactly one encounter request on confirmation. Browser layout review used sample data, with no production battle started.
