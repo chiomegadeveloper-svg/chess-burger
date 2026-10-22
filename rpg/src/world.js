@@ -62,7 +62,7 @@
  function resumeAfterBattle(){if(!battlePaused)return;battlePaused=false;if(!world.hidden)startGPS();}
  function stopGPS(message='GPS is off. Your location is not being shared.'){
   battlePaused=false;nextOnlineAttempt=0;
-  clearInterval(gpsTimer);gpsTimer=null;requestVersion++;monsterRequest=false;lastMonsterAttempt=0;clearInterval(monsterTimer);monsterTimer=null;for(const pin of encounterPins.values())pin.remove();encounterPins.clear();if(rangeCircle){rangeCircle.remove();rangeCircle=null;}if(watch!==null)navigator.geolocation?.clearWatch(watch);watch=null;position=null;offline();if(selfMarker){selfMarker.remove();selfMarker=null;accuracyCircle.remove();accuracyCircle=null;}
+  clearInterval(gpsTimer);gpsTimer=null;requestVersion++;monsterRequest=false;lastMonsterAttempt=0;clearInterval(monsterTimer);monsterTimer=null;for(const pin of encounterPins.values())pin.remove();encounterPins.clear();if(rangeCircle){rangeCircle.remove();rangeCircle=null;}if(watch!==null)navigator.geolocation?.clearWatch(watch);watch=null;position=null;showChests([]);offline();if(selfMarker){selfMarker.remove();selfMarker=null;accuracyCircle.remove();accuracyCircle=null;}
   el('world-gps').textContent='◎ Enable GPS';el('world-share').disabled=true;el('world-map-mode').textContent='PREVIEW AREA';el('world-position').textContent='Enable GPS to find your place in the realm.';status(message);
  }
  function gpsError(error){
@@ -149,6 +149,9 @@
   if(!map)return;const ids=new Set(visible.map(e=>e.id));for(const [id,pin] of encounterPins)if(!ids.has(id)){pin.remove();encounterPins.delete(id);}
   for(const e of visible){if(encounterPins.has(e.id))continue;const src=window.DamageSprites.sprite(e.monsterId,100,'left');const icon=L.divIcon({className:'world-monster-pin',html:`<div class="world-monster-marker"><b class="world-monster-level">LVL ${Number(e.level)}</b><img src="${src}" alt=""><span>${safe(e.name)}</span></div>`,iconSize:[84,108],iconAnchor:[42,87]});const pin=L.marker([e.lat,e.lng],{icon,alt:`${e.name}, LVL ${e.level}`}).addTo(map);pin.on('click',()=>window.RPGBattle.encounter(e.id));encounterPins.set(e.id,pin);}
  }
+ const chestPins=new Map();
+ function showChests(rows){if(!map)return;const ids=new Set(rows.map(c=>c.id));for(const [id,pin]of chestPins)if(!ids.has(id)){pin.remove();chestPins.delete(id);}for(const chest of rows){if(chestPins.has(chest.id))continue;const icon=L.divIcon({className:'world-chest-pin',html:`<div class="world-chest-marker chest-${chest.kind}"><img src="/guild/guild-chest.webp" alt=""><span>${safe(chest.name)}</span></div>`,iconSize:[80,79],iconAnchor:[40,60]}),marker=L.marker([chest.lat,chest.lng],{icon,alt:chest.name,zIndexOffset:1000}).addTo(map);marker.on('click',()=>window.RPGChests?.open(chest));chestPins.set(chest.id,marker);}}
+ function chestArea(bounds){if(!map)return;follow=false;map.fitBounds([[bounds[0],bounds[2]],[bounds[1],bounds[3]]],{padding:[45,45],maxZoom:15});}
  el('world-battle-lab').addEventListener('click',()=>window.RPGBattle.openLab());
- window.RPGWorld={open,refresh,pauseForBattle,resumeAfterBattle,primeEncounters,outOfRange,stop:stopGPS,encounters,syncEncounters,offline,position:()=>position&&({...position}),monster:id=>monsterRows.find(e=>e.id===id),consume(id){encounters(monsterRows.filter(e=>e.id!==id));}};
+ window.RPGWorld={showChests,chestArea,version:()=>requestVersion,open,refresh,pauseForBattle,resumeAfterBattle,primeEncounters,outOfRange,stop:stopGPS,encounters,syncEncounters,offline,position:()=>position&&({...position}),monster:id=>monsterRows.find(e=>e.id===id),consume(id){encounters(monsterRows.filter(e=>e.id!==id));}};
 })();

@@ -1,3 +1,4 @@
+import {chestRequest,recoverChests} from './chests.mjs';
 import {merchantRequest} from './merchant.mjs';
 import {health,healthCap,mana,manaCap,normalize,loot,stash,recovery,cbgDrop} from './rewards.mjs';
 import {Chess} from 'chess.js';
@@ -17,6 +18,7 @@ export async function gameRequest(client,user,method,input={},services={}){
  const cachedSet=()=>doc?.monsterSet?.refreshAt>now?{encounters:(doc.encounters||[]).filter(e=>!e.consumed&&e.expires_at>now),refreshAt:doc.monsterSet.refreshAt}:null;
  if(doc?.state){const normalized=normalize(doc),recovered=input.action==='init'&&recovery(doc);if(normalized||recovered)await persist();}
  if(input.action==='init'&&doc?.state){for(const award of (doc.awards||[]).filter(a=>a.cbg&&!a.cbgPaid).slice(0,5)){const paid=await client.rpc('cb_rpg_battle_reward',{p_user_id:user,p_battle_id:award.id});if(paid.error)break;if(paid.data)Object.assign(doc,paid.data);}}
+ if(input.action==='init'&&doc?.state)await recoverChests(client,user,doc,now);
  if(input.action==='init')return {game:doc?.state||null,generation:doc?.generation||null,spawnCache:cachedSet()};
  const resetError=()=>{throw Object.assign(Error('Your RPG hero was reset by an owner. Reopen RPG to choose your hero.'),{status:409,code:'hero_reset'});};
  if(doc?.generation&&input.generation!==doc.generation)resetError();
@@ -69,6 +71,7 @@ export async function gameRequest(client,user,method,input={},services={}){
   const reward=doc.awards.find(a=>a.id===b?.id);if(reward?.cbg&&!reward.cbgPaid){const paid=await client.rpc('cb_rpg_battle_reward',{p_user_id:user,p_battle_id:b.id});if(!paid.error&&paid.data)Object.assign(doc,paid.data);}
   return {cbgReward:reward?.cbg||0,cbgPending:!!reward?.cbg&&!doc.awards.find(a=>a.id===b?.id)?.cbgPaid,game:doc.state,pendingLoot:doc.pendingLoot||[],drops:doc.awards.find(a=>a.id===b?.id)?.drops||[],battle:b?visible(b):null,progression:progression(doc,b),defeatedEncounterId:b?.kind==='monster'&&b.status==='finished'&&b.winner===me(b)&&b.endReason==='knockout'?b.encounterId:null};
  };
+ if(['chests','openChest'].includes(input.action)){if(input.action==='openChest'){const active=await current();await result(active);if(['active','pending'].includes(active?.status))fail('Finish your battle before opening a chest.');}return chestRequest(client,user,doc,input,now,services);}
  if(['merchant','merchantBuy','merchantSell'].includes(input.action)){const active=await current();await result(active);if(['active','pending'].includes(active?.status))fail('Finish your battle before trading.');return merchantRequest(client,user,doc,input,now);}
  if(['drinkPotion','usePotion'].includes(input.action)&&!input.battlePotion){await result(await current());
   const ongoing=await read(client,user,'rpg_profile','hero');let active=ongoing?.battle?.status==='active';if(ongoing?.pvpId){const rows=await client.from('cb_inventory_items').select('metadata').eq('item_kind','rpg_battle').eq('item_id',ongoing.pvpId).contains('metadata',{participants:[user]}).maybeSingle();if(rows.error)fail('Battle unavailable.',503);active=['pending','active'].includes(rows.data?.metadata?.status);}if(active)fail('Finish your battle before using a potion.');

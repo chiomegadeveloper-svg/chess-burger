@@ -388,6 +388,6 @@
   el('hr-drink-potion').onclick=()=>{const item=state.items.find(i=>i.defId==='health_potion');if(item)void consumePotion(item.uid);};
   el('hr-claim-loot').onclick=async()=>{el('hr-claim-loot').disabled=true;try{const response=await fetch('/api/battle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'claimLoot'})}),data=await response.json();if(!response.ok)throw Error(data.error);Object.assign(state,data.game);localStorage.setItem(key(),JSON.stringify(state));feedback(data.pendingLoot?.length?'Stash full. Throw away unwanted items, then collect the remaining drops.':'Saved drops collected.');}catch(error){feedback(error.message);}finally{el('hr-claim-loot').disabled=false;render();}};
 
- window.RPGRoom={persist:save,open,refresh:render,utility(kind){if(kind==='book'){window.BabaylanBook.open();showModal('hr-book-modal');}if(kind==='shop'){save();window.RPGMerchant.open(state);}}};
+ window.RPGRoom={accept(game){Object.assign(state,game);localStorage.setItem(key(),JSON.stringify(state));render();window.RPGWorld.refresh?.();},persist:save,open,refresh:render,utility(kind){if(kind==='book'){window.BabaylanBook.open();showModal('hr-book-modal');}if(kind==='shop'){save();window.RPGMerchant.open(state);}}};
   el('saveBtn').addEventListener('click',()=>{const name=el('heroName').value.trim();if(name.length>=2)open(selected,name);});
 })();
