@@ -65,3 +65,13 @@ The generated hero damage atlas was internally consistent with the sandbox but n
 All health thresholds retain the original hero identity. Hero damage/kneeling/death pose substitutions are suspended because the existing atlas changes their appearance; no new artwork was generated. Monster damage poses and original ct.js attack animation timing remain intact. This is a rendering-only fix: account hero choice, equipment, stats and progression are unchanged.
 
 Verified all eight heroes across seven HP values and both facings, original asset hashes, map-to-battle integration, original Crusader in browser combat and matching head portrait. Screenshot `rpg-crusader-original-restored.jpg` is a local practice preview.
+
+## v0.0608 — responsive battle panels, icon skills and prompt attacks
+
+Removed fixed battle width and fighter-height caps. Status panels and fighter frames expand with the viewport; compact landscape keeps harvest/actions reachable and uses the space for the fighters. Encounter, harvest and report forms have fluid viewport-bound sizes. Original hero images and ct.js effect artwork are unchanged. Desktop and 844×390 landscape browser checks completed.
+
+Hero and enemy skill slots show icons only. Hover/focus tooltips expose the skill name, AP/MP costs, calculated damage, readiness and cooldown. Empty slots are blank. Disabled skill details remain focusable through their wrapper.
+
+Preload all five original effect atlases while preparing the hero. Start the hero's cosmetic skill animation on input, overlap it with the server request, and reconcile the confirmed hit at impact without replaying the same animation. Failed requests do not award damage/resources. Enemy response retains its 1–3 second delay. Presence requests use their independent record path, so pending map sharing cannot queue ahead of battle commands; profile/combat mutations stay serialized.
+
+Verified with delayed-response tests: animation starts before the request completes, HP stays unchanged until server confirmation and effect impact, hero effects play once, and pending presence does not block combat. Browser screenshot `rpg-responsive-battle.jpg` is a local practice preview with the tooltip focused.

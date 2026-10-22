@@ -3,7 +3,7 @@
  const el=id=>document.getElementById(id),root=el('rpg-battle'),R=window.RPGBattleRules,C=window.RPGInventory;
  let seenBattle='',seenEvent=0,shownHp=[],lastImpact=0,presenting=false,presentationToken=0;
  let pendingProgress=null,refreshing=false,encounterDialog=null,previewTarget=null,selectionPromise=null;
- let attackQueue=[],enemyThinking=false,enemyCasting=null;
+ let attackQueue=[],enemyThinking=false,enemyCasting=null,attackPreview=null;
  let hero,state,battle=null,local=false,busy=false,pollTimer=null,clockTimer=null,dismissed=false,selected=null,chess=null,chessKey='',engine=null,engineReady=null,engineResolve=null,engineTimer=null,aiThinking=false,engineBroken=false,puzzleData=null,lastLog='';
  const notice=(s,important=false)=>{el('bt-notice').textContent=s;root.classList.toggle('bt-has-notice',important&&!!s);};
  const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -13,6 +13,7 @@
  function show(){if(encounterDialog?.open){encounterDialog.close();previewTarget=null;}dismissed=false;if(battle)window.RPGWorld.pauseForBattle?.();root.hidden=false;el('rpg-world').inert=true;el('bt-close').focus();}
  function stopEngine(){engine?.terminate();engine=null;engineReady=null;clearTimeout(engineTimer);engineResolve?.reject(Error('Engine stopped.'));engineResolve=null;aiThinking=false;}
  function close(){cancelPresentation();root.hidden=true;window.RPGWorld.resumeAfterBattle?.();el('bt-rules').hidden=true;el('rpg-world').inert=false;dismissed=true;el('world-battle-lab')?.focus();if(pendingHarvest)showHarvest();else if(battle?.status==='finished')openReport(battle);}
+ function skillDamage(a,d,s){let n=Math.max(1,Math.round(a.stats[s.magic?2:1]*s.scale+2-d.stats[3]*.15));return d.defending?Math.max(1,Math.ceil(n/2)):n;}
  function vitals(a){return [['Health','hp','maxHp','#7bc89f'],['Mana','mp','maxMp','#58c8dd'],['Attack points','ap','maxAp','#f29b65']].map(([label,key,max,color])=>`<div class="bt-vital"><span>${label.toUpperCase()} <b>${a[key]} / ${a[max]}</b></span><div><i style="--vital-color:${color};width:${Math.max(0,a[key]/a[max]*100)}%"></i></div></div>`).join('');}
  function sprite(a,facing){return window.DamageSprites.sprite(a.heroId,a.hp===0?0:a.hp/a.maxHp*100,facing);}
  const harvestModal=el('bt-harvest-modal');let pendingHarvest=null;
@@ -75,6 +76,7 @@
  });
  // The server owns combat; this queue only controls when damage becomes visible.
  function cancelPresentation(){
+  attackPreview=null;root.classList.remove('bt-hero-windup');
   presentationToken++;attackQueue=[];presenting=false;enemyThinking=false;enemyCasting=null;
   window.RPGSkillFX?.stop(el('bt-stage'));
   shownHp=battle?.actors.map(a=>a.hp)||[];seenBattle=battle?.id||'';seenEvent=battle?.eventSeq||0;lastImpact=seenEvent;
@@ -103,7 +105,13 @@
   try{
    while(attackQueue.length&&token===presentationToken){
     const events=attackQueue.splice(0),me=battle.me??0;
-    if(window.RPGSkillFX?.sequence)await window.RPGSkillFX.sequence(el('bt-stage'),events.map(e=>({...e,reverse:e.side!==me,delayMs:battle.kind!=='pvp'&&e.side!==me?1000+Math.floor(Math.random()*2001):0})),{onPrepare:e=>{if(token!==presentationToken)return;enemyThinking=e.delayMs>0;enemyCasting=null;draw();},onAttack:e=>{if(token!==presentationToken)return;enemyThinking=false;enemyCasting=e.side!==me?e.skill:null;draw();},onImpact:e=>revealImpact(e,token)});
+    // The hero's cosmetic animation starts on tap; reconcile its confirmed hit once.
+    const preview=attackPreview,first=events[0];
+    if(preview&&first?.side===me&&first.skill===preview.skill){
+     events.shift();await preview.impact;if(token!==presentationToken)return;
+     revealImpact(first,token);await preview.finished;if(attackPreview===preview)attackPreview=null;
+    }
+    if(events.length&&window.RPGSkillFX?.sequence)await window.RPGSkillFX.sequence(el('bt-stage'),events.map(e=>({...e,reverse:e.side!==me,delayMs:battle.kind!=='pvp'&&e.side!==me?1000+Math.floor(Math.random()*2001):0})),{onPrepare:e=>{if(token!==presentationToken)return;enemyThinking=e.delayMs>0;enemyCasting=null;draw();},onAttack:e=>{if(token!==presentationToken)return;enemyThinking=false;enemyCasting=e.side!==me?e.skill:null;draw();},onImpact:e=>revealImpact(e,token)});
     // Missing/failed effects must still reconcile health and release the controls.
     if(token!==presentationToken)return;
     for(const event of events)revealImpact(event,token);
@@ -127,18 +135,20 @@
   el('bt-enemy-name').textContent=enemy.name;el('bt-enemy-level').textContent=`Level ${enemy.level} · ${battle.kind==='pvp'?'Adventurer':enemy.boss?'Boss':'Monster'}`;el('bt-enemy-vitals').innerHTML=vitals(enemy);
   el('bt-hero-art').src=sprite(a,'right');el('bt-hero-art').alt=`${a.name} · ${a.hp} health`;el('bt-enemy-art').src=sprite(enemy,'left');el('bt-enemy-art').alt=`${enemy.name} · ${enemy.hp} health`;el('bt-enemy-kind').textContent=enemy.name.toUpperCase();
   el('bt-enemy-stats').innerHTML=['Health','Attack','Magic','Armor','Mana','Wisdom'].map((name,i)=>`<div>${name}<b>${enemy.stats[i]}</b></div>`).join('');el('bt-bag').innerHTML=el('world-bag').innerHTML;el('bt-bag').style.aspectRatio=el('world-bag').style.aspectRatio;
-  el('bt-round').textContent=`ROUND ${battle.round}`;el('bt-turn-label').textContent=presenting?(enemyThinking?`${enemy.name} is choosing a skill…`:'Attacking…'):pending?'Challenge pending':active?(mine?'Your turn':`${enemy.name}’s turn`):battle.status==='cancelled'?'Challenge closed':'Battle complete';el('bt-mode').textContent=local?'DEVICE PRACTICE':battle.training?'ONLINE PRACTICE':battle.kind==='pvp'?'PLAYER DUEL':'MONSTER BATTLE';
+  el('bt-round').textContent=`ROUND ${battle.round}`;el('bt-turn-label').textContent=(presenting||(busy&&attackPreview))?(enemyThinking?`${enemy.name} is choosing a skill…`:'Attacking…'):pending?'Challenge pending':active?(mine?'Your turn':`${enemy.name}’s turn`):battle.status==='cancelled'?'Challenge closed':'Battle complete';el('bt-mode').textContent=local?'DEVICE PRACTICE':battle.training?'ONLINE PRACTICE':battle.kind==='pvp'?'PLAYER DUEL':'MONSTER BATTLE';
   el('bt-stage').hidden=ownChallenge;el('bt-challenge').hidden=!ownChallenge;el('bt-pending').hidden=!pending;
   el('bt-pending-title').textContent=me===1?`${enemy.name} challenges you.`:`Waiting for ${enemy.name}…`;el('bt-accept').hidden=me!==1;el('bt-accept').disabled=busy;el('bt-decline').disabled=busy;
   el('bt-skills').innerHTML=Array.from({length:4},(_,i)=>a.active[i]||null).map(id=>{
-   const s=R.SKILLS[id];if(!s)return '<button disabled type="button" aria-label="Empty skill slot"><strong>Empty slot</strong><small>Equip in Hero Room</small></button>';
+   const s=R.SKILLS[id];if(!s)return '<span class="bt-empty-skill" aria-label="Empty skill slot"></span>';
    const cd=Math.max(0,(a.ready[id]||0)-a.turns),reason=!active?(pending?'Challenge pending':'Battle ended'):!mine?'Wait for your turn':!a.active.includes(id)?'Not equipped':cd?`Cooldown · ${cd} turn${cd===1?'':'s'}`:a.ap<s.ap?'Need more AP':a.mp<s.mp?'Need more mana':!mine?'Wait for your turn':challenge?'Harvest in progress':'Ready';
-   return `<button type="button" data-bt-skill="${id}" title="${s.name} · ${s.ap} AP · ${s.mp} MP · ${s.cooldown} turn cooldown" ${busy||presenting||!R.usable(battle,me,id)?'disabled':''}><img src="assets/skills/icons/${id}.webp" alt=""><strong>${s.name}</strong><small>${s.ap} AP / ${s.mp} MP</small><em>${reason}</em></button>`;
+   const damage=skillDamage(a,enemy,s),tip=`${s.name} · ${s.ap} AP · ${s.mp} MP · Damage ${damage} · ${reason} · ${s.cooldown} turn cooldown`;
+   return `<span class="bt-skill-slot" tabindex="0" role="group" aria-label="${esc(tip)}" data-tooltip="${esc(tip)}"><button type="button" data-bt-skill="${id}" aria-label="${esc(tip)}" ${busy||presenting||!R.usable(battle,me,id)?'disabled':''}><img src="assets/skills/icons/${id}.webp" alt=""></button></span>`;
   }).join('');
   el('bt-enemy-skills').innerHTML=Array.from({length:4},(_,i)=>enemy.active[i]||null).map(id=>{
-   const s=R.SKILLS[id];if(!s)return '<div class="bt-enemy-skill bt-empty-skill"><span>Empty slot</span></div>';
+   const s=R.SKILLS[id];if(!s)return '<span class="bt-empty-skill" aria-label="Empty skill slot"></span>';
    const cd=Math.max(0,(enemy.ready[id]||0)-enemy.turns),casting=enemyCasting===id,reason=casting?'Attacking':enemyThinking?'Choosing…':cd?`Cooldown · ${cd}`:enemy.ap<s.ap?'Need AP':enemy.mp<s.mp?'Need mana':'Ready';
-   return `<div class="bt-enemy-skill ${casting?'bt-casting':''}" title="${s.name} · ${s.ap} AP · ${s.mp} MP · ${s.cooldown} turn cooldown"><img src="assets/skills/icons/${id}.webp" alt=""><strong>${s.name}</strong><small>${s.ap} AP / ${s.mp} MP</small><em>${reason}</em></div>`;
+   const tip=`${s.name} · ${s.ap} AP · ${s.mp} MP · Damage ${skillDamage(enemy,a,s)} · ${reason} · ${s.cooldown} turn cooldown`;
+   return `<div class="bt-skill-slot bt-enemy-skill ${casting?'bt-casting':''}" tabindex="0" role="group" aria-label="${esc(tip)}" data-tooltip="${esc(tip)}"><img src="assets/skills/icons/${id}.webp" alt=""></div>`;
   }).join('');
   for(const id of ['bt-ap','bt-mp','bt-defend'])el(id).disabled=busy||presenting||!mine||challenge;
   el('bt-ap').disabled ||=a.ap>=a.maxAp;el('bt-mp').disabled ||=a.mp>=a.maxMp;el('bt-run').disabled=busy||presenting||!['active','pending'].includes(battle.status);el('bt-abandon').disabled=busy||presenting;
@@ -153,7 +163,7 @@
  }
  function tick(){if(!battle||!['pending','active'].includes(battle.status)){el('bt-clock').textContent='';return;}const seconds=Math.max(0,Math.ceil((battle.deadline-Date.now())/1000));el('bt-clock').textContent=`${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')} left`;if(local&&R.timeout(battle)){notice('Time expired.');draw();}}
  async function refresh(){if(!hero||local||busy||refreshing||el('rpg-world').hidden)return;refreshing=true;const requestedBattle=battle?.id;try{const data=await api();if(local||battle?.id!==requestedBattle||(data.battle?.id===battle?.id&&data.battle?.version<battle?.version))return;if(data.spawnStatus)window.RPGWorld.syncEncounters?.(data);if(pendingProgress&&!data.battle){C.applyProgress(state,pendingProgress.totalXp);pendingProgress=null;window.RPGRoom.persist?.();window.RPGWorld.refresh?.();}if(data.battle&&(['active','pending','finished'].includes(data.battle.status)||battle?.id===data.battle.id)){const changed=!battle||data.battle.version!==battle.version||data.battle.id!==battle.id;battle=data.battle;if(changed)draw();if(['pending','active'].includes(battle.status)&&!dismissed)show();}else if(!data.battle&&battle){battle=null;draw();}}catch(e){if(!root.hidden&&!local)notice(battle?e.message:'Your login expired. Reopen RPG after signing in.',true);}finally{refreshing=false;}}
- function connect(h,s){hero=h;state=s;local=false;dismissed=false;if(pollTimer)clearInterval(pollTimer);pollTimer=setInterval(refresh,3000);if(!clockTimer)clockTimer=setInterval(tick,1000);api({action:'progress',heroId:hero.id}).then(()=>{if(!local&&pendingProgress&&!battle){C.applyProgress(state,pendingProgress.totalXp);pendingProgress=null;window.RPGRoom.persist?.();window.RPGWorld.refresh?.();}}).catch(()=>{});refresh();}
+ function connect(h,s){hero=h;state=s;void window.RPGSkillFX?.warm?.(Object.keys(R.SKILLS));local=false;dismissed=false;if(pollTimer)clearInterval(pollTimer);pollTimer=setInterval(refresh,3000);if(!clockTimer)clockTimer=setInterval(tick,1000);api({action:'progress',heroId:hero.id}).then(()=>{if(!local&&pendingProgress&&!battle){C.applyProgress(state,pendingProgress.totalXp);pendingProgress=null;window.RPGRoom.persist?.();window.RPGWorld.refresh?.();}}).catch(()=>{});refresh();}
  function openLab(){show();if(battle&&['pending','active'].includes(battle.status)){draw();return;}battle=null;local=false;notice('Choose a monster or boss to test your current hero.');draw();}
  function encounterStatus(message,error=false){
   if(!encounterDialog)return;const status=encounterDialog.querySelector('[data-encounter-status]');status.textContent=message;status.classList.toggle('error',error);
@@ -223,7 +233,15 @@
   else if(input.action==='attack'){R.attack(b,0,input.skill);R.finishTurn(b);}
   else if(input.action==='defend'){R.defend(b,0);R.finishTurn(b);}else throw Error('Unknown action.');b.version++;
  }
- async function action(input){if(busy||presenting||pendingHarvest||!battle)return;const priorHarvest=battle.harvestResult?.id;busy=true;draw();try{if(local)await localAction(input);else{const data=await api({...input,version:battle.version,...(input.action==='accept'?{profile:loadout()}:{} )});battle=input.action==='leave'?(data.report||data.battle):data.battle;}if(input.action==='leave'){const ended=battle;stopEngine();close();battle=null;dismissed=true;if(ended?.status==='finished')openReport(ended);}}catch(e){notice(e.message,true);if(!local){try{const d=await api();battle=d.battle;}catch{}}}finally{if(battle?.harvestResult&&battle.harvestResult.id!==priorHarvest&&battle.harvestResult.side===(battle.me??0))pendingHarvest={...battle.harvestResult};busy=false;draw();}}
+ async function action(input){if(busy||presenting||pendingHarvest||!battle)return;
+  if(input.action==='attack'){
+   if(!R.usable(battle,battle.me??0,input.skill))return;
+   root.classList.add('bt-hero-windup');
+   if(window.RPGSkillFX?.play){let impact;const preview={skill:input.skill,impact:new Promise(resolve=>impact=resolve),finished:null};attackPreview=preview;
+    preview.finished=Promise.resolve(window.RPGSkillFX.play(el('bt-stage'),input.skill,{onAttack:()=>root.classList.remove('bt-hero-windup'),onImpact:()=>impact()})).catch(()=>{}).finally(()=>{impact();root.classList.remove('bt-hero-windup');});
+   }
+  }
+  const priorHarvest=battle.harvestResult?.id;busy=true;draw();try{if(local)await localAction(input);else{const data=await api({...input,version:battle.version,...(input.action==='accept'?{profile:loadout()}:{} )});battle=input.action==='leave'?(data.report||data.battle):data.battle;}if(input.action==='leave'){const ended=battle;stopEngine();close();battle=null;dismissed=true;if(ended?.status==='finished')openReport(ended);}}catch(e){if(attackPreview){attackPreview=null;window.RPGSkillFX?.stop(el('bt-stage'));root.classList.remove('bt-hero-windup');}notice(e.message,true);if(!local){try{const d=await api();battle=d.battle;}catch{}}}finally{if(battle?.harvestResult&&battle.harvestResult.id!==priorHarvest&&battle.harvestResult.side===(battle.me??0))pendingHarvest={...battle.harvestResult};busy=false;draw();}}
  const pieceNames={p:'pawn',n:'knight',b:'bishop',r:'rook',q:'queen',k:'king'};
  function board(){if(!chess)return;const color=battle.challenge.kind==='ap'?'w':chess.turn(),flip=color==='b',ranks=flip?[1,2,3,4,5,6,7,8]:[8,7,6,5,4,3,2,1],files=flip?'hgfedcba':'abcdefgh',legal=selected?chess.moves({square:selected,verbose:true}).map(m=>m.to):[];let html='';
   for(const rank of ranks)for(const file of files){

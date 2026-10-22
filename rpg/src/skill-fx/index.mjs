@@ -78,4 +78,4 @@ async function sequence(host,events,options={}){
  catch(error){if(options.status)options.status.textContent='Animation could not load. Tap Replay to retry.';console.warn('Skill animation unavailable:',error.message);}
  finally{if(session&&!session.cancelled&&sessions.get(host)===session){if(host.id==='bt-stage')stop(host);else session.app?.ticker.stop();}}
 }
-window.RPGSkillFX={play:(host,id,options={})=>sequence(host,[{skill:id,reverse:!!options.reverse}],options),sequence,stop,engine:'ct.js 5.3.1 / PixiAnimatedSprite'};
+window.RPGSkillFX={warm:ids=>Promise.allSettled(ids.map(id=>skill(id)).filter(Boolean).map(frames)),play:(host,id,options={})=>sequence(host,[{skill:id,reverse:!!options.reverse}],options),sequence,stop,engine:'ct.js 5.3.1 / PixiAnimatedSprite'};

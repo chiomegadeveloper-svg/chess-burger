@@ -73,3 +73,27 @@ test('all eight heroes keep their original artwork at every health threshold and
  assert.equal(a.w.DamageSprites.sprite('chaanack',40,'right'),'assets/damage/frames/chaanack-40-left.webp');
  }finally{a.close();}
 });
+
+test('attack starts its visual immediately, waits for confirmed impact, and does not replay the hero skill',async()=>{
+ const db=database(),saved=await gameRequest(db,'player-a','POST',{action:'register',heroId:'crusader',name:'Quick Hero',skill:'punch'});
+ const gps={lat:11.26,lng:125,accuracy:40,time:Date.now()},batch=await gameRequest(db,'player-a','POST',{action:'spawn',gps},{roadPoints:async()=>[{lat:11.2602,lng:125}]}),enemy=batch.encounters[0];
+ const a=open(db);try{await pause();await pause();a.w.RPGBattle.connect({id:'crusader',name:'Aurex',stats:[20,4,4,4,20,4]},saved.game);a.w.RPGWorld.position=()=>({...gps,time:Date.now()});a.w.RPGWorld.monster=()=>enemy;
+ await a.w.RPGBattle.encounter(enemy.id);await pause();a.d.querySelector('[data-attack]').click();await pause();await pause();
+ let start=0,impact,finish,release;const queued=[];
+ a.w.RPGSkillFX={play:(host,id,options)=>{start++;impact=options.onImpact;return new Promise(resolve=>finish=resolve);},sequence:async(host,events,options)=>{queued.push(...events);for(const event of events)options.onImpact(event);},stop(){}};
+ const fetch=a.w.fetch;a.w.fetch=(input,options)=>JSON.parse(options?.body||'{}').action==='attack'?new Promise(resolve=>{release=()=>resolve(fetch(input,options));}):fetch(input,options);
+ const beforeImpact=a.d.querySelector('#bt-enemy-art').alt;const button=a.d.querySelector('[data-bt-skill="basic"]');assert.equal(button.textContent,'');assert.equal(button.children.length,1);assert.match(button.getAttribute('aria-label'),/Basic Tackle.*4 AP.*2 MP.*Damage/);assert.match(button.parentElement.dataset.tooltip,/Basic Tackle/);
+ button.click();assert.equal(start,1);assert.equal(a.messages.filter(m=>m.body?.action==='attack').length,0);assert.equal(a.d.querySelector('#bt-enemy-art').alt,beforeImpact);
+ release();await pause();await pause();assert.equal(a.d.querySelector('#bt-enemy-art').alt,beforeImpact);
+ impact();finish();await pause();await pause();assert.ok(queued.every(e=>e.side!==0),'hero effect must not replay after server response');assert.ok(a.d.querySelector('#bt-enemy-art').alt.endsWith(`${(await read(db,'player-a')).battle.actors[1].hp} health`));assert.equal(a.d.querySelectorAll('#bt-skills strong,#bt-skills small,#bt-skills em').length,0);
+ }finally{a.close();}
+});
+
+test('a slow map presence response cannot hold a combat request in the account queue',async()=>{
+ const a=open(database());try{await pause();await pause();const post=a.w.postMessage;let held;
+ a.w.postMessage=data=>{if(data.type==='CB_RPG_API'&&data.body.channel==='presence')held=data;else post(data);};
+ const presence=a.w.fetch('/api/world/presence',{method:'POST',body:JSON.stringify({lat:11.26,lng:125,accuracy:40})});await pause();assert.ok(held);
+ let complete=false;const combat=a.w.fetch('/api/battle').then(()=>complete=true);await pause();await pause();assert.equal(complete,true);
+ a.w.dispatchEvent(new a.w.MessageEvent('message',{source:a.w,origin:a.w.location.origin,data:{type:'CB_RPG_REPLY',id:held.id,status:200,data:{ok:true}}}));await presence;await combat;
+ }finally{a.close();}
+});

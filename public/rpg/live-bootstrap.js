@@ -9,7 +9,7 @@
    requests.set(id,{resolve,reject,timeout});parent.postMessage({type:'CB_RPG_API',id,method,body},location.origin);
   });
  }
- function rpc(method,body){const snapshot=clone(body);const pending=queue.catch(()=>{}).then(()=>request(method,snapshot));queue=pending;return pending;}
+ function rpc(method,body){const snapshot=clone(body);if(snapshot.channel==='presence')return request(method,snapshot);const pending=queue.catch(()=>{}).then(()=>request(method,snapshot));queue=pending;return pending;}
  window.addEventListener('message',event=>{
   if(event.source!==parent||event.origin!==location.origin)return;
   const data=event.data;if(data?.type==='CB_RPG_REPLY'){const task=requests.get(data.id);if(!task)return;clearTimeout(task.timeout);requests.delete(data.id);if(data.data?.code==='hero_reset'){location.reload();return;}task.resolve({status:data.status,data:data.data});}

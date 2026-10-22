@@ -68,3 +68,66 @@
 #bt-report-modal .bt-summary-footer button:hover{filter:brightness(1.12)}
 @media(max-width:360px){#bt-report-modal .bt-summary-body{padding-inline:12px}#bt-report-modal .bt-summary-header{padding-inline:12px}#bt-report-modal .bt-summary-match img{height:88px}#bt-report-modal .bt-summary-match small{font-size:9px}}
 @media(max-height:580px) and (min-width:501px){#bt-report-modal .bt-summary-card{width:min(480px,100%)}#bt-report-modal .bt-summary-header{padding:10px 16px}#bt-report-modal .bt-summary-header h2{font-size:24px}#bt-report-modal .bt-summary-match img{height:76px}#bt-report-modal .bt-summary-body{padding:0 16px 10px}#bt-report-modal .bt-summary-footer{padding:9px 16px}}
+
+/* Screen-filling battle panels. Keep the original art and effect stage. */
+.rpg-battle.bt-playing:not(.bt-chess-mode){padding:clamp(8px,1.2vw,20px);height:100dvh;gap:8px;overflow:auto}
+.bt-playing:not(.bt-chess-mode) .bt-fight{display:grid;grid-template-columns:clamp(160px,18vw,280px) minmax(0,1fr) clamp(150px,16vw,250px);gap:clamp(8px,1vw,18px);width:100%;max-width:none;height:100%;margin:0;min-height:0}
+.bt-playing:not(.bt-chess-mode) .bt-side{align-self:stretch;overflow:auto;min-height:0;padding:clamp(10px,1.1vw,18px)}
+.bt-playing:not(.bt-chess-mode) .bt-center{grid-column:2;grid-row:1;display:grid;grid-template-rows:auto minmax(0,1fr) auto auto auto;gap:clamp(7px,1vh,14px);min-height:0}
+.bt-playing:not(.bt-chess-mode) .bt-stage{min-height:0;grid-template-columns:minmax(0,1fr) clamp(28px,3vw,48px) minmax(0,1fr);gap:clamp(4px,.7vw,12px);align-items:stretch}
+.bt-playing:not(.bt-chess-mode) .bt-combatant{min-height:0;display:flex;flex-direction:column;gap:6px}
+.bt-playing:not(.bt-chess-mode) .bt-art-frame{flex:1;width:100%;height:100%;min-height:0;max-height:none;aspect-ratio:auto;margin:0;display:grid;place-items:center}
+.bt-playing:not(.bt-chess-mode) .bt-art-frame img{width:100%;height:100%;min-height:0;object-fit:contain}
+.bt-playing:not(.bt-chess-mode) .bt-versus{align-self:center}
+.bt-playing:not(.bt-chess-mode) .bt-enemy{grid-column:3;grid-row:1;display:block;width:auto}
+.bt-playing:not(.bt-chess-mode) .bt-own{display:block;width:auto}
+.bt-playing:not(.bt-chess-mode) .bt-side h2{font-size:clamp(14px,1.4vw,22px)}
+.bt-playing:not(.bt-chess-mode) .bt-vital>span{font-size:clamp(9px,.8vw,12px)}
+.bt-playing:not(.bt-chess-mode) .bt-vital>div{height:clamp(6px,.7vh,10px)}
+.bt-playing:not(.bt-chess-mode) .bt-identity>img{width:clamp(40px,4vw,64px);height:clamp(40px,4vw,64px)}
+.bt-playing:not(.bt-chess-mode) .bt-enemy-stats{display:grid;font-size:clamp(10px,.9vw,13px)}
+.bt-playing:not(.bt-chess-mode) .bt-enemy-stats b{font-size:clamp(17px,1.7vw,25px)}
+.bt-playing:not(.bt-chess-mode) .bt-log{height:clamp(28px,5vh,48px);font-size:clamp(9px,.8vw,12px);margin:0}
+.bt-playing:not(.bt-chess-mode) .bt-turn{min-height:40px;font-size:clamp(9px,.8vw,12px)}
+.bt-playing:not(.bt-chess-mode) .bt-turn strong{font-size:clamp(12px,1.2vw,18px)}
+.bt-loadouts{gap:clamp(12px,3vw,48px);overflow:visible}
+.bt-loadouts .bt-skills{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:clamp(5px,.7vw,12px);overflow:visible}
+.bt-loadouts .bt-skill-slot,.bt-loadouts .bt-empty-skill{position:relative;display:grid;place-items:center;min-width:0;width:100%;height:clamp(54px,9dvh,104px);min-height:0;border:1px solid #496975;border-radius:10px;background:#19313d;outline-offset:3px}
+.bt-loadouts .bt-skill-slot button{width:100%;height:100%;min-height:0;padding:5px;display:grid;place-items:center;border:0;border-radius:inherit;background:transparent}
+.bt-loadouts .bt-skill-slot img{width:88%;height:88%;max-width:88px;max-height:88px;object-fit:contain;pointer-events:none}
+.bt-loadouts .bt-empty-skill{opacity:.4;background:#162630}
+.bt-loadouts .bt-enemy-skill{padding:5px;border-color:#775061;background:#302833}
+.bt-loadouts .bt-skill-slot:focus-visible,.bt-loadouts .bt-skill-slot:focus-within,.bt-loadouts .bt-skill-slot:hover{border-color:#8ee5ee;box-shadow:0 0 0 1px #8ee5ee}
+.bt-loadouts .bt-skill-slot::after{content:attr(data-tooltip);position:absolute;bottom:calc(100% + 9px);left:50%;transform:translateX(-50%);width:max-content;max-width:min(290px,70vw);padding:10px 12px;border:1px solid #7aa4ab;border-radius:8px;background:#071722f5;box-shadow:0 6px 22px #0009;color:#f3e2bb;font:600 12px/1.6 system-ui;text-align:left;white-space:normal;pointer-events:none;opacity:0;visibility:hidden;z-index:30}
+.bt-loadouts .bt-skill-slot:hover::after,.bt-loadouts .bt-skill-slot:focus-visible::after,.bt-loadouts .bt-skill-slot:focus-within::after{opacity:1;visibility:visible}
+.bt-loadouts .bt-skill-slot:first-child::after{left:0;transform:none}.bt-loadouts .bt-skill-slot:last-child::after{left:auto;right:0;transform:none}
+.bt-hero-windup #bt-hero-art{animation:bt-hero-ready .18s ease-out both}@keyframes bt-hero-ready{to{transform:translateX(6px);filter:brightness(1.16)}}
+@media(orientation:landscape) and (max-width:1000px){
+ .bt-playing:not(.bt-chess-mode) .bt-fight{grid-template-columns:clamp(110px,17vw,165px) minmax(0,1fr) clamp(105px,16vw,155px);gap:7px}
+ .bt-playing:not(.bt-chess-mode) .bt-side{padding:8px}
+ .bt-playing:not(.bt-chess-mode) .bt-own .bt-vitals,.bt-playing:not(.bt-chess-mode) .bt-enemy .bt-vitals{display:block;margin:10px 0}
+ .bt-playing:not(.bt-chess-mode) .bt-extractors{display:grid;gap:5px}.bt-playing:not(.bt-chess-mode) .bt-extractors button{padding:6px;min-height:34px}
+ .bt-playing:not(.bt-chess-mode) .bt-side p{font-size:9px}.bt-playing:not(.bt-chess-mode) .bt-identity{gap:5px}
+ .bt-playing:not(.bt-chess-mode) .bt-identity>img{width:32px;height:32px}
+ .bt-loadouts .bt-skill-slot,.bt-loadouts .bt-empty-skill{height:clamp(44px,12dvh,70px)}
+ .bt-playing:not(.bt-chess-mode) .bt-header-actions button{padding:5px 7px;min-height:30px;font-size:10px}
+}
+@media(orientation:landscape) and (max-height:540px){
+ .bt-playing:not(.bt-chess-mode) .bt-center{gap:5px}.bt-playing:not(.bt-chess-mode) .bt-stage{min-height:110px}
+ .bt-playing:not(.bt-chess-mode) .bt-combatant>span,.bt-playing:not(.bt-chess-mode) .bt-stat-note{display:none}
+ .bt-playing:not(.bt-chess-mode) .bt-log{height:24px;font-size:9px}
+ .bt-playing:not(.bt-chess-mode) .bt-actions button{min-height:30px;padding:5px 8px;font-size:10px}
+ .bt-playing:not(.bt-chess-mode) .bt-turn{min-height:32px;padding:4px 6px}
+ .bt-loadouts h3{font-size:7px;margin-bottom:3px}.bt-loadouts .bt-skill-slot,.bt-loadouts .bt-empty-skill{height:46px}
+}
+@media(orientation:portrait) and (max-width:900px){
+ .rpg-battle.bt-playing:not(.bt-chess-mode){height:auto;min-height:100dvh}
+ .bt-playing:not(.bt-chess-mode) .bt-fight{display:flex;flex-direction:column;height:auto}
+ .bt-playing:not(.bt-chess-mode) .bt-side{max-height:none}
+ .bt-playing:not(.bt-chess-mode) .bt-stage{min-height:35dvh}
+ .bt-playing:not(.bt-chess-mode) .bt-side .bt-vitals{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+ .bt-playing:not(.bt-chess-mode) .bt-own>.world-bag,.bt-playing:not(.bt-chess-mode) .bt-bag-label{display:none}
+ .bt-playing:not(.bt-chess-mode) .bt-skill-slot{height:64px}
+}
+@media(orientation:landscape) and (max-height:540px){.bt-playing:not(.bt-chess-mode) .bt-own #bt-bag{height:23dvh;width:auto;max-width:100%;margin:auto;aspect-ratio:1}.bt-playing:not(.bt-chess-mode) .bt-vitals{margin:8px 0}.bt-playing:not(.bt-chess-mode) .bt-extractors{margin-top:8px}.bt-playing:not(.bt-chess-mode) .bt-bag-label{font-size:7px;margin-bottom:4px}}
+@media(orientation:landscape) and (max-height:540px){.bt-playing:not(.bt-chess-mode) .bt-own #bt-bag,.bt-playing:not(.bt-chess-mode) .bt-own .bt-bag-label{display:none}.bt-playing:not(.bt-chess-mode) .bt-extractors button span{font-size:10px}.bt-playing:not(.bt-chess-mode) .bt-extractors button{min-height:38px}}
