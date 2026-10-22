@@ -26,7 +26,7 @@ export async function gameRequest(client,user,method,input={},services={}){
  }
  if(!doc?.state){if(doc?.generation)resetError();fail('Choose your hero first.',409);}
  if(input.action==='save'){saveInventory(doc,input.state);await persist();return {game:doc.state};}
- const near=(a,b)=>{if(!a||a.accuracy>100||(b.accuracy!==undefined&&b.accuracy>100))fail('Wait for fresh GPS accuracy within ±100 m.');const distance=distanceMeters(a,b);if(distance>200)throw Object.assign(Error('Outside attack range. Move within 200 meters to battle.'),{status:409,code:'out_of_range',distance:Math.ceil(distance)});};
+ const near=(a,b)=>{if(!a)fail('Use a fresh map location to select an encounter.');const distance=distanceMeters(a,b);if(distance>200)throw Object.assign(Error('Outside attack range. Move within 200 meters to battle.'),{status:409,code:'out_of_range',distance:Math.ceil(distance)});};
  const getPresence=async id=>{const p=await read(client,id,'rpg_presence','live');if(!p||now-p.updatedAt>30000)fail('This player needs a fresh online GPS position.');return p;};
  if(input.channel==='presence'){
   if(method==='DELETE'){const r=await client.from('cb_inventory_items').delete().eq('user_id',user).eq('item_kind','rpg_presence').eq('item_id','live');if(r.error)fail('Could not stop player sharing.',503);return {ok:true};}
@@ -76,15 +76,22 @@ export async function gameRequest(client,user,method,input={},services={}){
   const cache=cachedSet(),encounters=cache.encounters;
   return {encounters,spawnStatus:'ready',refreshAt:cache.refreshAt,exhausted:!encounters.length,progression:progression(doc),message:`${encounters.length} fixed road encounters · 200 m attack range · new set every 30 minutes.`};
  }
+ if(input.action==='select-encounter'){
+  const gps=validateFix(input.gps,now),encounter=doc.encounters.find(e=>e.id===input.target&&!e.consumed&&e.expires_at>now);
+  if(!gps)fail('Use a fresh map location to select this monster.');if(!encounter)fail('This monster has expired or was already defeated.');near(gps,encounter);
+  doc.selection={target:encounter.id,token:crypto.randomUUID(),expiresAt:Math.min(encounter.expires_at,now+120000)};await persist();return {selectionToken:doc.selection.token};
+ }
  if(['practice','encounter','challenge'].includes(input.action)){
   if(input.action==='practice')fail('Choose a nearby monster on the map.');
   const existing=await current();if(existing&&['active','pending'].includes(existing.status))fail('Finish your current battle first.');
   const a=await player();if(!a.active.length)fail('Equip an attack skill first.');let enemy,kind='monster',encounter;
-  if(input.action==='encounter'){const gps=validateFix(input.gps,now);encounter=doc.encounters.find(e=>e.id===input.target&&!e.consumed&&e.expires_at>now);if(!gps||!encounter)fail('This monster expired or has already been battled.');near(gps,encounter);enemy=R.monster(encounter.monsterId,encounter.level);}
+  if(input.action==='encounter'){encounter=doc.encounters.find(e=>e.id===input.target&&!e.consumed&&e.expires_at>now);if(!encounter)fail('This monster expired or has already been battled.');
+   const selected=doc.selection&&doc.selection.target===input.target&&doc.selection.token===input.selectionToken&&doc.selection.expiresAt>now;
+   if(!selected){const gps=validateFix(input.gps,now);if(!gps)fail('Select this monster on the map again.');near(gps,encounter);}enemy=R.monster(encounter.monsterId,encounter.level);}
   else{const p=await getPresence(user),r=await client.from('cb_inventory_items').select('user_id,metadata').eq('item_kind','rpg_presence').eq('metadata->>peerId',input.target).gt('updated_at',new Date(now-30000).toISOString()).maybeSingle();if(r.error||!r.data||r.data.user_id===user)fail('This player is no longer nearby.');near(p,r.data.metadata);enemy=await player(r.data.user_id);kind='pvp';}
   const battle=R.createBattle(a,enemy,kind,now);battle.id=crypto.randomUUID();battle.encounterId=encounter?.id||null;battle.training=false;
   if(kind==='pvp'){shared={revision:0,owner:user,participants:[user,enemy.userId],status:battle.status,state:battle};await insert(client,user,'rpg_battle',battle.id,shared);doc.pvpId=battle.id;await persist();}
-  else{doc.pvpId=null;doc.battle=battle;await persist();}
+  else{doc.pvpId=null;doc.selection=null;doc.battle=battle;await persist();}
   return await result(battle);
  }
  const b=await current();if(!b)fail('No current battle.',404);const side=me(b);if(side<0)fail('This is not your battle.',403);
@@ -95,7 +102,7 @@ export async function gameRequest(client,user,method,input={},services={}){
  if(input.version!==b.version)fail('Battle changed. Refresh and try again.',409);
  if(b.status==='pending'){
   if(input.action==='decline'){b.status='cancelled';R.note(b,'Challenge declined.');}
-  else if(input.action==='accept'&&side===1){const [a,p]=await Promise.all([getPresence(b.actors[0].userId),getPresence(user)]);near(a,p);b.actors[1]=await player();if(!b.actors[1].active.length)fail('Equip a skill first.');b.status='active';b.startedAt=now;b.deadline=now+90000;R.note(b,'Challenge accepted. Challenger takes the first turn.');}
+  else if(input.action==='accept'&&side===1){b.actors[1]=await player();if(!b.actors[1].active.length)fail('Equip a skill first.');b.status='active';b.startedAt=now;b.deadline=now+90000;R.note(b,'Challenge accepted. Challenger takes the first turn.');}
   else fail('Waiting for the other player to accept.');await save(b);return await result(b);
  }
  if(b.status!=='active')fail('This battle has ended.',409);

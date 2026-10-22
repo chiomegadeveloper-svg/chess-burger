@@ -31,3 +31,13 @@ test('nearby online players can challenge and accept within 200 meters and are r
  b=(await f.call({action:'accept',version:b.version},'POST','b')).battle;assert.equal(b.status,'active');await f.call({action:'leave'});
  await f.call({channel:'presence',...f.gps(201)},'POST','b');await assert.rejects(f.call({action:'challenge',target:target.peerId}),e=>e.code==='out_of_range');
 });
+
+test('map selection grants a bound encounter ticket; battle starts and plays without another GPS fix',async()=>{
+ const f=fixture();await register(f);const batch=await f.call({action:'spawn',gps:f.gps()}),enemy=batch.encounters[0];
+ const near={lat:enemy.lat,lng:enemy.lng,accuracy:500,time:f.now()};
+ await assert.rejects(f.call({action:'select-encounter',target:enemy.id,gps:{...near,lat:12}}),e=>e.code==='out_of_range');
+ const selected=await f.call({action:'select-encounter',target:enemy.id,gps:near});assert.ok(selected.selectionToken);
+ await assert.rejects(f.call({action:'encounter',target:enemy.id,selectionToken:'forged'}),/map again/);
+ const battle=(await f.call({action:'encounter',target:enemy.id,selectionToken:selected.selectionToken})).battle;assert.equal(battle.status,'active');assert.equal(battle.encounterId,enemy.id);
+ const turn=await f.call({action:'attack',skill:'basic',version:battle.version});assert.ok(turn.battle.version>battle.version);
+});

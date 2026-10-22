@@ -39,3 +39,11 @@ Tests cover the 199/201 m boundary for monsters and PvP, full lifetime across cl
 Tapping an in-range monster opens a responsive native dialog with the hero on the left, VS in the center and the monster on the right. Both full-health sprites face one another; names and levels identify each side. RUN dismisses without creating a battle or changing resources. ATTACK rechecks the current GPS/range and starts the authenticated encounter. Out-of-range taps retain the ten-second distance notice. Native Escape dismisses the preview, and incoming active battles close it.
 
 The new integration test verifies left/right sprites, no server battle on preview/Run, movement outside range before Attack, and exactly one encounter request on confirmation. Browser layout review used sample data, with no production battle started.
+
+## ATTACK transition and GPS-free combat (v0.0584)
+
+Map selection checks the 200 m distance using the map's location and creates a short-lived, account/monster-bound selection ticket. ATTACK uses that ticket without another GPS fix or accuracy gate. The server still verifies the selected monster, ticket, expiry and active-battle state. Old clients retain a map-location fallback. PvP distance is checked when challenging; acceptance and combat do not recheck GPS.
+
+The encounter remains visible while starting a battle. Errors appear inside that dialog instead of opening an empty Battle Lab screen. Successful creation opens the full battle interface against the selected monster. The empty-screen fallback is titled Battle. GPS watches and sharing pause while the battle interface is open, then resume on return to the map. Monster expiry, authoritative XP and battle turns remain server-side.
+
+Validation includes a selected encounter starting and taking a turn with no further GPS, forged ticket rejection, full battle render after ATTACK, and actual watch pause/restart. Browser transition review uses a local sample service, not a production account battle.

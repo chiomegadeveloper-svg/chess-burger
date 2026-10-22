@@ -1,6 +1,7 @@
 (function(){
  'use strict';
  const el=id=>document.getElementById(id),world=el('rpg-world'),C=window.RPGInventory,images=window.RPG_ITEM_IMAGES;
+ let battlePaused=false,resumeSharing=false;
  let monsterRows=[],monsterRefreshAt=0,monsterRequest=false,lastMonsterAttempt=0,monsterTimer=null,rangeCircle=null,gpsTimer=null;
  let hero,state,map,tileLayer,mapLoadingTimer,basemapVersion=0,selfMarker,accuracyCircle,peerMarkers=[],watch=null,timer=null,position=null,sharing=false,busy=false,follow=true,requestVersion=0,onlineVersion=0,apiQueue=Promise.resolve();
  const status=text=>{el('world-gps-status').textContent=text;};
@@ -49,7 +50,13 @@
  function offline(message='You are offline. Your location is not being shared.'){
   const wasSharing=sharing;sharing=false;onlineVersion++;if(timer!==null)clearInterval(timer);timer=null;clearPeers();el('world-share').textContent='Go online';el('world-online-status').textContent=message;if(wasSharing)forgetPresence();
  }
+ function pauseForBattle(){
+  if(battlePaused)return;battlePaused=true;resumeSharing=sharing;requestVersion++;monsterRequest=false;
+  if(watch!==null)navigator.geolocation?.clearWatch(watch);watch=null;clearInterval(gpsTimer);gpsTimer=null;clearInterval(monsterTimer);monsterTimer=null;offline();
+ }
+ function resumeAfterBattle(){if(!battlePaused)return;battlePaused=false;if(!world.hidden)startGPS();}
  function stopGPS(message='GPS is off. Your location is not being shared.'){
+  battlePaused=false;resumeSharing=false;
   clearInterval(gpsTimer);gpsTimer=null;requestVersion++;monsterRequest=false;lastMonsterAttempt=0;clearInterval(monsterTimer);monsterTimer=null;for(const pin of encounterPins.values())pin.remove();encounterPins.clear();if(rangeCircle){rangeCircle.remove();rangeCircle=null;}if(watch!==null)navigator.geolocation?.clearWatch(watch);watch=null;position=null;offline();if(selfMarker){selfMarker.remove();selfMarker=null;accuracyCircle.remove();accuracyCircle=null;}
   el('world-gps').textContent='◎ Enable GPS';el('world-share').disabled=true;el('world-map-mode').textContent='PREVIEW AREA';el('world-position').textContent='Enable GPS to find your place in the realm.';status(message);
  }
@@ -58,6 +65,7 @@
   else{position=null;el('world-share').disabled=true;offline();status(error.code===3?'GPS timed out. Waiting for a fresh location…':'GPS signal unavailable. Waiting for a fresh location…');if(selfMarker){selfMarker.remove();selfMarker=null;accuracyCircle?.remove();accuracyCircle=null;}for(const pin of encounterPins.values())pin.remove();encounterPins.clear();if(rangeCircle){rangeCircle.remove();rangeCircle=null;}}
  }
  function startGPS(){
+  if(battlePaused)return;
   if(watch!==null)return;
   if(!navigator.geolocation){status('This browser does not support GPS location.');return;}
   if(!window.isSecureContext){status('GPS needs a secure HTTPS connection. Open the published account to enable it.');return;}
@@ -66,10 +74,11 @@
   try{watch=navigator.geolocation.watchPosition(value=>{
    if(version!==requestVersion||world.hidden)return;const {latitude:lat,longitude:lng,accuracy}=value.coords;if(!Number.isFinite(lat)||!Number.isFinite(lng)||!Number.isFinite(accuracy)||(Number.isFinite(value.timestamp)&&Date.now()-value.timestamp>30000))return;
    position={lat,lng,accuracy,time:Date.now()};el('world-map-mode').textContent='LIVE GPS';el('world-share').disabled=accuracy>1000;el('world-position').textContent=`${lat.toFixed(5)}, ${lng.toFixed(5)} · accuracy ±${Math.round(accuracy)} m`;
-   status(accuracy>1000?'GPS accuracy is low. Move to an open area before going online.':`Live GPS · accuracy ±${Math.round(accuracy)} m. ${sharing?'Sharing with nearby players.':'Monster discovery uses this GPS fix. Player sharing is off.'}`);drawPosition();roadFallback();discoverMonsters();
+   status(accuracy>1000?'GPS accuracy is low. Move to an open area before going online.':`Live GPS · accuracy ±${Math.round(accuracy)} m. ${sharing?'Sharing with nearby players.':'Monster discovery uses this GPS fix. Player sharing is off.'}`);drawPosition();if(resumeSharing){resumeSharing=false;if(!sharing)online();}roadFallback();discoverMonsters();
   },error=>{if(version===requestVersion&&!world.hidden)gpsError(error);},{enableHighAccuracy:true,maximumAge:10000,timeout:20000});}catch{stopGPS('GPS could not start. Check location permissions and try again.');}
  }
  function refreshGPS(){
+  if(battlePaused)return;
   if(watch!==null)navigator.geolocation?.clearWatch(watch);watch=null;
   requestVersion++;monsterRequest=false;startGPS();
  }
@@ -119,7 +128,7 @@
   if(data.spawnStatus==='ready'){monsterRefreshAt=data.refreshAt||Date.now()+1800000;encounters(data.encounters||[]);if(data.message)el('world-monster-status').textContent=data.message;}
  }
  async function discoverMonsters(force=false){
-  if(world.hidden||!position||Date.now()-position.time>30000)return;
+  if(battlePaused||world.hidden||!position||Date.now()-position.time>30000)return;
   const now=Date.now();encounters(monsterRows);
   if(monsterRequest||(!force&&now<monsterRefreshAt))return;
   if(now-lastMonsterAttempt<2000)return;
@@ -136,5 +145,5 @@
   for(const e of visible){if(encounterPins.has(e.id))continue;const src=window.DamageSprites.sprite(e.monsterId,100,'left');const icon=L.divIcon({className:'world-monster-pin',html:`<div class="world-monster-marker"><b class="world-monster-level">LVL ${Number(e.level)}</b><img src="${src}" alt=""><span>${safe(e.name)}</span></div>`,iconSize:[84,108],iconAnchor:[42,87]});const pin=L.marker([e.lat,e.lng],{icon,alt:`${e.name}, LVL ${e.level}`}).addTo(map);pin.on('click',()=>window.RPGBattle.encounter(e.id));encounterPins.set(e.id,pin);}
  }
  el('world-battle-lab').addEventListener('click',()=>window.RPGBattle.openLab());
- window.RPGWorld={open,refresh,primeEncounters,outOfRange,stop:stopGPS,encounters,syncEncounters,offline,position:()=>position&&({...position}),monster:id=>monsterRows.find(e=>e.id===id),consume(id){encounters(monsterRows.filter(e=>e.id!==id));}};
+ window.RPGWorld={open,refresh,pauseForBattle,resumeAfterBattle,primeEncounters,outOfRange,stop:stopGPS,encounters,syncEncounters,offline,position:()=>position&&({...position}),monster:id=>monsterRows.find(e=>e.id===id),consume(id){encounters(monsterRows.filter(e=>e.id!==id));}};
 })();
