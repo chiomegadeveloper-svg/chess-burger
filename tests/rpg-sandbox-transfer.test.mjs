@@ -19,3 +19,9 @@ test('original ct.js animation loader resolves all five sheets under the live RP
   assert.ok(readFileSync('public'+url.pathname).length>0);
  }
 });
+
+test('canonical hero asset exports are preserved',()=>{
+ const assets=JSON.parse(readFileSync('rpg/original-hero-assets.json','utf8'));
+ assert.equal(Object.keys(assets).length,16);
+ for(const [path,expected] of Object.entries(assets))assert.equal(createHash('sha256').update(readFileSync('public/rpg/'+path)).digest('hex'),expected,path);
+});

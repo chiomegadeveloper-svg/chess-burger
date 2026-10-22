@@ -57,3 +57,11 @@ Reimported the battle HTML verbatim from the sandbox, keeping production-only ro
 Fixed the ct.js animation texture loader: sandbox-root `/assets/skills/sheets/` requests were failing in the main app, which hosts the game at `/rpg/`. Both source and shipped engine now resolve sheets relative to the RPG document base. Preserved original frame timing, attack travel, impact callback, enemy delay and damage pose transitions. Included original upstream ct.js component and license for reproducibility.
 
 Verification: byte-level artwork/template transfer checks; live map-to-battle integration; actual browser combat with Basic Tackle and enemy Ember, texture animation and delayed HP impact; production build. Browser screenshot in `rpg-original-battle-restored.jpg` uses a local practice fixture, not a production account.
+
+## v0.0600 — restore original selected hero identity
+
+The generated hero damage atlas was internally consistent with the sandbox but not with the original hero-selection art. In particular, the original Crusader has a closed helmet while the generated combat atlas exposes a different face. Corrected the renderer to use lossless exports of each original hero for encounter preview, battle, reports and PvP facing. Both facings are derived only by mirroring the original image. Re-cropped the eight head portraits from the same canonical hero images.
+
+All health thresholds retain the original hero identity. Hero damage/kneeling/death pose substitutions are suspended because the existing atlas changes their appearance; no new artwork was generated. Monster damage poses and original ct.js attack animation timing remain intact. This is a rendering-only fix: account hero choice, equipment, stats and progression are unchanged.
+
+Verified all eight heroes across seven HP values and both facings, original asset hashes, map-to-battle integration, original Crusader in browser combat and matching head portrait. Screenshot `rpg-crusader-original-restored.jpg` is a local practice preview.

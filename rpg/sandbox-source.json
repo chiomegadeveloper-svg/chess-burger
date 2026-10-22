@@ -232,8 +232,16 @@
     "src/battle.css": "7d3de56597a259feabb7da4565fa202329cf9a9e556a8b18cdbe8ee692f048e2",
     "src/battle.html": "88ee1c18919909aa6d4f9da24e2fb84c2c8d01d8c3e42ccffc615c9d6364351a",
     "src/damage-data.js": "216fe74b49e05e8c715ee482ee247244b9f49073509e92e897ede342e082a83c",
-    "src/damage-sprites.js": "d6ea9025ce50057a9ae37cc040a5e3db49e0c85b9b383d09293c5470b7ea1774",
-    "src/hero-forge.html": "fc9d6cc32a5243d7344229d2dffbfcef097be41e260799dd58e9ba9cfa9b45c3",
-    "src/hero-heads.json": "62a119a22f9d3132e7a30a7eed2cf429bfed91c33b89c66e9374d5fcdd629cf3"
+    "src/hero-forge.html": "fc9d6cc32a5243d7344229d2dffbfcef097be41e260799dd58e9ba9cfa9b45c3"
+  },
+  "integrationOverrides": {
+    "src/damage-sprites.js": {
+      "sandboxSha256": "d6ea9025ce50057a9ae37cc040a5e3db49e0c85b9b383d09293c5470b7ea1774",
+      "reason": "Generated hero damage atlases differ from the canonical hero selector artwork. Use original hero images at every HP threshold; monster damage frames remain unchanged."
+    },
+    "src/hero-heads.json": {
+      "sandboxSha256": "62a119a22f9d3132e7a30a7eed2cf429bfed91c33b89c66e9374d5fcdd629cf3",
+      "reason": "Re-crop head portraits from the original selected hero artwork, not the inconsistent damage atlas."
+    }
   }
 }

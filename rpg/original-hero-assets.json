@@ -1,0 +1,18 @@
+{
+  "assets/heroes/queen-left.webp": "8b5bbc5635adef0f24229d3f8dc979dfb914952380cc9aa2e0e07b8f86580ba8",
+  "assets/heroes/mage-left.webp": "8fa4613b69dbcbbee18d983e45aedb0c1ee1c9a7925a9e8dc14e9df8625aeb74",
+  "assets/heroes/assassin-right.webp": "fa18f504d875e082a8ae9923d5264ce799fc3ab276a13d5d54cf6330177fcf65",
+  "assets/heroes/tank-right.webp": "1741cd597a58767867485000194138fbb740c788487cb6ffd366bddf0e9de76d",
+  "assets/heroes/crusader-left.webp": "dd5330998275f834eb89a94d7f26175ea04f0034268021395f6561d11274418f",
+  "assets/heroes/mage-right.webp": "b57850f14af982be434498db317898bb5631a11dad9bdc3dc5ec56ac50e92c20",
+  "assets/heroes/archer-left.webp": "04555e372eb6c2c10343a2264f5aa79121aff775316a611c261147e4416de3c5",
+  "assets/heroes/archer-right.webp": "99b7cca814d476504a0ed5eb6df6e33b6328a8de332e6112f81c730fadd6558a",
+  "assets/heroes/assassin-left.webp": "8b125dfb6d5f5ae03b77cdbad8994239e66b878c5c200960a18fa687cd783b61",
+  "assets/heroes/rogue-left.webp": "2479425b2e7f9f7bf9880803cb7fe30686db9bc07d122ead87c92be787637c94",
+  "assets/heroes/theft-left.webp": "71c42d0b0880d0105ddce940ae6762dcf4be59a8f5491e28f3d66b01fde7fad4",
+  "assets/heroes/tank-left.webp": "12437ee2dd1d31507e271cf804919d949cbc29b7857750a036d79412aa8c9e9a",
+  "assets/heroes/theft-right.webp": "a1a68fabb6cba61d7aade11791c7e0563ea7451d8f9472c119c2e4aec9dbc7fe",
+  "assets/heroes/queen-right.webp": "00db6063f800c0d04d9be2917528048d855b228d234966a07f9173cdefb9c8b6",
+  "assets/heroes/crusader-right.webp": "8f64c03347254958d5c9237d5f3f9c52bd84ca57e6c33aaaba9c1cec56cf0f18",
+  "assets/heroes/rogue-right.webp": "d1d4164643590eaf927d376c0d0625f5736b0feb59972f77dca9f2bfc0558ed0"
+}
