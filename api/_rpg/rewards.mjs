@@ -11,10 +11,10 @@ export function loot(level,rng=Math.random){
  const count=1+Math.floor(rng()*3),drops=[];
  for(let i=0;i<count;i++){
   const roll=rng(),rarity=roll<.85?'common':roll<.95?'uncommon':'rare';
-  // One recovery potion is guaranteed; extra drops can be any gear or potion.
-  const pool=C.items.filter(d=>d.category===(rng()<.5?'Weapons':'Armor'));
-  const def=i===0?C.itemMap.health_potion:rng()<.25?C.itemMap[rng()<.5?'health_potion':'mana_potion']:pool[Math.floor(rng()*pool.length)];
-  drops.push({uid:crypto.randomUUID(),defId:def.id,rotation:0,rotated:false,...C.rollItem(def,level,rng,{rarity,iLvl:level,requiredLevel:Math.max(1,level-2)})});
+  // Item type is independent from rarity: 85% equipment, 15% consumables.
+  const category=rng()<.5?'Weapons':'Armor',pool=C.items.filter(d=>d.category===category);
+  const def=rng()<.85?pool[Math.floor(rng()*pool.length)]:C.itemMap[rng()<.5?'health_potion':'mana_potion'];
+  drops.push({uid:crypto.randomUUID(),defId:def.id,rotation:0,rotated:false,...C.rollItem(def,level,rng,{rarity,iLvl:level})});
  }
  return drops;
 }

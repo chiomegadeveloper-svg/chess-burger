@@ -10,8 +10,8 @@ function sheet(group){
 }
 async function frames(s){
  if(textures.has(s.id)){const cached=textures.get(s.id);textures.delete(s.id);textures.set(s.id,cached);return;}
- const base=await sheet(s.category);if(textures.has(s.id))return;const image=base.baseTexture.resource.source,cellW=image.width/6,cellH=image.height/6;
- const list=Array.from({length:s.animation.frames},(_,i)=>{const canvas=document.createElement('canvas');canvas.width=400;canvas.height=400;const w=160,h=160*cellH/cellW;canvas.getContext('2d').drawImage(image,i*cellW,s.animation.row*cellH,cellW,cellH,120,(400-h)/2,w,h);return PIXI.Texture.from(canvas);});
+ const base=await sheet(s.category);if(textures.has(s.id))return;const image=base.baseTexture.resource.source;
+ const list=Array.from({length:s.animation.frames},(_,i)=>PIXI.Texture.from(window.RPGSkillFrames.frame(image,i,s.animation.row)));
  for(const frame of list)frame.defaultAnchor.set(.5,.5);
  textures.set(s.id,list);for(const [id,cached] of textures){if(textures.size<=10)break;if(id!==s.id&&!protectedSkills.has(id)){for(const frame of cached)frame.destroy(true);textures.delete(id);}}
 }
@@ -38,8 +38,8 @@ async function animate(host,s,options,session){
  const w=app.screen.width,h=app.screen.height;
  const source=options.reverse?.78:.22,target=options.reverse?.22:.78;
  sprite.position.set(battle?w*source:w*.5,h*.48);
- const extent=battle?Math.min(w*.3,h*.9):Math.min(w,h)*1.55;
- sprite.scale.set(extent/160*(options.reverse?-1:1),extent/160);
+ const extent=battle?Math.min(w*.28,h*.58):Math.min(w,h)*.68;
+ sprite.scale.set(extent/144*(options.reverse?-1:1),extent/144);
  app.stage.addChild(sprite);
  const caption=document.createElement('span');caption.className='rpg-skill-caption';caption.textContent=s.name;host.appendChild(caption);
  await new Promise(resolve=>{

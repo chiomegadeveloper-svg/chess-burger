@@ -160,8 +160,7 @@ function AppPage() {
   }, []);
   const needsAgreement=member===true && profile?.agreement_version===null;
   const welcomeDecision = useRef(false);
-  const rpgReturn = useRef<"welcome"|"play-select">("play-select");
-  const closeRpg = useCallback(() => {if(rpgReturn.current === "welcome"){setTab("home");setShowWelcome(true);}else setTab("play-select");},[]);
+  const closeRpg = useCallback(() => {setShowWelcome(false);setTab("home");},[]);
   const acceptAgreement=async()=>{
     if(!agreementChecked || agreementSaving)return;
     setAgreementSaving(true);
@@ -639,7 +638,7 @@ function AppPage() {
           <button className="play-destination arena arena-live" type="button" onClick={() => setTab("grand-arena")}><img src="/play-selection/grand-arena.webp" alt="Chess Burger Grand Arena entrance"/><span><strong>Grand Arena</strong><small>Timed elimination battles with live standings</small><b>Enter Arena <ChevronRight size={17}/></b></span></button>
           <button className="play-destination puzzles" type="button" onClick={() => setTab("puzzles")}><img src="/play-selection/puzzle-quest.webp" alt="Chess Burger puzzle maze arena"/><span><strong>Puzzle Quest</strong><small>100 puzzles, Coach Patty and Gold rewards</small><b>Enter Puzzles <ChevronRight size={17}/></b></span></button>
           <button className="play-destination tournament" type="button" onClick={() => setTab("tournaments")}><img src="/play-selection/tournament.webp" alt="Cute chess characters competing for a gold tournament trophy"/><span><strong>Tournament</strong><small>Owner hosted sessions · free entry</small><b>Explore Tournament <ChevronRight size={17}/></b></span></button>
-          <button className="play-destination rpg" type="button" onClick={() => {rpgReturn.current="play-select";setTab("rpg-coming");requestRpgLandscape();}}><img src="/play-selection/rpg.webp" alt="Chess knights exploring an enchanted RPG portal"/><span><strong>RPG</strong><small>Choose a hero and explore your real-world realm</small><b>Explore RPG <ChevronRight size={17}/></b></span></button>
+          <button className="play-destination rpg" type="button" onClick={() => {setTab("rpg-coming");requestRpgLandscape();}}><img src="/play-selection/rpg.webp" alt="Chess knights exploring an enchanted RPG portal"/><span><strong>RPG</strong><small>Choose a hero and explore your real-world realm</small><b>Explore RPG <ChevronRight size={17}/></b></span></button>
         </div>
         <PublicArenaSessions onOpen={() => setTab("grand-arena")} />
       </section>
@@ -908,7 +907,7 @@ function AppPage() {
                 <img src="/welcome/invasion.webp" alt="Chess pieces invading a territory map" />
                 <strong>INVASION</strong>
               </button>
-              <button type="button" disabled={needsAgreement} className="welcome-card rpg" onClick={() => {rpgReturn.current="welcome";finishWelcome("rpg-coming");requestRpgLandscape();}}>
+              <button type="button" disabled={needsAgreement} className="welcome-card rpg" onClick={() => {finishWelcome("rpg-coming");requestRpgLandscape();}}>
                 <img src="/play-selection/rpg.webp" alt="Chess knights entering a fantasy realm"/><strong>RPG</strong>
               </button>
               <button
