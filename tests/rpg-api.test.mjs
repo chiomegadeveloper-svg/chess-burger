@@ -11,6 +11,7 @@ test('live RPG handler checks origin and session, scopes account reads, and veri
   assert.equal((await request({})).status,401);
   assert.equal((await request({headers:{host:'chessburger.site',origin:'https://evil.test',authorization:'Bearer test'}})).status,403);
   assert.equal((await request({method:'PUT'})).status,405);
+  assert.equal((await request({headers:{host:'chessburger.site',origin:'https://chessburger.site',authorization:'Bearer test'},body:{action:'owner_search',query:'tester'}})).status,403);
   const ready=await request({method:'GET',query:{health:'1'}});assert.equal(ready.status,200);assert.equal(ready.body.ready,true);
   const init=await request({headers:{host:'chessburger.site',origin:'https://chessburger.site',authorization:'Bearer test'}});assert.equal(init.status,200);assert.equal(init.body.game,null);
   assert.ok(calls.some(url=>url.includes('user_id=eq.'+uid)&&url.includes('item_kind=eq.rpg_profile')));

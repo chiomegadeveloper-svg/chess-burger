@@ -12,13 +12,18 @@ const rand=n=>crypto.getRandomValues(new Uint32Array(1))[0]%n;
 export async function gameRequest(client,user,method,input={},services={}){
  const now=Date.now();let doc=await read(client,user),shared=null;
  const persist=()=>write(client,user,'rpg_profile','hero',doc);
+ if(input.action==='init')return {game:doc?.state||null,generation:doc?.generation||null};
+ const resetError=()=>{throw Object.assign(Error('Your RPG hero was reset by an owner. Reopen RPG to choose your hero.'),{status:409,code:'hero_reset'});};
+ if(doc?.generation&&input.generation!==doc.generation)resetError();
  if(input.action==='register'){
-  if(doc){if(doc.heroId!==input.heroId||doc.name!==String(input.name).trim()||doc.starterSkill!==input.skill)fail('Your hero has already been chosen and cannot be changed.');return {game:doc.state};}
-  const proposed=makeHero(input);await insert(client,user,'rpg_profile','hero',proposed);doc=await read(client,user);
-  if(doc.heroId!==proposed.heroId||doc.name!==proposed.name||doc.starterSkill!==proposed.starterSkill)fail('A hero was already confirmed in another window. Reopen RPG to continue.');return {game:doc.state};
+  if(doc?.state){if(doc.heroId!==input.heroId||doc.name!==String(input.name).trim()||doc.starterSkill!==input.skill)fail('Your hero has already been chosen and cannot be changed.');return {game:doc.state,generation:doc.generation||null};}
+  const proposed=makeHero(input);
+  if(doc){Object.assign(proposed,{revision:doc.revision,generation:doc.generation,lastReset:doc.lastReset});await write(client,user,'rpg_profile','hero',proposed);}
+  else await insert(client,user,'rpg_profile','hero',proposed);
+  doc=await read(client,user);
+  if(!doc?.state||doc.heroId!==proposed.heroId||doc.name!==proposed.name||doc.starterSkill!==proposed.starterSkill)fail('A hero was already confirmed in another window. Reopen RPG to continue.');return {game:doc.state,generation:doc.generation||null};
  }
- if(input.action==='init')return {game:doc?.state||null};
- if(!doc)fail('Choose your hero first.',409);
+ if(!doc?.state){if(doc?.generation)resetError();fail('Choose your hero first.',409);}
  if(input.action==='save'){saveInventory(doc,input.state);await persist();return {game:doc.state};}
  const near=(a,b)=>{if(!a||a.accuracy>10||(b.accuracy!==undefined&&b.accuracy>10))fail('Wait for fresh GPS accuracy within ±10 m.');if(distanceMeters(a,b)>10)fail('Move within 10 meters to start this encounter.');};
  const getPresence=async id=>{const p=await read(client,id,'rpg_presence','live');if(!p||now-p.updatedAt>30000)fail('This player needs a fresh online GPS position.');return p;};
@@ -30,17 +35,23 @@ export async function gameRequest(client,user,method,input={},services={}){
   const rows=await client.from('cb_inventory_items').select('user_id,metadata').eq('item_kind','rpg_presence').gt('updated_at',new Date(now-45000).toISOString()).neq('user_id',user).limit(200);if(rows.error)fail('Nearby players unavailable.',503);
   return {players:(rows.data||[]).map(r=>r.metadata).filter(p=>now-p.updatedAt<45000&&distanceMeters(p,old)<=5000).sort((a,b)=>distanceMeters(a,old)-distanceMeters(b,old)).slice(0,100)};
  }
- const player=async (id=user)=>{const d=id===user?doc:await read(client,id);if(!d)fail('This player has not chosen a hero.');const s=d.state;return {...R.profile({heroId:d.heroId,name:d.name,level:s.level,stats:C.totals(s,P.baseStats(s.level)),active:s.active}),userId:id};};
+ const player=async (id=user)=>{const d=id===user?doc:await read(client,id);if(!d?.state)fail('This player has not chosen a hero.');const s=d.state;return {...R.profile({heroId:d.heroId,name:d.name,level:s.level,stats:C.totals(s,P.baseStats(s.level)),active:s.active}),userId:id,heroGeneration:d.generation||null};};
  const me=b=>b.actors.findIndex(a=>a.userId===user),visible=b=>R.publicBattle(b,me(b));
  const save=async (b,solvedId=null)=>{
   b.version++;if(solvedId){doc.history=[solvedId,...doc.history.filter(id=>id!==solvedId)].slice(0,1000);}
   if(b.kind==='pvp'){shared.state=b;shared.status=b.status;await write(client,shared.owner,'rpg_battle',b.id,shared);if(solvedId)await persist();}
   else{doc.battle=b;await persist();}
  };
+ async function validShared(b){
+  const profiles=await Promise.all(b.actors.map(a=>a.userId===user?doc:read(client,a.userId)));
+  if(profiles.every((p,i)=>p?.state&&(p.generation||null)===(b.actors[i].heroGeneration||null)))return true;
+  if(['active','pending'].includes(b.status)){b.status='cancelled';b.winner=null;b.challenge=null;R.note(b,'Battle closed because a hero was reset by an owner.');await save(b);}
+  return false;
+ }
  async function current(){
-  if(doc.pvpId){const rows=await client.from('cb_inventory_items').select('metadata').eq('item_kind','rpg_battle').eq('item_id',doc.pvpId).contains('metadata',{participants:[user]}).maybeSingle();if(rows.error)fail('Battle unavailable.',503);shared=rows.data?.metadata||null;if(shared){const b=shared.state;if(R.timeout(b,now))await save(b);return b;}}
+  if(doc.pvpId){const rows=await client.from('cb_inventory_items').select('metadata').eq('item_kind','rpg_battle').eq('item_id',doc.pvpId).contains('metadata',{participants:[user]}).maybeSingle();if(rows.error)fail('Battle unavailable.',503);shared=rows.data?.metadata||null;if(shared){const b=shared.state;if(!await validShared(b))return null;if(R.timeout(b,now))await save(b);return b;}}
   const incoming=await client.from('cb_inventory_items').select('metadata').eq('item_kind','rpg_battle').contains('metadata',{participants:[user]}).in('metadata->>status',['pending','active']).gt('updated_at',new Date(now-7200000).toISOString()).limit(1).maybeSingle();if(incoming.error)fail('Battle unavailable.',503);
-  if(incoming.data){shared=incoming.data.metadata;doc.pvpId=shared.state.id;await persist();if(R.timeout(shared.state,now))await save(shared.state);return shared.state;}
+  if(incoming.data){shared=incoming.data.metadata;if(!await validShared(shared.state))return null;doc.pvpId=shared.state.id;await persist();if(R.timeout(shared.state,now))await save(shared.state);return shared.state;}
   const b=doc.battle||null;if(b&&R.timeout(b,now))await save(b);return b;
  }
  const result=async b=>{

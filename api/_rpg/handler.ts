@@ -1,5 +1,6 @@
 import {createClient} from '@supabase/supabase-js';
 import {gameRequest} from './service.mjs';
+import {ownerRequest} from './owner.mjs';
 type Req={method?:string;query?:Record<string,string|string[]|undefined>;body?:unknown;headers:Record<string,string|string[]|undefined>};
 type Res={status:(code:number)=>Res;json:(body:unknown)=>void;setHeader:(name:string,value:string)=>void};
 export default async function handler(req:Req,res:Res){
@@ -14,10 +15,11 @@ export default async function handler(req:Req,res:Res){
   if(req.headers['sec-fetch-site']==='cross-site'||(origin&&new URL(String(origin)).host!==String(host)))return res.status(403).json({error:'Request not allowed.'});
   const authorization=String(req.headers.authorization||'').replace(/^Bearer\s+/i,'');if(!authorization)return res.status(401).json({error:'Sign in to Chess Burger to play RPG.'});
   const auth=await client.auth.getUser(authorization);if(auth.error||!auth.data.user)return res.status(401).json({error:'Your login expired. Reopen RPG after signing in.'});
-  const profile=await client.from('cb_profiles').select('agreement_version,avatar_url').eq('user_id',auth.data.user.id).single();
+  const profile=await client.from('cb_profiles').select('agreement_version,avatar_url,role').eq('user_id',auth.data.user.id).single();
   if(profile.error||profile.data.agreement_version===null)return res.status(403).json({error:'Complete your Chess Burger registration first.'});
   let body=typeof req.body==='string'?JSON.parse(req.body):req.body||{};if(JSON.stringify(body).length>100000)return res.status(413).json({error:'Game request is too large.'});
-  if(req.method==='GET')body={channel:req.query?.channel,action:req.query?.action};
+  if(req.method==='GET')body={channel:req.query?.channel,action:req.query?.action,generation:req.query?.generation};
+  if(String(body.action||'').startsWith('owner_')){if(req.method!=='POST')return res.status(405).json({error:'Method not allowed.'});return res.status(200).json(await ownerRequest(client,auth.data.user.id,profile.data.role,body));}
   return res.status(200).json(await gameRequest(client,auth.data.user.id,req.method||'GET',body));
- }catch(error){const e=error as Error&{status?:number};return res.status(e.status||503).json({error:e.status?e.message:'RPG service is temporarily unavailable. Please retry.'});}
+ }catch(error){const e=error as Error&{status?:number;code?:string};return res.status(e.status||503).json({error:e.status?e.message:'RPG service is temporarily unavailable. Please retry.',...(e.code?{code:e.code}:{})});}
 }

@@ -18,7 +18,7 @@ export default function RpgGame({onBack}:{onBack:()=>void}){
    try{
     if(JSON.stringify(message.body).length>100000)throw Error('Game request too large.');
     const client=await getSupabase(),auth=await client?.auth.getSession(),session=auth?.data.session;if(!session)throw Error('Your login expired. Reopen RPG after signing in.');
-    let url='/api/profile?feature=rpg';if(message.method==='GET'){const q=new URLSearchParams();if(message.body?.channel)q.set('channel',message.body.channel);if(message.body?.action)q.set('action',message.body.action);url+='&'+q;}
+    let url='/api/profile?feature=rpg';if(message.method==='GET'){const q=new URLSearchParams();if(message.body?.channel)q.set('channel',message.body.channel);if(message.body?.action)q.set('action',message.body.action);if(message.body?.generation)q.set('generation',message.body.generation);url+='&'+q;}
     const response=await fetch(url,{method:message.method,headers:{Authorization:'Bearer '+session.access_token,'Content-Type':'application/json'},body:message.method==='GET'?undefined:JSON.stringify(message.body),cache:'no-store',signal:AbortSignal.timeout(40000)});status=response.status;data=await response.json();
    }catch(e){data={error:(e as Error).message||'RPG connection failed.'};}
    frame.current?.contentWindow?.postMessage({type:'CB_RPG_REPLY',id:message.id,status,data},location.origin);
