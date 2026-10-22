@@ -1,0 +1,227 @@
+(function(root){
+  'use strict';
+  const P=root.RPGProgression||(typeof require==='function'?require('./progression.js'):null);
+  const stats=['Health','Attack','Magic','Armor','Mana','Wisdom'];
+  const tiers=['Worn','Forged','Runed','Enchanted'];
+  // id, display name, footprint, category, Health/Attack/Magic/Armor/Mana/Wisdom bonuses.
+  const types=[
+    ['iron_sword','Long Iron Sword',1,3,'Weapons',[0,3,0,0,0,0]],
+    ['iron_dagger','Iron Dagger',1,2,'Weapons',[0,2,0,0,0,1]],
+    ['iron_shield','Iron Shield',2,2,'Armor',[1,0,0,3,0,0]],
+    ['wood_shield','Wooden Shield',2,2,'Armor',[1,0,0,2,0,0]],
+    ['wood_dagger','Wood Dagger',1,2,'Weapons',[0,1,0,0,0,1]],
+    ['wood_sword','Wood Long Sword',1,3,'Weapons',[0,2,0,0,0,0]],
+    ['armor','Armor',2,3,'Armor',[2,0,0,3,0,0]],
+    ['wizard_staff','Wizard Staff',1,4,'Weapons',[0,0,3,0,2,0]],
+    ['warlock_staff','Warlock Staff',1,4,'Weapons',[0,0,4,0,0,1]],
+    ['emerald_staff','Short Emerald Staff',1,2,'Weapons',[0,0,2,0,2,0]],
+    ['wood_mace','Wooden Mace',1,3,'Weapons',[0,2,0,0,0,0]],
+    ['iron_mace','Iron Mace',1,3,'Weapons',[0,3,0,1,0,0]],
+    ['emerald_mace','Emerald Mace',1,3,'Weapons',[0,3,1,0,0,0]],
+    ['emerald_sword','Emerald Sword',1,3,'Weapons',[0,3,2,0,0,0]],
+    ['emerald_dagger','Emerald Dagger',1,2,'Weapons',[0,2,1,0,0,1]],
+    ['gauntlets','Gauntlets',2,1,'Armor',[0,1,0,2,0,0]],
+    ['helm','Helm',2,2,'Armor',[0,0,0,2,0,2]]
+  ];
+  const items=types.flatMap(([id,name,w,h,category,bonus])=>tiers.map((tier,i)=>({id:`${id}_v${i+1}`,type:id,name:`${tier} ${name}`,w,h,category,tier:i+1,sprite:`${id}_v${i+1}`,bonus:bonus.map(v=>v*(i+1))})));
+  items.push({id:'health_potion',type:'health_potion',name:'Health Potion',w:1,h:1,category:'Potions',tier:1,sprite:'health_potion',bonus:[3,0,0,0,0,0]},
+    {id:'mana_potion',type:'mana_potion',name:'Mana Potion',w:1,h:1,category:'Potions',tier:1,sprite:'mana_potion',bonus:[0,0,0,0,3,0]});
+  const spells=root.RPG_ATTACK_SKILLS||(typeof require==='function'?require('./skill-catalog.js'):[]);
+  const itemMap=Object.fromEntries(items.map(i=>[i.id,i]));
+  const spellMap=Object.fromEntries(spells.map(s=>[s.id,s]));
+  const grids={bag:{cols:6,rows:6},stash:{cols:6,rows:6}};
+  const rarities=[
+    {id:'common',name:'Common',color:'#a9babf',range:[0,0],weight:500},
+    {id:'uncommon',name:'Uncommon',color:'#69cf83',range:[1,1],weight:280},
+    {id:'rare',name:'Rare',color:'#6caaff',range:[1,2],weight:140},
+    {id:'epic',name:'Epic',color:'#c193ff',range:[2,4],weight:55},
+    {id:'mythic',name:'Mythic',color:'#ffb758',range:[3,5],weight:20},
+    {id:'divine',name:'Divine',color:'#a6f1ff',range:[5,6],weight:5}
+  ];
+  const rarityMap=Object.fromEntries(rarities.map(r=>[r.id,r]));
+  const enhancements=['Vitality','Force','Sorcery','Guarding','Clarity','Insight'];
+  const BAG_PRICE=100,STARTING_CBG=500;
+  const uid=()=>root.crypto?.randomUUID?.()||`item-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const clone=value=>JSON.parse(JSON.stringify(value));
+  const newState=(heroId,name)=>({version:3,heroId,name,level:1,totalXp:0,points:0,upgrades:[0,0,0,0,0,0],items:[],active:['basic',null,null,null],spellStorage:Array(30).fill(null),learned:['basic'],learnCredits:0,grids:clone(grids),cbg:STARTING_CBG});
+  const orientation=value=>typeof value==='boolean'?(value?1:0):((value||0)%4+4)%4;
+  const rotationOf=item=>orientation(item.rotation??item.rotated);
+  const size=(definition,rotation=0)=>orientation(rotation)%2?{w:definition.h,h:definition.w}:{w:definition.w,h:definition.h};
+  const gridFor=(state,where)=>Object.hasOwn(grids,where)?(state.grids?.[where]||(state.version===1?{bag:{cols:6,rows:8},stash:{cols:8,rows:8}}[where]:grids[where])):null;
+  const integer=(low,high,rng=Math.random)=>low+Math.floor(Math.max(0,Math.min(1-Number.EPSILON,rng()))*(high-low+1));
+  const gearTier=required=>Math.floor(required/10)+1;
+  function rollRarity(rng){let ticket=integer(1,1000,rng);for(const rarity of rarities){ticket-=rarity.weight;if(ticket<=0)return rarity.id;}return 'divine';}
+  function rollItem(def,level,rng=Math.random,options={}){
+    const iLvl=options.iLvl??integer(Math.max(1,level-3),Math.max(5,level+4),rng);
+    const requiredLevel=options.requiredLevel??integer(Math.max(1,iLvl-6),iLvl,rng);
+    const rarity=options.rarity??rollRarity(rng),definition=rarityMap[rarity];
+    const budget=iLvl+3,total=def.bonus.reduce((a,b)=>a+b,0);
+    const baseBonus=def.bonus.map(v=>Math.floor(v/total*budget));
+    let left=budget-baseBonus.reduce((a,b)=>a+b,0);
+    const ordered=def.bonus.map((v,index)=>({index,fraction:v/total*budget-baseBonus[index]})).sort((a,b)=>b.fraction-a.fraction);
+    for(let i=0;left>0;i++,left--)baseBonus[ordered[i%ordered.length].index]++;
+    const count=integer(...definition.range,rng),indices=[0,1,2,3,4,5];
+    for(let i=indices.length-1;i>0;i--){const j=integer(0,i,rng);[indices[i],indices[j]]=[indices[j],indices[i]];}
+    const attributes=indices.slice(0,count).map(stat=>({stat,value:integer(1,Math.ceil(iLvl/4)+rarities.indexOf(definition),rng)}));
+    const stat=integer(0,5,rng);
+    return {iLvl,requiredLevel,gearTier:gearTier(requiredLevel),rarity,baseBonus,attributes,enhancement:{stat,name:enhancements[stat],value:integer(1,Math.ceil(iLvl/6)+1,rng)}};
+  }
+  const itemBonus=item=>{
+    const result=[...item.baseBonus];
+    for(const attribute of item.attributes)result[attribute.stat]+=attribute.value;
+    result[item.enhancement.stat]+=item.enhancement.value;return result;
+  };
+  const canEquip=(state,item)=>state.level>=(item.requiredLevel||1);
+  function canPlace(state,item,where,x,y,rotation=rotationOf(item)){
+    const grid=gridFor(state,where),def=itemMap[item.defId];
+    if(!grid||!def||!Number.isInteger(x)||!Number.isInteger(y)||(where==='bag'&&!canEquip(state,item)))return false;
+    const {w,h}=size(def,rotation);
+    if(x<0||y<0||x+w>grid.cols||y+h>grid.rows)return false;
+    return !state.items.some(other=>{
+      if(other.uid===item.uid||other.where!==where)return false;
+      const box=size(itemMap[other.defId],rotationOf(other));
+      return x<other.x+box.w&&x+w>other.x&&y<other.y+box.h&&y+h>other.y;
+    });
+  }
+  function place(state,item,where,x,y,rotation=rotationOf(item)){
+    if(!canPlace(state,item,where,x,y,rotation))return false;
+    rotation=orientation(rotation);const rotated=Boolean(rotation%2);
+    const old=state.items.find(i=>i.uid===item.uid);
+    if(old)Object.assign(old,{where,x,y,rotation,rotated});
+    else state.items.push({...item,where,x,y,rotation,rotated});
+    return true;
+  }
+  function findSpace(state,item,where,allowRotate=true){
+    const grid=gridFor(state,where);if(!grid)return null;
+    const original=rotationOf(item);
+    for(const rotation of allowRotate?[original,(original+1)%4]:[original]){
+      for(let y=0;y<grid.rows;y++)for(let x=0;x<grid.cols;x++)if(canPlace(state,item,where,x,y,rotation))return {x,y,rotation,rotated:Boolean(rotation%2)};
+    }
+    return null;
+  }
+  function collect(state,defId,where='stash',rng=Math.random){
+    if(!itemMap[defId])return null;
+    const item={uid:uid(),defId,rotation:0,rotated:false,...rollItem(itemMap[defId],state.level,rng)},spot=findSpace(state,item,where);
+    return spot&&place(state,item,where,spot.x,spot.y,spot.rotation)?state.items.at(-1):null;
+  }
+  function rotateItem(state,item){return place(state,item,item.where,item.x,item.y,(rotationOf(item)+1)%4);}
+  function addTestGear(state,requested,rng=Math.random){
+    if(!Array.isArray(requested)||!requested.length||requested.length>3||requested.some(rarity=>!['epic','mythic','divine'].includes(rarity)))return null;
+    const trial={...state,items:[...state.items]},created=[],def=itemMap.armor_v4;
+    for(const rarity of requested){
+      const item={uid:uid(),defId:def.id,rotation:0,rotated:false,sandboxTest:true,...rollItem(def,state.level,rng,{rarity,iLvl:state.level,requiredLevel:state.level})};
+      const spot=findSpace(trial,item,'bag');
+      if(!spot||!place(trial,item,'bag',spot.x,spot.y,spot.rotation))return null;
+      created.push(trial.items.at(-1));
+    }
+    state.items.push(...created);return created;
+  }
+  function autoArrange(state,where){
+    const grid=gridFor(state,where);if(!grid)return false;
+    const inventory=state.items.filter(item=>item.where===where);
+    if(!inventory.length)return true;
+    // Keep a known-valid arrangement as the fallback. Trials never touch live items.
+    if(inventory.some(item=>!canPlace(state,item,where,item.x,item.y,rotationOf(item))))return false;
+    const footprint=item=>size(itemMap[item.defId],rotationOf(item));
+    const area=item=>{const box=footprint(item);return box.w*box.h;};
+    const score=layout=>{
+      let bottom=0,vertical=0,horizontal=0;
+      for(const item of layout){const {w,h}=footprint(item);bottom=Math.max(bottom,item.y+h);vertical+=w*h*(2*item.y+h);horizontal+=w*h*(2*item.x+w);}
+      return [bottom,vertical,horizontal];
+    };
+    const better=(next,current)=>{for(let i=0;i<next.length;i++){if(next[i]!==current[i])return next[i]<current[i];}return false;};
+    let best=inventory.map(item=>({...item})),bestScore=score(best);
+    const rowCount=bestScore[0]; // Existing capacity beyond the used rows need not be scanned.
+    const modes=[
+      (a,b)=>area(b)-area(a),
+      (a,b)=>Math.max(...Object.values(footprint(b)))-Math.max(...Object.values(footprint(a)))||area(b)-area(a),
+      (a,b)=>footprint(b).h-footprint(a).h||area(b)-area(a),
+      (a,b)=>footprint(b).w-footprint(a).w||area(b)-area(a)
+    ];
+    for(const compare of modes)for(const horizontalFirst of [false,true]){
+      const rows=new Uint8Array(rowCount),layout=[];
+      const ordered=[...inventory].sort((a,b)=>compare(a,b)||a.defId.localeCompare(b.defId)||a.uid.localeCompare(b.uid));
+      for(const item of ordered){
+        const original=rotationOf(item),def=itemMap[item.defId];
+        const rotations=def.w===def.h?[original]:[original,(original+1)%4].sort((a,b)=>{
+          const aa=size(def,a),bb=size(def,b);return horizontalFirst?bb.w-aa.w:bb.h-aa.h;
+        });
+        let spot=null;
+        search:for(let y=0;y<rowCount;y++)for(let x=0;x<grid.cols;x++)for(const rotation of rotations){
+          const {w,h}=size(def,rotation);if(x+w>grid.cols||y+h>rowCount)continue;
+          const mask=((1<<w)-1)<<x;
+          let blocked=false;for(let offset=0;offset<h;offset++)if(rows[y+offset]&mask){blocked=true;break;}
+          if(blocked)continue;
+          for(let offset=0;offset<h;offset++)rows[y+offset]|=mask;
+          spot={x,y,rotation};break search;
+        }
+        if(!spot)break;
+        layout.push({...item,...spot,rotated:Boolean(spot.rotation%2)});
+      }
+      if(layout.length===inventory.length){const next=score(layout);if(better(next,bestScore)){best=layout;bestScore=next;}}
+    }
+    // Commit positions only; item identity, rolls, ownership, currency and bonuses stay intact.
+    const positions=new Map(best.map(item=>[item.uid,item]));
+    for(const item of inventory){const next=positions.get(item.uid);Object.assign(item,{x:next.x,y:next.y,rotation:next.rotation,rotated:next.rotated});}
+    return true;
+  }
+  function buyBag(state,where){
+    if(!Object.hasOwn(grids,where)||state.cbg<BAG_PRICE||!Number.isSafeInteger(state.cbg))return false;
+    state.grids[where].rows++;state.cbg-=BAG_PRICE;return true;
+  }
+  function addTestCBG(state){if(!Number.isSafeInteger(state.cbg+100))return false;state.cbg+=100;return true;}
+  const bagBonus=state=>state.items.filter(i=>i.where==='bag'&&canEquip(state,i)).reduce((sum,item)=>{const bonus=itemBonus(item);return sum.map((v,i)=>v+bonus[i]);},[0,0,0,0,0,0]);
+  const spellBonus=state=>state.active.filter(Boolean).reduce((sum,id)=>sum.map((v,i)=>v+spellMap[id].bonus[i]),[0,0,0,0,0,0]);
+  const totals=(state,base)=>P.baseStats(state.level).map((v,i)=>v+bagBonus(state)[i]+spellBonus(state)[i]);
+  function applyProgress(state,totalXp){const before=state.level,p=P.progress(totalXp);state.level=p.level;state.totalXp=p.totalXp;for(const item of state.items.filter(i=>i.where==='bag'&&!canEquip(state,i))){let spot=findSpace(state,item,'stash');while(!spot){state.grids.stash.rows++;spot=findSpace(state,item,'stash');}place(state,item,'stash',spot.x,spot.y,spot.rotation);}const credits=Math.floor(p.level/2)-Math.floor(before/2);state.learnCredits=Math.max(0,Math.min(spells.length-state.learned.length,state.learnCredits+credits));return p.level-before;}
+  function gainXp(state,amount){return applyProgress(state,(state.totalXp??P.threshold(state.level))+Math.max(0,amount));}
+  function levelUp(state){if(state.level>=88)return false;applyProgress(state,P.threshold(state.level+1));return true;}
+  function upgrade(state,index){if(!Number.isInteger(index)||index<0||index>=6||state.points<1)return false;state.upgrades[index]++;state.points--;return true;}
+  function learn(state,id){
+    const slot=state.spellStorage.indexOf(null);
+    if(!spellMap[id]||state.level<2||state.learnCredits<1||state.learned.includes(id)||slot<0)return false;
+    state.spellStorage[slot]=id;state.learned.push(id);state.learnCredits--;return true;
+  }
+  function moveSpell(state,from,index,to,target){
+    const source=from==='active'?state.active:from==='storage'?state.spellStorage:null;
+    const dest=to==='active'?state.active:to==='storage'?state.spellStorage:null;
+    if(!source||!dest||!Number.isInteger(index)||!Number.isInteger(target)||index<0||index>=source.length||target<0||target>=dest.length||!source[index])return false;
+    [dest[target],source[index]]=[source[index],dest[target]];return true;
+  }
+  function validShape(state,heroId){
+    if(!state||![1,2,3].includes(state.version)||state.heroId!==heroId||typeof state.name!=='string'||!Number.isSafeInteger(state.level)||state.level<1||!Number.isSafeInteger(state.points)||state.points<0||!Array.isArray(state.upgrades)||state.upgrades.length!==6||state.upgrades.some(v=>!Number.isSafeInteger(v)||v<0)||!Array.isArray(state.items)||!Array.isArray(state.active)||state.active.length!==4||!Array.isArray(state.spellStorage)||state.spellStorage.length!==(state.version===3?30:8)||!Array.isArray(state.learned)||!Number.isSafeInteger(state.learnCredits)||state.learnCredits<0)return false;
+    const rawSlots=[...state.active,...state.spellStorage];
+    if(rawSlots.some(id=>id!==null&&(typeof id!=='string'||!Object.hasOwn(spellMap,id))))return false;
+    const slots=rawSlots.filter(Boolean);
+    if(new Set(slots).size!==slots.length||slots.length!==state.learned.length||slots.some(id=>!state.learned.includes(id))||state.learned.some(id=>!Object.hasOwn(spellMap,id))||new Set(state.learned).size!==state.learned.length)return false;
+    if(state.items.some(item=>!item||typeof item.defId!=='string'||!Object.hasOwn(itemMap,item.defId)||typeof item.rotated!=='boolean'))return false;
+    return true;
+  }
+  function validRoll(item){
+    const rarity=rarityMap[item.rarity],positive=v=>Number.isSafeInteger(v)&&v>0;
+    if(!rarity||!positive(item.iLvl)||!positive(item.requiredLevel)||item.requiredLevel>item.iLvl||item.gearTier!==gearTier(item.requiredLevel)||!Number.isInteger(item.rotation)||item.rotation<0||item.rotation>3||item.rotated!==Boolean(item.rotation%2)||!Array.isArray(item.baseBonus)||item.baseBonus.length!==6||item.baseBonus.some(v=>!Number.isSafeInteger(v)||v<0)||item.baseBonus.reduce((a,b)=>a+b,0)!==item.iLvl+3||!Array.isArray(item.attributes)||item.attributes.length<rarity.range[0]||item.attributes.length>rarity.range[1])return false;
+    const validAttribute=a=>a&&Number.isInteger(a.stat)&&a.stat>=0&&a.stat<6&&positive(a.value);
+    if(item.attributes.some(a=>!validAttribute(a))||new Set(item.attributes.map(a=>a.stat)).size!==item.attributes.length||!validAttribute(item.enhancement)||item.enhancement.name!==enhancements[item.enhancement.stat])return false;
+    return true;
+  }
+  function validState(state,heroId){
+    if(!validShape(state,heroId)||![2,3].includes(state.version)||!Number.isSafeInteger(state.cbg)||state.cbg<0||!state.grids)return false;
+    for(const where of ['bag','stash'])if(state.grids[where]?.cols!==6||!Number.isSafeInteger(state.grids[where]?.rows)||state.grids[where].rows<6)return false;
+    const seen=new Set();for(const item of state.items){if(!validRoll(item)||typeof item.uid!=='string'||seen.has(item.uid)||!canPlace(state,item,item.where,item.x,item.y,item.rotation))return false;seen.add(item.uid);}return true;
+  }
+  function migrate(old,heroId,rng=Math.random){
+    if(validState(old,heroId)){const state=clone(old);state.version=3;state.level=P.clampLevel(state.level);state.totalXp=P.progress(state.totalXp??P.threshold(state.level)).totalXp;state.points=0;state.spellStorage.push(...Array(30-state.spellStorage.length).fill(null));return state;}
+    if(!validShape(old,heroId)||old.version!==1)return null;
+    const seen=new Set();for(const item of old.items){if(typeof item.uid!=='string'||seen.has(item.uid)||!canPlace(old,item,item.where,item.x,item.y,item.rotated))return null;seen.add(item.uid);}
+    const state={...clone(old),version:3,spellStorage:[...old.spellStorage,...Array(22).fill(null)],grids:{bag:{cols:6,rows:8},stash:{cols:6,rows:11}},cbg:STARTING_CBG,items:[]};
+    for(const legacy of old.items){
+      const item={...clone(legacy),rotation:legacy.rotated?1:0,...rollItem(itemMap[legacy.defId],state.level,rng,{iLvl:state.level,requiredLevel:state.level,rarity:rarities[Math.min(itemMap[legacy.defId].tier-1,3)].id})};
+      let spot=canPlace(state,item,item.where,item.x,item.y,item.rotation)?{x:item.x,y:item.y,rotation:item.rotation}:findSpace(state,item,item.where);
+      while(!spot){state.grids[item.where].rows++;spot=findSpace(state,item,item.where);}
+      place(state,item,item.where,spot.x,spot.y,spot.rotation);
+    }
+    return validState(state,heroId)?state:null;
+  }
+  const api={stats,tiers,types,items,itemMap,spells,spellMap,grids,rarities,rarityMap,enhancements,BAG_PRICE,STARTING_CBG,newState,size,rotationOf,gridFor,gearTier,rollItem,itemBonus,canEquip,canPlace,place,findSpace,collect,rotateItem,addTestGear,autoArrange,buyBag,addTestCBG,bagBonus,spellBonus,totals,applyProgress,gainXp,levelUp,upgrade,learn,moveSpell,validState,migrate};
+  root.RPGInventory=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
+})(globalThis);

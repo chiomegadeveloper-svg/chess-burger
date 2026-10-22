@@ -9,6 +9,7 @@ const buildId = `${Date.now()}-${randomUUID()}`;
 const outputDirectory = fileURLToPath(new URL('../vercel-dist/',import.meta.url));
 
 export default defineConfig({
+  server: {allowedHosts:["terminal.local"]},
   root: fileURLToPath(new URL('.',import.meta.url)),
   publicDir: fileURLToPath(new URL('../public',import.meta.url)),
   plugins: [react(), {

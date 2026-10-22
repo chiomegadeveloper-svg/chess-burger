@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
+import rpgHandler from './_rpg/handler.js';
 
-type Req = { method?: string; body?: unknown; headers: Record<string, string | string[] | undefined> };
+type Req = { query?:Record<string,string|string[]|undefined>; method?: string; body?: unknown; headers: Record<string, string | string[] | undefined> };
 type Res = { status: (code: number) => Res; json: (body: unknown) => void; setHeader: (name: string, value: string) => void };
 
 function cleanUrl(value: unknown) {
@@ -57,6 +58,7 @@ async function referralView(client: any, userId: string) {
 }
 
 export default async function handler(req: Req, res: Res) {
+  if(req.query?.feature === "rpg")return rpgHandler(req,res);
   res.setHeader('Cache-Control', 'no-store');
   if (req.method !== 'GET' && req.method !== 'PUT') return res.status(405).json({ error: 'Method not allowed.' });
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;

@@ -4,26 +4,72 @@
   "buildCommand": "npm run build:vercel",
   "outputDirectory": "vercel-dist",
   "crons": [
-    { "path": "/api/arena-finalize", "schedule": "0 13 * * *" },
-    { "path": "/api/arena-finalize", "schedule": "5 16 * * *" }
+    {
+      "path": "/api/arena-finalize",
+      "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/api/arena-finalize",
+      "schedule": "5 16 * * *"
+    }
   ],
   "headers": [
     {
       "source": "/version.json",
-      "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }]
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store, max-age=0"
+        }
+      ]
     },
     {
       "source": "/sw.js",
-      "headers": [{ "key": "Cache-Control", "value": "no-store, max-age=0" }]
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store, max-age=0"
+        }
+      ]
     },
     {
       "source": "/(.*)",
       "headers": [
-        { "key": "X-Content-Type-Options", "value": "nosniff" },
-        { "key": "X-Frame-Options", "value": "DENY" },
-        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
-        { "key": "Permissions-Policy", "value": "camera=(self), microphone=(self), geolocation=(self)" }
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "camera=(self), microphone=(self), geolocation=(self)"
+        }
+      ]
+    },
+    {
+      "source": "/rpg/(.*)",
+      "headers": [
+        {
+          "key": "X-Frame-Options",
+          "value": "SAMEORIGIN"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
+        }
       ]
     }
-  ]
+  ],
+  "functions": {
+    "api/profile.ts": {
+      "includeFiles": "api/_rpg/**"
+    }
+  }
 }
