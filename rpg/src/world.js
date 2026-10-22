@@ -1,10 +1,12 @@
 (function(){
  'use strict';
  const el=id=>document.getElementById(id),world=el('rpg-world'),C=window.RPGInventory,images=window.RPG_ITEM_IMAGES;
- let battlePaused=false,resumeSharing=false;
+ let battlePaused=false,nextOnlineAttempt=0,permissionStatus=null;
  let monsterRows=[],monsterRefreshAt=0,monsterRequest=false,lastMonsterAttempt=0,monsterTimer=null,rangeCircle=null,gpsTimer=null;
  let hero,state,map,tileLayer,mapLoadingTimer,basemapVersion=0,selfMarker,accuracyCircle,peerMarkers=[],watch=null,timer=null,position=null,sharing=false,busy=false,follow=true,requestVersion=0,onlineVersion=0,apiQueue=Promise.resolve();
  const status=text=>{el('world-gps-status').textContent=text;};
+ function ensureOnline(){if(!battlePaused&&!world.hidden&&!document.hidden&&navigator.onLine!==false&&!sharing&&position&&position.accuracy<=1000&&Date.now()-position.time<30000&&Date.now()>=nextOnlineAttempt)online();}
+ function observePermission(){if(permissionStatus||!navigator.permissions?.query)return;navigator.permissions.query({name:'geolocation'}).then(permission=>{permissionStatus=permission;permission.onchange=()=>{if(permission.state==='granted'&&!world.hidden&&!battlePaused)refreshGPS();};}).catch(()=>{});}
  const safe=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  function refresh(nextHero=hero,nextState=state){
   hero=nextHero;state=nextState;if(!hero||!state)return;
@@ -15,7 +17,7 @@
   for(let y=0;y<grid.rows;y++)for(let x=0;x<grid.cols;x++)html+=`<i style="left:${x/grid.cols*100}%;top:${y/grid.rows*100}%;width:${100/grid.cols}%;height:${100/grid.rows}%"></i>`;
   for(const item of state.items.filter(i=>i.where==='bag')){const def=C.itemMap[item.defId],size=C.size(def,item.rotation),rarity=C.rarityMap[item.rarity];html+=`<span class="world-bag-item" role="img" aria-label="${safe(def.name)}, ${safe(rarity.name)}" title="${safe(def.name)} · ${safe(rarity.name)} · iLvl ${item.iLvl}" style="--rarity:${rarity.color};--angle:${item.rotation*90}deg;left:${item.x/grid.cols*100}%;top:${item.y/grid.rows*100}%;width:${size.w/grid.cols*100}%;height:${size.h/grid.rows*100}%"><img src="${images[def.sprite]}" alt=""></span>`;}
   bag.innerHTML=html;
-  el('world-attacks').innerHTML=state.active.map((id,index)=>{const spell=C.spellMap[id];return `<div class="world-spell" role="img" aria-label="${spell?safe(spell.name):`Empty attack slot ${index+1}`}" title="${spell?safe(spell.description):'Empty attack slot'}">${spell?`<img src="assets/skills/icons/${spell.id}.webp" alt="">`:`<span>${index+1}</span>`}</div>`;}).join('');
+  el('world-attacks').innerHTML=state.active.map((id,index)=>{const spell=C.spellMap[id];return `<div class="world-spell" role="img" aria-label="${spell?safe(spell.name):`Empty attack slot ${index+1}`}" title="${spell?safe(spell.description):'Empty attack slot'}">${spell?`<img src="assets/skills/runes/${spell.id}.svg" alt="">`:`<span>${index+1}</span>`}</div>`;}).join('');
  }
  function clearPeers(){for(const marker of peerMarkers)marker.remove();peerMarkers=[];el('world-players').replaceChildren();el('world-player-count').textContent='Nearby adventurers';}
  async function loadBasemap(){
@@ -51,17 +53,17 @@
   const wasSharing=sharing;sharing=false;onlineVersion++;if(timer!==null)clearInterval(timer);timer=null;clearPeers();el('world-share').textContent='Go online';el('world-online-status').textContent=message;if(wasSharing)forgetPresence();
  }
  function pauseForBattle(){
-  if(battlePaused)return;battlePaused=true;resumeSharing=sharing;requestVersion++;monsterRequest=false;
+  if(battlePaused)return;battlePaused=true;requestVersion++;monsterRequest=false;
   if(watch!==null)navigator.geolocation?.clearWatch(watch);watch=null;clearInterval(gpsTimer);gpsTimer=null;clearInterval(monsterTimer);monsterTimer=null;offline();
  }
  function resumeAfterBattle(){if(!battlePaused)return;battlePaused=false;if(!world.hidden)startGPS();}
  function stopGPS(message='GPS is off. Your location is not being shared.'){
-  battlePaused=false;resumeSharing=false;
+  battlePaused=false;nextOnlineAttempt=0;
   clearInterval(gpsTimer);gpsTimer=null;requestVersion++;monsterRequest=false;lastMonsterAttempt=0;clearInterval(monsterTimer);monsterTimer=null;for(const pin of encounterPins.values())pin.remove();encounterPins.clear();if(rangeCircle){rangeCircle.remove();rangeCircle=null;}if(watch!==null)navigator.geolocation?.clearWatch(watch);watch=null;position=null;offline();if(selfMarker){selfMarker.remove();selfMarker=null;accuracyCircle.remove();accuracyCircle=null;}
   el('world-gps').textContent='◎ Enable GPS';el('world-share').disabled=true;el('world-map-mode').textContent='PREVIEW AREA';el('world-position').textContent='Enable GPS to find your place in the realm.';status(message);
  }
  function gpsError(error){
-  if(error.code===1)stopGPS('Location permission was denied. Allow location in your browser settings, then enable GPS again.');
+  if(error.code===1)stopGPS('Location permission was denied. Allow location in your browser settings. GPS will restart automatically.');
   else{position=null;el('world-share').disabled=true;offline();status(error.code===3?'GPS timed out. Waiting for a fresh location…':'GPS signal unavailable. Waiting for a fresh location…');if(selfMarker){selfMarker.remove();selfMarker=null;accuracyCircle?.remove();accuracyCircle=null;}for(const pin of encounterPins.values())pin.remove();encounterPins.clear();if(rangeCircle){rangeCircle.remove();rangeCircle=null;}}
  }
  function startGPS(){
@@ -70,11 +72,11 @@
   if(!navigator.geolocation){status('This browser does not support GPS location.');return;}
   if(!window.isSecureContext){status('GPS needs a secure HTTPS connection. Open the published account to enable it.');return;}
   if(!monsterTimer)monsterTimer=setInterval(discoverMonsters,2000);
-  const version=++requestVersion;status('Finding your GPS location…');el('world-gps').textContent='◎ Refresh GPS';follow=true;clearInterval(gpsTimer);gpsTimer=setInterval(()=>{if(!world.hidden&&!document.hidden&&(!position||Date.now()-position.time>20000))refreshGPS();},10000);
+  const version=++requestVersion;status('Finding your GPS location…');el('world-gps').textContent='◎ Refresh GPS';follow=true;clearInterval(gpsTimer);gpsTimer=setInterval(()=>{if(world.hidden||document.hidden||battlePaused)return;if(!position||Date.now()-position.time>20000)refreshGPS();else ensureOnline();},10000);
   try{watch=navigator.geolocation.watchPosition(value=>{
-   if(version!==requestVersion||world.hidden)return;const {latitude:lat,longitude:lng,accuracy}=value.coords;if(!Number.isFinite(lat)||!Number.isFinite(lng)||!Number.isFinite(accuracy)||(Number.isFinite(value.timestamp)&&Date.now()-value.timestamp>30000))return;
+   if(version!==requestVersion||world.hidden||battlePaused||document.hidden)return;const {latitude:lat,longitude:lng,accuracy}=value.coords;if(!Number.isFinite(lat)||!Number.isFinite(lng)||!Number.isFinite(accuracy)||(Number.isFinite(value.timestamp)&&Date.now()-value.timestamp>30000))return;
    position={lat,lng,accuracy,time:Date.now()};el('world-map-mode').textContent='LIVE GPS';el('world-share').disabled=accuracy>1000;el('world-position').textContent=`${lat.toFixed(5)}, ${lng.toFixed(5)} · accuracy ±${Math.round(accuracy)} m`;
-   status(accuracy>1000?'GPS accuracy is low. Move to an open area before going online.':`Live GPS · accuracy ±${Math.round(accuracy)} m. ${sharing?'Sharing with nearby players.':'Monster discovery uses this GPS fix. Player sharing is off.'}`);drawPosition();if(resumeSharing){resumeSharing=false;if(!sharing)online();}roadFallback();discoverMonsters();
+   ensureOnline();status(accuracy>1000?'GPS accuracy is low. Move to an open area before going online.':`Live GPS · accuracy ±${Math.round(accuracy)} m. ${sharing?'Sharing with nearby players.':'Monster discovery uses this GPS fix. Player sharing is off.'}`);drawPosition();roadFallback();discoverMonsters();
   },error=>{if(version===requestVersion&&!world.hidden)gpsError(error);},{enableHighAccuracy:true,maximumAge:10000,timeout:20000});}catch{stopGPS('GPS could not start. Check location permissions and try again.');}
  }
  function refreshGPS(){
@@ -92,23 +94,23 @@
  }
  async function sync(){
   if(busy||!sharing||!position||world.hidden)return;
-  if(Date.now()-position.time>30000){offline('GPS is stale. Get a fresh location, then go online again.');return;}
+  if(Date.now()-position.time>30000){offline('Refreshing your GPS automatically…');refreshGPS();return;}
   const version=onlineVersion,payload={heroId:hero.id,name:state.name,level:state.level,lat:position.lat,lng:position.lng,accuracy:position.accuracy};busy=true;
   try{
-   await queue(async()=>{if(!sharing||version!==onlineVersion)return;const r=await fetch('/api/world/presence',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});if(!r.ok){const error=new Error(r.status===401?'Sign in to this account to go online.':r.status===429?'Please wait a moment, then go online again.':'Player presence is unavailable. Please try again.');throw error;} });
+   await queue(async()=>{if(!sharing||version!==onlineVersion)return;const r=await fetch('/api/world/presence',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});if(!r.ok){const error=new Error(r.status===401?'Sign in to this account to go online.':r.status===429?'Player sharing is busy. Retrying automatically.':'Player presence is unavailable. Please try again.');throw error;} });
    if(!sharing||version!==onlineVersion)return;const r=await fetch('/api/world/presence',{credentials:'same-origin',cache:'no-store'});if(!r.ok)throw Error('Unable to refresh nearby players.');const result=await r.json();if(sharing&&version===onlineVersion){showPeers(Array.isArray(result.players)?result.players:[]);status(`Live GPS · sharing with nearby players · accuracy ±${Math.round(position.accuracy)} m`);}
-  }catch(error){if(sharing&&version===onlineVersion)offline(error.message||'Network unavailable. Go online again when connected.');}
+  }catch(error){if(sharing&&version===onlineVersion){nextOnlineAttempt=Date.now()+8000;offline((error.message||'Network unavailable.')+' Retrying automatically.');}}
   finally{busy=false;}
  }
  function online(){if(sharing){offline();status(position?'Live GPS · player sharing is off.':'GPS is off.');return;}if(!position||position.accuracy>1000||Date.now()-position.time>30000){status('Wait for a fresh, accurate GPS location before going online.');return;}sharing=true;onlineVersion++;el('world-share').textContent='Go offline';el('world-online-status').textContent='Connecting to nearby adventurers…';sync();timer=setInterval(sync,8000);}
- function open(nextHero,nextState){refresh(nextHero,nextState);el('hr-room').hidden=true;world.hidden=false;document.querySelector('.app').hidden=true;initMap();el('world-exit').focus();startGPS();window.RPGBattle?.connect(hero,state);clearInterval(monsterTimer);monsterTimer=setInterval(discoverMonsters,2000);}
+ function open(nextHero,nextState){refresh(nextHero,nextState);el('hr-room').hidden=true;world.hidden=false;document.querySelector('.app').hidden=true;initMap();el('world-exit').focus();observePermission();startGPS();window.RPGBattle?.connect(hero,state);clearInterval(monsterTimer);monsterTimer=setInterval(discoverMonsters,2000);}
  function leave(exit){window.RPGBattle?.stop();stopGPS();world.hidden=true;el('hr-room').hidden=false;window.RPGRoom.refresh();el('hr-explore').focus();if(exit){window.dispatchEvent(new CustomEvent('chessburger:rpg-exit'));if(window.parent!==window)window.parent.postMessage({type:'CHESS_BURGER_RPG_EXIT'},location.origin);}}
  el('world-gps').addEventListener('click',refreshGPS);el('world-share').addEventListener('click',online);el('world-exit').addEventListener('click',()=>leave(true));
  for(const id of ['world-equipment','world-bag-open'])el(id).addEventListener('click',()=>leave(false));
  el('world-book').addEventListener('click',()=>window.RPGRoom.utility('book'));el('world-shop').addEventListener('click',()=>window.RPGRoom.utility('shop'));
  el('world-center').addEventListener('click',()=>{if(!position){status('Enable GPS to center the map on your location.');return;}follow=true;drawPosition();});el('world-zoom-in').addEventListener('click',()=>map?.zoomIn());el('world-zoom-out').addEventListener('click',()=>map?.zoomOut());
  el('world-map-retry').addEventListener('click',()=>{if(!map){initMap();return;}el('world-map-fallback').hidden=true;loadBasemap();});
- document.addEventListener('visibilitychange',()=>{if(world.hidden)return;if(document.hidden){offline();status('GPS tracking remains enabled. Your browser may pause updates in the background.');}else refreshGPS();});window.addEventListener('pageshow',()=>{if(!world.hidden)refreshGPS();});window.addEventListener('pagehide',()=>{if(!world.hidden)stopGPS();});window.addEventListener('offline',()=>{if(!world.hidden){offline('Network offline. Player sharing has stopped.');status('Network offline. GPS can continue on this device.');}});
+ document.addEventListener('visibilitychange',()=>{if(world.hidden)return;if(document.hidden){offline();status('GPS tracking remains enabled. Your browser may pause updates in the background.');}else refreshGPS();});window.addEventListener('pageshow',()=>{if(!world.hidden)refreshGPS();});window.addEventListener('pagehide',()=>{if(!world.hidden)stopGPS();});window.addEventListener('online',()=>{if(!world.hidden&&!battlePaused){nextOnlineAttempt=0;refreshGPS();}});window.addEventListener('offline',()=>{if(!world.hidden){offline('Network offline. Player sharing has stopped.');status('Network offline. GPS can continue on this device.');}});
  let rangeNotice=null,rangeDismissTimer=null,rangeHideTimer=null;
  function dismissRangeNotice(){if(!rangeNotice)return;clearTimeout(rangeDismissTimer);clearTimeout(rangeHideTimer);rangeNotice.classList.add('leaving');rangeHideTimer=setTimeout(()=>{rangeNotice.hidden=true;},350);}
  function outOfRange(distance,pvp=false){

@@ -16,7 +16,7 @@
   function mark(id){candidate=id;for(const button of grid.children)button.setAttribute('aria-pressed',String(button.dataset.skill===id));use.disabled=!id;}
   for(const skill of skills){
    const button=document.createElement('button');button.type='button';button.dataset.skill=skill.id;button.className='live-skill-icon';button.setAttribute('aria-label',skill.name);button.setAttribute('aria-pressed','false');button.setAttribute('aria-describedby','live-skill-metrics');
-   const image=document.createElement('img');image.src=`assets/skills/icons/${skill.id}.webp`;image.alt='';image.width=56;image.height=56;button.append(image);
+   const image=document.createElement('img');image.src=`assets/skills/runes/${skill.id}.svg`;image.alt='';image.width=56;image.height=56;button.append(image);
    if(skill.id==='basic'){button.setAttribute('aria-disabled','true');button.classList.add('included');}
    button.addEventListener('mouseenter',()=>inspect(skill));button.addEventListener('focus',()=>inspect(skill));
    button.addEventListener('click',()=>{inspect(skill);if(skill.id!=='basic')mark(skill.id);});grid.append(button);
@@ -25,7 +25,7 @@
   const close=()=>{dialog.close();open.focus();};dialog.querySelector('[data-close]').onclick=close;
   dialog.addEventListener('click',event=>{if(event.target===dialog){const r=dialog.getBoundingClientRect();if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)close();}});
   open.onclick=()=>{mark(value.value);dialog.showModal();if(candidate)inspect(byId[candidate]);};
-  use.onclick=()=>{if(!candidate||candidate==='basic')return;value.value=candidate;open.replaceChildren();const image=document.createElement('img');image.src=`assets/skills/icons/${candidate}.webp`;image.alt=byId[candidate].name;open.append(image);const text=document.createElement('span');text.textContent='Change attack';open.append(text);open.setAttribute('aria-label',`Change starting attack: ${byId[candidate].name}`);value.dispatchEvent(new Event('change',{bubbles:true}));close();};
+  use.onclick=()=>{if(!candidate||candidate==='basic')return;value.value=candidate;open.replaceChildren();const image=document.createElement('img');image.src=`assets/skills/runes/${candidate}.svg`;image.alt=byId[candidate].name;open.append(image);const text=document.createElement('span');text.textContent='Change attack';open.append(text);open.setAttribute('aria-label',`Change starting attack: ${byId[candidate].name}`);value.dispatchEvent(new Event('change',{bubbles:true}));close();};
   return {get value(){return value.value;},focus(){open.focus();}};
  }};
 })();

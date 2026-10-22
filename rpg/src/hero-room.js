@@ -74,7 +74,7 @@
     node.innerHTML=html;node.parentElement.scrollTop=scroll;el(`hr-${where}-count`).textContent=`${occupied}/${grid.cols*grid.rows}`;
   }
   let libraryPage=0,previewSkill='basic';
-  const skillImage=spell=>`assets/skills/icons/${spell.id}.webp`;
+  const skillImage=spell=>`assets/skills/runes/${spell.id}.svg`;
   function renderSpells(){
     el('hr-library-page').textContent=`${libraryPage+1} / 4`;
     el('hr-library-prev').disabled=libraryPage===0;el('hr-library-next').disabled=libraryPage===3;

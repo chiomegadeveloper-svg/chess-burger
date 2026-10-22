@@ -83,3 +83,11 @@ Added 30 distinct, category-colored SVG skill rune icons for the battle loadouts
 Increased the top battle typography by 45%, with responsive wrapping and compact landscape sizes. Centered both stat labels and numbers in the monster attribute cards. Added the matching six hero attributes on the left, using the server's locked combat stats (including equipped bonuses). Compact landscape uses a three-column hero grid and keeps all six values visible with harvest and turn controls.
 
 Verified desktop and 844×390 browser layouts, full-frame rune fit, both six-stat grids against authoritative battle values, original hero identity and attack timing regression tests. Screenshot `rpg-battle-runes-stats.jpg` is a local practice preview.
+
+## v0.0624 — consistent skill runes and automatic map presence
+
+The previous release applied runes only to battle. Updated Hero Room active attacks, stored spells, Skill Book, the starting-skill picker and map active attacks to use the same 30 rune assets. Each symbol fills its slot; the combat animation sheets remain unchanged.
+
+Hid the Refresh GPS and Go online buttons, including keyboard navigation. The existing GPS watch now starts nearby-player presence automatically on an eligible fresh fix. Fresh-location checks continue every 10 seconds and online presence refreshes every 8 seconds. Network return and granted location permission restart location automatically. Presence errors retry with a delay; leaving the map or opening combat stops sharing, and returning to the map resumes it automatically. GPS permission still belongs to the browser.
+
+Verified with UI/service integration: rune paths across room/picker/map, hidden controls, automatic presence creation, network disconnect cleanup/reconnect, and battle pause/resume without a manual click. Browser checked Hero Room runes and absence of the map controls. `rpg-hero-room-runes.jpg` is a local UI preview.

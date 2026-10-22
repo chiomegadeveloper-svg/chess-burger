@@ -97,3 +97,5 @@
 @media(max-width:600px){.hr-skill-tools{padding:8px 10px;align-items:flex-start;flex-direction:column;gap:5px}.hr-skill-preview{margin:0 10px 6px;gap:8px}.hr-skill-preview>div:first-child{width:105px;height:110px}.hr-skill-preview strong{font-size:14px}.hr-skill-preview p{font-size:10px}.hr-skill-card .hr-skill-art{grid-row:1/6;width:65px;height:85px}.hr-skill-card .hr-skill-card-actions{grid-column:2}.hr-library-nav{font-size:8px}.hr-skill-preview .hr-btn{font-size:10px}}
 
 .rpg-xp-panel{display:grid;gap:5px;font:11px system-ui;color:#dbbc82;margin:8px 0}.rpg-xp-panel progress{width:100%;height:7px;accent-color:#dfac55}.rpg-xp-panel small{font-size:9px;line-height:1.4;color:#9cb5bd}.bt-summary-xp{font-size:11px;text-align:center;color:#eac579;margin:6px 0}#world-monster-status{font:11px/1.4 system-ui;color:#abc3cb;margin:6px 0}
+/* Use the same full-frame spell rune in the bag room and power library. */
+.hr-spell-slot img{position:absolute;inset:2px;width:calc(100% - 4px);height:calc(100% - 4px);min-width:0;min-height:0;object-fit:contain}
