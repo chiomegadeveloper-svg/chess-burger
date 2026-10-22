@@ -88,10 +88,10 @@ export async function gameRequest(client,user,method,input={},services={}){
   const gps=validateFix(input.gps,now);if(!gps)fail('Wait for a fresh GPS fix.');
   if(!doc.monsterSet||!(doc.monsterSet.refreshAt>now)){
    let points;const cache=doc.roadCache;
-   if(cache&&now-cache.at<21600000&&distanceMeters(cache,gps)<=150)points=cache.points.filter(p=>distanceMeters(gps,p)<=600);
+   if(cache&&cache.radius===Layout.SPAWN_RADIUS&&now-cache.at<21600000&&distanceMeters(cache,gps)<=150)points=cache.points.filter(p=>distanceMeters(gps,p)<=Layout.SPAWN_RADIUS);
    if(!points?.length){try{points=await (services.roadPoints||roadPoints)(gps);}catch{points=[];}}
    if(!points.length)return {encounters:[],spawnStatus:'unavailable',refreshAt:now+5000,message:'Loading nearby roads · retrying automatically.'};
-   doc.roadCache={lat:gps.lat,lng:gps.lng,at:now,points};
+   doc.roadCache={lat:gps.lat,lng:gps.lng,at:now,radius:Layout.SPAWN_RADIUS,points};
    doc.monsterSet={...gps,createdAt:now,refreshAt:now+1800000};doc.encounters=Layout.create(gps,doc.state.level,R.MONSTERS.filter(m=>!m.boss),now,points).map(e=>({...e,id:crypto.randomUUID(),training:false,consumed:false}));await persist();
   }
   const cache=cachedSet(),encounters=cache.encounters;
