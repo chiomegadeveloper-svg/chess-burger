@@ -47,7 +47,7 @@
 
   reportModal.dataset.outcome=summary.winner?'victory':'defeat';
   el('bt-summary-title').textContent=summary.reason==='battle_limit'?'Time’s up':summary.winner?'Victory':'Defeat';
-  el('bt-drops-list').innerHTML=lastDrops.length?lastDrops.map(item=>`<span style="color:${C.rarityMap[item.rarity].color}">${esc(C.rarityMap[item.rarity].name)} · ${esc(C.itemMap[item.defId].name)}</span>`).join(''):'No item drops.';
+  el('bt-drops-list').innerHTML=lastDrops.length?lastDrops.map((item,index)=>{const def=C.itemMap[item.defId],rarity=C.rarityMap[item.rarity],label=`${rarity.name} · ${def.name}`;return `<button type="button" class="bt-drop-icon" style="--drop-color:${rarity.color}" aria-label="${esc(label)}" aria-describedby="bt-drop-tip-${index}"><img src="${window.RPG_ITEM_IMAGES[def.sprite]}" alt="" draggable="false"><span class="bt-drop-tooltip" id="bt-drop-tip-${index}" role="tooltip">${esc(label)}</span></button>`;}).join(''):'No item drops.';
   const reason=summary.reason==='battle_limit'?'Five minute limit reached. No victory rewards.':summary.reason==='forfeit'?(summary.winner?'Your opponent forfeited.':'You forfeited this encounter.'):summary.reason==='timeout'?(summary.winner?'Your opponent ran out of time.':'You ran out of time.'):summary.reason==='knockout'?(summary.winner?`You defeated ${enemy.name}.`:`${enemy.name} won this encounter.`):'This encounter has ended.';
   el('bt-summary-reason').textContent=reason;
   for(const [id,actor,facing] of [['hero',you,'right'],['enemy',enemy,'left']]){el('bt-summary-'+id).src=sprite(actor,facing);el('bt-summary-'+id).alt=actor.name;}
