@@ -47,9 +47,3 @@ test('enemy and future PvP heroes face inward; cancelling never reveals pending 
  const [enemy,hero]=apps[0].stage.children;assert.ok(enemy.position.x>hero.position.x);assert.ok(enemy.scale.x<0);assert.ok(hero.scale.x>0);
  win.RPGSkillFX.stop(host);await running;assert.equal(hits,0);assert.equal(apps[0].destroyed,true);
 });
-test('persistent battle portraits stay in the DOM while only the attacking character is substituted',async()=>{
- const {win,host,sprites,apps}=await renderer();host.dataset={};
- const running=win.RPGSkillFX.sequence(host,[{skill:'basic',attackerId:'rogue',defenderId:'draguu',persistentFighters:true}],{});await settle();
- assert.equal(host.dataset.caster,'hero');assert.equal(apps[0].stage.children.length,2);
- const effect=sprites.find(s=>s.playing);effect.onComplete();await running;assert.equal(host.dataset.caster,undefined);
-});

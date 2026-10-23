@@ -42,17 +42,17 @@ test('map selection grants a bound encounter ticket; battle starts and plays wit
  const turn=await f.call({action:'attack',skill:'basic',version:battle.version});assert.ok(turn.battle.version>battle.version);
 });
 
-test('road candidates and new monster sets span 10800 meters while combat stays within 200 meters',async()=>{
+test('road candidates and new monster sets span 800 meters while combat stays within 200 meters',async()=>{
  const {walkingCandidates}=await import('../api/_rpg/roads.mjs'),Layout=(await import('../api/_rpg/src/encounter-layout.js')).default,{distanceMeters}=await import('../api/_rpg/world.mjs');
  const point=meters=>({lat:at.lat+meters/111195,lng:at.lng});
- const ways=[{tags:{highway:'residential'},geometry:[100,11000].map(m=>({lat:point(m).lat,lon:point(m).lng}))}];
- for(const candidates of [walkingCandidates(ways,at),Layout.roadPoints(ways,at)]){assert.ok(candidates.some(p=>distanceMeters(at,p)>10500));assert.ok(candidates.every(p=>distanceMeters(at,p)<=10800));}
- const db=database();let loads=0;const call=input=>gameRequest(db,'a','POST',input,{roadPoints:async()=>{loads++;return [point(100),point(10790),point(10810)];}});
+ const ways=[{tags:{highway:'residential'},geometry:[100,900].map(m=>({lat:point(m).lat,lon:point(m).lng}))}];
+ for(const candidates of [walkingCandidates(ways,at),Layout.roadPoints(ways,at)]){assert.ok(candidates.some(p=>distanceMeters(at,p)>750));assert.ok(candidates.every(p=>distanceMeters(at,p)<=800));}
+ const db=database();let loads=0;const call=input=>gameRequest(db,'a','POST',input,{roadPoints:async()=>{loads++;return [point(100),point(790),point(810)];}});
  await call({action:'register',heroId:'rogue',name:'Far Explorer',skill:'punch'});
  // Older 600 m caches must not restrict the next set to their old coverage.
- const row=[...db.rows.values()].find(r=>r.item_kind==='rpg_profile');row.metadata.roadCache={...at,at:Date.now(),radius:1200,points:[point(100)]};row.metadata.monsterSet={radius:1200,refreshAt:Date.now()+1800000};
+ const row=[...db.rows.values()].find(r=>r.item_kind==='rpg_profile');row.metadata.roadCache={...at,at:Date.now(),radius:10800,points:[point(100)]};row.metadata.monsterSet={radius:10800,refreshAt:Date.now()+1800000};
  const batch=await call({action:'spawn',gps:{...at,accuracy:5,time:Date.now()}});assert.equal(loads,1);assert.equal(batch.encounters.length,2);
- const far=batch.encounters.find(e=>distanceMeters(at,e)>10500);assert.ok(far);
+ const far=batch.encounters.find(e=>distanceMeters(at,e)>750);assert.ok(far);
  await assert.rejects(call({action:'select-encounter',target:far.id,gps:{...at,accuracy:5,time:Date.now()}}),e=>e.code==='out_of_range');
  const selected=await call({action:'select-encounter',target:far.id,gps:{lat:far.lat-199/111195,lng:far.lng,accuracy:5,time:Date.now()}});assert.ok(selected.selectionToken);
 });

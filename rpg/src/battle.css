@@ -245,18 +245,7 @@
 
 .encounter-portrait{position:relative}.encounter-portrait>small{position:absolute;bottom:12px;right:12px;font-size:18px;font-weight:900;color:#ffe4a0;background:#122430;border:1px solid #c5a465;border-radius:8px;padding:5px 9px}
 
-/* One persistent scenic arena replaces the separate portrait panels. */
-.bt-playing:not(.bt-chess-mode) .bt-center{grid-template-rows:minmax(130px,1fr) auto auto minmax(28px,65px)}
-.bt-playing:not(.bt-chess-mode) .bt-center>.bt-turn{height:auto;min-height:0}
-.bt-playing:not(.bt-chess-mode) .bt-fx-bar{height:100%;min-height:130px;background-position:center 58%}
-.bt-fx-bar>.bt-stage{position:absolute;inset:0;display:block!important;width:100%;height:100%;min-height:0;padding:0;border:0;background:none;overflow:hidden}
-.bt-fx-bar>.bt-stage[hidden]{display:none!important}
-.bt-fx-bar .bt-stage>.bt-combatant{position:absolute;left:0;top:8%;width:30%;height:88%;display:block!important}
-.bt-fx-bar .bt-stage>.bt-combatant:has(#bt-enemy-art){left:auto;right:0}
-.bt-fx-bar .bt-stage .bt-art-frame{border:0!important;border-radius:0;background:none!important;width:100%;height:100%;max-height:none;aspect-ratio:auto}
-.bt-fx-bar .bt-stage .bt-art-frame img{width:100%;height:100%;object-fit:contain;object-position:center bottom}
-.bt-fx-bar .bt-combatant>span,.bt-fx-bar #bt-fx-idle{display:none!important}
-.bt-fx-bar .bt-stage-round{left:50%;top:8px;transform:translateX(-50%);font-size:12px;background:#071824b3;border-radius:6px;padding:3px 8px}
-.bt-fx-bar .bt-stage-turn{position:absolute;left:50%;top:36px;bottom:auto;transform:translateX(-50%);font-size:clamp(11px,1.3vw,18px);max-width:65%;text-align:center}
-.bt-fx-bar[data-caster=hero] #bt-hero-art,.bt-fx-bar[data-caster=enemy] #bt-enemy-art{visibility:hidden}
-@media(orientation:landscape) and (max-height:540px){.bt-playing:not(.bt-chess-mode) .bt-center{grid-template-rows:minmax(86px,1fr) auto auto minmax(20px,34px)}.bt-playing:not(.bt-chess-mode) .bt-center>.bt-turn{height:auto;min-height:0}.bt-playing:not(.bt-chess-mode) .bt-fx-bar{height:100%;min-height:86px}.bt-fx-bar .bt-stage-round{top:3px;font-size:9px;padding:2px 5px}.bt-fx-bar .bt-stage-turn{top:23px;font-size:10px;padding:3px 6px}.bt-playing:not(.bt-chess-mode) .bt-log{height:auto;min-height:0}}
+/* Keep the dedicated spell banner above the separate fighter portraits. */
+.bt-playing:not(.bt-chess-mode) .bt-center>.bt-turn{height:clamp(120px,22dvh,210px);min-height:120px}
+.bt-playing:not(.bt-chess-mode) .bt-fx-bar{height:100%;min-height:120px}
+@media(orientation:landscape) and (max-height:540px){.bt-playing:not(.bt-chess-mode) .bt-center>.bt-turn{height:clamp(80px,25dvh,130px);min-height:80px}.bt-playing:not(.bt-chess-mode) .bt-fx-bar{height:100%;min-height:80px}}
