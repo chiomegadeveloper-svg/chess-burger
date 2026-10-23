@@ -249,3 +249,16 @@
 .bt-playing:not(.bt-chess-mode) .bt-center>.bt-turn{height:clamp(120px,22dvh,210px);min-height:120px}
 .bt-playing:not(.bt-chess-mode) .bt-fx-bar{height:100%;min-height:120px}
 @media(orientation:landscape) and (max-height:540px){.bt-playing:not(.bt-chess-mode) .bt-center>.bt-turn{height:clamp(80px,25dvh,130px);min-height:80px}.bt-playing:not(.bt-chess-mode) .bt-fx-bar{height:100%;min-height:80px}}
+
+/* Two equal report cards; the removed VS must not leave an empty grid track. */
+#bt-report-modal .bt-summary-match{grid-template-columns:repeat(2,minmax(0,1fr))}
+#bt-report-modal .bt-summary-match>div{min-width:0;overflow:hidden}
+/* Keep idle damage poses in the dedicated animation banner between actions. */
+.bt-fx-fighters{position:absolute;inset:0;pointer-events:none}
+.bt-fx-fighters>img{position:absolute;left:0;bottom:6%;width:30%;height:88%;object-fit:contain;object-position:center bottom;filter:drop-shadow(0 5px 8px #0006)}
+.bt-fx-fighters>#bt-fx-enemy{left:auto;right:0}
+.bt-fx-bar[data-caster=hero] #bt-fx-hero,.bt-fx-bar[data-caster=enemy] #bt-fx-enemy{visibility:hidden}
+@media(orientation:landscape) and (max-height:540px){
+ .bt-playing:not(.bt-chess-mode) .bt-center{grid-template-rows:auto minmax(70px,1fr) auto auto auto}
+ .bt-playing:not(.bt-chess-mode) .bt-stage{min-height:70px}
+}

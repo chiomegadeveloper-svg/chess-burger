@@ -19,7 +19,7 @@ function character(app,data,x,facing){
  if(!data)return null;
  const actor=new PIXI.AnimatedSprite(data.frames);actor.anchor.set(.5,.5);actor.gotoAndStop(0);
  const scale=Math.min(app.screen.height*.9/232,app.screen.width*.25/232);
- actor.scale.set(scale*(data.entry.facing===facing?1:-1),scale);actor.position.set(app.screen.width*x,app.screen.height*.48);
+ actor.scale.set(scale*(data.entry.facing===facing?1:-1),scale);actor.position.set(app.screen.width*x,app.screen.height*.94-100*scale);
  app.stage.addChild(actor);return actor;
 }
 function sheet(group){
@@ -34,6 +34,7 @@ async function frames(s){
  textures.set(s.id,list);for(const [id,cached] of textures){if(textures.size<=10)break;if(id!==s.id&&!protectedSkills.has(id)){for(const frame of cached)frame.destroy(true);textures.delete(id);}}
 }
 function stop(host){
+ if(host.dataset)delete host.dataset.caster;
  const session=sessions.get(host);if(!session)return;
  session.cancelled=true;session.finish?.();session.resize?.disconnect();
  session.app?.destroy(true,{children:true,texture:false,baseTexture:false});sessions.delete(host);
@@ -58,8 +59,9 @@ async function animate(host,s,options,session){
  const [attackerData,defenderData]=await Promise.all([characterFrames(options.attackerId).catch(()=>null),characterFrames(options.defenderId).catch(()=>null)]);
  if(session.cancelled)return;
  const attacker=battle?character(app,attackerData,options.reverse?.85:.15,options.reverse?'left':'right'):null;
- const defender=battle?character(app,defenderData,options.reverse?.15:.85,options.reverse?'right':'left'):null;
- sprite.position.set(battle?w*source:w*.5,h*.48);
+ const defender=battle&&!options.persistentFighters?character(app,defenderData,options.reverse?.15:.85,options.reverse?'right':'left'):null;
+ if(attacker&&options.persistentFighters&&host.dataset)host.dataset.caster=options.reverse?'enemy':'hero';
+ sprite.position.set(battle?w*source:w*.5,h*(battle?.72:.48));
  const scale=window.RPGSkillFrames.fitScale(s.id,w,h,battle);
  sprite.scale.set(scale*(options.reverse?-1:1),scale);
  app.stage.addChild(sprite);
@@ -80,8 +82,8 @@ async function animate(host,s,options,session){
    if(frame>=3)impact();
   };
   sprite.onFrameChange=frameChanged;
-  const finish=()=>{if(done)return;if(!session.cancelled)impact();done=true;app.ticker.remove(update);sprite.stop();attacker?.destroy();defender?.destroy();if(battle||session.cancelled){sprite.destroy();caption.remove();}else{sprite.gotoAndStop(3);app.renderer.render(app.stage);}session.finish=null;resolve();};session.finish=finish;
-  const update=()=>{if(session.cancelled){finish();return;}if(battle&&!reduced){const t=Math.min(1,(performance.now()-started)/travelMs);sprite.x=app.screen.width*(source+(target-source)*t);sprite.y=app.screen.height*.48;}};
+  const finish=()=>{if(done)return;if(!session.cancelled)impact();done=true;app.ticker.remove(update);sprite.stop();attacker?.destroy();defender?.destroy();if(host.dataset)delete host.dataset.caster;if(battle||session.cancelled){sprite.destroy();caption.remove();}else{sprite.gotoAndStop(3);app.renderer.render(app.stage);}session.finish=null;resolve();};session.finish=finish;
+  const update=()=>{if(session.cancelled){finish();return;}if(battle&&!reduced){const t=Math.min(1,(performance.now()-started)/travelMs);sprite.x=app.screen.width*(source+(target-source)*t);sprite.y=app.screen.height*.72;}};
   if(reduced){sprite.gotoAndStop(3);attacker?.gotoAndStop(2);impact();const timer=setTimeout(finish,450);session.finish=()=>{clearTimeout(timer);finish();};}
   else{sprite.onComplete=finish;app.ticker.add(update);sprite.gotoAndPlay(0);}
  });
