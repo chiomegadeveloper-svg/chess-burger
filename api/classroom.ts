@@ -1,33 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
 import { AccessToken, DataPacket_Kind, RoomServiceClient, TrackSource } from "livekit-server-sdk";
 import { Chess } from "chess.js";
+import {legalStudentMove,legalPlayMove} from "./_classroom-movement.js";
 import chessMathHandler from "./_chess-math.js";
 import chessMathAttackHandler from "./_chess-math-attack.js";
+import { assertClassroomPosition,writeClassroomBoard } from "./_classroom-board-write.js";
 import { classroomNotation } from "./_classroom-notation.js";
-
-/** Locked student boards accept one legal move by the room's approved student side. */
-function legalStudentMove(before:string,after:string,color:"w"|"b",strictTurn=false){
-  try{
-    const parts=(before==="start"?new Chess().fen():before).split(" ");
-    if(strictTurn&&parts[1]!==color)return false;
-    if(parts[1]!==color){parts[1]=color;parts[3]="-";}
-    const position=new Chess(parts.join(" "),{skipValidation:true});
-    return position.moves({verbose:true}).some(move=>{
-      const next=new Chess(position.fen(),{skipValidation:true});
-      next.move(move);
-      return next.fen()===after;
-    });
-  }catch{return false;}
-}
-
-function legalPlayMove(before:string,after:string){
-  try{
-    const position=new Chess(before==="start"?new Chess().fen():before,{skipValidation:true});
-    return position.moves({verbose:true}).some(move=>{
-      const next=new Chess(position.fen(),{skipValidation:true});next.move(move);return next.fen()===after;
-    });
-  }catch{return false;}
-}
 
 type Req={method?:string;headers:{authorization?:string|string[]};body?:Record<string,unknown>};
 type Res={status:(n:number)=>Res;json:(v:unknown)=>void;setHeader:(k:string,v:string)=>void};
@@ -266,13 +244,23 @@ const activeEnrollment=async(roomId:string,studentId:string,now:string,free:bool
       const before=await client.from("cb_classroom_workspaces").select("board_mode").eq("room_id",roomId).single();
       if(before.error||!before.data)fail(500,before.error?.message||"Classroom board mode is unavailable.");
       if(before.data!.board_mode===mode)return res.status(200).json({workspace:before.data,unchanged:true});
-      const workspace=await client.from("cb_classroom_workspaces").update({board_mode:mode,...(mode==='play'?{fen:'start',annotations:[],student_color:'w'}:{}),updated_by:userId,updated_at:now}).eq("room_id",roomId).eq("board_mode",before.data!.board_mode).select("*").maybeSingle();
+      const workspace=await client.from("cb_classroom_workspaces").update({board_mode:mode,updated_by:userId,updated_at:now}).eq("room_id",roomId).eq("board_mode",before.data!.board_mode).select("*").maybeSingle();
       if(workspace.error)fail(500,workspace.error.message);
       if(!workspace.data)fail(409,"The mode changed. Refresh and try again.");
-      // Reset individual boards when starting a fresh game; student free movement is Teach-only.
-      const boards=await client.from("cb_classroom_student_boards").update({...(mode==='play'?{fen:'start',annotations:[]}:{}),free_movement:false,updated_by:userId,updated_at:now}).eq("room_id",roomId).select("*");
+      // Changing movement rules preserves every position and annotation.
+      const boards=await client.from("cb_classroom_student_boards").update({free_movement:false,updated_by:userId,updated_at:now}).eq("room_id",roomId).select("*");
       if(boards.error)fail(500,boards.error.message);
       return res.status(200).json({workspace:workspace.data,boards:boards.data||[]});
+    }
+    if(action==="set-board-orientation"){
+      const roomId=String(body.room_id||""),now=new Date().toISOString();
+      if(!/^[a-f0-9-]{36}$/i.test(roomId)||typeof body.flipped!=="boolean")fail(400,"Choose a valid board view.");
+      const room=await client.from("cb_classroom_rooms").select("teacher_id").eq("id",roomId).eq("status","active").gt("expires_at",now).maybeSingle();
+      if(room.error)fail(500,room.error.message);
+      if(!room.data||room.data.teacher_id===userId||!await activeEnrollment(roomId,userId,now,await freeClassroom(),true))fail(403,"Only an enrolled student can change their own board view.");
+      const board=await client.from("cb_classroom_student_boards").upsert({room_id:roomId,student_id:userId,view_flipped:body.flipped,flip_requested_at:null,updated_by:userId,updated_at:now},{onConflict:"room_id,student_id"}).select("*").single();
+      if(board.error)fail(500,board.error.message);
+      return res.status(200).json({board:board.data});
     }
     if(action==="request-board-orientation"){
       const roomId=String(body.room_id||""),now=new Date().toISOString();
@@ -370,10 +358,10 @@ const activeEnrollment=async(roomId:string,studentId:string,now:string,free:bool
       const teacher=room.data.teacher_id===userId;
       const free=await freeClassroom();
       if(!teacher&&!await activeEnrollment(roomId,userId,now,free))fail(403,"Your classroom access has expired.");
-      const modeRow=await client.from("cb_classroom_workspaces").select("board_mode,student_color,fen").eq("room_id",roomId).single();
+      const modeRow=await client.from("cb_classroom_workspaces").select("*").eq("room_id",roomId).single();
       if(modeRow.error||!modeRow.data)fail(500,modeRow.error?.message||"Classroom board mode is unavailable.");
       const playMode=modeRow.data!.board_mode!=="teach";
-      const fen=String(body.fen||"start");if(fen.length>160)fail(400,"Invalid board position.");
+      const fen=String(body.fen||"start");if(fen.length>160)fail(400,"Invalid board position.");try{new Chess(fen==="start"?new Chess().fen():fen,{skipValidation:true})}catch{fail(400,"Invalid board position.")}
       if(["assign-puzzle","reset-puzzle","assign-board"].includes(kind)){
         if(!teacher)fail(403,"Only the teacher can assign student boards.");
         if(playMode)fail(409,"Switch to Teach Mode to assign board positions or puzzles.");
@@ -431,11 +419,12 @@ const activeEnrollment=async(roomId:string,studentId:string,now:string,free:bool
         return res.status(200).json({board:saved.data});
       }
       if(kind==="master"){
+        assertClassroomPosition(body.expected_fen,modeRow.data!.fen||"start");
         if(!teacher)fail(403,"Only the teacher can control the lesson board.");
         if(playMode&&modeRow.data!.fen!==fen&&!legalPlayMove(modeRow.data!.fen||"start",fen)&&!(fen==="start"&&body.reset_board===true))fail(400,"Play Mode accepts one legal chess move at a time.");
         const annotations=Array.isArray(body.annotations)?body.annotations.slice(0,80):[];
         const control=String(body.time_control||"10+0").slice(0,12);
-        const saved=await client.from("cb_classroom_workspaces").upsert({room_id:roomId,fen,annotations,time_control:control,selected_student_id:body.selected_student_id||null,updated_by:userId,updated_at:now},{onConflict:"room_id"}).select("*").single();
+        const saved:{data:any;error:any}={data:await writeClassroomBoard(client,"cb_classroom_workspaces",roomId,null,modeRow.data,{fen,annotations,time_control:control,selected_student_id:body.selected_student_id||null,updated_by:userId,updated_at:now}),error:null};
         if(saved.error)fail(500,saved.error.message);const logged=await client.from("cb_classroom_lesson_events").insert({room_id:roomId,actor_id:userId,scope:"master",fen,annotations,label:"Teacher updated the lesson board"});if(logged.error)fail(500,logged.error.message);return res.status(200).json({workspace:saved.data});
       }
       if(kind==="shared"){
@@ -443,20 +432,25 @@ const activeEnrollment=async(roomId:string,studentId:string,now:string,free:bool
         const activeCount=await client.from("cb_classroom_enrollments").select("student_id",{count:"exact",head:true}).eq("room_id",roomId).gt("access_expires_at",free?"1970-01-01T00:00:00Z":now);
         if(activeCount.error)fail(500,activeCount.error.message);if(activeCount.count!==1)fail(409,"Shared board is available only for one-on-one sessions.");
         const movement=await client.from("cb_classroom_student_boards").select("*").eq("room_id",roomId).eq("student_id",userId).maybeSingle();if(movement.error)fail(500,movement.error.message);
-        const previous=await client.from("cb_classroom_workspaces").select("fen,student_color").eq("room_id",roomId).single();if(previous.error)fail(500,previous.error.message);
+        const previous=await client.from("cb_classroom_workspaces").select("*").eq("room_id",roomId).single();if(previous.error)fail(500,previous.error.message);
+        if(previous.data?.fen===fen)return res.status(200).json({workspace:previous.data,unchanged:true});
+        assertClassroomPosition(body.expected_fen,previous.data?.fen||"start");
         if((playMode||!movement.data?.free_movement)&&!legalStudentMove(previous.data?.fen||"start",fen,previous.data?.student_color==="b"?"b":"w",playMode))fail(400,"Move a piece of your approved color using a legal chess move.");
         if(previous.data?.fen!==fen){const snapshot=await client.from("cb_classroom_lesson_events").insert({room_id:roomId,actor_id:userId,scope:"shared",student_id:userId,fen:previous.data?.fen||"start",annotations:[],label:"Student move starting position"});if(snapshot.error)fail(500,snapshot.error.message);}
-        const saved=await client.from("cb_classroom_workspaces").update({fen,updated_by:userId,updated_at:now}).eq("room_id",roomId).select("*").single();
+        const saved:{data:any;error:any}={data:await writeClassroomBoard(client,"cb_classroom_workspaces",roomId,null,previous.data,{fen,updated_by:userId,updated_at:now}),error:null};
         if(saved.error)fail(500,saved.error.message);const logged=await client.from("cb_classroom_lesson_events").insert({room_id:roomId,actor_id:userId,scope:"shared",student_id:userId,fen,annotations:saved.data.annotations||[],label:"Student moved on the shared board"});if(logged.error)fail(500,logged.error.message);return res.status(200).json({workspace:saved.data});
       }
       if(kind==="student"){
         const studentId=teacher?String(body.student_id||""):userId;
         if(!await activeEnrollment(roomId,studentId,now,free))fail(403,"Student classroom access is not active.");
-        if(playMode&&teacher){const previous=await client.from("cb_classroom_student_boards").select("fen").eq("room_id",roomId).eq("student_id",studentId).maybeSingle();if(previous.error)fail(500,previous.error.message);if((previous.data?.fen||"start")!==fen&&!legalPlayMove(previous.data?.fen||"start",fen)&&!(fen==="start"&&body.reset_board===true))fail(400,"Play Mode accepts one legal chess move at a time.");}
+        const previous=await client.from("cb_classroom_student_boards").select("*").eq("room_id",roomId).eq("student_id",studentId).maybeSingle();if(previous.error)fail(500,previous.error.message);
+        if(!teacher&&previous.data?.fen===fen)return res.status(200).json({board:previous.data,unchanged:true});
+        assertClassroomPosition(body.expected_fen,previous.data?.fen||"start");
+        if(playMode&&teacher){if((previous.data?.fen||"start")!==fen&&!legalPlayMove(previous.data?.fen||"start",fen)&&!(fen==="start"&&body.reset_board===true))fail(400,"Play Mode accepts one legal chess move at a time.");}
         const boardPatch:Record<string,unknown>={room_id:roomId,student_id:studentId,fen,updated_by:userId,updated_at:now};
         if(teacher&&Array.isArray(body.annotations))boardPatch.annotations=body.annotations.slice(0,80);
-        if(!teacher){const previous=await client.from("cb_classroom_student_boards").select("*").eq("room_id",roomId).eq("student_id",studentId).maybeSingle();if(previous.error)fail(500,previous.error.message);if((playMode||!previous.data?.free_movement)&&!legalStudentMove(previous.data?.fen||"start",fen,modeRow.data!.student_color==="b"?"b":"w",playMode))fail(400,"Move a piece of your approved color using a legal chess move.");if((previous.data?.fen||"start")!==fen){const snapshot=await client.from("cb_classroom_lesson_events").insert({room_id:roomId,actor_id:userId,scope:"student",student_id:studentId,fen:previous.data?.fen||"start",annotations:[],label:"Student move starting position"});if(snapshot.error)fail(500,snapshot.error.message);}}
-        const saved=await client.from("cb_classroom_student_boards").upsert(boardPatch,{onConflict:"room_id,student_id"}).select("*").single();
+        if(!teacher){if((playMode||!previous.data?.free_movement)&&!legalStudentMove(previous.data?.fen||"start",fen,modeRow.data!.student_color==="b"?"b":"w",playMode))fail(400,"Move a piece of your approved color using a legal chess move.");if((previous.data?.fen||"start")!==fen){const snapshot=await client.from("cb_classroom_lesson_events").insert({room_id:roomId,actor_id:userId,scope:"student",student_id:studentId,fen:previous.data?.fen||"start",annotations:[],label:"Student move starting position"});if(snapshot.error)fail(500,snapshot.error.message);}}
+        const saved:{data:any;error:any}={data:await writeClassroomBoard(client,"cb_classroom_student_boards",roomId,studentId,previous.data,boardPatch),error:null};
         if(saved.error)fail(500,saved.error.message);const logged=await client.from("cb_classroom_lesson_events").insert({room_id:roomId,actor_id:userId,scope:"student",student_id:studentId,fen,annotations:saved.data.annotations||[],label:teacher?"Teacher updated a student board":"Student moved a piece"});if(logged.error)fail(500,logged.error.message);return res.status(200).json({board:saved.data});
       }
       fail(400,"Unknown workshop update.");
