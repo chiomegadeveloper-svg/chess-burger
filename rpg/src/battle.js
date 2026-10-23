@@ -120,6 +120,7 @@
  }
  document.addEventListener('visibilitychange',()=>{if(document.hidden&&presenting){cancelPresentation();draw();}});
  function draw(){
+  window.RPGBattleBackgrounds.apply(el('bt-fx-bar'),battle?.id);
   const startHits=observeHits();
   root.classList.toggle('bt-playing',!!battle);
   const ownChallenge=!!battle?.challenge&&battle.challenge.side===(battle.me??0);

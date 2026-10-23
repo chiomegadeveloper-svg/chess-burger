@@ -206,8 +206,8 @@
 
 /* The animation frame spans the fighters; controls remain in the hero panel. */
 .bt-playing:not(.bt-chess-mode) .bt-center>.bt-turn{display:block;padding:0;border:0;background:none;min-height:clamp(68px,12vh,115px)}
-.bt-fx-bar{position:relative;width:100%;height:clamp(68px,12vh,115px);overflow:hidden;border:1px solid #6a8792;border-radius:12px;background:linear-gradient(90deg,#142d3b,#254650 50%,#142d3b);isolation:isolate}
-#bt-fx-idle{position:absolute;inset:0;display:grid;place-items:center;color:#94b6c2;font:700 10px/1.3 system-ui;letter-spacing:.18em}
+.bt-fx-bar{position:relative;width:100%;height:clamp(68px,12vh,115px);overflow:hidden;border:1px solid #6a8792;border-radius:12px;background-color:#142d3b;background-image:linear-gradient(#07131e14,#07131e38),var(--battle-background,linear-gradient(90deg,#142d3b,#254650 50%,#142d3b));background-size:cover;background-position:center 62%;background-repeat:no-repeat;isolation:isolate}
+#bt-fx-idle{position:absolute;inset:0;display:grid;place-items:center;color:#f4ead4;text-shadow:0 1px 4px #000,0 0 8px #000;font:700 10px/1.3 system-ui;letter-spacing:.18em}
 #bt-fx-idle[hidden]{display:none!important}.bt-fx-bar .rpg-skill-canvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2}.bt-fx-bar .rpg-skill-caption{position:absolute;bottom:3px;left:50%;transform:translateX(-50%);z-index:3;padding:2px 8px;border-radius:6px;background:#071824ca;color:#f6dfab;font:700 11px system-ui;white-space:nowrap}
 .bt-stage-round{position:absolute;top:8px;left:12px;color:#b9d8dc;font:800 clamp(11px,1.1vw,16px) system-ui;z-index:5}
 .rpg-battle .bt-loadouts .bt-extractors>.bt-harvester-label{display:block;font:800 10px system-ui;color:#f2d59c;letter-spacing:.1em;margin-right:5px}

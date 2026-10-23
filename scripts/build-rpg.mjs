@@ -15,7 +15,7 @@ html=html.replace(/RPG Hero Forge Sandbox/g,'RPG').replace(/SANDBOX · NOT DEPLO
 html=html.replace('<head>','<head><base href="/rpg/"><script src="live-skill-picker.js"></script><script src="live-bootstrap.js"></script>');
 const css=await Promise.all(['hero-room','babaylan-book','damage-sprites','world','battle','merchant','chests'].map(f=>read('src/'+f+'.css')));
 html=html.replace('</head>','<link rel="stylesheet" href="vendor/leaflet/leaflet.css"><link rel="stylesheet" href="live.css"><style>'+css.join('\n')+'</style></head>');
-const names=['skill-catalog','progression','encounter-layout','inventory-core','item-images','babaylan-data','babaylan-images','hero-room','babaylan-book','damage-data','damage-sprites','character-attacks','map-basemap','city-boundary','world','battle-sound','battle','merchant','chests'];
+const names=['skill-catalog','progression','encounter-layout','inventory-core','item-images','babaylan-data','babaylan-images','hero-room','babaylan-book','damage-data','damage-sprites','character-attacks','map-basemap','city-boundary','world','battle-sound','battle-backgrounds','battle','merchant','chests'];
 const scripts=await Promise.all(names.map(async f=>'<script>\n'+await read('src/'+f+'.js')+'\n</script>'));
 const parts=await Promise.all(['hero-room','babaylan-book','world','battle','merchant','chests'].map(f=>read('src/'+f+'.html')));
 // Preserve the imported sandbox battle template; adapt only production copy and routes.
