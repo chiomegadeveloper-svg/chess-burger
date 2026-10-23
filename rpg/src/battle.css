@@ -258,16 +258,20 @@
 /* Match the attack renderer's 232px crop, 200px silhouette, 15/85% positions and ground baseline. */
 .bt-fx-bar{container-type:size}
 .bt-idle-actor{position:absolute;left:15%;bottom:6%;width:min(25cqw,90cqh);height:min(25cqw,90cqh);translate:-50% 6.8966%;overflow:hidden;transform-origin:50% 93.1034%;pointer-events:none}
-.bt-idle-actor[data-side=enemy]{left:85%;animation-delay:-1.7s}
-.bt-idle-actor[data-pose=idle]{animation:bt-idle-breathe 3.8s ease-in-out infinite}
-.bt-idle-actor[data-side=enemy][data-pose=idle]{animation-delay:-1.7s}
+.bt-idle-actor[data-side=enemy]{left:85%;animation-delay:-.48s}
+.bt-idle-actor[data-pose=idle]{animation:bt-idle-breathe 1.15s ease-in-out infinite}
+.bt-idle-actor[data-side=enemy][data-pose=idle]{animation-delay:-.48s}
 .bt-idle-actor>img{position:absolute;max-width:none;left:-60.3448%;top:-60.3448%;width:220.6897%;height:220.6897%;object-fit:contain;transform:scaleX(var(--idle-facing,1));pointer-events:none}
 .bt-idle-actor[data-condition=weak]{filter:saturate(.72) brightness(.9)}
 .bt-idle-actor[data-pose=fallen]>img{inset:0;width:100%;height:100%;object-position:center bottom}
 .bt-fx-bar[data-caster=hero] .bt-idle-actor[data-side=hero],.bt-fx-bar[data-caster=enemy] .bt-idle-actor[data-side=enemy]{visibility:hidden;animation-play-state:paused}
-@keyframes bt-idle-breathe{0%,100%{scale:1 1}50%{scale:1.004 1.018}}
+@keyframes bt-idle-breathe{0%,100%{scale:1 1}50%{scale:1.008 1.026}}
 @media(prefers-reduced-motion:reduce){.bt-idle-actor[data-pose=idle]{animation:none}}
 @media(orientation:landscape) and (max-height:540px){
  .bt-playing:not(.bt-chess-mode) .bt-center{grid-template-rows:auto minmax(70px,1fr) auto auto auto}
  .bt-playing:not(.bt-chess-mode) .bt-stage{min-height:70px}
 }
+
+/* Loot thumbnails have a fixed content box independent of source aspect ratio. */
+#bt-drops-list .bt-drop-icon{box-sizing:border-box;width:52px;height:52px;min-width:52px;min-height:52px;padding:0;overflow:visible}
+#bt-drops-list .bt-drop-icon>img{position:absolute;inset:6px;width:calc(100% - 12px);height:calc(100% - 12px);min-width:0;min-height:0;max-width:calc(100% - 12px);max-height:calc(100% - 12px);object-fit:contain}

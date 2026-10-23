@@ -53,3 +53,9 @@ test('persistent battle portraits stay in the DOM while only the attacking chara
  assert.equal(host.dataset.caster,'hero');assert.equal(apps[0].stage.children.length,2);
  const effect=sprites.find(s=>s.playing);effect.onComplete();await running;assert.equal(host.dataset.caster,undefined);
 });
+test('every attack pose keeps the idle height and planted ground baseline',async()=>{
+ const {win,host,sprites,apps}=await renderer();const running=win.RPGSkillFX.sequence(host,[{skill:'basic',attackerId:'assassin',defenderId:'windee',persistentFighters:true}],{});await settle();
+ const actor=apps[0].stage.children[0],entry=window.RPG_CHARACTER_ATTACKS.assassin,scale=Math.min(120*.9/232,600*.25/232);
+ for(let frame=0;frame<4;frame++){actor.showPose(frame);assert.ok(Math.abs(actor.scale.y*entry.frameHeights[frame]-scale*entry.idleHeight)<1e-8);assert.ok(Math.abs(actor.position.y+100*actor.scale.y-120*.94)<1e-8);}
+ sprites.find(s=>s.playing).onComplete();await running;
+});

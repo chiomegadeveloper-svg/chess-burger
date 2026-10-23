@@ -53,7 +53,7 @@ test('monster tap previews hero versus monster; Run makes no battle and Attack o
  dialog.querySelector('[data-attack]').click();await pause();await pause();assert.equal(dialog.open,false);assert.equal((await read(db,'player-a')).battle.encounterId,enemy.id);assert.equal(a.d.querySelector('#rpg-battle').hidden,false);assert.equal(a.d.querySelector('#bt-fight').hidden,false);assert.equal(a.d.querySelector('#bt-title').textContent,'Monster encounter');assert.ok(a.d.querySelectorAll('#bt-skills button').length>0);assert.ok(pauses>0);
  const actors=(await read(db,'player-a')).battle.actors;
  for(const [id,actor] of [['bt-own-stats',actors[0]],['bt-enemy-stats',actors[1]]]){assert.equal(a.d.querySelector('#'+id).children.length,6);assert.deepEqual([...a.d.querySelectorAll('#'+id+' b')].map(n=>Number(n.textContent)),actor.stats);}
- for(const img of a.d.querySelectorAll('#bt-skills img,#bt-enemy-skills img'))assert.match(img.getAttribute('src'),/^assets\/skills\/runes\/[a-z_]+\.svg$/);
+ for(const img of a.d.querySelectorAll('#bt-skills img,#bt-enemy-skills img'))assert.match(img.getAttribute('src'),/^assets\/skills\/runes\/[a-z_]+\.webp$/);
  assert.equal(a.d.querySelector('#bt-turn-label').parentElement.id,'bt-stage');
  for(const id of ['bt-ap','bt-mp']){const control=a.d.getElementById(id);assert.equal(control.textContent,'');assert.ok(control.closest('.bt-loadouts'));assert.equal(control.closest('.bt-own'),null);assert.match(control.parentElement.dataset.tooltip,/Harvest/);}
  a.d.querySelector('[data-bt-skill="basic"]').click();await pause();await pause();a.d.querySelector('#bt-mp').click();await pause();await pause();assert.equal(a.d.querySelector('#bt-turn-label').parentElement.className,'bt-turn');assert.match(a.d.querySelector('#bt-turn-label').textContent,/Puzzle/);
@@ -110,11 +110,11 @@ test('a slow map presence response cannot hold a combat request in the account q
 test('hero room, library, picker and map use runes; map GPS and player presence start and reconnect automatically',async()=>{
  const db=database(),saved=await gameRequest(db,'player-a','POST',{action:'register',heroId:'crusader',name:'Auto Explorer',skill:'punch'}),a=open(db);
  try{await pause();await pause();
- for(const img of a.d.querySelectorAll('#hr-active img,#hr-spell-storage img,.live-skill-icon img'))assert.match(img.getAttribute('src'),/assets\/skills\/runes\/[a-z_]+\.svg$/);
+ for(const img of a.d.querySelectorAll('#hr-active img,#hr-spell-storage img,.live-skill-icon img'))assert.match(img.getAttribute('src'),/assets\/skills\/runes\/[a-z_]+\.webp$/);
  const callbacks=[],cleared=[];Object.defineProperty(a.w,'isSecureContext',{value:true,configurable:true});Object.defineProperty(a.w.navigator,'geolocation',{value:{watchPosition(success){callbacks.push(success);return callbacks.length;},clearWatch(id){cleared.push(id);}},configurable:true});
  a.w.RPGBattle.spawn=async()=>({encounters:[],spawnStatus:'ready',refreshAt:Date.now()+1800000});
  a.w.RPGWorld.open(a.w.eval('HEROES.find(h=>h.id==="crusader")'),saved.game);assert.equal(callbacks.length,1);assert.equal(a.d.querySelector('.world-location-buttons').hidden,true);assert.equal(a.d.querySelector('#world-gps').tabIndex,-1);assert.equal(a.d.querySelector('#world-share').tabIndex,-1);
- for(const img of a.d.querySelectorAll('#world-attacks img'))assert.match(img.getAttribute('src'),/assets\/skills\/runes\/[a-z_]+\.svg$/);
+ for(const img of a.d.querySelectorAll('#world-attacks img'))assert.match(img.getAttribute('src'),/assets\/skills\/runes\/[a-z_]+\.webp$/);
  const fix=()=>({coords:{latitude:11.26,longitude:125,accuracy:40},timestamp:Date.now()});callbacks[0](fix());await pause();await pause();assert.ok(await read(db,'player-a','rpg_presence','live'));
  Object.defineProperty(a.w.navigator,'onLine',{value:false,configurable:true});a.w.dispatchEvent(new a.w.Event('offline'));await pause();assert.equal(await read(db,'player-a','rpg_presence','live'),null);
  Object.defineProperty(a.w.navigator,'onLine',{value:true,configurable:true});a.w.dispatchEvent(new a.w.Event('online'));assert.equal(callbacks.length,2);callbacks[1](fix());await pause();await pause();assert.ok(await read(db,'player-a','rpg_presence','live'));
@@ -254,4 +254,15 @@ test('Explorer uses a fast cached fix without restarting a slow accurate watch o
 
 test('chest dialog shows the 50-meter requirement and enables opening only after reaching range',async()=>{
  const a=open(database());try{await pause();await pause();const chest={id:'range-test',kind:'golden',name:'Golden Chest',lat:11.26,lng:125};let distance=51,accuracy=5;a.w.RPGWorld.position=()=>({lat:chest.lat+distance/111195,lng:125,accuracy,time:Date.now()});a.w.RPGChests.open(chest);assert.equal(a.d.querySelector('#chest-open').disabled,true);assert.match(a.d.querySelector('#chest-range').textContent,/opening range 50 m/);distance=49;accuracy=51;a.w.RPGChests.updateRange();assert.equal(a.d.querySelector('#chest-open').disabled,true);accuracy=5;a.w.RPGChests.updateRange();assert.equal(a.d.querySelector('#chest-open').disabled,false);assert.deepEqual(a.errors,[]);}finally{a.close();}
+});
+
+test('monster recovery turns show visible feedback instead of silently skipping the response',async()=>{
+ const db=database(),saved=await gameRequest(db,'player-a','POST',{action:'register',heroId:'crusader',name:'Recovery Hero',skill:'punch'}),gps={lat:11.26,lng:125,accuracy:40,time:Date.now()};
+ const batch=await gameRequest(db,'player-a','POST',{action:'spawn',gps},{roadPoints:async()=>[{lat:11.2602,lng:125}]}),enemy=batch.encounters[0],a=open(db);
+ try{await pause();await pause();a.w.RPGBattle.connect({id:'crusader',name:'Aurex',stats:[20,4,4,4,20,4]},saved.game);a.w.RPGWorld.position=()=>({...gps,time:Date.now()});a.w.RPGWorld.monster=()=>enemy;
+ await a.w.RPGBattle.encounter(enemy.id);await pause();a.d.querySelector('[data-attack]').click();await pause();await pause();
+ const row=[...db.rows.values()].find(r=>r.user_id==='player-a'&&r.item_kind==='rpg_profile');row.metadata.battle.actors[1].ap=0;row.metadata.battle.actors[1].mp=0;
+ let response;a.w.RPGSkillFX={sequence:async(host,events,options)=>{for(const event of events){options.onPrepare?.(event);if(event.kind){response=event;options.onAction?.(event);}else{options.onAttack?.(event);options.onImpact?.(event);}}},stop(){}};
+ a.d.querySelector('[data-bt-skill="basic"]').click();await pause();await pause();await pause();assert.equal(response.kind,'defend');assert.match(a.d.querySelector('#bt-notice').textContent,/defends.*AP.*MP/);assert.ok(a.d.querySelector('#rpg-battle').classList.contains('bt-has-notice'));assert.ok(!a.d.querySelector('#bt-own-vitals').textContent.includes('NaN'));assert.equal((await read(db,'player-a')).battle.turn,0);
+ }finally{a.close();}
 });

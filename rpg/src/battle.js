@@ -63,7 +63,7 @@
   el('bt-summary-highlights').innerHTML=[['Damage dealt',you.stats?.damage],['Damage taken',you.stats?.damageTaken],['Attacks',you.stats?.attacks]].map(([label,value])=>`<div><b>${value??'—'}</b><span>${label}</span></div>`).join('');
   reportModal.querySelectorAll('details').forEach(d=>d.open=false);
   el('bt-summary-totals').innerHTML=rows.map(([label,key])=>`<tr><th scope="row">${label}</th><td>${you.stats?.[key]??'—'}</td><td>${enemy.stats?.[key]??'—'}</td></tr>`).join('');
-  el('bt-summary-skills').innerHTML=[you,enemy].map((actor,i)=>`<section><h3>${i===0?'Your skills':'Opponent skills'}</h3>${actor.skills.length?actor.skills.map(s=>`<div><img src="assets/skills/runes/${s.id}.svg" alt=""><span>${esc(s.name)}</span><small>${s.uses}×</small><b>${s.damage} damage</b></div>`).join(''):'<p>No recorded attacks.</p>'}</section>`).join('');
+  el('bt-summary-skills').innerHTML=[you,enemy].map((actor,i)=>`<section><h3>${i===0?'Your skills':'Opponent skills'}</h3>${actor.skills.length?actor.skills.map(s=>`<div><img src="assets/skills/runes/${s.id}.webp" alt=""><span>${esc(s.name)}</span><small>${s.uses}×</small><b>${s.damage} damage</b></div>`).join(''):'<p>No recorded attacks.</p>'}</section>`).join('');
   el('bt-report-review').hidden=root.hidden||!battle;
   root.inert=true;el('rpg-world').inert=true;reportModal.hidden=false;el('bt-report-map').focus();
  }
@@ -99,7 +99,7 @@
  }
  function revealImpact(event,token){
   if(token!==presentationToken||event.id<=lastImpact||!battle)return;
-  lastImpact=event.id;if(event.kind!=='potion')window.RPGSound?.hit();const target=event.target??(1-event.side);
+  lastImpact=event.id;if(['defend','recover'].includes(event.kind)){const who=battle.actors[event.side].name;notice(event.kind==='defend'?`${who} defends · +${event.ap} AP · +${event.mp} MP`:`${who} recovers · +${event.amount} ${event.resource.toUpperCase()}`,true);draw();return;}if(event.kind!=='potion')window.RPGSound?.hit();const target=event.target??(1-event.side);
   shownHp[target]=Number.isFinite(event.hpAfter)?event.hpAfter:Math.max(0,shownHp[target]-event.damage);
   draw();
   const me=battle.me??0,node=el(target===me?'bt-hero-art':'bt-enemy-art').parentElement;
@@ -110,7 +110,7 @@
   try{
    while(attackQueue.length&&token===presentationToken){
     let events=attackQueue.splice(0);const me=battle.me??0;for(const event of events.filter(e=>e.kind==='potion')){revealImpact(event,token);notice(`Potion used · +${event.amount} ${event.resource.toUpperCase()}.`);}events=events.filter(e=>e.kind!=='potion');
-    if(events.length&&window.RPGSkillFX?.sequence)await window.RPGSkillFX.sequence(el('bt-fx-bar'),events.map(e=>({...e,persistentFighters:true,attackerId:battle.actors[e.side]?.heroId,defenderId:battle.actors[e.target??(1-e.side)]?.heroId,reverse:e.side!==me,delayMs:battle.kind!=='pvp'&&e.side!==me?1000+Math.floor(Math.random()*1001):0})),{onPrepare:e=>{if(token!==presentationToken)return;el('bt-fx-idle').hidden=true;enemyThinking=e.delayMs>0;enemyCasting=e.side!==me?e.skill:null;draw();},onAttack:e=>{if(token!==presentationToken)return;enemyThinking=false;enemyCasting=e.side!==me?e.skill:null;root.classList.remove('bt-hero-windup');window.RPGSound?.cast(R.SKILLS[e.skill]?.category);draw();},onImpact:e=>revealImpact(e,token)});
+    if(events.length&&window.RPGSkillFX?.sequence)await window.RPGSkillFX.sequence(el('bt-fx-bar'),events.map(e=>({...e,persistentFighters:true,attackerId:battle.actors[e.side]?.heroId,defenderId:battle.actors[e.target??(1-e.side)]?.heroId,reverse:e.side!==me,delayMs:battle.kind!=='pvp'&&e.side!==me?1000+Math.floor(Math.random()*1001):0})),{onPrepare:e=>{if(token!==presentationToken)return;el('bt-fx-idle').hidden=true;enemyThinking=e.delayMs>0;enemyCasting=e.side!==me?e.skill:null;draw();},onAttack:e=>{if(token!==presentationToken)return;enemyThinking=false;enemyCasting=e.side!==me?e.skill:null;root.classList.remove('bt-hero-windup');window.RPGSound?.cast(R.SKILLS[e.skill]?.category);draw();},onAction:e=>{enemyThinking=false;enemyCasting=null;revealImpact(e,token);},onImpact:e=>revealImpact(e,token)});
     // Missing/failed effects must still reconcile health and release the controls.
     if(token!==presentationToken)return;
     for(const event of events)revealImpact(event,token);
@@ -149,13 +149,13 @@
    const s=R.SKILLS[id];if(!s)return '<span class="bt-empty-skill" aria-label="Empty skill slot"></span>';
    const cd=Math.max(0,(a.ready[id]||0)-a.turns),reason=!active?(pending?'Challenge pending':'Battle ended'):!mine?'Wait for your turn':!a.active.includes(id)?'Not equipped':cd?`Cooldown · ${cd} turn${cd===1?'':'s'}`:a.ap<s.ap?'Need more AP':a.mp<s.mp?'Need more mana':!mine?'Wait for your turn':challenge?'Harvest in progress':'Ready';
    const damage=skillDamage(a,enemy,s),tip=`${s.name} · ${s.ap} AP · ${s.mp} MP · Damage ${damage} · ${reason} · ${s.cooldown} turn cooldown`;
-   return `<span class="bt-skill-slot" tabindex="0" role="group" aria-label="${esc(tip)}" data-tooltip="${esc(tip)}"><button type="button" data-bt-skill="${id}" aria-label="${esc(tip)}" ${busy||presenting||!R.usable(battle,me,id)?'disabled':''}><img src="assets/skills/runes/${id}.svg" alt=""></button></span>`;
+   return `<span class="bt-skill-slot" tabindex="0" role="group" aria-label="${esc(tip)}" data-tooltip="${esc(tip)}"><button type="button" data-bt-skill="${id}" aria-label="${esc(tip)}" ${busy||presenting||!R.usable(battle,me,id)?'disabled':''}><img src="assets/skills/runes/${id}.webp" alt=""></button></span>`;
   }).join('');
   el('bt-enemy-skills').innerHTML=Array.from({length:4},(_,i)=>enemy.active[i]||null).map(id=>{
    const s=R.SKILLS[id];if(!s)return '<span class="bt-empty-skill" aria-label="Empty skill slot"></span>';
    const cd=Math.max(0,(enemy.ready[id]||0)-enemy.turns),casting=enemyCasting===id,reason=casting?'Attacking':enemyThinking?'Choosing…':cd?`Cooldown · ${cd}`:enemy.ap<s.ap?'Need AP':enemy.mp<s.mp?'Need mana':'Ready';
    const tip=`${s.name} · ${s.ap} AP · ${s.mp} MP · Damage ${skillDamage(enemy,a,s)} · ${reason} · ${s.cooldown} turn cooldown`;
-   return `<div class="bt-skill-slot bt-enemy-skill ${casting?'bt-casting':''}" tabindex="0" role="group" aria-label="${esc(tip)}" data-tooltip="${esc(tip)}"><img src="assets/skills/runes/${id}.svg" alt=""></div>`;
+   return `<div class="bt-skill-slot bt-enemy-skill ${casting?'bt-casting':''}" tabindex="0" role="group" aria-label="${esc(tip)}" data-tooltip="${esc(tip)}"><img src="assets/skills/runes/${id}.webp" alt=""></div>`;
   }).join('');
   for(const id of ['bt-ap','bt-mp','bt-defend'])el(id).disabled=busy||presenting||!mine||challenge;
   el('bt-ap').disabled ||=a.ap>=a.maxAp;el('bt-mp').disabled ||=a.mp>=a.maxMp;el('bt-run').disabled=busy||presenting||!['active','pending'].includes(battle.status);el('bt-abandon').disabled=busy||presenting;

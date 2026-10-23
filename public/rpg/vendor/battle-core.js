@@ -848,16 +848,16 @@ function enemyTurn(b,now=Date.now()){
  const a=b.actors[1],target=b.actors[0],available=a.active.filter(id=>usable(b,1,id));
  const estimate=id=>Math.max(1,Math.round(a.stats[SKILLS[id].magic?2:1]*SKILLS[id].scale+2-target.stats[3]*.15));
  const lethal=available.find(id=>estimate(id)*(target.defending?.5:1)>=target.hp);
- const needs=a.ap<Math.min(a.maxAp,8)||a.mp<Math.min(a.maxMp,8);
  if(lethal)attack(b,1,lethal,now);
- else if(needs||(a.hp/a.maxHp<.35&&a.turns%3===0)||!available.length){
-  if(!available.length&&(a.ap<a.maxAp||a.mp<a.maxMp)&&a.turns%2===0){const resource=a.ap/a.maxAp<a.mp/a.maxMp?'ap':'mp';const gained=gainResource(b,1,resource);note(b,`${a.name} recovers ${gained} ${resource.toUpperCase()}.`);}
+ else if((a.hp/a.maxHp<.35&&a.turns%3===0)||!available.length){
+  if(!available.length&&(a.ap<a.maxAp||a.mp<a.maxMp)&&a.turns%2===0){const resource=a.ap/a.maxAp<a.mp/a.maxMp?'ap':'mp';const gained=gainResource(b,1,resource);recordAction(b,{kind:'recover',side:1,resource,amount:gained});note(b,`${a.name} recovers ${gained} ${resource.toUpperCase()}.`);}
   else defend(b,1);
  }else{const choices=available.sort((x,y)=>estimate(y)-estimate(x)),id=choices[a.turns%Math.min(2,choices.length)];attack(b,1,id,now);}
  advance(b,now);
 }
 function finishTurn(b,now=Date.now()){advance(b,now);enemyTurn(b,now);}
-function defend(b,side){b.actors[side].defending=true;reportFor(b,side).defends++;const ap=gainResource(b,side,'ap',8),mp=gainResource(b,side,'mp',8);note(b,`${b.actors[side].name} defends · +${ap} AP, +${mp} MP for the next turn (up to cap) · next incoming damage halved.`);}
+function recordAction(b,event){b.eventSeq=(b.eventSeq||0)+1;b.events=[...(b.events||[]),{id:b.eventSeq,...event}].slice(-12);}
+function defend(b,side){b.actors[side].defending=true;reportFor(b,side).defends++;const ap=gainResource(b,side,'ap',8),mp=gainResource(b,side,'mp',8);recordAction(b,{kind:'defend',side,ap,mp});note(b,`${b.actors[side].name} defends · +${ap} AP, +${mp} MP for the next turn (up to cap) · next incoming damage halved.`);}
 function timeout(b,now=Date.now()){
  if(!['active','pending'].includes(b.status))return false;
  if(b.status==='active'&&now>=(b.battleEndsAt??b.startedAt+300000)){endBattle(b,null,'battle_limit',b.battleEndsAt??b.startedAt+300000);note(b,'Five minute battle limit reached. No victory rewards.');return true;}

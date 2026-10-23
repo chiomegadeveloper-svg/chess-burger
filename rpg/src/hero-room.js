@@ -74,7 +74,7 @@
     node.innerHTML=html;node.parentElement.scrollTop=scroll;el(`hr-${where}-count`).textContent=`${occupied}/${grid.cols*grid.rows}`;
   }
   let libraryPage=0,previewSkill='basic',pendingSkill=null,activationSlot=-1,skillTrigger=null;
-  const skillImage=spell=>`assets/skills/runes/${spell.id}.svg`;
+  const skillImage=spell=>`assets/skills/runes/${spell.id}.webp`;
   function renderSpells(){
     el('hr-library-page').textContent=`${libraryPage+1} / 4`;
     el('hr-library-prev').disabled=libraryPage===0;el('hr-library-next').disabled=libraryPage===3;

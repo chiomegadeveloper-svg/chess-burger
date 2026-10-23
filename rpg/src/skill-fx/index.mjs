@@ -19,7 +19,7 @@ function character(app,data,x,facing){
  if(!data)return null;
  const actor=new PIXI.AnimatedSprite(data.frames);actor.anchor.set(.5,.5);actor.gotoAndStop(0);
  const scale=Math.min(app.screen.height*.9/232,app.screen.width*.25/232);
- actor.scale.set(scale*(data.entry.facing===facing?1:-1),scale);actor.position.set(app.screen.width*x,app.screen.height*.94-100*scale);
+ actor.showPose=frame=>{actor.gotoAndStop(frame);const ratio=data.entry.idleHeight&&data.entry.frameHeights?.[frame]?data.entry.idleHeight/data.entry.frameHeights[frame]:1,sized=scale*ratio;actor.scale.set(sized*(data.entry.facing===facing?1:-1),sized);actor.position.set(app.screen.width*x,app.screen.height*.94-100*sized);};actor.showPose(0);
  app.stage.addChild(actor);return actor;
 }
 function sheet(group){
@@ -78,13 +78,13 @@ async function animate(host,s,options,session){
   const frameChanged=()=>{
    if(session.cancelled)return;
    const frame=sprite.currentFrame;
-   if(attacker)attacker.gotoAndStop(Math.min(3,Math.floor(frame*4/s.animation.frames)));
+   if(attacker)attacker.showPose(Math.min(3,Math.floor(frame*4/s.animation.frames)));
    if(frame>=3)impact();
   };
   sprite.onFrameChange=frameChanged;
   const finish=()=>{if(done)return;if(!session.cancelled)impact();done=true;app.ticker.remove(update);sprite.stop();attacker?.destroy();defender?.destroy();if(host.dataset)delete host.dataset.caster;if(battle||session.cancelled){sprite.destroy();caption.remove();}else{sprite.gotoAndStop(3);app.renderer.render(app.stage);}session.finish=null;resolve();};session.finish=finish;
   const update=()=>{if(session.cancelled){finish();return;}if(battle&&!reduced){const t=Math.min(1,(performance.now()-started)/travelMs);sprite.x=app.screen.width*(source+(target-source)*t);sprite.y=app.screen.height*.72;}};
-  if(reduced){sprite.gotoAndStop(3);attacker?.gotoAndStop(2);impact();const timer=setTimeout(finish,450);session.finish=()=>{clearTimeout(timer);finish();};}
+  if(reduced){sprite.gotoAndStop(3);attacker?.showPose(2);impact();const timer=setTimeout(finish,450);session.finish=()=>{clearTimeout(timer);finish();};}
   else{sprite.onComplete=finish;app.ticker.add(update);sprite.gotoAndPlay(0);}
  });
 }
@@ -98,7 +98,7 @@ async function waitForReply(event,session){
 async function sequence(host,events,options={}){
  if(!host||!events.length)return;
  let session;
- try{session=stage(host);for(const event of events){const s=skill(event.skill);if(s&&!session.cancelled){options.onPrepare?.(event);await Promise.all([waitForReply(event,session),frames(s),characterFrames(event.attackerId).catch(()=>null),characterFrames(event.defenderId).catch(()=>null)]);if(session.cancelled)break;options.onAttack?.(event);await animate(host,s,{...event,onImpact:()=>options.onImpact?.(event)},session);}}if(options.status&&!session.cancelled)options.status.textContent='Animation ready · ct.js';}
+ try{session=stage(host);for(const event of events){if(['defend','recover'].includes(event.kind)){options.onPrepare?.(event);await waitForReply(event,session);if(session.cancelled)break;options.onAction?.(event);await waitForReply({delayMs:1000},session);continue;}const s=skill(event.skill);if(s&&!session.cancelled){options.onPrepare?.(event);await Promise.all([waitForReply(event,session),frames(s),characterFrames(event.attackerId).catch(()=>null),characterFrames(event.defenderId).catch(()=>null)]);if(session.cancelled)break;options.onAttack?.(event);await animate(host,s,{...event,onImpact:()=>options.onImpact?.(event)},session);}}if(options.status&&!session.cancelled)options.status.textContent='Animation ready · ct.js';}
  catch(error){if(options.status)options.status.textContent='Animation could not load. Tap Replay to retry.';console.warn('Skill animation unavailable:',error.message);}
  finally{if(session&&!session.cancelled&&sessions.get(host)===session){if(['bt-stage','bt-fx-bar'].includes(host.id))stop(host);else session.app?.ticker.stop();}}
 }

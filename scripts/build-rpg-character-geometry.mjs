@@ -1,0 +1,5 @@
+import sharp from 'sharp';import vm from 'node:vm';import {readFile,writeFile} from 'node:fs/promises';
+const window={};vm.runInNewContext(await readFile(new URL('../rpg/src/character-attacks.js',import.meta.url),'utf8'),{window});
+async function height(file,col=0){const {data,info}=await sharp(new URL('../public/rpg/'+file,import.meta.url).pathname).ensureAlpha().raw().toBuffer({resolveWithObject:true});let top=512,bottom=-1;for(let y=0;y<512;y++)for(let x=col*512;x<(col+1)*512;x++)if(data[(y*info.width+x)*4+3]>32){top=Math.min(top,y);bottom=Math.max(bottom,y);}return bottom-top+1;}
+for(const [id,entry] of Object.entries(window.RPG_CHARACTER_ATTACKS)){entry.idleHeight=await height('assets/idle/'+id+'.webp');entry.frameHeights=await Promise.all([0,1,2,3].map(c=>height(entry.src,c)));}
+await writeFile(new URL('../rpg/src/character-attacks.js',import.meta.url),'// Generated character atlas metadata; updated by build-rpg-character-geometry.mjs.\nwindow.RPG_CHARACTER_ATTACKS='+JSON.stringify(window.RPG_CHARACTER_ATTACKS,null,1)+';\n');

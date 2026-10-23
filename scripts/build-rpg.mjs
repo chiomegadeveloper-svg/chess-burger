@@ -1,4 +1,5 @@
 import './build-rpg-core.mjs';
+import './build-rpg-character-geometry.mjs';
 import './build-rpg-skill-fx.mjs';
 import './build-rpg-runes.mjs';
 import {readFile,writeFile,mkdir} from 'node:fs/promises';
