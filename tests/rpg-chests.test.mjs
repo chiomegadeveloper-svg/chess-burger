@@ -60,3 +60,10 @@ test('two first arrivals after midnight share one daily relocation without a fai
  const {call,now}=await setup();await call('a',{action:'chests',gps:gps(roads[0],now)});const next=nextChestDay(now),request={action:'chests',gps:gps(roads[0],next)};
  const [a,b]=await Promise.all([call('a',request,next),call('b',request,next)]);assert.equal(a.chests.length,7);assert.deepEqual(a.chests,b.chests);
 });
+
+test('chests require 50-meter proximity and sufficiently accurate GPS; a user at 49 meters can open',async()=>{
+ const {call,now}=await setup(),list=await call('a',{action:'chests',gps:gps(roads[0],now)}),chest=list.chests[0],fix=meters=>gps({lat:chest.lat+meters/111195,lng:chest.lng},now);
+ await assert.rejects(call('a',{action:'openChest',chestId:chest.id,gps:fix(51)}),/within 50 meters/);
+ await assert.rejects(call('a',{action:'openChest',chestId:chest.id,gps:{...fix(49),accuracy:51}}),/accuracy within 50 meters/);
+ const opened=await call('a',{action:'openChest',chestId:chest.id,gps:fix(49)});assert.ok(opened.opened.drops.length>0);
+});

@@ -75,12 +75,24 @@
   if(!navigator.geolocation){status('This browser does not support GPS location.');return;}
   if(!window.isSecureContext){status('GPS needs a secure HTTPS connection. Open the published account to enable it.');return;}
   if(!monsterTimer)monsterTimer=setInterval(discoverMonsters,2000);
-  const version=++requestVersion;status(position?'Refreshing GPS · showing your last known position…':'Finding your GPS location…');if(position){el('world-map-mode').textContent='UPDATING GPS';el('world-position').textContent=`Last known: ${position.lat.toFixed(5)}, ${position.lng.toFixed(5)} · refreshing GPS…`;}el('world-gps').textContent='◎ Refresh GPS';follow=true;clearInterval(gpsTimer);gpsTimer=setInterval(()=>{if(world.hidden||document.hidden||battlePaused)return;map?.invalidateSize({pan:false});drawPosition();encounters(monsterRows);if(!position||Date.now()-position.time>20000)refreshGPS();else ensureOnline();discoverMonsters();},10000);
-  try{watch=navigator.geolocation.watchPosition(value=>{
-   if(version!==requestVersion||world.hidden||battlePaused||document.hidden)return;const {latitude:lat,longitude:lng,accuracy}=value.coords;if(!Number.isFinite(lat)||!Number.isFinite(lng)||!Number.isFinite(accuracy)||(Number.isFinite(value.timestamp)&&Date.now()-value.timestamp>30000))return;
-   position={lat,lng,accuracy,time:Date.now()};el('world-map-mode').textContent='LIVE GPS';el('world-share').disabled=accuracy>1000;el('world-position').textContent=`${lat.toFixed(5)}, ${lng.toFixed(5)} · accuracy ±${Math.round(accuracy)} m`;
-   ensureOnline();status(accuracy>1000?'GPS accuracy is low. Move to an open area before going online.':`Live GPS · accuracy ±${Math.round(accuracy)} m. ${sharing?'Sharing with nearby players.':'Monster discovery uses this GPS fix. Player sharing is off.'}`);drawPosition();roadFallback();discoverMonsters();void window.RPGChests?.refresh();
-  },error=>{if(version===requestVersion&&!world.hidden)gpsError(error);},{enableHighAccuracy:true,maximumAge:10000,timeout:20000});}catch{stopGPS('GPS could not start. Check location permissions and try again.');}
+  const version=++requestVersion;
+  function acceptFix(value){
+   if(version!==requestVersion||world.hidden||battlePaused||document.hidden)return;
+   const {latitude:lat,longitude:lng,accuracy}=value.coords,time=Number.isFinite(value.timestamp)?value.timestamp:Date.now();
+   if(![lat,lng,accuracy].every(Number.isFinite)||Math.abs(lat)>85||Math.abs(lng)>180||accuracy<0||Date.now()-time>30000||time>Date.now()+5000)return;
+   if(position&&(time<position.time||(accuracy>position.accuracy&&time-position.time<5000)))return;
+   position={lat,lng,accuracy,time};el('world-map-mode').textContent=accuracy<=50?'LIVE GPS':'GPS ESTIMATE';el('world-share').disabled=accuracy>1000;el('world-position').textContent=`${lat.toFixed(5)}, ${lng.toFixed(5)} · accuracy ±${Math.round(accuracy)} m`;
+   ensureOnline();status(accuracy>50?'Location found · refining GPS accuracy…':`Live GPS · accuracy ±${Math.round(accuracy)} m. ${sharing?'Sharing with nearby players.':'Connecting to nearby players…'}`);drawPosition();roadFallback();discoverMonsters();void window.RPGChests?.refresh();window.RPGChests?.updateRange();
+  }
+  let quickPending=false;
+  function quickFix(){
+   if(quickPending||!navigator.geolocation.getCurrentPosition)return;quickPending=true;
+   try{navigator.geolocation.getCurrentPosition(value=>{quickPending=false;acceptFix(value);},error=>{quickPending=false;if(version===requestVersion&&error.code===1)gpsError(error);},{enableHighAccuracy:false,maximumAge:30000,timeout:5000});}catch{quickPending=false;}
+  }
+  status(position?'Refreshing GPS · showing your last known position…':'Finding your GPS location…');if(position){el('world-map-mode').textContent='UPDATING GPS';el('world-position').textContent=`Last known: ${position.lat.toFixed(5)}, ${position.lng.toFixed(5)} · refreshing GPS…`;}el('world-gps').textContent='◎ Refresh GPS';follow=true;clearInterval(gpsTimer);
+  gpsTimer=setInterval(()=>{if(world.hidden||document.hidden||battlePaused)return;map?.invalidateSize({pan:false});drawPosition();encounters(monsterRows);if(!position||Date.now()-position.time>20000)quickFix();else ensureOnline();discoverMonsters();window.RPGChests?.updateRange();},10000);
+  try{watch=navigator.geolocation.watchPosition(acceptFix,error=>{if(version===requestVersion&&!world.hidden)gpsError(error);},{enableHighAccuracy:true,maximumAge:10000,timeout:30000});quickFix();}catch{stopGPS('GPS could not start. Check location permissions and try again.');}
+
  }
  function refreshGPS(){
   if(battlePaused)return;

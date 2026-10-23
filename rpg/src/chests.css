@@ -3,3 +3,5 @@
 .world-chest-finder{position:absolute;left:12px;bottom:14px;z-index:800;display:flex;align-items:center;gap:6px;border:1px solid #d0ad62;border-radius:10px;background:#10232ded;color:#ffe4a9;padding:4px 10px 4px 4px;min-height:46px;font:700 12px system-ui;cursor:pointer;box-shadow:0 3px 14px #0006}.world-chest-finder img{width:44px;height:40px;object-fit:contain}.world-chest-finder:focus-visible{outline:3px solid #78dfed;outline-offset:3px}#world-chests-bar[data-state=error]{color:#ffd1a8}@media(max-height:540px){.world-chest-finder{left:8px;bottom:10px;font-size:11px;min-height:40px}.world-chest-finder img{width:36px;height:34px}}
 
 .world-chest-marker.chest-claimed img{filter:grayscale(1);opacity:.55}.world-chest-marker.chest-claimed span{color:#c4cbd0;border-color:#7b8990}
+
+#chest-range{color:#a8e1d7;font-weight:600;font-size:13px;margin:6px 0}

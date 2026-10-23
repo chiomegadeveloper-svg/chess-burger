@@ -237,3 +237,19 @@ test('Hero Room and background tabs make no city chest requests',async()=>{
  a.d.querySelector('#rpg-world').hidden=false;Object.defineProperty(a.d,'hidden',{value:true,configurable:true});await a.w.RPGChests.refresh(true);assert.equal(count(),before);assert.equal([...db.rows.values()].some(r=>r.item_kind==='rpg_chest_city'),false);assert.deepEqual(a.errors,[]);
  }finally{a.close();}
 });
+
+test('Explorer uses a fast cached fix without restarting a slow accurate watch or accepting a late coarse location',async()=>{
+ const db=database(),saved=await gameRequest(db,'player-a','POST',{action:'register',heroId:'rogue',name:'Quick GPS',skill:'punch'}),a=open(db);
+ try{await pause();await pause();let watchSuccess,quickSuccess,watches=0;const cleared=[],timers=[],quickOptions=[];const interval=a.w.setInterval;
+ a.w.setInterval=(fn,ms)=>{timers.push({fn,ms});return interval(fn,ms);};Object.defineProperty(a.w,'isSecureContext',{value:true,configurable:true});Object.defineProperty(a.w.navigator,'geolocation',{value:{watchPosition(fn){watchSuccess=fn;return ++watches;},getCurrentPosition(fn,error,options){quickSuccess=fn;quickOptions.push(options);},clearWatch(id){cleared.push(id);}},configurable:true});
+ a.w.RPGWorld.open(a.w.eval('HEROES[0]'),saved.game);assert.equal(watches,1);assert.equal(quickOptions[0].enableHighAccuracy,false);assert.ok(quickOptions[0].maximumAge<=30000);
+ timers.find(t=>t.ms===10000).fn();timers.find(t=>t.ms===10000).fn();assert.deepEqual(cleared,[]);assert.equal(watches,1);
+ const now=Date.now();quickSuccess({coords:{latitude:11.26,longitude:125,accuracy:300},timestamp:now-10000});assert.equal(a.w.RPGWorld.position().lat,11.26);assert.equal(a.w.RPGWorld.position().time,now-10000);assert.equal(a.d.querySelector('#world-map-mode').textContent,'GPS ESTIMATE');
+ watchSuccess({coords:{latitude:11.261,longitude:125.001,accuracy:5},timestamp:now});assert.equal(a.w.RPGWorld.position().accuracy,5);quickSuccess({coords:{latitude:11.1,longitude:125,accuracy:500},timestamp:now-5000});assert.equal(a.w.RPGWorld.position().lat,11.261);
+ a.w.RPGWorld.stop();quickSuccess({coords:{latitude:11.2,longitude:125,accuracy:50},timestamp:Date.now()});assert.equal(a.w.RPGWorld.position(),null);assert.deepEqual(a.errors,[]);
+ }finally{a.close();}
+});
+
+test('chest dialog shows the 50-meter requirement and enables opening only after reaching range',async()=>{
+ const a=open(database());try{await pause();await pause();const chest={id:'range-test',kind:'golden',name:'Golden Chest',lat:11.26,lng:125};let distance=51,accuracy=5;a.w.RPGWorld.position=()=>({lat:chest.lat+distance/111195,lng:125,accuracy,time:Date.now()});a.w.RPGChests.open(chest);assert.equal(a.d.querySelector('#chest-open').disabled,true);assert.match(a.d.querySelector('#chest-range').textContent,/opening range 50 m/);distance=49;accuracy=51;a.w.RPGChests.updateRange();assert.equal(a.d.querySelector('#chest-open').disabled,true);accuracy=5;a.w.RPGChests.updateRange();assert.equal(a.d.querySelector('#chest-open').disabled,false);assert.deepEqual(a.errors,[]);}finally{a.close();}
+});
