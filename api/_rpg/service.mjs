@@ -1,3 +1,4 @@
+import {publishRpgFeed} from './feed.mjs';
 import {chestRequest,recoverChests} from './chests.mjs';
 import {merchantRequest} from './merchant.mjs';
 import {health,healthCap,mana,manaCap,normalize,loot,stash,recovery,cbgDrop} from './rewards.mjs';
@@ -14,21 +15,23 @@ const uci=m=>({from:m.slice(0,2),to:m.slice(2,4),promotion:m[4]||'q'});
 const rand=n=>crypto.getRandomValues(new Uint32Array(1))[0]%n;
 export async function gameRequest(client,user,method,input={},services={}){
  const now=services.now?.()??Date.now();let doc=await read(client,user),shared=null;
- const persist=()=>write(client,user,'rpg_profile','hero',doc);
+ if(doc?.state&&!doc.feedCursor)doc.feedCursor={registered:true,level:doc.state.level};
+ const persist=async()=>{await write(client,user,'rpg_profile','hero',doc);await publishRpgFeed(client,user,doc);};
  const cachedSet=()=>doc?.monsterSet?.refreshAt>now?{encounters:(doc.encounters||[]).filter(e=>!e.consumed&&e.expires_at>now),refreshAt:doc.monsterSet.refreshAt}:null;
  if(doc?.state){const normalized=normalize(doc),recovered=input.action==='init'&&recovery(doc);if(normalized||recovered)await persist();}
  if(input.action==='init'&&doc?.state){for(const award of (doc.awards||[]).filter(a=>a.cbg&&!a.cbgPaid).slice(0,5)){const paid=await client.rpc('cb_rpg_battle_reward',{p_user_id:user,p_battle_id:award.id});if(paid.error)break;if(paid.data)Object.assign(doc,paid.data);}}
  if(input.action==='init'&&doc?.state)await recoverChests(client,user,doc,now);
+ if(input.action==='init'&&doc?.state)await publishRpgFeed(client,user,doc);
  if(input.action==='init')return {game:doc?.state||null,generation:doc?.generation||null,spawnCache:cachedSet()};
  const resetError=()=>{throw Object.assign(Error('Your RPG hero was reset by an owner. Reopen RPG to choose your hero.'),{status:409,code:'hero_reset'});};
  if(doc?.generation&&input.generation!==doc.generation)resetError();
  if(input.action==='register'){
-  if(doc?.state){if(doc.heroId!==input.heroId||doc.name!==String(input.name).trim()||doc.starterSkill!==input.skill)fail('Your hero has already been chosen and cannot be changed.');return {game:doc.state,generation:doc.generation||null};}
-  const proposed=makeHero(input);recovery(proposed);
+  if(doc?.state){if(doc.heroId!==input.heroId||doc.name!==String(input.name).trim()||doc.starterSkill!==input.skill)fail('Your hero has already been chosen and cannot be changed.');await publishRpgFeed(client,user,doc);return {game:doc.state,generation:doc.generation||null};}
+  const proposed=makeHero(input);proposed.feedCursor={registered:false,level:1};recovery(proposed);
   if(doc){Object.assign(proposed,{revision:doc.revision,generation:doc.generation,lastReset:doc.lastReset});await write(client,user,'rpg_profile','hero',proposed);}
   else await insert(client,user,'rpg_profile','hero',proposed);
   doc=await read(client,user);
-  if(!doc?.state||doc.heroId!==proposed.heroId||doc.name!==proposed.name||doc.starterSkill!==proposed.starterSkill)fail('A hero was already confirmed in another window. Reopen RPG to continue.');return {game:doc.state,generation:doc.generation||null};
+  if(!doc?.state||doc.heroId!==proposed.heroId||doc.name!==proposed.name||doc.starterSkill!==proposed.starterSkill)fail('A hero was already confirmed in another window. Reopen RPG to continue.');await publishRpgFeed(client,user,doc);return {game:doc.state,generation:doc.generation||null};
  }
  if(!doc?.state){if(doc?.generation)resetError();fail('Choose your hero first.',409);}
  if(input.action==='claimLoot'){stash(doc);await persist();return {game:doc.state,pendingLoot:doc.pendingLoot};}

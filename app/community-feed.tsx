@@ -932,6 +932,10 @@ export default function CommunityFeed({
             level = levelFor(event.cbr),
             announcement = event.kind === "announcement",
             arenaChampion = event.content.startsWith("won Grand Arena Session"),
+            rpgLabel = event.kind === "new_reward"
+              ? event.content.startsWith("joined Chess Burger RPG with Hero:") ? "RPG Hero"
+                : /^reached Level \d+ in Chess Burger RPG with Hero:/.test(event.content) ? "RPG Level Up" : ""
+              : "",
             arenaSession = arenaChampion
               ? (event.content.match(/Session (\d+)/)?.[1] ?? "")
               : "",
@@ -1000,7 +1004,7 @@ export default function CommunityFeed({
                   <span className="feed-kind">
                     {arenaChampion
                       ? "Champion"
-                      : (labels[event.kind] ?? event.kind.replaceAll("_", " "))}
+                      : (rpgLabel || labels[event.kind] || event.kind.replaceAll("_", " "))}
                   </span>
                   <time dateTime={event.created_at}>
                     {date.toLocaleDateString([], {

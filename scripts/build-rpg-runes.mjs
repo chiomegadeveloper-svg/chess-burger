@@ -36,5 +36,20 @@ const glyphs={
  thunderstorm:'<path d="M21 43q-8-19 9-23 11-19 29-4 23-3 19 18 15 16-2 20H61M21 43h14M49 35 32 59h17l-9 24 29-35H52Z"/>'
 };
 await mkdir(out,{recursive:true});
-for(const s of skills){if(!glyphs[s.id])throw Error('Missing rune: '+s.id);const color=colors[s.category];await writeFile(new URL(s.id+'.svg',out),`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" fill="none"><title>${s.name}</title><defs><radialGradient id="bg"><stop stop-color="${color}" stop-opacity=".18"/><stop offset="1" stop-color="${color}" stop-opacity=".025"/></radialGradient></defs><circle cx="48" cy="48" r="45" fill="url(#bg)" stroke="${color}" stroke-opacity=".65" stroke-width="2"/><path d="M48 3v6M48 87v6M3 48h6M87 48h6" stroke="${color}" stroke-width="3"/><g stroke="${color}" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">${glyphs[s.id]}</g></svg>\n`);}
-console.log(`Built ${skills.length} battle skill runes.`);
+for(const s of skills){
+ if(!glyphs[s.id])throw Error('Missing rune: '+s.id);
+ const color=colors[s.category];
+ const art=glyphs[s.id].replace(/<path d="([^"]+)"/g,(all,path)=>all+` fill="${/[zZ]/.test(path)?'url(#symbol)':'none'}"${/[zZ]/.test(path)?' stroke="#10202e" stroke-width="1.8"':''}`).replace(/<circle /g,'<circle fill="url(#gem)" ');
+ const svg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" fill="none"><title>${s.name}</title><defs>
+ <radialGradient id="gem" cx=".34" cy=".22" r=".9"><stop stop-color="${color}" stop-opacity=".7"/><stop offset=".4" stop-color="#15313f"/><stop offset="1" stop-color="#030d19"/></radialGradient>
+ <linearGradient id="rim" x1="15" y1="5" x2="75" y2="92" gradientUnits="userSpaceOnUse"><stop stop-color="#f7ffff"/><stop offset=".24" stop-color="${color}"/><stop offset=".52" stop-color="#1f4656"/><stop offset=".76" stop-color="${color}"/><stop offset="1" stop-color="#07121c"/></linearGradient>
+ <linearGradient id="symbol" x1="25" y1="15" x2="65" y2="82" gradientUnits="userSpaceOnUse"><stop stop-color="#fffef2"/><stop offset=".28" stop-color="${color}"/><stop offset=".55" stop-color="${color}"/><stop offset="1" stop-color="#47717a"/></linearGradient>
+ <linearGradient id="gloss" x2="0" y2="1"><stop stop-color="#fff" stop-opacity=".42"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><clipPath id="disc"><circle cx="48" cy="48" r="40"/></clipPath>
+ </defs><circle cx="48" cy="49" r="46" fill="#02080f"/><circle cx="48" cy="47" r="44" fill="url(#rim)"/><circle cx="48" cy="47" r="39.5" fill="url(#gem)" stroke="#07121d" stroke-width="2"/>
+ <circle cx="48" cy="47" r="35.5" stroke="${color}" stroke-opacity=".3" stroke-width="1"/>
+ <g transform="translate(6 5) scale(.875)" stroke="#020a16" stroke-width="8" stroke-linecap="round" stroke-linejoin="round">${art}</g>
+ <g transform="translate(6 3.5) scale(.875)" stroke="url(#symbol)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round">${art}</g>
+ <path d="M8 29Q43-4 87 25L83 43Q45 23 13 49Z" fill="url(#gloss)" clip-path="url(#disc)"/><path d="M24 13Q47 2 66 12" stroke="#fff" stroke-opacity=".65" stroke-width="1.3" stroke-linecap="round"/><path d="m75 74 3 3" stroke="${color}" stroke-width="2" stroke-linecap="round"/></svg>\n`;
+ await writeFile(new URL(s.id+'.svg',out),svg);
+}
+console.log(`Built ${skills.length} glossy elemental battle runes.`);

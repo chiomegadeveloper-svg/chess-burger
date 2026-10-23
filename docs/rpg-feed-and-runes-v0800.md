@@ -1,0 +1,9 @@
+# RPG activity feed and glossy runes — v0.0800
+
+New confirmed heroes publish a Home feed event: “joined Chess Burger RPG with Hero: Morvex.” Saved server-side level gains publish “reached Level 2 in Chess Burger RPG with Hero: Morvex.” The feed uses the account display name and the canonical preset hero name. Home labels these events RPG Hero and RPG Level Up. Each crossed level is announced separately; existing players are baselined without historical backfill.
+
+Events use deterministic UUIDs and insert-only upserts on the existing cb_feed table, using the already supported new_reward kind. A durable cursor on the RPG profile advances only after successful feed delivery. Failed delivery does not block registration or discard earned XP; later persistence or RPG initialization retries it. Duplicate registration, duplicate battle settlement and repeated polling do not duplicate posts. No schema migration or new API entry point is required. Existing profile foreign keys and feed permissions remain unchanged; server-side activity generation uses the existing authenticated RPG service.
+
+All 30 existing rune SVGs retain their skill silhouettes and paths, with solid symbols, beveled metal rims, glossy gem backgrounds and five elemental palettes. Paths and skill costs/cooldowns remain unchanged, so Hero Room, the skill picker, battle, Explorer and reports all use the updated assets. Browser inspection of the actual generated SVGs is shown in docs/images/rpg-glossy-runes-v0800.jpg.
+
+Validation includes registration retries, pending feed recovery, duplicate delivery, multiple crossed levels, no historical backfill, and a settled monster victory that actually earns a level. Owner reset tests read the reviewed current revision, including feed cursor writes. All 100 RPG tests and the production build passed. Feed verification used isolated test data; production accounts were not created or modified for testing.

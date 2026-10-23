@@ -16,5 +16,5 @@ export function database({jsonb=false}={}){
   }
   maybeSingle(){return this.run(true);}then(resolve,reject){return this.run().then(resolve,reject);}
  }
- return {rows,from(){return new Query();},async rpc(){return {data:null,error:{code:'PGRST202',message:'Function is not installed in this fixture'}};}};
+ const feed=new Map();const db={rows,feed,feedError:false,from(table){if(table==='cb_feed')return {async upsert(events){if(db.feedError)return {error:{message:'Unavailable'}};for(const event of events)if(!feed.has(event.id))feed.set(event.id,stored(event));return {error:null};}};if(table==='cb_profiles')return {select(){return this;},eq(){return this;},async maybeSingle(){return {data:{display_name:'Test Player'},error:null};}};return new Query();},async rpc(){return {data:null,error:{code:'PGRST202',message:'Function is not installed in this fixture'}};}};return db;
 }

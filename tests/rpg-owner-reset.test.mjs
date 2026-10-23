@@ -17,7 +17,7 @@ test('owner authorization, user search, confirmation and stale-review checks pro
  assert.equal((await read(client,uid)).name,'First Hero');
 });
 test('reset preserves the old save, logs approval, blocks old clients and allows only one replacement hero',async()=>{
- const {client,logs}=setup();const before=(await register(client)).game,request={action:'owner_reset',userId:uid,revision:0,confirmation:'@tester'};
+ const {client,logs}=setup();const before=(await register(client)).game,request={action:'owner_reset',userId:uid,revision:(await read(client,uid)).revision,confirmation:'@tester'};
  const outcomes=await Promise.allSettled([ownerRequest(client,actor,'owner',request),ownerRequest(client,actor,'owner',request)]);assert.equal(outcomes.filter(r=>r.status==='fulfilled').length,1);
  const init=await gameRequest(client,uid,'POST',{action:'init'});assert.equal(init.game,null);assert.ok(init.generation);assert.equal(logs.length,1);assert.equal(logs[0].action,'rpg_hero_reset');
  assert.ok([...client.rows.values()].some(r=>r.item_kind==='rpg_reset'&&r.metadata.previous.name==='First Hero'));
