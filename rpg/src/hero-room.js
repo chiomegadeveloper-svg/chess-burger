@@ -55,7 +55,7 @@
     el('hr-points').textContent=state.points?`${state.points} upgrade point${state.points===1?'':'s'}`:'Automatic stat gains every level';
     const remaining=C.spells.length-state.learned.length;
     el('hr-learn').innerHTML='<span aria-hidden="true">📖</span>';el('hr-learn').title=`Skill Book · ${Math.min(state.learnCredits,remaining)} skill choices available`;el('hr-learn').setAttribute('aria-label',el('hr-learn').title);
-    el('hr-learn').disabled=false;
+    el('hr-learn').disabled=false;el('hr-learn').classList.toggle('skill-ready',state.learnCredits>0&&remaining>0);
   }
   function renderGrid(where){
     const grid=C.gridFor(state,where),node=el(`hr-${where}`),scroll=node.parentElement.scrollTop;
@@ -73,7 +73,7 @@
     }
     node.innerHTML=html;node.parentElement.scrollTop=scroll;el(`hr-${where}-count`).textContent=`${occupied}/${grid.cols*grid.rows}`;
   }
-  let libraryPage=0,previewSkill='basic';
+  let libraryPage=0,previewSkill='basic',pendingSkill=null,activationSlot=-1,skillTrigger=null;
   const skillImage=spell=>`assets/skills/runes/${spell.id}.svg`;
   function renderSpells(){
     el('hr-library-page').textContent=`${libraryPage+1} / 4`;
@@ -136,7 +136,7 @@
     hideTooltip();closeModal();returnFocus=document.activeElement;modal=el(id);modal.hidden=false;room.inert=true;el('rpg-world').inert=!el('rpg-world').hidden;
     const first=modal.querySelector('input,button:not([disabled])');first?.focus();
   }
-  function closeModal(){if(!modal)return;if(modal.id==='hr-learn-modal')window.RPGSkillFX?.stop(el('hr-skill-fx'));modal.hidden=true;modal=null;room.inert=false;el('rpg-world').inert=false;if(!el('rpg-world').hidden)window.RPGWorld.refresh(hero,state);returnFocus?.focus();returnFocus=null;}
+  function closeModal(){if(el('hr-skill-confirm').open)el('hr-skill-confirm').close();pendingSkill=null;if(!modal)return;if(modal.id==='hr-learn-modal')window.RPGSkillFX?.stop(el('hr-skill-fx'));modal.hidden=true;modal=null;room.inert=false;el('rpg-world').inert=false;if(!el('rpg-world').hidden)window.RPGWorld.refresh(hero,state);returnFocus?.focus();returnFocus=null;}
   function renderCatalog(){
     const query=el('hr-search').value.trim().toLowerCase(),category=el('hr-category').value,tier=Number(el('hr-tier-filter').value);
     const defs=C.items.filter(d=>(!query||d.name.toLowerCase().includes(query))&&(!category||d.category===category)&&(!tier||d.tier===tier));
@@ -159,6 +159,23 @@
     }).join('');
     playSkillPreview();
   }
+  function confirmSkill(id,button){
+    const spell=C.spellMap[id];if(!spell||state.learned.includes(id)||!state.learnCredits)return;
+    pendingSkill=id;skillTrigger=button;activationSlot=state.active.indexOf(null);previewSkill=id;playSkillPreview();
+    el('hr-skill-confirm-icon').src=skillImage(spell);el('hr-skill-confirm-name').textContent=spell.name;
+    el('hr-skill-confirm-detail').textContent=`${spell.ap} AP · ${spell.mp} MP · ${Math.round(spell.scale*100)}% ${spell.magic?'Magic':'Attack'} + 2 − 15% Armor · ${spell.cooldown} turn cooldown · ${bonuses(spell.bonus)}`;
+    el('hr-skill-confirm-note').textContent=activationSlot>=0?'Use one skill choice and activate this attack in an empty slot?':'Choose an attack to replace. Your previous attack will move to the Power Library.';
+    const slots=el('hr-skill-confirm-slots');slots.hidden=activationSlot>=0;slots.innerHTML=state.active.map((current,index)=>`<button type="button" class="hr-btn" data-activate-slot="${index}" aria-pressed="false" aria-label="Replace slot ${index+1}: ${escape(C.spellMap[current]?.name||'Empty')}" title="${escape(C.spellMap[current]?.name||'Empty')}">${current?`<img src="${skillImage(C.spellMap[current])}" alt="">`:'+'}</button>`).join('');
+    el('hr-skill-activate').disabled=activationSlot<0;el('hr-skill-confirm').showModal();el('hr-skill-cancel').focus();
+  }
+  el('hr-skill-confirm-slots').addEventListener('click',event=>{const button=event.target.closest('[data-activate-slot]');if(!button)return;activationSlot=Number(button.dataset.activateSlot);for(const slot of el('hr-skill-confirm-slots').children)slot.setAttribute('aria-pressed',String(slot===button));el('hr-skill-activate').disabled=false;});
+  el('hr-skill-cancel').onclick=()=>el('hr-skill-confirm').close();
+  el('hr-skill-confirm').addEventListener('close',()=>{pendingSkill=null;skillTrigger?.focus();skillTrigger=null;});
+  el('hr-skill-activate').onclick=()=>{
+    const id=pendingSkill,slot=activationSlot;if(!id||slot<0||slot>3)return;
+    if(!C.learn(state,id))return;
+    C.moveSpell(state,'storage',state.spellStorage.indexOf(id),'active',slot);closeModal();changed(`${C.spellMap[id].name} activated! Its bonus is now active.`);
+  };
   function description(item){
     const def=C.itemMap[item.defId],rarity=C.rarityMap[item.rarity],size=C.size(def,item.rotation),allowed=C.canEquip(state,item);
     if(C.isConsumable(item))return `<div class="hr-description-head"><img src="${images[def.sprite]}" alt=""><div><h3>${def.name}</h3><p>Consumable · 1 × 1 tile</p></div></div><p class="hr-description-total">Restores 20 ${item.defId==='health_potion'?'Health':'mana'}, up to your maximum.</p><p>Drag onto your hero to use. Consumed after activation.</p>`;
@@ -347,8 +364,7 @@
   el('hr-skill-replay').addEventListener('click',playSkillPreview);
   el('hr-learn-list').addEventListener('click',event=>{
     const preview=event.target.closest('[data-preview-skill]')?.dataset.previewSkill;if(preview){previewSkill=preview;playSkillPreview();return;}
-    const id=event.target.closest('[data-learn]')?.dataset.learn;if(!id)return;
-    if(C.learn(state,id)){closeModal();changed(`${C.spellMap[id].name} learned! It is in spell storage. Move it to an active slot to gain its bonus.`);}
+    const button=event.target.closest('[data-learn]');if(!button||button.disabled)return;confirmSkill(button.dataset.learn,button);
   });
   for(const node of document.querySelectorAll('.hr-modal'))node.addEventListener('click',event=>{if(event.target===node||event.target.closest('[data-close-modal]'))closeModal();});
   // Activate touch controls on release and ignore the duplicate browser click.
@@ -373,6 +389,7 @@
   },true);
   document.addEventListener('keydown',event=>{
     if(room.hidden&&el('rpg-world').hidden)return;
+    if(el('hr-skill-confirm').open)return;
     if(event.key==='Escape'){if(modal)closeModal();else{clearDrag();selectedItem=null;selectedSpell=null;render();}return;}
     if(modal&&event.key==='Tab'){
       const nodes=[...modal.querySelectorAll('button:not([disabled]),input,select')].filter(n=>n.offsetParent!==null),first=nodes[0],last=nodes.at(-1);

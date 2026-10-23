@@ -30,8 +30,8 @@
       <p class="hr-stash-tip" hidden>Stashed items add no attributes. Move equipment into your bag to use its bonuses.</p>
     </section>
     <section class="hr-panel hr-storage-panel" aria-label="Attack and magic spell storage">
-      <div class="hr-storage-top"><h2 class="hr-section-label"><img data-room-icon="storage_icon" alt="">POWER LIBRARY</h2><button type="button" class="hr-btn" id="hr-learn">Skill Book</button></div>
-      <div class="hr-library-nav"><span id="hr-skill-progress"></span><div><button type="button" class="hr-btn" id="hr-library-prev" aria-label="Previous library page">←</button><span id="hr-library-page"></span><button type="button" class="hr-btn" id="hr-library-next" aria-label="Next library page">→</button></div></div><div class="hr-storage-bottom">
+      <div class="hr-storage-top"><h2 class="hr-section-label"><img data-room-icon="storage_icon" alt="">POWER LIBRARY</h2></div>
+      <div class="hr-library-nav"><div class="hr-library-choice"><span id="hr-skill-progress"></span><button type="button" class="hr-btn" id="hr-learn">Skill Book</button></div><div><button type="button" class="hr-btn" id="hr-library-prev" aria-label="Previous library page">←</button><span id="hr-library-page"></span><button type="button" class="hr-btn" id="hr-library-next" aria-label="Next library page">→</button></div></div><div class="hr-storage-bottom">
         <div class="hr-storage-slots" id="hr-spell-storage" role="group" aria-label="Stored attacks and spells"></div>
         <button type="button" class="hr-explore-cta" id="hr-explore"><span>Explore World</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 19 19 5M5 5h14v14"/></svg></button>
       </div>
@@ -90,3 +90,11 @@
   <div class="damage-states" id="damage-states" role="group" aria-label="Health state sprites"></div>
  </div>
 </div>
+
+<dialog id="hr-skill-confirm" class="hr-skill-confirm" aria-labelledby="hr-skill-confirm-name" aria-describedby="hr-skill-confirm-detail hr-skill-confirm-note">
+ <img id="hr-skill-confirm-icon" alt="">
+ <h2 id="hr-skill-confirm-name"></h2><p id="hr-skill-confirm-detail"></p>
+ <p id="hr-skill-confirm-note"></p>
+ <div id="hr-skill-confirm-slots" role="group" aria-label="Choose active attack slot"></div>
+ <div class="hr-skill-confirm-actions"><button type="button" class="hr-btn" id="hr-skill-cancel">Cancel</button><button type="button" class="hr-btn primary" id="hr-skill-activate">Activate</button></div>
+</dialog>
