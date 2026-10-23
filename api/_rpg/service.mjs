@@ -17,7 +17,7 @@ export async function gameRequest(client,user,method,input={},services={}){
  const now=services.now?.()??Date.now();let doc=await read(client,user),shared=null;
  if(doc?.state&&!doc.feedCursor)doc.feedCursor={registered:true,level:doc.state.level};
  const persist=async()=>{await write(client,user,'rpg_profile','hero',doc);await publishRpgFeed(client,user,doc);};
- const cachedSet=()=>doc?.monsterSet?.radius===Layout.SPAWN_RADIUS&&doc.monsterSet.refreshAt>now?{encounters:(doc.encounters||[]).filter(e=>!e.consumed&&e.expires_at>now),refreshAt:doc.monsterSet.refreshAt}:null;
+ const cachedSet=()=>doc?.monsterSet?.version===Layout.SPAWN_VERSION&&doc.monsterSet.radius===Layout.SPAWN_RADIUS&&doc.monsterSet.refreshAt>now?{encounters:(doc.encounters||[]).filter(e=>!e.consumed&&e.expires_at>now),refreshAt:doc.monsterSet.refreshAt}:null;
  if(doc?.state){const normalized=normalize(doc),recovered=input.action==='init'&&recovery(doc);if(normalized||recovered)await persist();}
  if(input.action==='init'&&doc?.state){for(const award of (doc.awards||[]).filter(a=>a.cbg&&!a.cbgPaid).slice(0,5)){const paid=await client.rpc('cb_rpg_battle_reward',{p_user_id:user,p_battle_id:award.id});if(paid.error)break;if(paid.data)Object.assign(doc,paid.data);}}
  if(input.action==='init'&&doc?.state)await recoverChests(client,user,doc,now);
@@ -89,13 +89,13 @@ export async function gameRequest(client,user,method,input={},services={}){
  if(method==='GET')return await result(await current());
  if(input.action==='spawn'){
   const gps=validateFix(input.gps,now);if(!gps)fail('Wait for a fresh GPS fix.');
-  if(!doc.monsterSet||doc.monsterSet.radius!==Layout.SPAWN_RADIUS||!(doc.monsterSet.refreshAt>now)){
+  if(!doc.monsterSet||doc.monsterSet.version!==Layout.SPAWN_VERSION||doc.monsterSet.radius!==Layout.SPAWN_RADIUS||!(doc.monsterSet.refreshAt>now)){
    let points;const cache=doc.roadCache;
-   if(cache&&cache.radius===Layout.SPAWN_RADIUS&&now-cache.at<21600000&&distanceMeters(cache,gps)<=150)points=cache.points.filter(p=>distanceMeters(gps,p)<=Layout.SPAWN_RADIUS);
+   if(cache&&cache.version===Layout.SPAWN_VERSION&&cache.radius===Layout.SPAWN_RADIUS&&now-cache.at<21600000&&distanceMeters(cache,gps)<=150)points=cache.points.filter(p=>distanceMeters(gps,p)<=Layout.SPAWN_RADIUS);
    if(!points?.length){try{points=await (services.roadPoints||roadPoints)(gps);}catch{points=[];}}
    if(!points.length)return {encounters:[],spawnStatus:'unavailable',refreshAt:now+5000,message:'Loading nearby roads · retrying automatically.'};
-   doc.roadCache={lat:gps.lat,lng:gps.lng,at:now,radius:Layout.SPAWN_RADIUS,points};
-   doc.monsterSet={...gps,radius:Layout.SPAWN_RADIUS,createdAt:now,refreshAt:now+1800000};doc.encounters=Layout.create(gps,doc.state.level,R.MONSTERS.filter(m=>!m.boss),now,points).map(e=>({...e,id:crypto.randomUUID(),training:false,consumed:false}));await persist();
+   doc.roadCache={lat:gps.lat,lng:gps.lng,at:now,version:Layout.SPAWN_VERSION,radius:Layout.SPAWN_RADIUS,points};
+   doc.monsterSet={...gps,version:Layout.SPAWN_VERSION,radius:Layout.SPAWN_RADIUS,createdAt:now,refreshAt:now+1800000};doc.encounters=Layout.create(gps,doc.state.level,R.MONSTERS.filter(m=>!m.boss),now,points).map(e=>({...e,id:crypto.randomUUID(),training:false,consumed:false}));await persist();
   }
   const cache=cachedSet(),encounters=cache.encounters;
   return {encounters,spawnStatus:'ready',refreshAt:cache.refreshAt,exhausted:!encounters.length,progression:progression(doc),message:`${encounters.length} fixed road encounters · 200 m attack range · new set every 30 minutes.`};

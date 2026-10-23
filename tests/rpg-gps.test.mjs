@@ -56,3 +56,21 @@ test('road candidates and new monster sets span 800 meters while combat stays wi
  await assert.rejects(call({action:'select-encounter',target:far.id,gps:{...at,accuracy:5,time:Date.now()}}),e=>e.code==='out_of_range');
  const selected=await call({action:'select-encounter',target:far.id,gps:{lat:far.lat-199/111195,lng:far.lng,accuracy:5,time:Date.now()}});assert.ok(selected.selectionToken);
 });
+
+test('fresh sets reserve 3–5 distinct road monsters inside 200m, with the rest out to 800m',async()=>{
+ const Layout=(await import('../api/_rpg/src/encounter-layout.js')).default,{distanceMeters}=await import('../api/_rpg/world.mjs');
+ const points=[30,60,90,120,150,180,199,...Array.from({length:24},(_,i)=>220+i*24)].map(m=>({lat:at.lat+m/111195,lng:at.lng}));
+ const counts=new Set();for(let seed=0;seed<100;seed++){
+  const batch=Layout.create(at,10,[{id:'mhakiduk'}],1700000000000+seed,points),near=batch.filter(e=>distanceMeters(at,e)<=200);
+  assert.equal(batch.length,16);assert.ok(near.length>=3&&near.length<=5);counts.add(near.length);
+  assert.equal(new Set(batch.map(e=>`${e.lat},${e.lng}`)).size,16);assert.ok(batch.every(e=>points.some(p=>p.lat===e.lat&&p.lng===e.lng)));
+  assert.ok(batch.every(e=>distanceMeters(at,e)<=800));assert.equal(batch.filter(e=>e.level===8).length,5);assert.equal(batch.filter(e=>e.level===10).length,4);assert.equal(batch.filter(e=>e.level===11||e.level===12).length,4);assert.equal(batch.filter(e=>e.level===13).length,3);
+ }
+ assert.deepEqual([...counts].sort(),[3,4,5]);
+ const db=database(),call=input=>gameRequest(db,'a','POST',input,{roadPoints:async()=>points});await call({action:'register',heroId:'rogue',name:'Nearby Warrior',skill:'punch'});
+ const row=[...db.rows.values()].find(r=>r.item_kind==='rpg_profile');row.metadata.monsterSet={radius:800,refreshAt:Date.now()+1800000};row.metadata.encounters=[];
+ assert.equal((await call({action:'init'})).spawnCache,null);
+ const gps={...at,accuracy:5,time:Date.now()},batch=await call({action:'spawn',gps});assert.ok(batch.encounters.filter(e=>distanceMeters(at,e)<=200).length>=3);
+ assert.deepEqual((await call({action:'spawn',gps})).encounters,batch.encounters,'GPS refresh must not reroll or refill pinned monsters');
+ const sparse=Layout.create(at,10,[{id:'mhakiduk'}],1700000000000,points.slice(0,2));assert.equal(sparse.length,2,'never invent off-road positions or stack duplicates when road coverage is sparse');
+});

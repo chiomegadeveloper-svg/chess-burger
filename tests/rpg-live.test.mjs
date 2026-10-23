@@ -8,7 +8,7 @@ import {PbfReader} from 'pbf';
 import {database} from './helpers/rpg-db.mjs';
 
 const register=(db,user='a',heroId='rogue')=>gameRequest(db,user,'POST',{action:'register',heroId,name:'Warrior '+user,skill:'punch'});
-const roadPoints=async()=>Array.from({length:32},(_,i)=>({lat:11.257+i*.00015,lng:125}));
+const roadPoints=async()=>Array.from({length:48},(_,i)=>({lat:11.257+i*.00015,lng:125}));
 const gps=()=>({lat:11.26,lng:125,accuracy:5,time:Date.now()});
 test('hero creation has two attacks, permanent identity, zero test currency, and simultaneous registrations choose one hero',async()=>{
  const db=database();const results=await Promise.allSettled([register(db),register(db,'a','mage')]);assert.equal(results.filter(r=>r.status==='fulfilled').length,1);
