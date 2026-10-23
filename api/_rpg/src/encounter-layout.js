@@ -1,5 +1,5 @@
 (function(root){
- const SPAWN_RADIUS=1200;
+ const SPAWN_RADIUS=10800;
  const distance=(a,b)=>{const r=Math.PI/180,x=Math.sin((b.lat-a.lat)*r/2)**2+Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin((b.lng-a.lng)*r/2)**2;return 12742000*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));};
  function rngFor(text){let seed=2166136261;for(const c of text)seed=Math.imul(seed^c.charCodeAt(0),16777619);return ()=>{seed+=0x6D2B79F5;let t=seed;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return ((t^t>>>14)>>>0)/4294967296;};}
  function levels(level,rng=Math.random){level=Math.max(1,Math.min(88,Math.floor(level)||1));return [...Array(5).fill(level-2),...Array(4).fill(level),...Array.from({length:4},()=>level+1+Math.floor(rng()*2)),...Array(3).fill(level+3)].map(n=>Math.max(1,Math.min(88,n)));}

@@ -12,9 +12,9 @@ export function walkingCandidates(elements,center){
 }
 const roadCache=new Map();
 export async function fetchWalking(center,fetcher=fetch){
- const lat=Math.round(center.lat*100)/100,lng=Math.round(center.lng*100)/100,span=.017/Math.max(.08,Math.cos(lat*Math.PI/180)),key=`${lat}:${lng}`;
+ const lat=Math.round(center.lat*100)/100,lng=Math.round(center.lng*100)/100,latSpan=Layout.SPAWN_RADIUS/111195+.006,span=latSpan/Math.max(.08,Math.cos(lat*Math.PI/180)),key=`${Layout.SPAWN_RADIUS}:${lat}:${lng}`;
  const cached=fetcher===fetch&&roadCache.get(key);if(cached&&cached.until>Date.now())return walkingCandidates(cached.elements,center);
- const query=`[out:json][timeout:4];way[highway~"^(footway|pedestrian|path|living_street|residential|unclassified|service)$"](${lat-.017},${lng-span},${lat+.017},${lng+span});out tags geom;`;
+ const query=`[out:json][timeout:4];way[highway~"^(footway|pedestrian|path|living_street|residential|unclassified|service)$"](${lat-latSpan},${lng-span},${lat+latSpan},${lng+span});out tags geom;`;
  for(const host of ['https://overpass-api.de','https://overpass.kumi.systems']){
   try{const response=await fetcher(`${host}/api/interpreter`,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({data:query}),signal:AbortSignal.timeout(4500)});
    if(!response.ok)continue;const data=await response.json();if(data.remark||!Array.isArray(data.elements))continue;
