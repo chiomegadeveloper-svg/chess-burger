@@ -30,7 +30,7 @@
     state.name=name;selectedItem=null;selectedSpell=null;lastTap=null;
     document.querySelector('.app').hidden=true;room.hidden=false;
     el('toast').classList.remove('show');
-    el('hr-portrait').src=hero.img;el('hr-portrait').alt=`${hero.name}, ${hero.heroClass}, facing right`;
+    el('hr-portrait').src=(typeof HERO_HEADS!=='undefined'&&HERO_HEADS[hero.id])||hero.img;el('hr-portrait').alt=`${hero.name}, ${hero.heroClass}, portrait`;
     render();save();el('hr-back').focus();
     feedback('Double-tap items to rotate clockwise. Hover or open Details to inspect them.');
   }
