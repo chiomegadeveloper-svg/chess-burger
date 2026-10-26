@@ -1,6 +1,6 @@
 (function(){
  'use strict';
- const el=id=>document.getElementById(id),root=el('rpg-battle'),R=window.RPGBattleRules,C=window.RPGInventory;
+ const el=id=>document.getElementById(id),root=el('rpg-battle'),R=window.RPGBattleRules,C=window.RPGInventory,E=window.RPGElements;
  let connectionVersion=0;
  let seenBattle='',seenEvent=0,shownHp=[],lastImpact=0,presenting=false,presentationToken=0;
  let pendingProgress=null,refreshing=false,encounterDialog=null,previewTarget=null,selectionPromise=null;
@@ -10,12 +10,12 @@
  const notice=(s,important=false)=>{el('bt-notice').textContent=s;root.classList.toggle('bt-has-notice',important&&!!s);};
  const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const uci=m=>({from:m.slice(0,2),to:m.slice(2,4),promotion:m[4]||'q'}),moveId=m=>m.from+m.to+(m.promotion||'');
- const loadout=()=>({heroId:hero.id,name:state.name,level:state.level,stats:C.totals(state,hero.stats),bonuses:C.bagBonus(state).map((n,i)=>n+C.spellBonus(state)[i]),active:state.active.slice()});
+ const loadout=()=>({heroId:hero.id,name:state.name,level:state.level,stats:C.totals(state,hero.stats),bonuses:C.bagBonus(state).map((n,i)=>n+C.spellBonus(state)[i]),passives:C.passives(state),active:state.active.slice()});
  async function api(input,signal){const version=connectionVersion;const r=await fetch('/api/battle',{signal,method:input?'POST':'GET',credentials:'same-origin',cache:'no-store',...(input?{headers:{'Content-Type':'application/json'},body:JSON.stringify(input)}:{})});let data;try{data=await r.json();}catch{throw Error('Battle service unavailable. Try again.');}if(version!==connectionVersion)throw new DOMException('RPG view changed.','AbortError');if(!r.ok)throw Object.assign(Error(data.error||'Battle request failed.'),{code:data.code,distance:data.distance});receiveHarvest(data.battle,!!battle&&battle.id===data.battle?.id);if(data.game&&state){Object.assign(state,data.game);localStorage.setItem(window.RPGLive.key(state.heroId),JSON.stringify(state));window.RPGRoom.refresh?.();}if(data.drops)lastDrops=data.drops;if('cbgReward'in data){lastCbg=data.cbgReward;cbgPending=data.cbgPending;if(lastCbg&&!cbgPending)parent.postMessage({type:'CB_RPG_WALLET_CHANGED'},location.origin);}if(data.defeatedEncounterId)window.RPGWorld.consume(data.defeatedEncounterId);if(data.progression&&data.progression.heroId===hero?.id)pendingProgress=data.progression;return data;}
  function show(){if(encounterDialog?.open){encounterDialog.close();previewTarget=null;}dismissed=false;if(battle)window.RPGWorld.pauseForBattle?.();root.hidden=false;el('rpg-world').inert=true;el('bt-close').focus();}
  function stopEngine(){engine?.terminate();engine=null;engineReady=null;clearTimeout(engineTimer);engineResolve?.reject(Error('Engine stopped.'));engineResolve=null;aiThinking=false;}
  function close(){clearPotionDrag();cancelPresentation();root.hidden=true;window.RPGWorld.resumeAfterBattle?.();el('bt-rules').hidden=true;el('rpg-world').inert=false;dismissed=true;el('world-battle-lab')?.focus();if(pendingHarvest)showHarvest();else if(battle?.status==='finished')openReport(battle);}
- function skillDamage(a,d,s){let n=Math.max(1,Math.round(a.stats[s.magic?2:1]*s.scale+2-d.stats[3]*.15));return d.defending?Math.max(1,Math.ceil(n/2)):n;}
+ function skillDamage(a,d,s,againstMonster=false){return R.damageFor(a,d,s,againstMonster);}
  function vitals(a){return [['Health','hp','maxHp','#7bc89f'],['Mana','mp','maxMp','#58c8dd'],['Attack points','ap','maxAp','#f29b65']].map(([label,key,max,color])=>`<div class="bt-vital"><span>${label.toUpperCase()} <b>${a[key]} / ${a[max]}</b></span><div><i style="--vital-color:${color};width:${Math.max(0,a[key]/a[max]*100)}%"></i></div></div>`).join('');}
  function sprite(a,facing){return window.DamageSprites.sprite(a.heroId,a.hp===0?0:a.hp/a.maxHp*100,facing);}
  const harvestModal=el('bt-harvest-modal');let pendingHarvest=null;
@@ -48,7 +48,7 @@
 
   reportModal.dataset.outcome=summary.winner?'victory':'defeat';
   el('bt-summary-title').textContent=summary.reason==='battle_limit'?'Time’s up':summary.winner?'Victory':'Defeat';
-  el('bt-drops-list').innerHTML=lastDrops.length?lastDrops.map((item,index)=>{const def=C.itemMap[item.defId],rarity=C.rarityMap[item.rarity],label=`${rarity.name} · ${def.name}`;return `<button type="button" class="bt-drop-icon" style="--drop-color:${rarity.color}" aria-label="${esc(label)}" aria-describedby="bt-drop-tip-${index}"><img src="${window.RPG_ITEM_IMAGES[def.sprite]}" alt="" draggable="false"><span class="bt-drop-tooltip" id="bt-drop-tip-${index}" role="tooltip">${esc(label)}</span></button>`;}).join(''):'No item drops.';
+  el('bt-drops-list').innerHTML=lastDrops.length?lastDrops.map((item,index)=>{const def=C.itemMap[item.defId],rarity=C.rarityMap[item.rarity],label=`${rarity.name} · ${def.name}${E.property(item)?" · "+E.itemText(item):""}`;return `<button type="button" class="bt-drop-icon" style="--drop-color:${rarity.color}" aria-label="${esc(label)}" aria-describedby="bt-drop-tip-${index}"><img src="${window.RPG_ITEM_IMAGES[def.sprite]}" alt="" draggable="false">${E.property(item)?E.badge(item.elemental.element):''}<span class="bt-drop-tooltip" id="bt-drop-tip-${index}" role="tooltip">${esc(label)}</span></button>`;}).join(''):'No item drops.';
   if(lastCbg)el('bt-drops-list').insertAdjacentHTML('beforeend',`<span class="bt-cbg-drop" title="${cbgPending?'Saved reward awaiting wallet activation':'Added to your CBG balance'}">🪙 +${lastCbg} CBG${cbgPending?' · pending':''}</span>`);
   const reason=summary.reason==='battle_limit'?'Five minute limit reached. No victory rewards.':summary.reason==='forfeit'?(summary.winner?'Your opponent forfeited.':'You forfeited this encounter.'):summary.reason==='timeout'?(summary.winner?'Your opponent ran out of time.':'You ran out of time.'):summary.reason==='knockout'?(summary.winner?`You defeated ${enemy.name}.`:`${enemy.name} won this encounter.`):'This encounter has ended.';
   el('bt-summary-reason').textContent=reason;
@@ -99,7 +99,7 @@
  }
  function revealImpact(event,token){
   if(token!==presentationToken||event.id<=lastImpact||!battle)return;
-  lastImpact=event.id;if(['defend','recover'].includes(event.kind)){const who=battle.actors[event.side].name;notice(event.kind==='defend'?`${who} defends · +${event.ap} AP · +${event.mp} MP`:`${who} recovers · +${event.amount} ${event.resource.toUpperCase()}`,true);draw();return;}if(event.kind!=='potion')window.RPGSound?.hit();const target=event.target??(1-event.side);
+  lastImpact=event.id;if(event.skill&&event.effectiveness)notice(`${E.label(event.element)} · ${event.effectiveness} · ${event.damage} damage`,true);if(['defend','recover'].includes(event.kind)){const who=battle.actors[event.side].name;notice(event.kind==='defend'?`${who} defends · +${event.ap} AP · +${event.mp} MP`:`${who} recovers · +${event.amount} ${event.resource.toUpperCase()}`,true);draw();return;}if(event.kind!=='potion')window.RPGSound?.hit();const target=event.target??(1-event.side);
   shownHp[target]=Number.isFinite(event.hpAfter)?event.hpAfter:Math.max(0,shownHp[target]-event.damage);
   draw();
   const me=battle.me??0,node=el(target===me?'bt-hero-art':'bt-enemy-art').parentElement;
@@ -132,8 +132,8 @@
   el('bt-lobby').hidden=!!battle;el('bt-fight').hidden=!battle;if(!battle){el('bt-title').textContent='Battle';el('bt-clock').textContent='';return;}
   const me=battle.me??0,a={...battle.actors[me],hp:shownHp[me]??battle.actors[me].hp},enemy={...battle.actors[1-me],hp:shownHp[1-me]??battle.actors[1-me].hp},pending=battle.status==='pending',active=battle.status==='active',mine=battle.turn===me&&active,challenge=!!battle.challenge;
   el('bt-title').textContent=battle.kind==='pvp'?'Adventurer duel':enemy.boss?'Boss encounter':'Monster encounter';
-  el('bt-own-name').textContent=a.name;el('bt-own-level').textContent=`Level ${a.level} · ${(HEROES.find(h=>h.id===a.heroId)?.heroClass||hero.heroClass)}`;el('bt-head').src=HERO_HEADS[a.heroId]||HERO_HEADS[hero.id];el('bt-own-vitals').innerHTML=vitals(a);
-  el('bt-enemy-name').textContent=enemy.name;el('bt-enemy-level').textContent=`Level ${enemy.level} · ${battle.kind==='pvp'?'Adventurer':enemy.boss?'Boss':'Monster'}`;el('bt-enemy-vitals').innerHTML=vitals(enemy);
+  el('bt-own-name').innerHTML=esc(a.name)+' '+E.badge(E.affinity(a.heroId));el('bt-own-level').textContent=`Level ${a.level} · ${(HEROES.find(h=>h.id===a.heroId)?.heroClass||hero.heroClass)}`;el('bt-head').src=HERO_HEADS[a.heroId]||HERO_HEADS[hero.id];el('bt-own-vitals').innerHTML=vitals(a);
+  el('bt-enemy-name').innerHTML=esc(enemy.name)+' '+E.badge(E.affinity(enemy.heroId));el('bt-enemy-level').textContent=`Level ${enemy.level} · ${battle.kind==='pvp'?'Adventurer':enemy.boss?'Boss':'Monster'}`;el('bt-enemy-vitals').innerHTML=vitals(enemy);
   el('bt-hero-art').src=sprite(a,'right');el('bt-hero-art').alt=`${a.name} · ${a.hp} health`;el('bt-enemy-art').src=sprite(enemy,'left');el('bt-enemy-art').alt=`${enemy.name} · ${enemy.hp} health`;el('bt-enemy-kind').textContent=enemy.name.toUpperCase();
   for(const [id,actor,facing] of [['bt-fx-hero',a,'right'],['bt-fx-enemy',enemy,'left']]){
    const image=el(id),idle=window.RPG_CHARACTER_IDLES?.[actor.heroId],alive=actor.hp>0,useIdle=!!idle&&alive,frame=image.parentElement;
@@ -148,14 +148,14 @@
   el('bt-skills').innerHTML=Array.from({length:4},(_,i)=>a.active[i]||null).map(id=>{
    const s=R.SKILLS[id];if(!s)return '<span class="bt-empty-skill" aria-label="Empty skill slot"></span>';
    const cd=Math.max(0,(a.ready[id]||0)-a.turns),reason=!active?(pending?'Challenge pending':'Battle ended'):!mine?'Wait for your turn':!a.active.includes(id)?'Not equipped':cd?`Cooldown · ${cd} turn${cd===1?'':'s'}`:a.ap<s.ap?'Need more AP':a.mp<s.mp?'Need more mana':!mine?'Wait for your turn':challenge?'Harvest in progress':'Ready';
-   const damage=skillDamage(a,enemy,s),tip=`${s.name} · ${s.ap} AP · ${s.mp} MP · Damage ${damage} · ${reason} · ${s.cooldown} turn cooldown`;
-   return `<span class="bt-skill-slot" tabindex="0" role="group" aria-label="${esc(tip)}" data-tooltip="${esc(tip)}"><button type="button" data-bt-skill="${id}" aria-label="${esc(tip)}" ${busy||presenting||!R.usable(battle,me,id)?'disabled':''}><img src="assets/skills/runes/${id}.webp" alt=""></button></span>`;
+   const damage=skillDamage(a,enemy,s,battle.kind==='monster'),tip=`${s.name} · ${E.label(E.skillElement(s))} · ${E.attackInfo(a,enemy,s).label} · ${s.ap} AP · ${s.mp} MP · Damage ${damage} · ${reason} · ${s.cooldown} turn cooldown`;
+   return `<span class="bt-skill-slot" tabindex="0" role="group" aria-label="${esc(tip)}" data-tooltip="${esc(tip)}"><button type="button" data-bt-skill="${id}" aria-label="${esc(tip)}" ${busy||presenting||!R.usable(battle,me,id)?'disabled':''}><img src="assets/skills/runes/${id}.webp" alt="">${E.badge(E.skillElement(s))}</button></span>`;
   }).join('');
   el('bt-enemy-skills').innerHTML=Array.from({length:4},(_,i)=>enemy.active[i]||null).map(id=>{
    const s=R.SKILLS[id];if(!s)return '<span class="bt-empty-skill" aria-label="Empty skill slot"></span>';
    const cd=Math.max(0,(enemy.ready[id]||0)-enemy.turns),casting=enemyCasting===id,reason=casting?'Attacking':enemyThinking?'Choosing…':cd?`Cooldown · ${cd}`:enemy.ap<s.ap?'Need AP':enemy.mp<s.mp?'Need mana':'Ready';
-   const tip=`${s.name} · ${s.ap} AP · ${s.mp} MP · Damage ${skillDamage(enemy,a,s)} · ${reason} · ${s.cooldown} turn cooldown`;
-   return `<div class="bt-skill-slot bt-enemy-skill ${casting?'bt-casting':''}" tabindex="0" role="group" aria-label="${esc(tip)}" data-tooltip="${esc(tip)}"><img src="assets/skills/runes/${id}.webp" alt=""></div>`;
+   const tip=`${s.name} · ${E.label(E.skillElement(s))} · ${E.attackInfo(enemy,a,s).label} · ${s.ap} AP · ${s.mp} MP · Damage ${skillDamage(enemy,a,s)} · ${reason} · ${s.cooldown} turn cooldown`;
+   return `<div class="bt-skill-slot bt-enemy-skill ${casting?'bt-casting':''}" tabindex="0" role="group" aria-label="${esc(tip)}" data-tooltip="${esc(tip)}"><img src="assets/skills/runes/${id}.webp" alt="">${E.badge(E.skillElement(s))}</div>`;
   }).join('');
   for(const id of ['bt-ap','bt-mp','bt-defend'])el(id).disabled=busy||presenting||!mine||challenge;
   el('bt-ap').disabled ||=a.ap>=a.maxAp;el('bt-mp').disabled ||=a.mp>=a.maxMp;el('bt-run').disabled=busy||presenting||!['active','pending'].includes(battle.status);el('bt-abandon').disabled=busy||presenting;

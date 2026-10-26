@@ -11,12 +11,12 @@
    const attack=4+skill.bonus[skill.magic?2:1],damage=Math.max(1,Math.round(attack*skill.scale+2-4*.15));
    details.innerHTML='<dl><div><dt>AP</dt><dd></dd></div><div><dt>MP</dt><dd></dd></div><div><dt>Attack damage</dt><dd></dd></div></dl><small></small>';
    [...details.querySelectorAll('dd')].forEach((el,i)=>el.textContent=[skill.ap,skill.mp,damage][i]);
-   details.querySelector('small').textContent=skill.id==='basic'?'Basic Tackle · already included':'Level 1 estimate vs. 4 armor. Defense and equipment affect damage.';
+   details.querySelector('small').textContent=skill.id==='basic'?'Basic Tackle · already included':window.RPGElements.label(window.RPGElements.skillElement(skill))+' · Level 1 estimate vs. neutral, 4 armor. Affinity and equipment affect damage.';
   }
   function mark(id){candidate=id;for(const button of grid.children)button.setAttribute('aria-pressed',String(button.dataset.skill===id));use.disabled=!id;}
   for(const skill of skills){
-   const button=document.createElement('button');button.type='button';button.dataset.skill=skill.id;button.className='live-skill-icon';button.setAttribute('aria-label',skill.name);button.setAttribute('aria-pressed','false');button.setAttribute('aria-describedby','live-skill-metrics');
-   const image=document.createElement('img');image.src=`assets/skills/runes/${skill.id}.webp`;image.alt='';image.width=56;image.height=56;button.append(image);
+   const button=document.createElement('button');button.type='button';button.dataset.skill=skill.id;button.className='live-skill-icon';button.setAttribute('aria-label',skill.name+' · '+window.RPGElements.label(window.RPGElements.skillElement(skill)));button.setAttribute('aria-pressed','false');button.setAttribute('aria-describedby','live-skill-metrics');
+   const image=document.createElement('img');image.src=`assets/skills/runes/${skill.id}.webp`;image.alt='';image.width=56;image.height=56;button.append(image);button.insertAdjacentHTML('beforeend',window.RPGElements.badge(window.RPGElements.skillElement(skill)));
    if(skill.id==='basic'){button.setAttribute('aria-disabled','true');button.classList.add('included');}
    button.addEventListener('mouseenter',()=>inspect(skill));button.addEventListener('focus',()=>inspect(skill));
    button.addEventListener('click',()=>{inspect(skill);if(skill.id!=='basic')mark(skill.id);});grid.append(button);

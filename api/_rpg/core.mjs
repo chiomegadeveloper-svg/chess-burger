@@ -1,6 +1,7 @@
 // Shared deterministic rules. The server owns all combat mutations.
 import attackSkills from './src/skill-catalog.js';
 import P from './src/progression.js';
+import E from './src/elements.js';
 export const SKILLS=Object.fromEntries(attackSkills.map(s=>[s.id,s]));
 export const MONSTERS=[['chaanack','Chaanack'],['erpack','Erpack'],['donkuber','Donkuber'],['windee','Windee'],['kalaagg','Kalaagg'],['pektu','Pektu'],['mhakiduk','Mhakiduk'],['odeksa','Odeksa'],['buhokba','Buhokba'],['muraduk','Muraduk'],['punsuck','Punsuck'],['conchita','Conchita'],['jengot','Jengot'],['draguu','Draguu'],['baluu','Baluu'],['kassag','Kassag']].map(([id,name],i)=>({id,name,boss:i>=10}));
 export function profile(input){
@@ -41,15 +42,16 @@ export function battleSummary(b,side=0){
 export function createBattle(a,b,kind='monster',now=Date.now()){a.turns=1;return {startedAt:kind==='pvp'?null:now,endedAt:null,endReason:null,report:{complete:true,actors:[emptyReport(),emptyReport()]},kind,status:kind==='pvp'?'pending':'active',actors:[a,b],turn:0,round:1,ply:0,version:0,battleEndsAt:kind==='pvp'?null:now+300000,deadline:now+(kind==='pvp'?60000:300000),events:[],eventSeq:0,log:['Battle ready. Equipment and skills are locked for this encounter.'],challenge:null,winner:null};}
 export function note(b,s){b.log.push(s);b.log=b.log.slice(-30);}
 export function usable(b,side,id){const a=b.actors[side],s=SKILLS[id];return b.status==='active'&&b.turn===side&&!b.challenge&&s&&a.active.includes(id)&&a.ap>=s.ap&&a.mp>=s.mp&&(a.ready[id]||0)<=a.turns;}
-export function attack(b,side,id,now=Date.now()){if(!usable(b,side,id))throw Error('Skill unavailable: check AP, mana, cooldown, and whose turn it is.');const a=b.actors[side],d=b.actors[1-side],s=SKILLS[id];a.ap-=s.ap;a.mp-=s.mp;a.ready[id]=a.turns+s.cooldown+1;let damage=Math.max(1,Math.round((a.stats[s.magic?2:1]*s.scale+2)-d.stats[3]*.15));const p=a.passives||{},res=d.passives||{};damage=Math.max(1,Math.round(damage*(1+(p[s.magic?'magicDamage':'physicalDamage']||0)/100)*(1+(b.kind==='monster'&&side===0?(p.monsterDamage||0):0)/100)*(1-(res.damageReduction||0)/100)));if(d.defending)damage=Math.max(1,Math.ceil(damage/2));const hpBefore=d.hp,effective=Math.min(d.hp,damage);d.hp=Math.max(0,d.hp-damage);const r=reportFor(b,side);r.damage+=effective;r.attacks++;r.apSpent+=s.ap;r.mpSpent+=s.mp;const use=r.skills[id]||(r.skills[id]={uses:0,damage:0});use.uses++;use.damage+=effective;b.eventSeq=(b.eventSeq||0)+1;b.events=[...(b.events||[]),{id:b.eventSeq,skill:id,side,target:1-side,damage,hpBefore,hpAfter:d.hp}].slice(-12);note(b,`${a.name} used ${s.name} · ${damage} damage.`);if(d.hp===0){endBattle(b,side,'knockout',now);note(b,`${a.name} wins.`);}return damage;}
+export function damageFor(a,d,s,againstMonster=false){let damage=Math.max(1,Math.round(a.stats[s.magic?2:1]*s.scale+2-d.stats[3]*.15));const p=a.passives||{},r=d.passives||{};damage=Math.max(1,Math.round(damage*(1+(p[s.magic?'magicDamage':'physicalDamage']||0)/100)*(1+(againstMonster?(p.monsterDamage||0):0)/100)*(1-(r.damageReduction||0)/100)*E.attackInfo(a,d,s).multiplier));return d.defending?Math.max(1,Math.ceil(damage/2)):damage;}
+export function attack(b,side,id,now=Date.now()){if(!usable(b,side,id))throw Error('Skill unavailable: check AP, mana, cooldown, and whose turn it is.');const a=b.actors[side],d=b.actors[1-side],s=SKILLS[id];a.ap-=s.ap;a.mp-=s.mp;a.ready[id]=a.turns+s.cooldown+1;const elemental=E.attackInfo(a,d,s);const damage=damageFor(a,d,s,b.kind==='monster'&&side===0);const hpBefore=d.hp,effective=Math.min(d.hp,damage);d.hp=Math.max(0,d.hp-damage);const r=reportFor(b,side);r.damage+=effective;r.attacks++;r.apSpent+=s.ap;r.mpSpent+=s.mp;const use=r.skills[id]||(r.skills[id]={uses:0,damage:0});use.uses++;use.damage+=effective;b.eventSeq=(b.eventSeq||0)+1;b.events=[...(b.events||[]),{id:b.eventSeq,skill:id,side,target:1-side,damage,hpBefore,hpAfter:d.hp,element:elemental.element,effectiveness:elemental.label}].slice(-12);note(b,`${a.name} used ${s.name} · ${damage} damage · ${elemental.label}.`);if(d.hp===0){endBattle(b,side,'knockout',now);note(b,`${a.name} wins.`);}return damage;}
 export function advance(b,now=Date.now()){
  if(b.status!=='active')return;b.challenge=null;b.ply++;b.turn=1-b.turn;b.round=Math.floor(b.ply/2)+1;const a=b.actors[b.turn];a.turns++;a.defending=false;b.deadline=now+(b.kind==='pvp'?90000:1800000);
 }
 export function enemyTurn(b,now=Date.now()){
  if(b.status!=='active'||b.turn!==1||b.kind==='pvp')return;
  const a=b.actors[1],target=b.actors[0],available=a.active.filter(id=>usable(b,1,id));
- const estimate=id=>Math.max(1,Math.round(a.stats[SKILLS[id].magic?2:1]*SKILLS[id].scale+2-target.stats[3]*.15));
- const lethal=available.find(id=>estimate(id)*(target.defending?.5:1)>=target.hp);
+ const estimate=id=>damageFor(a,target,SKILLS[id]);
+ const lethal=available.find(id=>estimate(id)>=target.hp);
  if(lethal)attack(b,1,lethal,now);
  else if((a.hp/a.maxHp<.35&&a.turns%3===0)||!available.length){
   if(!available.length&&(a.ap<a.maxAp||a.mp<a.maxMp)&&a.turns%2===0){const resource=a.ap/a.maxAp<a.mp/a.maxMp?'ap':'mp';const gained=gainResource(b,1,resource);recordAction(b,{kind:'recover',side:1,resource,amount:gained});note(b,`${a.name} recovers ${gained} ${resource.toUpperCase()}.`);}

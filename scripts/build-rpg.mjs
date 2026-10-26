@@ -8,12 +8,13 @@ const root=new URL('../rpg/',import.meta.url),out=new URL('../public/rpg/',impor
 const read=path=>readFile(new URL(path,root),'utf8');
 let html=await read('src/hero-forge.html');
 html=html.replace(/"stats":\[[0-9,]+\]/g,'"stats":[20,4,4,4,20,4]');
+html=html.replace("btn.querySelector('.heroClass').textContent=h.heroClass","btn.querySelector('.heroClass').textContent=h.heroClass+' · '+RPGElements.label(RPGElements.affinity(h.id))");
 html=html.replace('const HEROES=','const HERO_HEADS='+await read('src/hero-heads.json')+';const HEROES=');
 html=html.replace("btn.querySelector('img').src=h.img","btn.querySelector('img').src=HERO_HEADS[h.id]");
 html=html.replace('Every hero starts with six basic stats, each from 4 to 28. Select a hero to compare their strengths.','Start with 20 Health, 20 AP and 20 MP. Choose your one hero and your additional starting skill.').replace('LEVEL 1 · RANGE 4–28','LEVEL 1 · MAX 88').replaceAll('<small> / 28</small>','<small> base</small>');
 html=html.replace('Equipment upgrades are coming soon.','Your hero choice is permanent for now.').replace('✧ ENCHANTMENT · SOON','✧ YOUR NEXT ROOM').replace('◈ WEAPON · ◈ ARMOR · ◈ RELIC · ◈ ACCESSORY','BAG · STASH · ATTACKS · SPELLS').replace('SAVE HERO LOCALLY ↗','CONFIRM HERO →');
 html=html.replace(/RPG Hero Forge Sandbox/g,'RPG').replace(/SANDBOX · NOT DEPLOYED/g,'YOUR ADVENTURE').replace(/Saved on this device only[^<]*/g,'One hero per account · choose carefully');
-html=html.replace('<head>','<head><base href="/rpg/"><script src="live-skill-picker.js"></script><script src="live-bootstrap.js"></script>');
+html=html.replace('<head>','<head><base href="/rpg/"><script src="elements.js"></script><script src="live-skill-picker.js"></script><script src="live-bootstrap.js"></script>');
 const css=await Promise.all(['hero-room','babaylan-book','damage-sprites','world','battle','merchant','chests'].map(f=>read('src/'+f+'.css')));
 html=html.replace('</head>','<link rel="stylesheet" href="vendor/leaflet/leaflet.css"><link rel="stylesheet" href="live.css"><style>'+css.join('\n')+'</style></head>');
 const names=['skill-catalog','progression','encounter-layout','inventory-core','item-images','babaylan-data','babaylan-images','hero-room','babaylan-book','damage-data','damage-sprites','character-attacks','character-idles','map-basemap','city-boundary','world','battle-sound','battle-backgrounds','battle','merchant','chests'];

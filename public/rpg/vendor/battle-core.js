@@ -1,4 +1,25 @@
-(function(){(function(root){
+(function(){// Shared elemental rules; no account state or client-controlled affinity.
+(function(root){
+ 'use strict';
+ const definitions={neutral:{name:'Neutral',color:'#c4d0d5',symbol:'◇'},fire:{name:'Fire',color:'#ff8959',symbol:'♨'},water:{name:'Water',color:'#66bcff',symbol:'≋'},earth:{name:'Earth',color:'#c8a274',symbol:'⬟'},thunder:{name:'Thunder',color:'#ffe06c',symbol:'ϟ'},air:{name:'Air',color:'#e3f3ff',symbol:'彡'},toxic:{name:'Toxic',color:'#d68aff',symbol:'☣'}};
+ const ids=['fire','water','earth','thunder','air','toxic'];
+ const strong={fire:['thunder','toxic'],water:['earth','fire'],earth:['thunder','toxic'],thunder:['water','air'],air:['earth','fire'],toxic:['water','air']};
+ const affinities={rogue:'fire',queen:'fire',mage:'water',tank:'earth',crusader:'earth',assassin:'thunder',archer:'air',theft:'toxic',pektu:'fire',conchita:'fire',muraduk:'water',draguu:'water',erpack:'earth',windee:'earth',punsuck:'earth',kalaagg:'thunder',kassag:'thunder',donkuber:'air',odeksa:'air',jengot:'air',chaanack:'toxic',mhakiduk:'toxic',buhokba:'toxic',baluu:'toxic'};
+ const affinity=id=>affinities[id]||'neutral';
+ const skillElement=s=>({wind:'air',fire:'fire',lightning:'thunder'}[s.category]||({stone_shard:'earth',tidal_orb:'water',frost_lance:'water',thorn_burst:'toxic',crystal_crush:'earth',earthbreaker:'earth'}[s.id])||'neutral');
+ const matchup=(attack,defense)=>strong[attack]?.includes(defense)?1.25:strong[defense]?.includes(attack)?0.8:1;
+ const info=id=>definitions[id]||definitions.neutral;
+ const label=id=>info(id).symbol+' '+info(id).name;
+ const badge=id=>{const d=info(id);return '<span class="rpg-element" style="--element-color:'+d.color+'" title="'+d.name+'" aria-label="'+d.name+' element">'+d.symbol+'</span>';};
+ const property=item=>item?.elemental&&ids.includes(item.elemental.element)&&Number.isInteger(item.elemental.value)&&item.elemental.value>=2&&item.elemental.value<=8?item.elemental:null;
+ const itemText=item=>{const p=property(item);return p?label(p.element)+' · +'+p.value+'% '+(p.kind==='resistance'?'resistance':'skill damage'):'';};
+ function gearBonuses(state,C){const out={};for(const item of state.items||[]){const p=property(item),def=C.itemMap[item.defId];if(!p||item.where!=='bag'||!C.canEquip(state,item)||C.isConsumable(item))continue;const kind=def?.category==='Armor'?'resistance':'damage';if(p.kind!==kind)continue;const key='element_'+p.element+'_'+kind;out[key]=Math.min(20,(out[key]||0)+p.value);}return out;}
+ function attackInfo(a,d,s){const element=skillElement(s),factor=matchup(element,affinity(d.heroId)),p=a.passives||{},r=d.passives||{};return {element,matchup:factor,label:factor>1?'Strong':factor<1?'Resisted':'Normal',multiplier:factor*(element!=='neutral'&&element===affinity(a.heroId)?1.05:1)*(1+Math.max(0,Math.min(20,p['element_'+element+'_damage']||0))/100)*(1-Math.max(0,Math.min(20,r['element_'+element+'_resistance']||0))/100)};}
+ const api={definitions,ids,strong,affinities,affinity,skillElement,matchup,info,label,badge,property,itemText,gearBonuses,attackInfo};
+ root.RPGElements=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
+})(typeof globalThis!=='undefined'?globalThis:this);
+
+(function(root){
  const MAX_LEVEL=88,clampLevel=n=>Math.max(1,Math.min(MAX_LEVEL,Math.floor(Number(n)||1)));
  const nextXp=level=>level>=MAX_LEVEL?0:100+35*(level-1)+5*(level-1)**2;
  function threshold(level){let xp=0;for(let n=1;n<clampLevel(level);n++)xp+=nextXp(n);return xp;}
@@ -797,7 +818,7 @@
  if(typeof module!=="undefined"&&module.exports)module.exports=skills;
 })(globalThis);
 
-const attackSkills=globalThis.RPG_ATTACK_SKILLS,P=globalThis.RPGProgression;
+const attackSkills=globalThis.RPG_ATTACK_SKILLS,P=globalThis.RPGProgression,E=globalThis.RPGElements;
 // Shared deterministic rules. The server owns all combat mutations.
 const SKILLS=Object.fromEntries(attackSkills.map(s=>[s.id,s]));
 const MONSTERS=[['chaanack','Chaanack'],['erpack','Erpack'],['donkuber','Donkuber'],['windee','Windee'],['kalaagg','Kalaagg'],['pektu','Pektu'],['mhakiduk','Mhakiduk'],['odeksa','Odeksa'],['buhokba','Buhokba'],['muraduk','Muraduk'],['punsuck','Punsuck'],['conchita','Conchita'],['jengot','Jengot'],['draguu','Draguu'],['baluu','Baluu'],['kassag','Kassag']].map(([id,name],i)=>({id,name,boss:i>=10}));
@@ -839,15 +860,16 @@ function battleSummary(b,side=0){
 function createBattle(a,b,kind='monster',now=Date.now()){a.turns=1;return {startedAt:kind==='pvp'?null:now,endedAt:null,endReason:null,report:{complete:true,actors:[emptyReport(),emptyReport()]},kind,status:kind==='pvp'?'pending':'active',actors:[a,b],turn:0,round:1,ply:0,version:0,battleEndsAt:kind==='pvp'?null:now+300000,deadline:now+(kind==='pvp'?60000:300000),events:[],eventSeq:0,log:['Battle ready. Equipment and skills are locked for this encounter.'],challenge:null,winner:null};}
 function note(b,s){b.log.push(s);b.log=b.log.slice(-30);}
 function usable(b,side,id){const a=b.actors[side],s=SKILLS[id];return b.status==='active'&&b.turn===side&&!b.challenge&&s&&a.active.includes(id)&&a.ap>=s.ap&&a.mp>=s.mp&&(a.ready[id]||0)<=a.turns;}
-function attack(b,side,id,now=Date.now()){if(!usable(b,side,id))throw Error('Skill unavailable: check AP, mana, cooldown, and whose turn it is.');const a=b.actors[side],d=b.actors[1-side],s=SKILLS[id];a.ap-=s.ap;a.mp-=s.mp;a.ready[id]=a.turns+s.cooldown+1;let damage=Math.max(1,Math.round((a.stats[s.magic?2:1]*s.scale+2)-d.stats[3]*.15));const p=a.passives||{},res=d.passives||{};damage=Math.max(1,Math.round(damage*(1+(p[s.magic?'magicDamage':'physicalDamage']||0)/100)*(1+(b.kind==='monster'&&side===0?(p.monsterDamage||0):0)/100)*(1-(res.damageReduction||0)/100)));if(d.defending)damage=Math.max(1,Math.ceil(damage/2));const hpBefore=d.hp,effective=Math.min(d.hp,damage);d.hp=Math.max(0,d.hp-damage);const r=reportFor(b,side);r.damage+=effective;r.attacks++;r.apSpent+=s.ap;r.mpSpent+=s.mp;const use=r.skills[id]||(r.skills[id]={uses:0,damage:0});use.uses++;use.damage+=effective;b.eventSeq=(b.eventSeq||0)+1;b.events=[...(b.events||[]),{id:b.eventSeq,skill:id,side,target:1-side,damage,hpBefore,hpAfter:d.hp}].slice(-12);note(b,`${a.name} used ${s.name} · ${damage} damage.`);if(d.hp===0){endBattle(b,side,'knockout',now);note(b,`${a.name} wins.`);}return damage;}
+function damageFor(a,d,s,againstMonster=false){let damage=Math.max(1,Math.round(a.stats[s.magic?2:1]*s.scale+2-d.stats[3]*.15));const p=a.passives||{},r=d.passives||{};damage=Math.max(1,Math.round(damage*(1+(p[s.magic?'magicDamage':'physicalDamage']||0)/100)*(1+(againstMonster?(p.monsterDamage||0):0)/100)*(1-(r.damageReduction||0)/100)*E.attackInfo(a,d,s).multiplier));return d.defending?Math.max(1,Math.ceil(damage/2)):damage;}
+function attack(b,side,id,now=Date.now()){if(!usable(b,side,id))throw Error('Skill unavailable: check AP, mana, cooldown, and whose turn it is.');const a=b.actors[side],d=b.actors[1-side],s=SKILLS[id];a.ap-=s.ap;a.mp-=s.mp;a.ready[id]=a.turns+s.cooldown+1;const elemental=E.attackInfo(a,d,s);const damage=damageFor(a,d,s,b.kind==='monster'&&side===0);const hpBefore=d.hp,effective=Math.min(d.hp,damage);d.hp=Math.max(0,d.hp-damage);const r=reportFor(b,side);r.damage+=effective;r.attacks++;r.apSpent+=s.ap;r.mpSpent+=s.mp;const use=r.skills[id]||(r.skills[id]={uses:0,damage:0});use.uses++;use.damage+=effective;b.eventSeq=(b.eventSeq||0)+1;b.events=[...(b.events||[]),{id:b.eventSeq,skill:id,side,target:1-side,damage,hpBefore,hpAfter:d.hp,element:elemental.element,effectiveness:elemental.label}].slice(-12);note(b,`${a.name} used ${s.name} · ${damage} damage · ${elemental.label}.`);if(d.hp===0){endBattle(b,side,'knockout',now);note(b,`${a.name} wins.`);}return damage;}
 function advance(b,now=Date.now()){
  if(b.status!=='active')return;b.challenge=null;b.ply++;b.turn=1-b.turn;b.round=Math.floor(b.ply/2)+1;const a=b.actors[b.turn];a.turns++;a.defending=false;b.deadline=now+(b.kind==='pvp'?90000:1800000);
 }
 function enemyTurn(b,now=Date.now()){
  if(b.status!=='active'||b.turn!==1||b.kind==='pvp')return;
  const a=b.actors[1],target=b.actors[0],available=a.active.filter(id=>usable(b,1,id));
- const estimate=id=>Math.max(1,Math.round(a.stats[SKILLS[id].magic?2:1]*SKILLS[id].scale+2-target.stats[3]*.15));
- const lethal=available.find(id=>estimate(id)*(target.defending?.5:1)>=target.hp);
+ const estimate=id=>damageFor(a,target,SKILLS[id]);
+ const lethal=available.find(id=>estimate(id)>=target.hp);
  if(lethal)attack(b,1,lethal,now);
  else if((a.hp/a.maxHp<.35&&a.turns%3===0)||!available.length){
   if(!available.length&&(a.ap<a.maxAp||a.mp<a.maxMp)&&a.turns%2===0){const resource=a.ap/a.maxAp<a.mp/a.maxMp?'ap':'mp';const gained=gainResource(b,1,resource);recordAction(b,{kind:'recover',side:1,resource,amount:gained});note(b,`${a.name} recovers ${gained} ${resource.toUpperCase()}.`);}
@@ -867,4 +889,4 @@ function timeout(b,now=Date.now()){
 }
 function publicBattle(b,me){if(!b)return null;const c=b.challenge;return {...b,me,actors:b.actors.map(a=>{const {userId,...visible}=a;return visible;}),challenge:c?{kind:c.kind,side:c.side,clocks:c.clocks,clockAt:c.clockAt,...(c.side===me?{fen:c.fen,moves:c.moves||[],elo:c.elo,puzzleId:c.puzzleId,rating:c.rating,pool:c.pool}:{} )}:null};}
 
-globalThis.RPGBattleRules={SKILLS,MONSTERS,profile,monster,createBattle,usable,attack,advance,enemyTurn,finishTurn,defend,timeout,note,endBattle,gainResource,harvestResult,potion,battleSummary,publicBattle};})();
+globalThis.RPGBattleRules={damageFor,SKILLS,MONSTERS,profile,monster,createBattle,usable,attack,advance,enemyTurn,finishTurn,defend,timeout,note,endBattle,gainResource,harvestResult,potion,battleSummary,publicBattle};})();
