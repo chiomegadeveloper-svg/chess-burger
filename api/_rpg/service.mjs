@@ -1,5 +1,5 @@
 import {publishRpgFeed} from './feed.mjs';
-import {chestRequest,recoverChests} from './chests.mjs';
+import {chestRequest,resolveCity,recoverChests} from './chests.mjs';
 import {merchantRequest} from './merchant.mjs';
 import {health,healthCap,mana,manaCap,normalize,loot,stash,recovery,cbgDrop} from './rewards.mjs';
 import {Chess} from 'chess.js';
@@ -8,6 +8,7 @@ import * as R from './core.mjs';
 import P from './src/progression.js';
 import C from './src/inventory-core.js';
 import Layout from './src/encounter-layout.js';
+import Boundary from './src/city-boundary.js';
 import {distanceMeters,validateFix} from './world.mjs';
 import {roadPoints} from './map.mjs';
 import {read,insert,write,fail,makeHero,saveInventory,progression} from './store.mjs';
@@ -17,7 +18,7 @@ export async function gameRequest(client,user,method,input={},services={}){
  const now=services.now?.()??Date.now();let doc=await read(client,user),shared=null;
  if(doc?.state&&!doc.feedCursor)doc.feedCursor={registered:true,level:doc.state.level};
  const persist=async()=>{await write(client,user,'rpg_profile','hero',doc);await publishRpgFeed(client,user,doc);};
- const cachedSet=()=>doc?.monsterSet?.version===Layout.SPAWN_VERSION&&doc.monsterSet.radius===Layout.SPAWN_RADIUS&&doc.monsterSet.refreshAt>now?{encounters:(doc.encounters||[]).filter(e=>!e.consumed&&e.expires_at>now),refreshAt:doc.monsterSet.refreshAt}:null;
+ const cachedSet=()=>doc?.monsterSet?.version===Layout.SPAWN_VERSION&&doc.monsterSet.radius===Layout.SPAWN_RADIUS&&doc.monsterSet.cityId===(doc.chestCity?.city?.id||null)&&doc.monsterSet.refreshAt>now?{encounters:(doc.encounters||[]).filter(e=>!e.consumed&&e.expires_at>now),refreshAt:doc.monsterSet.refreshAt}:null;
  if(doc?.state){const normalized=normalize(doc),recovered=input.action==='init'&&recovery(doc);if(normalized||recovered)await persist();}
  if(input.action==='init'&&doc?.state){for(const award of (doc.awards||[]).filter(a=>a.cbg&&!a.cbgPaid).slice(0,5)){const paid=await client.rpc('cb_rpg_battle_reward',{p_user_id:user,p_battle_id:award.id});if(paid.error)break;if(paid.data)Object.assign(doc,paid.data);}}
  if(input.action==='init'&&doc?.state)await recoverChests(client,user,doc,now);
@@ -75,7 +76,7 @@ export async function gameRequest(client,user,method,input={},services={}){
   return {cbgReward:reward?.cbg||0,cbgPending:!!reward?.cbg&&!doc.awards.find(a=>a.id===b?.id)?.cbgPaid,game:doc.state,pendingLoot:doc.pendingLoot||[],drops:doc.awards.find(a=>a.id===b?.id)?.drops||[],battle:b?visible(b):null,progression:progression(doc,b),defeatedEncounterId:b?.kind==='monster'&&b.status==='finished'&&b.winner===me(b)&&b.endReason==='knockout'?b.encounterId:null};
  };
  if(['chests','openChest'].includes(input.action)){if(input.action==='openChest'){const active=await current();await result(active);if(['active','pending'].includes(active?.status))fail('Finish your battle before opening a chest.');}return chestRequest(client,user,doc,input,now,services);}
- if(['merchant','merchantBuy','merchantSell'].includes(input.action)){const active=await current();await result(active);if(['active','pending'].includes(active?.status))fail('Finish your battle before trading.');return merchantRequest(client,user,doc,input,now);}
+ if(['merchant','merchantBuy','merchantSell'].includes(input.action)){const active=await current();await result(active);if(['active','pending'].includes(active?.status))fail('Finish your battle before trading.');return merchantRequest(client,user,doc,input,now,services);}
  if(['drinkPotion','usePotion'].includes(input.action)&&!input.battlePotion){await result(await current());
   const ongoing=await read(client,user,'rpg_profile','hero');let active=ongoing?.battle?.status==='active';if(ongoing?.pvpId){const rows=await client.from('cb_inventory_items').select('metadata').eq('item_kind','rpg_battle').eq('item_id',ongoing.pvpId).contains('metadata',{participants:[user]}).maybeSingle();if(rows.error)fail('Battle unavailable.',503);active=['pending','active'].includes(rows.data?.metadata?.status);}if(active)fail('Finish your battle before using a potion.');
   const index=doc.state.items.findIndex(i=>input.action==='usePotion'?i.uid===input.uid&&C.isConsumable(i):i.defId==='health_potion');if(index<0)fail('This potion is no longer available.');
@@ -89,20 +90,24 @@ export async function gameRequest(client,user,method,input={},services={}){
  if(method==='GET')return await result(await current());
  if(input.action==='spawn'){
   const gps=validateFix(input.gps,now);if(!gps)fail('Wait for a fresh GPS fix.');
-  if(!doc.monsterSet||doc.monsterSet.version!==Layout.SPAWN_VERSION||doc.monsterSet.radius!==Layout.SPAWN_RADIUS||!(doc.monsterSet.refreshAt>now)){
+  if(doc.chestCity&&!Boundary.contains(doc.chestCity.city,gps)){const city=await(services.resolveCity||resolveCity)(gps);doc.chestCity={city,anchor:gps,at:now};doc.monsterSet=null;doc.encounters=[];doc.roadCache=null;}
+  const city=doc.chestCity?.city,cityId=city?.id||null;
+  if(!doc.monsterSet||doc.monsterSet.cityId!==cityId||doc.monsterSet.version!==Layout.SPAWN_VERSION||doc.monsterSet.radius!==Layout.SPAWN_RADIUS||!(doc.monsterSet.refreshAt>now)){
    let points;const cache=doc.roadCache;
-   if(cache&&cache.version===Layout.SPAWN_VERSION&&cache.radius===Layout.SPAWN_RADIUS&&now-cache.at<21600000&&distanceMeters(cache,gps)<=150)points=cache.points.filter(p=>distanceMeters(gps,p)<=Layout.SPAWN_RADIUS);
+   if(cache&&cache.cityId===cityId&&cache.version===Layout.SPAWN_VERSION&&cache.radius===Layout.SPAWN_RADIUS&&now-cache.at<21600000&&distanceMeters(cache,gps)<=150)points=cache.points.filter(p=>distanceMeters(gps,p)<=Layout.SPAWN_RADIUS);
    if(!points?.length){try{points=await (services.roadPoints||roadPoints)(gps);}catch{points=[];}}
    if(!points.length)return {encounters:[],spawnStatus:'unavailable',refreshAt:now+5000,message:'Loading nearby roads · retrying automatically.'};
-   doc.roadCache={lat:gps.lat,lng:gps.lng,at:now,version:Layout.SPAWN_VERSION,radius:Layout.SPAWN_RADIUS,points};
-   doc.monsterSet={...gps,version:Layout.SPAWN_VERSION,radius:Layout.SPAWN_RADIUS,createdAt:now,refreshAt:now+1800000};doc.encounters=Layout.create(gps,doc.state.level,R.MONSTERS.filter(m=>!m.boss),now,points).map(e=>({...e,id:crypto.randomUUID(),training:false,consumed:false}));await persist();
+   points=points.filter(p=>!city||Boundary.contains(city,p));
+   if(!points.length)return {encounters:[],spawnStatus:'unavailable',refreshAt:now+5000,message:'Loading roads in your current city…'};
+   doc.roadCache={lat:gps.lat,lng:gps.lng,at:now,cityId,version:Layout.SPAWN_VERSION,radius:Layout.SPAWN_RADIUS,points};
+   doc.monsterSet={...gps,cityId,version:Layout.SPAWN_VERSION,radius:Layout.SPAWN_RADIUS,createdAt:now,refreshAt:now+1800000};doc.encounters=Layout.create(gps,doc.state.level,R.MONSTERS.filter(m=>!m.boss),now,points).map(e=>({...e,id:crypto.randomUUID(),training:false,consumed:false}));await persist();
   }
   const cache=cachedSet(),encounters=cache.encounters;
-  return {encounters,spawnStatus:'ready',refreshAt:cache.refreshAt,exhausted:!encounters.length,progression:progression(doc),message:`${encounters.length} fixed road encounters · 200 m attack range · new set every 30 minutes.`};
+  return {encounters,cityId,spawnStatus:'ready',refreshAt:cache.refreshAt,exhausted:!encounters.length,progression:progression(doc),message:`${encounters.length} fixed road encounters · 200 m attack range · new set every 30 minutes.`};
  }
  if(input.action==='select-encounter'){
   const gps=validateFix(input.gps,now),encounter=doc.encounters.find(e=>e.id===input.target&&!e.consumed&&e.expires_at>now);
-  if(!gps)fail('Use a fresh map location to select this monster.');if(!encounter)fail('This monster has expired or was already defeated.');near(gps,encounter);
+  if(!gps)fail('Use a fresh map location to select this monster.');if(doc.monsterSet?.cityId!==(doc.chestCity?.city?.id||null))fail('This monster belongs to your previous city. Refresh the map.');if(!encounter)fail('This monster has expired or was already defeated.');near(gps,encounter);
   doc.selection={target:encounter.id,token:crypto.randomUUID(),expiresAt:Math.min(encounter.expires_at,now+120000)};await persist();return {selectionToken:doc.selection.token};
  }
  if(['practice','encounter','challenge'].includes(input.action)){

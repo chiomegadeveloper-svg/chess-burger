@@ -298,5 +298,5 @@
  root.addEventListener('pointerup',event=>{if(!potionDrag||event.pointerId!==potionDrag.pointer)return;const {uid}=potionDrag,r=el('bt-hero-art').parentElement.getBoundingClientRect(),inside=event.clientX>=r.left&&event.clientX<=r.right&&event.clientY>=r.top&&event.clientY<=r.bottom;clearPotionDrag();if(root.hasPointerCapture?.(event.pointerId))root.releasePointerCapture(event.pointerId);if(inside&&canDrink(uid))void action({action:'usePotion',battlePotion:true,uid});});
  root.addEventListener('pointercancel',clearPotionDrag);
  el('bt-bag').addEventListener('keydown',event=>{const node=event.target.closest('[data-item-uid]');if(node&&['Enter',' '].includes(event.key)){event.preventDefault();if(canDrink(node.dataset.itemUid))void action({action:'usePotion',battlePotion:true,uid:node.dataset.itemUid});}});
- window.RPGBattle={connect,openLab,encounter,spawn,stop(){connectionVersion++;pendingHarvest=null;harvestModal.hidden=true;root.inert=false;closeEncounter();clearInterval(pollTimer);pollTimer=null;stopEngine();close();battle=null;}};
+ window.RPGBattle={clearCity:closeEncounter,connect,openLab,encounter,spawn,stop(){connectionVersion++;pendingHarvest=null;harvestModal.hidden=true;root.inert=false;closeEncounter();clearInterval(pollTimer);pollTimer=null;stopEngine();close();battle=null;}};
 })();
