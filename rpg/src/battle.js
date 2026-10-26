@@ -208,8 +208,7 @@
  }local=false;busy=true;encounterStatus('Starting battle…');try{
   const selectionToken=!pvp?await selectionPromise:null;
   if(!pvp&&previewTarget!==target)return;
-  if(!pvp&&!selectionToken)throw Error('Select this monster on the map again.');
-  const data=await api(pvp?{action:'challenge',target,profile:loadout()}:{action:'encounter',target,selectionToken,profile:loadout()});if(!data.battle)throw Error('The encounter could not start. Please tap ATTACK again.');
+  const data=await api(pvp?{action:'challenge',target,profile:loadout()}:{action:'encounter',target,selectionToken,gps:window.RPGWorld.position?.(),profile:loadout()});if(!data.battle)throw Error('The encounter could not start. Please tap ATTACK again.');
   battle=data.battle;lastLog='';show();notice(pvp?'Challenge sent. Waiting for the other player.':'Nearby encounter started.');
  }catch(e){if(e.code==='out_of_range'){closeEncounter();window.RPGWorld.outOfRange(e.distance,pvp);}else if(encounterDialog?.open)encounterStatus(e.message,true);else el('world-gps-status').textContent=e.message;}
  finally{busy=false;if(encounterDialog?.open)for(const button of encounterDialog.querySelectorAll('footer button'))button.disabled=false;if(battle)draw();}}

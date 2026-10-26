@@ -74,3 +74,14 @@ test('fresh sets reserve 3–5 distinct road monsters inside 200m, with the rest
  assert.deepEqual((await call({action:'spawn',gps})).encounters,batch.encounters,'GPS refresh must not reroll or refill pinned monsters');
  const sparse=Layout.create(at,10,[{id:'mhakiduk'}],1700000000000,points.slice(0,2));assert.equal(sparse.length,2,'never invent off-road positions or stack duplicates when road coverage is sparse');
 });
+
+test('missing or expired selection tickets fall back to fresh 200-meter GPS validation',async()=>{
+ for(const mode of ['missing','expired']){
+  const f=fixture();await register(f);const batch=await f.call({action:'spawn',gps:f.gps()}),enemy=batch.encounters[0];let token;
+  if(mode==='expired'){const selected=await f.call({action:'select-encounter',target:enemy.id,gps:{...f.gps(),lat:enemy.lat,lng:enemy.lng}});token=selected.selectionToken;f.time(f.now()+121000);}
+  const fix=meters=>({...f.gps(),lat:enemy.lat-meters/111195,lng:enemy.lng});
+  await assert.rejects(f.call({action:'encounter',target:enemy.id,selectionToken:token,gps:fix(232)}),e=>e.code==='out_of_range'&&e.distance>=232);
+  await assert.rejects(f.call({action:'encounter',target:enemy.id,selectionToken:token,gps:{...fix(100),time:f.now()-31000}}),/map again/);
+  const result=await f.call({action:'encounter',target:enemy.id,selectionToken:token,gps:fix(199)});assert.equal(result.battle.encounterId,enemy.id);assert.equal(result.battle.status,'active');
+ }
+});

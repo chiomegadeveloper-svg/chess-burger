@@ -107,14 +107,14 @@ export async function gameRequest(client,user,method,input={},services={}){
  }
  if(input.action==='select-encounter'){
   const gps=validateFix(input.gps,now),encounter=doc.encounters.find(e=>e.id===input.target&&!e.consumed&&e.expires_at>now);
-  if(!gps)fail('Use a fresh map location to select this monster.');if(doc.monsterSet?.cityId!==(doc.chestCity?.city?.id||null))fail('This monster belongs to your previous city. Refresh the map.');if(!encounter)fail('This monster has expired or was already defeated.');near(gps,encounter);
+  if(!gps)fail('Use a fresh map location to select this monster.');if((doc.monsterSet?.cityId||null)!==(doc.chestCity?.city?.id||null))fail('This monster belongs to your previous city. Refresh the map.');if(!encounter)fail('This monster has expired or was already defeated.');near(gps,encounter);
   doc.selection={target:encounter.id,token:crypto.randomUUID(),expiresAt:Math.min(encounter.expires_at,now+120000)};await persist();return {selectionToken:doc.selection.token};
  }
  if(['practice','encounter','challenge'].includes(input.action)){
   if(input.action==='practice')fail('Choose a nearby monster on the map.');
   const existing=await current();if(existing?.status==='finished')await result(existing);if(existing&&['active','pending'].includes(existing.status))fail('Finish your current battle first.');
   const a=await player();if(a.hp<=0)fail('Drink a health potion in Hero Room before entering another battle.');if(!a.active.length)fail('Equip an attack skill first.');let enemy,kind='monster',encounter;
-  if(input.action==='encounter'){encounter=doc.encounters.find(e=>e.id===input.target&&!e.consumed&&e.expires_at>now);if(!encounter)fail('This monster expired or has already been battled.');
+  if(input.action==='encounter'){if((doc.monsterSet?.cityId||null)!==(doc.chestCity?.city?.id||null))fail('This monster belongs to your previous city. Refresh the map.');encounter=doc.encounters.find(e=>e.id===input.target&&!e.consumed&&e.expires_at>now);if(!encounter)fail('This monster expired or has already been battled.');
    const selected=doc.selection&&doc.selection.target===input.target&&doc.selection.token===input.selectionToken&&doc.selection.expiresAt>now;
    if(!selected){const gps=validateFix(input.gps,now);if(!gps)fail('Select this monster on the map again.');near(gps,encounter);}enemy=R.monster(encounter.monsterId,encounter.level);}
   else{const p=await getPresence(user),r=await client.from('cb_inventory_items').select('user_id,metadata').eq('item_kind','rpg_presence').eq('metadata->>peerId',input.target).gt('updated_at',new Date(now-30000).toISOString()).maybeSingle();if(r.error||!r.data||r.data.user_id===user)fail('This player is no longer nearby.');near(p,r.data.metadata);enemy=await player(r.data.user_id);kind='pvp';}

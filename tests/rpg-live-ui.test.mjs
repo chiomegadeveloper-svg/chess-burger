@@ -60,7 +60,7 @@ test('monster tap previews hero versus monster; Run makes no battle and Attack o
  a.d.querySelector('[data-bt-skill="basic"]').click();await pause();await pause();a.d.querySelector('#bt-mp').click();await pause();await pause();assert.equal(a.d.querySelector('#bt-turn-label').parentElement.className,'bt-turn');assert.match(a.d.querySelector('#bt-turn-label').textContent,/Puzzle/);
  a.d.querySelector('#bt-abandon').click();await pause();await pause();assert.equal(a.d.querySelector('#bt-turn-label').parentElement.id,'bt-stage');
  a.d.querySelector('#bt-close').click();assert.ok(resumes>0);
- assert.equal(a.messages.filter(m=>m.type==='CB_RPG_API'&&m.body.action==='encounter').length,1);assert.deepEqual(a.errors,[]);
+ assert.equal(a.messages.filter(m=>m.type==='CB_RPG_API'&&m.body.action==='encounter').length,2);assert.deepEqual(a.errors,[]);
  }finally{a.close();}
 });
 
@@ -277,5 +277,31 @@ test('crossing towns clears all encounter types and blocks delayed monster resul
  a.w.RPGWorld.applyCity(town,[merchant]);a.w.RPGWorld.encounters([{id:'old-monster',monsterId:'chaanack',name:'Chaanack',level:1,lat:11.26,lng:125,expires_at:Date.now()+1800000}]);a.w.RPGWorld.showChests([{id:'old-chest'}]);assert.equal(a.w.RPGWorld.merchants().length,1);assert.ok(a.w.RPGWorld.monster('old-monster'));
  a.w.RPGMerchant.open(saved.game,merchant);fix={...fix,lat:11.3};a.w.RPGWorld.checkCity();assert.equal(a.w.RPGWorld.cityPending(),true);assert.equal(a.w.RPGWorld.merchants().length,0);assert.equal(a.w.RPGWorld.monster('old-monster'),undefined);assert.equal(chests.length,0);assert.equal(a.d.querySelector('#rpg-merchant').open,false);
  const next={id:'town-b',name:'Town B',bounds:[11.29,11.32,124.99,125.02]};assert.equal(a.w.RPGWorld.applyCity(town,[merchant]),false);a.w.RPGWorld.applyCity(next,[{...merchant,id:'merchant-b',lat:11.3}]);assert.equal(a.w.RPGWorld.cityPending(),false);assert.equal(a.w.RPGWorld.merchants()[0].id,'merchant-b');
+ }finally{a.close();}
+});
+
+test('ATTACK retries current GPS after preview validation fails and needs no second map tap',async()=>{
+ const db=database(),saved=await gameRequest(db,'player-a','POST',{action:'register',heroId:'assassin',name:'Reach Test',skill:'punch'}),gps={lat:11.26,lng:125,accuracy:5,time:Date.now()};
+ const batch=await gameRequest(db,'player-a','POST',{action:'spawn',gps},{roadPoints:async()=>[{lat:11.2602,lng:125}]}),enemy=batch.encounters[0],a=open(db);
+ try{
+  await pause();await pause();a.w.RPGBattle.connect({id:'assassin',name:'Morvex',stats:[20,4,4,4,20,4]},saved.game);a.w.RPGWorld.position=()=>({...gps,time:Date.now()});a.w.RPGWorld.monster=()=>enemy;
+  const original=a.w.fetch;a.w.fetch=(url,options)=>JSON.parse(options?.body||'{}').action==='select-encounter'?Promise.resolve(new a.w.Response(JSON.stringify({error:'Your game changed in another window. Refresh and try again.'}),{status:409})):original(url,options);
+  await a.w.RPGBattle.encounter(enemy.id);await pause();await pause();const dialog=a.d.querySelector('.world-encounter-choice');assert.equal(dialog.open,true);assert.match(dialog.querySelector('[data-encounter-status]').textContent,/another window/);
+  dialog.querySelector('[data-attack]').click();await pause();await pause();assert.equal(dialog.open,false);assert.equal(a.d.querySelector('#rpg-battle').hidden,false);assert.equal((await read(db,'player-a')).battle.encounterId,enemy.id);
+  const call=a.messages.find(m=>m.type==='CB_RPG_API'&&m.body.action==='encounter');assert.ok(call.body.gps);assert.equal(call.body.target,enemy.id);assert.deepEqual(a.errors,[]);
+ }finally{a.close();}
+});
+
+test('monster ground pins update distance and reach labels as GPS moves across 200 meters',async()=>{
+ const db=database(),saved=await gameRequest(db,'player-a','POST',{action:'register',heroId:'rogue',name:'Map Reach',skill:'punch'}),a=open(db);
+ try{
+  await pause();await pause();let fix;Object.defineProperty(a.w,'isSecureContext',{value:true,configurable:true});Object.defineProperty(a.w.navigator,'geolocation',{value:{watchPosition(success){fix=success;return 1;},clearWatch(){}},configurable:true});
+  const map={setView(){return this;},getZoom(){return 16;},on(){},invalidateSize(){},attributionControl:{addAttribution(){}}};
+  const marker=(ll,options={})=>{const node=a.d.createElement('div');node.className=options.icon?.className||'';node.innerHTML=options.icon?.html||'';return {addTo(){a.d.querySelector('#world-map').append(node);return this;},remove(){node.remove();},on(){return this;},bindTooltip(){return this;},setLatLng(){return this;},setRadius(){return this;},getElement(){return node;}};};
+  a.w.L={map:()=>map,marker,circle:marker,divIcon:x=>x};a.w.RPGBasemap.create=async()=>({on(){},addTo(){},remove(){}});a.w.RPGChests.refresh=async()=>{};
+  const enemies=[100,232].map((m,i)=>({id:'reach-'+i,monsterId:'chaanack',name:'Chaanack',level:1,lat:11.26+m/111195,lng:125,expires_at:Date.now()+1800000}));a.w.RPGBattle.spawn=async()=>({encounters:enemies,spawnStatus:'ready',refreshAt:Date.now()+1800000});
+  a.w.RPGWorld.open(a.w.eval('HEROES[0]'),saved.game);fix({coords:{latitude:11.26,longitude:125,accuracy:5},timestamp:Date.now()});await pause();await pause();
+  const pins=[...a.d.querySelectorAll('.world-monster-pin')];assert.equal(pins.length,2);assert.match(pins[0].textContent,/100 m · In reach/);assert.ok(pins[0].classList.contains('world-in-range'));assert.match(pins[1].textContent,/232 m · Move closer/);assert.ok(!pins[1].classList.contains('world-in-range'));assert.ok(pins.every(p=>p.querySelector('.world-monster-location')));
+  fix({coords:{latitude:11.26+250/111195,longitude:125,accuracy:5},timestamp:Date.now()+10});await pause();assert.match(pins[1].textContent,/18 m · In reach/);assert.ok(pins[1].classList.contains('world-in-range'));assert.equal(a.d.querySelectorAll('.world-monster-pin').length,2);assert.deepEqual(a.errors,[]);
  }finally{a.close();}
 });
