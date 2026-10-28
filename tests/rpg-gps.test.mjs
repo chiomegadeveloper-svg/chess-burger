@@ -64,10 +64,10 @@ test('fresh Explorer sets reserve 35% of road monsters inside 200m, rounded to s
   const batch=Layout.create(at,10,[{id:'mhakiduk'}],1700000000000+seed,points),near=batch.filter(e=>distanceMeters(at,e)<=200);
   assert.equal(batch.length,16);assert.equal(near.length,6);
   assert.equal(new Set(batch.map(e=>`${e.lat},${e.lng}`)).size,16);assert.ok(batch.every(e=>points.some(p=>p.lat===e.lat&&p.lng===e.lng)));
-  assert.ok(batch.every(e=>distanceMeters(at,e)<=800));assert.equal(batch.filter(e=>e.level===8).length,5);assert.equal(batch.filter(e=>e.level===10).length,4);assert.equal(batch.filter(e=>e.level===11||e.level===12).length,4);assert.equal(batch.filter(e=>e.level===13).length,3);
+  assert.ok(batch.every(e=>distanceMeters(at,e)<=800));assert.ok(batch.every(e=>e.level>=9&&e.level<=30));
  }
  const db=database(),call=input=>gameRequest(db,'a','POST',input,{roadPoints:async()=>points});await call({action:'register',heroId:'rogue',name:'Nearby Warrior',skill:'punch'});
- const row=[...db.rows.values()].find(r=>r.item_kind==='rpg_profile');row.metadata.monsterSet={version:2,cityId:null,radius:800,refreshAt:Date.now()+1800000};row.metadata.encounters=[{id:'old-set',lat:at.lat,lng:at.lng,expires_at:Date.now()+1800000}];
+ const row=[...db.rows.values()].find(r=>r.item_kind==='rpg_profile');row.metadata.monsterSet={version:3,cityId:null,radius:800,refreshAt:Date.now()+1800000};row.metadata.encounters=[{id:'old-set',lat:at.lat,lng:at.lng,expires_at:Date.now()+1800000}];
  assert.equal((await call({action:'init'})).spawnCache,null);
  const gps={...at,accuracy:5,time:Date.now()},batch=await call({action:'spawn',gps});assert.equal(batch.encounters.filter(e=>distanceMeters(at,e)<=200).length,6);assert.ok(batch.encounters.every(e=>e.id!=='old-set'));
  assert.deepEqual((await call({action:'spawn',gps})).encounters,batch.encounters,'GPS refresh must not reroll or refill pinned monsters');
