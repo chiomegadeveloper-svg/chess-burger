@@ -5,6 +5,6 @@
  function progress(totalXp=0){totalXp=Math.min(threshold(88),Math.max(0,Math.floor(Number(totalXp)||0)));let level=1;while(level<88&&totalXp>=threshold(level+1))level++;return {level,totalXp,xp:totalXp-threshold(level),nextXp:nextXp(level),maxLevel:88};}
  const baseStats=level=>{const n=clampLevel(level)-1;return [20+4*n,4+n,4+n,4+n,20+3*n,4+n];};
  const maxAp=level=>20+2*(clampLevel(level)-1);
- function victoryXp(heroLevel,monsterLevel){return Math.round((40+12*clampLevel(monsterLevel))*Math.max(.5,Math.min(1.6,1+(monsterLevel-heroLevel)*.15)));}
+ function victoryXp(heroLevel,monsterLevel){return Math.floor(Math.round((40+12*clampLevel(monsterLevel))*Math.max(.5,Math.min(1.6,1+(monsterLevel-heroLevel)*.15)))/2);}
  const api={MAX_LEVEL,clampLevel,nextXp,threshold,progress,baseStats,maxAp,victoryXp};root.RPGProgression=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(globalThis);

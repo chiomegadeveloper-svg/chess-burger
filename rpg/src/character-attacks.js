@@ -230,7 +230,7 @@ window.RPG_CHARACTER_ATTACKS={
   "tile": 512,
   "visible": 200,
   "facing": "left",
-  "idleHeight": 197,
+  "idleHeight": 179,
   "frameHeights": [
    169,
    159,
