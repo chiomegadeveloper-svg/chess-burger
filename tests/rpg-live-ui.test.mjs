@@ -76,7 +76,7 @@ test('battle pauses the actual GPS watch and returning to the map starts it agai
 test('all eight heroes preserve full-health identity and restore the sandbox injury and death poses',async()=>{
  const a=open(database());try{await pause();await pause();
  for(const id of ['rogue','theft','assassin','mage','tank','archer','queen','crusader'])for(const hp of [100,80,60,40,20,1,0])for(const facing of ['left','right']){
-  assert.equal(a.w.DamageSprites.sprite(id,hp,facing),hp>80?`assets/heroes/${id}-${facing}.webp`:`assets/damage/frames/${id}-${hp<=1?1:hp<=20?20:hp<=40?40:hp<=60?60:80}-${facing}.webp`);
+  assert.equal(a.w.DamageSprites.sprite(id,hp,facing),hp===0?`assets/death/portraits/${id}-${facing}.webp`:hp>80?`assets/heroes/${id}-${facing}.webp`:`assets/damage/frames/${id}-${hp<=1?1:hp<=20?20:hp<=40?40:hp<=60?60:80}-${facing}.webp`);
  }
  assert.equal(a.w.DamageSprites.sprite('chaanack',40,'right'),'assets/damage/frames/chaanack-40-left.webp');
  }finally{a.close();}

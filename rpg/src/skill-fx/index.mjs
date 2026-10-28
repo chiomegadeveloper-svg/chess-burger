@@ -4,13 +4,13 @@ import {textures} from './resources.mjs';
 
 const sessions=new Map(),sheetPromises=new Map();let protectedSkills=new Set();
 const skill=id=>window.RPG_ATTACK_SKILLS.find(s=>s.id===id);
-const characterSheets=new Map();
+const characterSheets=new Map(),characterReady=new Map();
 async function characterFrames(id){
  const entry=window.RPG_CHARACTER_ATTACKS?.[id];if(!entry)return null;
  if(!characterSheets.has(id))characterSheets.set(id,new Promise((resolve,reject)=>{
   const image=new Image();image.onload=()=>{
    const base=PIXI.BaseTexture.from(image,{scaleMode:PIXI.SCALE_MODES.NEAREST});
-   resolve({entry,frames:Array.from({length:4},(_,col)=>new PIXI.Texture(base,new PIXI.Rectangle(col*512+140,140,232,232)))});
+   const result={entry,frames:Array.from({length:4},(_,col)=>new PIXI.Texture(base,new PIXI.Rectangle(col*512+140,140,232,232)))};characterReady.set(id,result);resolve(result);
   };image.onerror=()=>reject(Error('Character attack sheet could not load.'));image.src=entry.src;
  }).catch(error=>{characterSheets.delete(id);throw error;}));
  return characterSheets.get(id);
@@ -38,7 +38,7 @@ function stop(host){
  const session=sessions.get(host);if(!session)return;
  session.cancelled=true;session.finish?.();session.resize?.disconnect();
  session.app?.destroy(true,{children:true,texture:false,baseTexture:false});sessions.delete(host);
- host.querySelectorAll('.rpg-skill-canvas,.rpg-skill-caption').forEach(n=>n.remove());
+ host.querySelectorAll('.rpg-skill-canvas,.rpg-skill-caption,.rpg-skill-fallback').forEach(n=>n.remove());
 }
 function stage(host){
  stop(host);
@@ -49,14 +49,14 @@ function stage(host){
  return session;
 }
 async function animate(host,s,options,session){
- await frames(s);if(session.cancelled)return;
+ if(session.cancelled)return;
  const {app}=session;
  const reduced=window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
- const sprite=new CtAnimatedSprite({baseClass:'AnimatedSprite',texture:s.id,anchorX:.5,anchorY:.5,loopAnimation:false,animationFPS:s.animation.fps,playAnimationOnStart:false},{});
+ const sprite=new CtAnimatedSprite({baseClass:'AnimatedSprite',texture:s.id,anchorX:.5,anchorY:.5,loopAnimation:false,animationFPS:Math.max(14,s.animation.fps),playAnimationOnStart:false},{});
  const battle=['bt-stage','bt-fx-bar'].includes(host.id);
  const w=app.screen.width,h=app.screen.height;
  const source=options.reverse?.78:.22,target=options.reverse?.22:.78;
- const [attackerData,defenderData]=await Promise.all([characterFrames(options.attackerId).catch(()=>null),characterFrames(options.defenderId).catch(()=>null)]);
+ const attackerData=characterReady.get(options.attackerId),defenderData=characterReady.get(options.defenderId);
  if(session.cancelled)return;
  const attacker=battle?character(app,attackerData,options.reverse?.85:.15,options.reverse?'left':'right'):null;
  const defender=battle&&!options.persistentFighters?character(app,defenderData,options.reverse?.15:.85,options.reverse?'right':'left'):null;
@@ -67,7 +67,7 @@ async function animate(host,s,options,session){
  app.stage.addChild(sprite);
  const caption=document.createElement('span');caption.className='rpg-skill-caption';caption.textContent=s.name;host.appendChild(caption);
  await new Promise(resolve=>{
-  let done=false,hit=false;const started=performance.now(),travelMs=3000/s.animation.fps;
+  let done=false,hit=false,watchdog;const started=performance.now(),travelMs=3000/Math.max(14,s.animation.fps);
   const impact=()=>{
    if(hit||session.cancelled)return;hit=true;
    if(battle)sprite.x=app.screen.width*target;
@@ -82,24 +82,36 @@ async function animate(host,s,options,session){
    if(frame>=3)impact();
   };
   sprite.onFrameChange=frameChanged;
-  const finish=()=>{if(done)return;if(!session.cancelled)impact();done=true;app.ticker.remove(update);sprite.stop();attacker?.destroy();defender?.destroy();if(host.dataset)delete host.dataset.caster;if(battle||session.cancelled){sprite.destroy();caption.remove();}else{sprite.gotoAndStop(3);app.renderer.render(app.stage);}session.finish=null;resolve();};session.finish=finish;
+  const finish=()=>{if(done)return;if(!session.cancelled)impact();done=true;clearTimeout(watchdog);app.ticker.remove(update);sprite.stop();attacker?.destroy();defender?.destroy();if(host.dataset)delete host.dataset.caster;if(battle||session.cancelled){sprite.destroy();caption.remove();}else{sprite.gotoAndStop(3);app.renderer.render(app.stage);}session.finish=null;resolve();};session.finish=finish;
   const update=()=>{if(session.cancelled){finish();return;}if(battle&&!reduced){const t=Math.min(1,(performance.now()-started)/travelMs);sprite.x=app.screen.width*(source+(target-source)*t);sprite.y=app.screen.height*.72;}};
   if(reduced){sprite.gotoAndStop(3);attacker?.showPose(2);impact();const timer=setTimeout(finish,450);session.finish=()=>{clearTimeout(timer);finish();};}
-  else{sprite.onComplete=finish;app.ticker.add(update);sprite.gotoAndPlay(0);}
+  else{sprite.onComplete=finish;app.ticker.add(update);sprite.gotoAndPlay(0);watchdog=setTimeout(finish,800);}
  });
 }
 async function waitForReply(event,session){
  if(!event.delayMs||session.cancelled)return;
  await new Promise(resolve=>{
   const finish=()=>{clearTimeout(timer);session.finish=null;resolve();};
-  const timer=setTimeout(finish,Math.min(3000,Math.max(1000,event.delayMs)));session.finish=finish;
+  const timer=setTimeout(finish,Math.min(2000,Math.max(0,event.delayMs)));session.finish=finish;
  });
 }
+// Cold image requests must not hold the turn open for many seconds.
+async function preload(events){await Promise.allSettled(events.flatMap(e=>{const s=skill(e.skill);return [s?frames(s):null,characterFrames(e.attackerId),characterFrames(e.defenderId)];}));}
+async function fallback(host,event,session,options){
+ const node=document.createElement('span');node.className='rpg-skill-fallback'+(event.reverse?' reverse':'');const image=document.createElement('img');image.src=`assets/skills/runes/${event.skill}.webp`;image.alt='';node.appendChild(image);host.appendChild(node);
+ await new Promise(resolve=>{let hit=false;const impact=()=>{if(!session.cancelled&&!hit){hit=true;options.onImpact?.(event);}};const hitTimer=setTimeout(impact,180),endTimer=setTimeout(()=>{impact();finish();},320);const finish=()=>{clearTimeout(hitTimer);clearTimeout(endTimer);node.remove();session.finish=null;resolve();};session.finish=finish;});
+}
 async function sequence(host,events,options={}){
- if(!host||!events.length)return;
- let session;
- try{session=stage(host);for(const event of events){if(['defend','recover'].includes(event.kind)){options.onPrepare?.(event);await waitForReply(event,session);if(session.cancelled)break;options.onAction?.(event);await waitForReply({delayMs:1000},session);continue;}const s=skill(event.skill);if(s&&!session.cancelled){options.onPrepare?.(event);await Promise.all([waitForReply(event,session),frames(s),characterFrames(event.attackerId).catch(()=>null),characterFrames(event.defenderId).catch(()=>null)]);if(session.cancelled)break;options.onAttack?.(event);await animate(host,s,{...event,onImpact:()=>options.onImpact?.(event)},session);}}if(options.status&&!session.cancelled)options.status.textContent='Animation ready · ct.js';}
- catch(error){if(options.status)options.status.textContent='Animation could not load. Tap Replay to retry.';console.warn('Skill animation unavailable:',error.message);}
+ if(!host||!events.length)return;let session;
+ try{
+  session=stage(host);let timer;await Promise.race([preload(events),new Promise(resolve=>{timer=setTimeout(resolve,600);})]);clearTimeout(timer);
+  for(const event of events){if(session.cancelled)break;
+   if(['defend','recover'].includes(event.kind)){options.onPrepare?.(event);await waitForReply(event,session);if(session.cancelled)break;options.onAction?.(event);await waitForReply({delayMs:250},session);continue;}
+   const s=skill(event.skill);if(!s)continue;options.onPrepare?.(event);await waitForReply(event,session);if(session.cancelled)break;options.onAttack?.(event);
+   if(textures.has(s.id))await animate(host,s,{...event,onImpact:()=>options.onImpact?.(event)},session);else await fallback(host,event,session,options);
+  }
+  if(options.status&&!session.cancelled)options.status.textContent='Animation ready · ct.js';
+ }catch(error){if(options.status)options.status.textContent='Animation could not load. Tap Replay to retry.';console.warn('Skill animation unavailable:',error.message);}
  finally{if(session&&!session.cancelled&&sessions.get(host)===session){if(['bt-stage','bt-fx-bar'].includes(host.id))stop(host);else session.app?.ticker.stop();}}
 }
-window.RPGSkillFX={warm:ids=>{protectedSkills=new Set(ids);return Promise.allSettled(ids.map(id=>skill(id)).filter(Boolean).map(frames));},warmCharacters:ids=>Promise.allSettled(ids.map(characterFrames)),play:(host,id,options={})=>sequence(host,[{skill:id,reverse:!!options.reverse}],options),sequence,stop,engine:'ct.js 5.3.1 / PixiAnimatedSprite'};
+window.RPGSkillFX={warmEncounter:(ids,characters)=>preload([...ids.map(skill=>({skill})),...characters.map(attackerId=>({attackerId}))]),warm:ids=>{protectedSkills=new Set(ids);return Promise.allSettled(ids.map(id=>skill(id)).filter(Boolean).map(frames));},warmCharacters:ids=>Promise.allSettled(ids.map(characterFrames)),play:(host,id,options={})=>sequence(host,[{skill:id,reverse:!!options.reverse}],options),sequence,stop,engine:'ct.js 5.3.1 / PixiAnimatedSprite'};

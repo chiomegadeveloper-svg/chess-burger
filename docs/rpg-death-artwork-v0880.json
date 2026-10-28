@@ -1,0 +1,102 @@
+{
+  "tool": "built-in image_gen",
+  "prompt": "Identity-preserving recreation of each existing prone death sprite: retain exact character, costume, colors, face and equipment; remove stone platform, floor, shadow and edge streaks; head faces right for heroes and left for monsters/bosses; crisp pixel-art character with transparent margins.",
+  "characters": [
+    {
+      "id": "assassin",
+      "reference": "public/rpg/assets/damage/frames/assassin-1-right.webp"
+    },
+    {
+      "id": "chaanack",
+      "reference": "public/rpg/assets/damage/frames/chaanack-1-left.webp"
+    },
+    {
+      "id": "rogue",
+      "reference": "public/rpg/assets/damage/frames/rogue-1-right.webp"
+    },
+    {
+      "id": "theft",
+      "reference": "public/rpg/assets/damage/frames/theft-1-right.webp"
+    },
+    {
+      "id": "mage",
+      "reference": "public/rpg/assets/damage/frames/mage-1-right.webp"
+    },
+    {
+      "id": "tank",
+      "reference": "public/rpg/assets/damage/frames/tank-1-right.webp"
+    },
+    {
+      "id": "archer",
+      "reference": "public/rpg/assets/damage/frames/archer-1-right.webp"
+    },
+    {
+      "id": "queen",
+      "reference": "public/rpg/assets/damage/frames/queen-1-right.webp"
+    },
+    {
+      "id": "crusader",
+      "reference": "public/rpg/assets/damage/frames/crusader-1-right.webp"
+    },
+    {
+      "id": "erpack",
+      "reference": "public/rpg/assets/damage/frames/erpack-1-left.webp"
+    },
+    {
+      "id": "donkuber",
+      "reference": "public/rpg/assets/damage/frames/donkuber-1-left.webp"
+    },
+    {
+      "id": "windee",
+      "reference": "public/rpg/assets/damage/frames/windee-1-left.webp"
+    },
+    {
+      "id": "kalaagg",
+      "reference": "public/rpg/assets/damage/frames/kalaagg-1-left.webp"
+    },
+    {
+      "id": "pektu",
+      "reference": "public/rpg/assets/damage/frames/pektu-1-left.webp"
+    },
+    {
+      "id": "mhakiduk",
+      "reference": "public/rpg/assets/damage/frames/mhakiduk-1-left.webp"
+    },
+    {
+      "id": "odeksa",
+      "reference": "public/rpg/assets/damage/frames/odeksa-1-left.webp"
+    },
+    {
+      "id": "buhokba",
+      "reference": "public/rpg/assets/damage/frames/buhokba-1-left.webp"
+    },
+    {
+      "id": "muraduk",
+      "reference": "public/rpg/assets/damage/frames/muraduk-1-left.webp"
+    },
+    {
+      "id": "punsuck",
+      "reference": "public/rpg/assets/damage/frames/punsuck-1-left.webp"
+    },
+    {
+      "id": "conchita",
+      "reference": "public/rpg/assets/damage/frames/conchita-1-left.webp"
+    },
+    {
+      "id": "jengot",
+      "reference": "public/rpg/assets/damage/frames/jengot-1-left.webp"
+    },
+    {
+      "id": "draguu",
+      "reference": "public/rpg/assets/damage/frames/draguu-1-left.webp"
+    },
+    {
+      "id": "baluu",
+      "reference": "public/rpg/assets/damage/frames/baluu-1-left.webp"
+    },
+    {
+      "id": "kassag",
+      "reference": "public/rpg/assets/damage/frames/kassag-1-left.webp"
+    }
+  ]
+}

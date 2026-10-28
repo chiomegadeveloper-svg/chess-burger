@@ -263,7 +263,7 @@
 .bt-idle-actor[data-side=enemy][data-pose=idle]{animation-delay:-.48s}
 .bt-idle-actor>img{position:absolute;max-width:none;left:-60.3448%;top:-60.3448%;width:220.6897%;height:220.6897%;object-fit:contain;transform:scaleX(var(--idle-facing,1));pointer-events:none}
 .bt-idle-actor[data-condition=weak]{filter:saturate(.72) brightness(.9)}
-.bt-idle-actor[data-pose=fallen]>img{inset:0;width:100%;height:100%;object-position:center bottom}
+/* Death tiles use the same 512-to-232 crop and ground baseline as idle and attack tiles. */
 .bt-fx-bar[data-caster=hero] .bt-idle-actor[data-side=hero],.bt-fx-bar[data-caster=enemy] .bt-idle-actor[data-side=enemy]{visibility:hidden;animation-play-state:paused}
 @keyframes bt-idle-breathe{0%,100%{scale:1 1}50%{scale:1.008 1.026}}
 @media(prefers-reduced-motion:reduce){.bt-idle-actor[data-pose=idle]{animation:none}}
@@ -275,3 +275,5 @@
 /* Loot thumbnails have a fixed content box independent of source aspect ratio. */
 #bt-drops-list .bt-drop-icon{box-sizing:border-box;width:52px;height:52px;min-width:52px;min-height:52px;padding:0;overflow:visible}
 #bt-drops-list .bt-drop-icon>img{position:absolute;inset:6px;width:calc(100% - 12px);height:calc(100% - 12px);min-width:0;min-height:0;max-width:calc(100% - 12px);max-height:calc(100% - 12px);object-fit:contain}
+
+.rpg-skill-fallback{position:absolute;left:15%;top:40%;width:64px;height:64px;z-index:4;animation:bt-quick-impact .32s ease-out both;pointer-events:none}.rpg-skill-fallback img{width:100%;height:100%;object-fit:contain}.rpg-skill-fallback.reverse{left:auto;right:15%;animation-name:bt-quick-impact-reverse}@keyframes bt-quick-impact{to{left:80%;opacity:.2;scale:1.2}}@keyframes bt-quick-impact-reverse{to{right:80%;opacity:.2;scale:1.2}}

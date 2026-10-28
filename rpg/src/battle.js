@@ -137,7 +137,7 @@
   el('bt-hero-art').src=sprite(a,'right');el('bt-hero-art').alt=`${a.name} · ${a.hp} health`;el('bt-enemy-art').src=sprite(enemy,'left');el('bt-enemy-art').alt=`${enemy.name} · ${enemy.hp} health`;el('bt-enemy-kind').textContent=enemy.name.toUpperCase();
   for(const [id,actor,facing] of [['bt-fx-hero',a,'right'],['bt-fx-enemy',enemy,'left']]){
    const image=el(id),idle=window.RPG_CHARACTER_IDLES?.[actor.heroId],alive=actor.hp>0,useIdle=!!idle&&alive,frame=image.parentElement;
-   const source=useIdle?idle.src:sprite(actor,facing);if(image.getAttribute('src')!==source)image.src=source;
+   const source=useIdle?idle.src:window.DamageSprites.death(actor.heroId,facing);if(image.getAttribute('src')!==source)image.src=source;
    image.alt=`${actor.name} · ${actor.hp} health`;frame.dataset.pose=useIdle?'idle':'fallen';frame.dataset.condition=actor.hp<=actor.maxHp*.4?'weak':'normal';
    image.style.setProperty('--idle-facing',useIdle&&idle.facing!==facing?-1:1);
   }
@@ -185,7 +185,7 @@
    document.body.append(encounterDialog);encounterDialog.querySelector('[data-run]').onclick=closeEncounter;encounterDialog.addEventListener('cancel',()=>{previewTarget=null;});
    encounterDialog.querySelector('[data-attack]').onclick=()=>{if(previewTarget&&!busy)void startEncounter(previewTarget);};
   }
-  previewTarget=target;encounterStatus('');
+  previewTarget=target;void window.RPGSkillFX?.warmEncounter?.([...state.active,...R.monster(enemy.monsterId,enemy.level).active].filter(Boolean),[hero.id,enemy.monsterId]);encounterStatus('');
   const heroImage=encounterDialog.querySelector('[data-hero]');heroImage.src=window.DamageSprites.sprite(hero.id,100,'right');heroImage.alt=state.name;
   const monsterImage=encounterDialog.querySelector('[data-monster]');monsterImage.src=window.DamageSprites.sprite(enemy.monsterId,100,'left');monsterImage.alt=enemy.name;
   encounterDialog.querySelector('[data-hero-name]').textContent=state.name;encounterDialog.querySelector('[data-hero-level]').textContent=`LVL ${state.level}`;
