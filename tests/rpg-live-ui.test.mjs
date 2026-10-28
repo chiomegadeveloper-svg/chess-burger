@@ -16,7 +16,7 @@ function open(db,services={}){
   w.eval(fs.readFileSync('public/rpg/vendor/chess.js','utf8'));w.eval(fs.readFileSync('public/rpg/vendor/battle-core.js','utf8'));
   w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};w.HTMLDialogElement.prototype.close=function(){this.open=false;};
   const send=data=>w.dispatchEvent(new w.MessageEvent('message',{source:w,origin:w.location.origin,data}));
-  w.postMessage=data=>{messages.push(data);if(data.type==='CB_RPG_READY')setTimeout(()=>send({type:'CB_RPG_BOOT',userId:'player-a'}),0);if(data.type==='CB_RPG_API')gameRequest(db,'player-a',data.method,data.body,services).then(result=>send({type:'CB_RPG_REPLY',id:data.id,status:200,data:result})).catch(e=>send({type:'CB_RPG_REPLY',id:data.id,status:e.status||500,data:{error:e.message}}));};
+  w.postMessage=data=>{messages.push(data);if(data.type==='CB_RPG_READY')setTimeout(()=>send({type:'CB_RPG_BOOT',userId:'player-a'}),0);if(data.type==='CB_RPG_API')gameRequest(db,'player-a',data.method,data.body,services).then(result=>send({type:'CB_RPG_REPLY',id:data.id,status:200,data:result})).catch(e=>send({type:'CB_RPG_REPLY',id:data.id,status:e.status||500,data:{error:e.message,...(e.code?{code:e.code}:{})}}));};
  }});
  return {dom,w:dom.window,d:dom.window.document,errors,messages,close:()=>dom.window.close()};
 }
@@ -318,4 +318,26 @@ test('monster ground pins update distance and reach labels as GPS moves across 2
  a.d.querySelector('#hr-guild [data-uid="shared-weapon"]').click();a.d.querySelector('[data-item-action="to-stash"]').click();await pause();await pause();await pause();assert.ok(a.d.querySelector('#hr-stash [data-uid="shared-weapon"]'));assert.equal(a.d.querySelector('#hr-guild [data-uid="shared-weapon"]'),null);assert.equal(db.guildStashes.get('guild-a').items.length,0);assert.equal(db.guildReceipts.size,2);
  a.d.querySelector('#hi-hero-room').click();assert.equal(a.w.RPGRoom.view(),'hero');assert.equal(a.d.querySelector('#hr-inventory-page').hidden,true);assert.equal(a.d.querySelector('#hr-character-page').hidden,false);assert.deepEqual(a.errors,[]);
  }finally{a.close();}
+});
+
+test('Guild Stash CBG controls deposit and withdraw the real wallet amount, while Cancel and invalid input make no transfer',async()=>{
+ const db=guildDatabase();db.guildMembers.set('player-a','guild-a');db.guildWallets.set('player-a',500);db.guildStashes.set('guild-a',{revision:0,items:[],cbg_balance:75});await gameRequest(db,'player-a','POST',{action:'register',heroId:'rogue',name:'Guild Banker',skill:'punch'});
+ const a=open(db);try{await pause();await pause();a.d.querySelector('#hr-inventory-open').click();await pause();await pause();assert.equal(a.d.querySelector('#hi-cbg-balance').textContent,'75');a.d.querySelector('#hi-cbg-deposit').click();await pause();await pause();assert.equal(a.d.querySelector('#hi-cbg-modal').open,true);assert.equal(a.d.querySelector('#hi-cbg-wallet').textContent,'500 CBG');
+ const amount=a.d.querySelector('#hi-cbg-amount');amount.value='0';amount.dispatchEvent(new a.w.Event('input'));assert.equal(a.d.querySelector('#hi-cbg-confirm').disabled,true);a.d.querySelector('#hi-cbg-cancel').click();assert.equal(db.guildCbgReceipts.size,0);
+ a.d.querySelector('#hi-cbg-deposit').click();await pause();await pause();amount.value='100';amount.dispatchEvent(new a.w.Event('input'));a.d.querySelector('#hi-cbg-confirm').click();await pause();await pause();assert.equal(a.d.querySelector('#hi-cbg-modal').open,false);assert.equal(db.guildWallets.get('player-a'),400);assert.equal(a.d.querySelector('#hi-cbg-balance').textContent,'175');
+ a.d.querySelector('#hi-cbg-withdraw').click();await pause();await pause();amount.value='50';amount.dispatchEvent(new a.w.Event('input'));a.d.querySelector('#hi-cbg-confirm').click();await pause();await pause();assert.equal(db.guildWallets.get('player-a'),450);assert.equal(a.d.querySelector('#hi-cbg-balance').textContent,'125');assert.equal(db.guildCbgReceipts.size,2);assert.equal(a.messages.filter(m=>m.type==='CB_RPG_WALLET_CHANGED').length,2);assert.deepEqual(a.errors,[]);
+ }finally{a.close();}
+});
+
+test('an unconfirmed CBG transfer keeps its request ID across closing and retrying, even with a zero wallet',async()=>{
+ const db=guildDatabase();db.guildMembers.set('player-a','guild-a');db.guildWallets.set('player-a',500);db.guildStashes.set('guild-a',{revision:0,items:[],cbg_balance:0});await gameRequest(db,'player-a','POST',{action:'register',heroId:'rogue',name:'Retry Banker',skill:'punch'});
+ const original=db.rpc;let lost=false;db.rpc=async(name,args)=>{const result=await original(name,args);if(name==='cb_rpg_guild_cbg'&&!lost){lost=true;return {error:{code:'NETWORK_ERROR',message:'Reply lost after commit'}};}return result;};
+ const a=open(db);try{await pause();await pause();a.d.querySelector('#hr-inventory-open').click();await pause();await pause();a.d.querySelector('#hi-cbg-deposit').click();await pause();await pause();const amount=a.d.querySelector('#hi-cbg-amount');amount.value='500';amount.dispatchEvent(new a.w.Event('input'));a.d.querySelector('#hi-cbg-confirm').click();await pause();await pause();await pause();assert.equal(db.guildWallets.get('player-a'),0);assert.equal(db.guildCbgReceipts.size,1);assert.equal(a.d.querySelector('#hi-cbg-modal').open,true);assert.match(a.d.querySelector('#hi-cbg-status').textContent,/not be confirmed/);a.d.querySelector('#hi-cbg-cancel').click();assert.equal(a.d.querySelector('#hi-cbg-deposit').disabled,false);
+ a.d.querySelector('#hi-cbg-deposit').click();await pause();await pause();assert.equal(amount.value,'500');assert.equal(amount.readOnly,true);assert.equal(a.d.querySelector('#hi-cbg-confirm').disabled,false);a.d.querySelector('#hi-cbg-confirm').click();await pause();await pause();assert.equal(a.d.querySelector('#hi-cbg-modal').open,false);assert.equal(db.guildWallets.get('player-a'),0);assert.equal(db.guildStashes.get('guild-a').cbg_balance,500);assert.equal(db.guildCbgReceipts.size,1);const calls=a.messages.filter(m=>m.body?.action==='guildCbg');assert.equal(calls.length,2);assert.equal(calls[0].body.requestId,calls[1].body.requestId);assert.deepEqual(a.errors,[]);
+ }finally{a.close();}
+});
+
+test('missing guild setup shows an activation state rather than an ineffective Retry action',async()=>{
+ const db=guildDatabase();db.guildMembers.set('player-a','guild-a');await gameRequest(db,'player-a','POST',{action:'register',heroId:'rogue',name:'Setup Pending',skill:'punch'});const from=db.from;db.from=table=>table==='cb_rpg_guild_stashes'?{select(){return this;},eq(){return this;},async maybeSingle(){return {data:null,error:{code:'PGRST205'}};}}:from(table);
+ const a=open(db);try{await pause();await pause();a.d.querySelector('#hr-inventory-open').click();await pause();await pause();assert.match(a.d.querySelector('#hi-guild-message').textContent,/not enabled yet/);assert.equal(a.d.querySelector('#hi-guild-retry').hidden,true);assert.equal(a.d.querySelector('#hi-cbg-deposit').disabled,true);assert.equal(a.d.querySelectorAll('#hr-guild .hr-cell').length,144);assert.deepEqual(a.errors,[]);}finally{a.close();}
 });

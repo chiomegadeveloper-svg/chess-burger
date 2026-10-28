@@ -3,7 +3,9 @@ import {fail} from './store.mjs';
 
 export const GUILD_GRID={cols:12,rows:12};
 export const guildLayout=(state,items)=>({...state,grids:{...state.grids,stash:GUILD_GRID},items:items.map(item=>({...item,where:'stash'}))});
-const unavailable=()=>fail('Guild stash is temporarily unavailable. Please retry.',503);
+const setupError=error=>/PGRST20[25]|42P01|42703|42883|42501/.test(error?.code||'');
+const unavailable=(setup=false)=>{throw Object.assign(Error(setup?'Shared guild storage is not enabled yet.':'Guild stash is temporarily unavailable. Please retry.'),{status:503,code:setup?'guild_setup_required':'guild_unavailable'});};
+async function wallet(client,user){const result=await client.from('cb_profiles').select('gold_points').eq('user_id',user).maybeSingle();if(result.error||!result.data)fail('Your CBG balance is unavailable.',503);return Number(result.data.gold_points||0);}
 
 async function membership(client,user){
  const member=await client.from('cb_guild_members').select('guild_id').eq('user_id',user).maybeSingle();
@@ -14,20 +16,29 @@ async function membership(client,user){
 
 export async function guildSnapshot(client,user){
  const guild=await membership(client,user);
- if(!guild)return {guild:null,revision:0,items:[],...GUILD_GRID};
- const result=await client.from('cb_rpg_guild_stashes').select('revision,items').eq('guild_id',guild.id).maybeSingle();
- if(result.error)unavailable();
- return {guild,revision:result.data?.revision||0,items:result.data?.items||[],...GUILD_GRID};
+ if(!guild)return {guild:null,revision:0,items:[],cbg:0,cbgReady:false,...GUILD_GRID};
+ let result=await client.from('cb_rpg_guild_stashes').select('revision,items,cbg_balance').eq('guild_id',guild.id).maybeSingle(),cbgReady=true;
+ if(result.error&&/42703|PGRST204/.test(result.error.code||'')){cbgReady=false;result=await client.from('cb_rpg_guild_stashes').select('revision,items').eq('guild_id',guild.id).maybeSingle();}
+ if(result.error)unavailable(setupError(result.error));
+ return {guild,revision:result.data?.revision||0,items:result.data?.items||[],cbg:Number(result.data?.cbg_balance||0),cbgReady,...GUILD_GRID};
 }
 
 export async function guildRequest(client,user,doc,input){
  const stash=await guildSnapshot(client,user);
- if(input.action==='guildStash')return {guildStash:stash};
+ if(input.action==='guildStash')return {guildStash:stash,walletCbg:stash.guild?await wallet(client,user):0};
  if(!stash.guild)fail('Join a Chess Burger guild to use its stash.',403);
  if(input.guildId!==stash.guild.id)fail('Your guild changed. Refresh the inventory before transferring.');
  if(!/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(input.requestId||''))fail('Please retry this transfer.',400);
+ if(input.action==='guildCbg'){
+  if(!['deposit','withdraw'].includes(input.direction)||!Number.isSafeInteger(input.amount)||input.amount<1||input.amount>1000000)fail('Enter a whole CBG amount from 1 to 1,000,000.',400);
+  if(!stash.cbgReady)unavailable(true);
+  const result=await client.rpc('cb_rpg_guild_cbg',{p_user_id:user,p_guild_id:stash.guild.id,p_request_id:input.requestId,p_direction:input.direction,p_amount:input.amount,p_generation:doc.generation||null});
+  if(result.error){if(setupError(result.error))unavailable(true);if(result.error.code==='40P01')fail('The guild stash is busy. Retry this transfer.');if(result.error.code==='P0001')fail(result.error.message);fail('Transfer status could not be confirmed. Retry the same transfer.',503);}
+  Object.assign(doc,result.data.document);
+  return {game:doc.state,walletCbg:result.data.walletCbg,guildStash:{...result.data.guildStash,guild:stash.guild,cbgReady:true,...GUILD_GRID},transferred:true};
+ }
  const receipt=await client.from('cb_rpg_guild_transfers').select('user_id,guild_id').eq('request_id',input.requestId).maybeSingle();
- if(receipt.error)unavailable();
+ if(receipt.error)unavailable(setupError(receipt.error));
  if(receipt.data){if(receipt.data.user_id!==user||receipt.data.guild_id!==stash.guild.id)fail('Transfer reference is unavailable.');return {game:doc.state,guildStash:stash,transferred:true};}
  if(input.stashRevision!==stash.revision||(input.inventoryRevision||0)!==(doc.state.inventoryRevision||0))fail('This inventory changed. Refresh and retry.');
  if(doc.battle?.status==='active')fail('Finish your battle before using the guild stash.');
@@ -54,7 +65,7 @@ export async function guildRequest(client,user,doc,input){
   p_user_id:user,p_guild_id:stash.guild.id,p_request_id:input.requestId,p_revision:doc.revision||0,
   p_stash_revision:stash.revision,p_document:next,p_items:items,p_item_uid:item.uid,p_from:from,p_to:to,
  });
- if(result.error){if(/PGRST202|42883|42P01/.test(result.error.code||''))unavailable();fail(result.error.message||'Transfer failed. Your items were not changed.');}
+ if(result.error){if(setupError(result.error))unavailable(true);fail(result.error.message||'Transfer failed. Your items were not changed.');}
  Object.assign(doc,result.data.document);
- return {game:doc.state,guildStash:{...result.data.guildStash,guild:stash.guild,...GUILD_GRID},transferred:true};
+ return {game:doc.state,guildStash:{cbg:stash.cbg,cbgReady:stash.cbgReady,...result.data.guildStash,guild:stash.guild,...GUILD_GRID},transferred:true};
 }

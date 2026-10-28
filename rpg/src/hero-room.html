@@ -38,6 +38,7 @@
   <section class="hr-panel hi-guild-panel" aria-label="Guild Stash">
    <div class="hr-panel-title"><span class="hi-guild-symbol" aria-hidden="true">♜</span><div><strong>GUILD STASH</strong><small id="hi-guild-name">12 × 12 · Shared with your guild</small></div><span id="hr-guild-count">0/144</span></div>
    <div class="hr-grid-wrap"><div class="hr-inventory" id="hr-guild" role="group" aria-label="Guild Stash, 12 columns by 12 rows"></div><div class="hi-guild-state" id="hi-guild-state"><span id="hi-guild-message">Loading your guild…</span><button type="button" class="hr-btn" id="hi-guild-retry" hidden>Retry</button></div></div>
+   <div class="hi-guild-cbg" aria-label="Shared guild CBG"><div><small>SHARED CBG</small><strong id="hi-cbg-balance">—</strong></div><button type="button" class="hr-btn" id="hi-cbg-deposit" disabled>Deposit</button><button type="button" class="hr-btn" id="hi-cbg-withdraw" disabled>Withdraw</button></div>
   </section>
  </main>
  <aside class="hi-inspector" id="hr-inspector" aria-label="Selected item" aria-live="polite"></aside>
@@ -101,4 +102,12 @@
  <p id="hr-skill-confirm-note"></p>
  <div id="hr-skill-confirm-slots" role="group" aria-label="Choose active attack slot"></div>
  <div class="hr-skill-confirm-actions"><button type="button" class="hr-btn" id="hr-skill-cancel">Cancel</button><button type="button" class="hr-btn primary" id="hr-skill-activate">Activate</button></div>
+</dialog>
+
+<dialog id="hi-cbg-modal" class="hi-cbg-dialog" aria-labelledby="hi-cbg-title">
+ <form id="hi-cbg-form"><header><div><small>GUILD STASH</small><h2 id="hi-cbg-title">Deposit CBG</h2></div><button type="button" id="hi-cbg-close" aria-label="Close CBG transfer">×</button></header>
+ <div class="hi-cbg-accounts"><div><span>Your wallet</span><strong id="hi-cbg-wallet"></strong></div><div><span>Guild stash</span><strong id="hi-cbg-shared"></strong></div></div>
+ <label for="hi-cbg-amount">Amount in CBG</label><input id="hi-cbg-amount" type="number" inputmode="numeric" min="1" max="1000000" step="1" required value="1" autocomplete="off">
+ <p id="hi-cbg-note">All members of your guild can use this shared CBG.</p><p id="hi-cbg-status" role="status" aria-live="polite"></p>
+ <footer><button type="button" class="hr-btn" id="hi-cbg-cancel">Cancel</button><button type="submit" class="hr-btn primary" id="hi-cbg-confirm">Deposit CBG</button></footer></form>
 </dialog>
