@@ -229,7 +229,7 @@
   }
   function renderLearn(){
     const remaining=C.spells.length-state.learned.length;
-    el('hr-learn-note').textContent=(state.learnCredits?`${Math.min(state.learnCredits,remaining)} skill choice(s) available. `:`Next skill choice: level ${Math.floor(state.level/2)*2+2}. `)+'Choose one new skill every 2 levels. Learn now or save the choice. Equip in one of 4 active slots; only equipped bonuses count.';
+    el('hr-learn-note').textContent=remaining===0?'All 30 skills learned · Equip attacks from your Power Library.':state.learnCredits?`${Math.min(state.learnCredits,remaining)} skill choice(s) available · New choice every 2 levels.`:`Next skill choice: level ${Math.floor(state.level/2)*2+2} · Equip up to 4 attacks.`;
     const category=el('hr-skill-category').value;
     el('hr-learn-list').innerHTML=C.spells.filter(s=>!category||s.category===category).map(spell=>{
       const known=state.learned.includes(spell.id);
