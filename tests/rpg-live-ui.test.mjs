@@ -20,6 +20,24 @@ function open(db,services={},transport={}){
  }});
  return {dom,w:dom.window,d:dom.window.document,errors,messages,close:()=>dom.window.close()};
 }
+test('Hero Room neon meters preserve zero health, update after a real potion, and show capped resources and maximum XP accurately',async()=>{
+ const C=(await import('../api/_rpg/src/inventory-core.js')).default,P=(await import('../api/_rpg/src/progression.js')).default,db=database();
+ await gameRequest(db,'player-a','POST',{action:'register',heroId:'assassin',name:'Neon Hero',skill:'punch'});
+ const doc=[...db.rows.values()].find(r=>r.item_kind==='rpg_profile').metadata;
+ C.gainXp(doc.state,P.threshold(7)+244);Object.assign(doc.state,{currentHp:0,currentMp:19,currentAp:24});
+ const a=open(db);try{await pause();await pause();
+  const meters=()=>[...a.d.querySelectorAll('#hr-current-hp [role="meter"]')];
+  assert.deepEqual(meters().map(n=>n.getAttribute('aria-valuenow')),['0','19','24']);
+  assert.deepEqual(meters().map(n=>n.querySelector('.hr-meter-percent').textContent),['0%','50%','75%']);
+  assert.equal(meters()[0].querySelector('i').style.width,'0%');assert.equal(a.d.querySelector('#hr-xp').value,244);assert.equal(a.d.querySelector('#hr-xp').max,490);assert.equal(a.d.querySelector('#hr-xp-percent').textContent,'50%');
+  a.d.querySelector('#hr-drink-potion').click();await pause();await pause();
+  assert.equal((await read(db,'player-a')).state.currentHp,20);assert.equal(meters()[0].getAttribute('aria-valuenow'),'20');assert.equal(meters()[0].querySelector('.hr-meter-percent').textContent,'45%');
+  const next=structuredClone((await read(db,'player-a')).state);C.gainXp(next,P.threshold(88)-next.totalXp);Object.assign(next,{currentHp:-1,currentMp:9999,currentAp:9999});a.w.RPGRoom.accept(next);
+  assert.equal(meters()[0].querySelector('i').style.width,'0%');assert.equal(meters()[1].querySelector('i').style.width,'100%');assert.equal(meters()[2].querySelector('i').style.width,'100%');
+  assert.equal(a.d.querySelector('#hr-xp-percent').textContent,'100%');assert.equal(a.d.querySelector('#hr-xp').value,1);assert.equal(a.d.querySelector('#hr-xp').max,1);assert.match(a.d.querySelector('#hr-xp').getAttribute('aria-valuetext'),/maximum level/);assert.deepEqual(a.errors,[]);
+ }finally{a.close();}
+});
+
 test('live portal creates one named hero with two attacks, hides test tools, exits instead of changing hero, and restores cloud hero on reopening',async()=>{
  const db=database(),a=open(db);try{
   await pause();await pause();assert.equal(a.d.querySelector('#live-loading'),null);assert.equal(a.d.querySelectorAll('.live-skill-icon').length,30);assert.equal(a.d.querySelector('select#live-starter'),null);
