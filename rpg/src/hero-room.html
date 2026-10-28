@@ -1,43 +1,47 @@
-<section class="hero-room" id="hr-room" aria-label="Hero equipment room" hidden>
-  <header class="hr-topbar">
-    <button type="button" class="hr-btn ghost" id="hr-back" aria-label="Exit RPG">← <span class="hr-back-label">Exit RPG</span></button>
-    <div><small>02 / PREPARE FOR ADVENTURE</small><h1>Hero Room</h1></div>
-    <span class="hr-pill">YOUR ADVENTURE</span>
-    <button type="button" class="hr-btn primary" id="hr-collect">Items</button>
-    <button type="button" class="hr-btn hr-book-trigger" id="hr-book" title="Babaylan Book" aria-label="Open Babaylan Book"><img src="{{BABAYLAN_BOOK_ICON}}" alt=""><span>Babaylan Book</span></button>
-    <small id="hr-wallet" hidden></small>
-    <button type="button" class="hr-btn" id="hr-damage">Sprite Lab</button>
-    <button type="button" class="hr-btn" id="hr-save">Save</button>
-  </header>
-  <main class="hr-main">
-    <section class="hr-panel hr-hero-panel" aria-label="Hero and attributes">
-      <div class="hr-hero-head"><div><h2 id="hr-name"></h2><small id="hr-class"></small></div><span class="hr-pill" id="hr-level"></span></div>
-      <div class="hr-hero-scene"><div class="hr-hero-figure"><img class="hr-hero-img" id="hr-portrait" alt=""></div></div>
-      <div class="hr-stats" id="hr-stats"></div><div class="hr-recovery"><strong id="hr-current-hp"></strong><button type="button" class="hr-btn" id="hr-drink-potion" title="Drink health potion · +20 HP" aria-label="Drink health potion · +20 HP">Heal +20</button><button type="button" class="hr-btn" id="hr-claim-loot" title="Collect saved drops" aria-label="Collect saved drops">Saved drops</button></div>
-      <div class="rpg-xp-panel"><span id="hr-xp-label"></span><progress id="hr-xp" max="100" value="0" aria-label="Experience to next level"></progress><small>Each level: +4 HP · +2 AP · +3 MP · +1 ATK / MAG / ARM / WIS</small></div><div class="hr-level-row"><span id="hr-points"></span><button type="button" class="hr-btn" id="hr-levelup" title="Device practice only: simulate one level. Online XP is server verified.">Test level +</button></div>
-      <p class="hr-base-note" hidden>Totals include bonuses. Matching colors merge into one + value; Mythic is purple, spells are cyan. Hover for the item breakdown.</p>
-    </section>
-    <section class="hr-panel hr-bag-panel" aria-label="Bag inventory">
-      <div class="hr-panel-title"><img data-room-icon="bag_icon" alt=""><div><strong>HERO BAG</strong><small id="hr-bag-size">6 × 6 · Equipped bonuses</small></div><button type="button" class="hr-arrange-button" id="hr-arrange-bag" data-arrange="bag" aria-label="Auto-arrange bag" data-tooltip="Auto-arrange bag"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><rect x="3" y="3" width="6" height="6" rx="1.5"/><rect x="3" y="13" width="6" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/><path d="M17 2v8m-4-4h8M14 3l6 6m0-6-6 6"/></svg></button><span id="hr-bag-count"></span></div>
-      <div class="hr-grid-wrap"><div class="hr-inventory" id="hr-bag" role="group" aria-label="Bag, 6 columns by 6 rows"></div></div>
-      <div class="hr-grid-note">Drag a potion onto your hero to restore 20 HP or mana. Double-tap equipment to rotate; hover for details.</div>
-    </section>
-    <section class="hr-panel hr-stash-panel" aria-label="Stash inventory">
-      <div class="hr-panel-title"><img data-room-icon="stash_icon" alt=""><div><strong>ITEM STASH</strong><small id="hr-stash-size">6 × 6 · Storage only</small></div><button type="button" class="hr-arrange-button" id="hr-arrange-stash" data-arrange="stash" aria-label="Auto-arrange stash" data-tooltip="Auto-arrange stash"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><rect x="3" y="3" width="6" height="6" rx="1.5"/><rect x="3" y="13" width="6" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/><path d="M17 2v8m-4-4h8M14 3l6 6m0-6-6 6"/></svg></button><span id="hr-stash-count"></span></div>
-      <div class="hr-grid-wrap"><div class="hr-inventory" id="hr-stash" role="group" aria-label="Stash, 6 columns by 6 rows"></div></div>
-      <div class="hr-inspector" id="hr-inspector" aria-live="polite"></div>
-      <p class="hr-stash-tip" hidden>Stashed items add no attributes. Move equipment into your bag to use its bonuses.</p>
-    </section>
-    <section class="hr-panel hr-storage-panel" aria-label="Attack and magic spell storage">
-      <div class="hr-active-section"><h2 class="hr-section-label"><img data-room-icon="active_icon" alt="">ACTIVE ATTACKS <span>4 slots</span></h2><div class="hr-active-slots" id="hr-active" role="group" aria-label="Active attacks"></div></div>
-      <div class="hr-storage-top"><h2 class="hr-section-label"><img data-room-icon="storage_icon" alt="">POWER LIBRARY</h2></div>
-      <div class="hr-library-nav"><div class="hr-library-choice"><span id="hr-skill-progress"></span><button type="button" class="hr-btn" id="hr-learn">Skill Book</button></div><div><button type="button" class="hr-btn" id="hr-library-prev" aria-label="Previous library page">←</button><span id="hr-library-page"></span><button type="button" class="hr-btn" id="hr-library-next" aria-label="Next library page">→</button></div></div><div class="hr-storage-bottom">
-        <div class="hr-storage-slots" id="hr-spell-storage" role="group" aria-label="Stored attacks and spells"></div>
-        <button type="button" class="hr-explore-cta" id="hr-explore"><span>Explore World</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 19 19 5M5 5h14v14"/></svg></button>
-      </div>
-    </section>
-  </main>
-  <div class="hr-bottom-note" id="hr-feedback" role="status" aria-live="polite">Select a spell, then tap a slot to move it. Progress saves on this device.</div>
+<section class="hero-room hr-split" id="hr-room" data-view="hero" aria-label="Hero Room" hidden>
+ <header class="hr-topbar">
+  <button type="button" class="hr-btn ghost hr-hero-only" id="hr-back" aria-label="Exit RPG">← <span class="hr-back-label">Exit RPG</span></button>
+  <div class="hr-screen-title"><small>YOUR ADVENTURE</small><h1 id="hr-view-title">Hero Room</h1></div>
+  <div class="hr-live-meta"><button id="hr-save" type="button" class="hr-btn" hidden>Save</button></div>
+  <nav class="hr-screen-nav" aria-label="Hero navigation"><button type="button" class="hr-btn hr-hero-only" id="hr-inventory-open">▦ <span>Inventory</span></button><button type="button" class="hr-btn hr-inventory-only" id="hi-hero-room">♟ <span>Hero Room</span></button><button type="button" class="hr-btn primary hr-inventory-only" id="hi-explore">Explore World ↗</button></nav>
+  <button id="hr-collect" type="button" hidden>Items</button><button id="hr-damage" type="button" hidden>Sprite Lab</button><small id="hr-wallet" hidden></small>
+ </header>
+ <main class="hr-main hr-character-page" id="hr-character-page">
+  <section class="hr-panel hr-hero-panel" aria-label="Hero portrait">
+   <div class="hr-hero-head"><div><h2 id="hr-name"></h2><small id="hr-class"></small></div><span class="hr-pill" id="hr-level"></span></div>
+   <div class="hr-hero-scene"><div class="hr-hero-figure"><img class="hr-hero-img" id="hr-portrait" alt=""></div><span class="hr-stage-caption">READY FOR ADVENTURE</span></div>
+  </section>
+  <section class="hr-panel hr-attributes-panel" aria-label="Hero attributes and resources">
+   <h2 class="hr-section-label">ATTRIBUTES</h2><div class="hr-stats" id="hr-stats"></div>
+   <div class="hr-recovery"><strong id="hr-current-hp"></strong><div class="hr-recovery-actions"><button type="button" class="hr-btn" id="hr-drink-potion" title="Drink health potion · +20 HP">Heal +20</button><button type="button" class="hr-btn" id="hr-claim-loot" title="Collect drops waiting for stash space">Saved drops</button></div></div>
+   <div class="rpg-xp-panel"><span id="hr-xp-label"></span><progress id="hr-xp" max="100" value="0" aria-label="Experience to next level"></progress><small>Each level: +4 HP · +2 AP · +3 MP · +1 ATK / MAG / ARM / WIS</small></div>
+   <div class="hr-level-row"><span id="hr-points"></span><button type="button" class="hr-btn" id="hr-levelup" hidden>Test level +</button></div>
+  </section>
+  <section class="hr-panel hr-storage-panel" aria-label="Active attacks and Power Library">
+   <div class="hr-active-section"><h2 class="hr-section-label">ACTIVE ATTACKS <span>4 slots</span></h2><div class="hr-active-slots" id="hr-active" role="group" aria-label="Active attacks"></div></div>
+   <div class="hr-storage-top"><h2 class="hr-section-label">POWER LIBRARY</h2><div class="hr-library-choice"><span id="hr-skill-progress"></span><button type="button" class="hr-btn" id="hr-learn" aria-label="Open Skill Book">Skill Book</button></div></div>
+   <div class="hr-storage-slots" id="hr-spell-storage" role="group" aria-label="Stored attacks and spells"></div>
+   <div class="hr-library-nav"><button type="button" class="hr-btn" id="hr-library-prev" aria-label="Previous library page">←</button><span id="hr-library-page"></span><button type="button" class="hr-btn" id="hr-library-next" aria-label="Next library page">→</button></div>
+   <button type="button" class="hr-btn hr-book-trigger" id="hr-book" title="Babaylan Book"><img src="{{BABAYLAN_BOOK_ICON}}" alt=""><span>Babaylan Book</span><span aria-hidden="true">↗</span></button>
+   <button type="button" class="hr-explore-cta" id="hr-explore"><span>Explore World</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 19 19 5M5 5h14v14"/></svg></button>
+  </section>
+ </main>
+ <main class="hi-main" id="hr-inventory-page" aria-label="Hero Inventory" hidden>
+  <section class="hr-panel hr-bag-panel" aria-label="Hero Bag">
+   <div class="hr-panel-title"><img data-room-icon="bag_icon" alt=""><div><strong>HERO BAG</strong><small id="hr-bag-size">6 × 6</small></div><button type="button" id="hr-arrange-bag" data-arrange="bag" hidden>Auto-arrange bag</button><span id="hr-bag-count"></span></div>
+   <div class="hr-grid-wrap"><div class="hr-inventory" id="hr-bag" role="group" aria-label="Hero Bag"></div></div>
+  </section>
+  <section class="hr-panel hr-stash-panel" aria-label="Hero Stash">
+   <div class="hr-panel-title"><img data-room-icon="stash_icon" alt=""><div><strong>HERO STASH</strong><small id="hr-stash-size">6 × 6</small></div><button type="button" id="hr-arrange-stash" data-arrange="stash" hidden>Auto-arrange stash</button><span id="hr-stash-count"></span></div>
+   <div class="hr-grid-wrap"><div class="hr-inventory" id="hr-stash" role="group" aria-label="Hero Stash"></div></div>
+  </section>
+  <section class="hr-panel hi-guild-panel" aria-label="Guild Stash">
+   <div class="hr-panel-title"><span class="hi-guild-symbol" aria-hidden="true">♜</span><div><strong>GUILD STASH</strong><small id="hi-guild-name">12 × 12 · Shared with your guild</small></div><span id="hr-guild-count">0/144</span></div>
+   <div class="hr-grid-wrap"><div class="hr-inventory" id="hr-guild" role="group" aria-label="Guild Stash, 12 columns by 12 rows"></div><div class="hi-guild-state" id="hi-guild-state"><span id="hi-guild-message">Loading your guild…</span><button type="button" class="hr-btn" id="hi-guild-retry" hidden>Retry</button></div></div>
+  </section>
+ </main>
+ <aside class="hi-inspector" id="hr-inspector" aria-label="Selected item" aria-live="polite"></aside>
+ <div class="hr-bottom-note" id="hr-feedback" role="status" aria-live="polite"></div>
 </section>
 <div class="hr-modal" id="hr-catalog-modal" role="dialog" aria-modal="true" aria-labelledby="hr-catalog-title" hidden>
   <div class="hr-modal-card">

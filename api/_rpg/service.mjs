@@ -1,6 +1,7 @@
 import {publishRpgFeed} from './feed.mjs';
 import {chestRequest,resolveCity,recoverChests} from './chests.mjs';
 import {merchantRequest} from './merchant.mjs';
+import {guildRequest} from './guild-stash.mjs';
 import {health,healthCap,mana,manaCap,normalize,loot,stash,recovery,cbgDrop} from './rewards.mjs';
 import {Chess} from 'chess.js';
 import puzzles from './puzzles.json' with {type:'json'};
@@ -35,6 +36,7 @@ export async function gameRequest(client,user,method,input={},services={}){
   if(!doc?.state||doc.heroId!==proposed.heroId||doc.name!==proposed.name||doc.starterSkill!==proposed.starterSkill)fail('A hero was already confirmed in another window. Reopen RPG to continue.');await publishRpgFeed(client,user,doc);return {game:doc.state,generation:doc.generation||null};
  }
  if(!doc?.state){if(doc?.generation)resetError();fail('Choose your hero first.',409);}
+ if(['guildStash','guildTransfer'].includes(input.action))return guildRequest(client,user,doc,input);
  if(input.action==='claimLoot'){stash(doc);await persist();return {game:doc.state,pendingLoot:doc.pendingLoot};}
  if(input.action==='save'){if(doc.pvpId){const rows=await client.from('cb_inventory_items').select('metadata').eq('item_kind','rpg_battle').eq('item_id',doc.pvpId).contains('metadata',{participants:[user]}).maybeSingle();if(rows.error||['active','pending'].includes(rows.data?.metadata?.status))fail('Equipment is locked during battle.');}saveInventory(doc,input.state);await persist();return {game:doc.state};}
  const near=(a,b)=>{if(!a)fail('Use a fresh map location to select an encounter.');const distance=distanceMeters(a,b);if(distance>200)throw Object.assign(Error('Outside attack range. Move within 200 meters to battle.'),{status:409,code:'out_of_range',distance:Math.ceil(distance)});};

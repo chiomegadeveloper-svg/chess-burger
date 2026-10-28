@@ -1,0 +1,60 @@
+import C from './src/inventory-core.js';
+import {fail} from './store.mjs';
+
+export const GUILD_GRID={cols:12,rows:12};
+export const guildLayout=(state,items)=>({...state,grids:{...state.grids,stash:GUILD_GRID},items:items.map(item=>({...item,where:'stash'}))});
+const unavailable=()=>fail('Guild stash is temporarily unavailable. Please retry.',503);
+
+async function membership(client,user){
+ const member=await client.from('cb_guild_members').select('guild_id').eq('user_id',user).maybeSingle();
+ if(member.error)unavailable();if(!member.data)return null;
+ const guild=await client.from('cb_guilds').select('id,name').eq('id',member.data.guild_id).maybeSingle();
+ if(guild.error)unavailable();return guild.data||null;
+}
+
+export async function guildSnapshot(client,user){
+ const guild=await membership(client,user);
+ if(!guild)return {guild:null,revision:0,items:[],...GUILD_GRID};
+ const result=await client.from('cb_rpg_guild_stashes').select('revision,items').eq('guild_id',guild.id).maybeSingle();
+ if(result.error)unavailable();
+ return {guild,revision:result.data?.revision||0,items:result.data?.items||[],...GUILD_GRID};
+}
+
+export async function guildRequest(client,user,doc,input){
+ const stash=await guildSnapshot(client,user);
+ if(input.action==='guildStash')return {guildStash:stash};
+ if(!stash.guild)fail('Join a Chess Burger guild to use its stash.',403);
+ if(input.guildId!==stash.guild.id)fail('Your guild changed. Refresh the inventory before transferring.');
+ if(!/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(input.requestId||''))fail('Please retry this transfer.',400);
+ const receipt=await client.from('cb_rpg_guild_transfers').select('user_id,guild_id').eq('request_id',input.requestId).maybeSingle();
+ if(receipt.error)unavailable();
+ if(receipt.data){if(receipt.data.user_id!==user||receipt.data.guild_id!==stash.guild.id)fail('Transfer reference is unavailable.');return {game:doc.state,guildStash:stash,transferred:true};}
+ if(input.stashRevision!==stash.revision||(input.inventoryRevision||0)!==(doc.state.inventoryRevision||0))fail('This inventory changed. Refresh and retry.');
+ if(doc.battle?.status==='active')fail('Finish your battle before using the guild stash.');
+ const from=input.from,to=input.to;
+ if(!['bag','stash','guild'].includes(from)||!['bag','stash','guild'].includes(to)||from!=='guild'&&to!=='guild')fail('Choose a guild stash transfer.',400);
+ if(!Number.isInteger(input.rotation)||input.rotation<0||input.rotation>3)fail('Invalid item rotation.',400);
+ const next=structuredClone(doc),items=structuredClone(stash.items),source=from==='guild'?items:next.state.items;
+ const item=source.find(i=>i.uid===input.uid&&i.where===from);if(!item)fail('This item has already moved. Refresh the stash.');
+ const rotation=input.rotation;
+ if(to==='guild'){
+  const layout=guildLayout(next.state,items);
+  if(!C.canPlace(layout,item,'stash',input.x,input.y,rotation))fail('This item does not fit in the guild stash.');
+  const placed={...item,where:'guild',x:input.x,y:input.y,rotation,rotated:Boolean(rotation%2)};
+  const index=items.findIndex(i=>i.uid===item.uid);if(index<0)items.push(placed);else items[index]=placed;
+  if(from!=='guild')next.state.items=next.state.items.filter(i=>i.uid!==item.uid);
+ }else{
+  if(next.state.items.some(i=>i.uid===item.uid))fail('This item is already in your inventory.');
+  if(!C.place(next.state,item,to,input.x,input.y,rotation))fail(to==='bag'&&!C.canEquip(next.state,item)?`Reach level ${item.requiredLevel} to equip this item.`:'This item does not fit in your inventory.');
+  items.splice(items.findIndex(i=>i.uid===item.uid),1);
+ }
+ if(!C.validState(next.state,doc.heroId))fail('Invalid inventory layout.',400);
+ next.state.inventoryRevision=(doc.state.inventoryRevision||0)+1;
+ const result=await client.rpc('cb_rpg_guild_transfer',{
+  p_user_id:user,p_guild_id:stash.guild.id,p_request_id:input.requestId,p_revision:doc.revision||0,
+  p_stash_revision:stash.revision,p_document:next,p_items:items,p_item_uid:item.uid,p_from:from,p_to:to,
+ });
+ if(result.error){if(/PGRST202|42883|42P01/.test(result.error.code||''))unavailable();fail(result.error.message||'Transfer failed. Your items were not changed.');}
+ Object.assign(doc,result.data.document);
+ return {game:doc.state,guildStash:{...result.data.guildStash,guild:stash.guild,...GUILD_GRID},transferred:true};
+}

@@ -7,14 +7,31 @@
   let hero,state,selectedItem=null,selectedSpell=null,drag=null,ghost=null,preview=null;
   let suppressClickUntil=0,suppressedSource=null,modal=null,returnFocus=null;
   let lastTap=null,tooltipAnchor=null,consumeBusy=false;
+  const transferId=()=>{if(crypto.randomUUID)return crypto.randomUUID();const bytes=crypto.getRandomValues(new Uint8Array(16));bytes[6]=bytes[6]&15|64;bytes[8]=bytes[8]&63|128;const h=[...bytes].map(n=>n.toString(16).padStart(2,'0')).join('');return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`;};
   const key=()=>window.RPGLive.key(hero.id);
   const escape=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const bonuses=list=>list.map((value,i)=>value?`+${value} ${C.stats[i]}`:'').filter(Boolean).join(' · ')||'No attribute bonus';
-  const itemById=uid=>state.items.find(item=>item.uid===uid);
+  let guildData={guild:null,revision:0,items:[],cols:12,rows:12},guildLoaded=false,guildLoading=false,guildBusy=false;
+  const itemById=uid=>state.items.find(item=>item.uid===uid)||guildData.items.find(item=>item.uid===uid);
+  const roomGrid=where=>where==='guild'?{cols:12,rows:12}:C.gridFor(state,where);
+  const guildLayout=()=>({...state,grids:{...state.grids,stash:{cols:12,rows:12}},items:guildData.items.map(item=>({...item,where:'stash'}))});
+  const canPlace=(item,where,x,y,rotation)=>where==='guild'?!!guildData.guild&&!guildBusy&&C.canPlace(guildLayout(),item,'stash',x,y,rotation):C.canPlace(state,item,where,x,y,rotation);
+  function fitGrids(){if(!state)return;for(const where of ['bag','stash','guild']){const node=el('hr-'+where),wrap=node.parentElement,grid=roomGrid(where),w=wrap.clientWidth-14,h=wrap.clientHeight-14;if(w<=0||h<=0)continue;const cell=Math.min((w-2)/grid.cols,(h-2)/grid.rows),width=Math.floor(cell*grid.cols)+2;node.style.width=width+'px';node.style.height=((width-2)*grid.rows/grid.cols+2)+'px';}}
+  function showView(view){hideTooltip();clearDrag();selectedItem=null;selectedSpell=null;room.dataset.view=view;feedback('');el('hr-character-page').hidden=view!=='hero';el('hr-inventory-page').hidden=view!=='inventory';el('hr-view-title').textContent=view==='hero'?'Hero Room':'Hero Inventory';room.setAttribute('aria-label',el('hr-view-title').textContent);renderInspector();fitGrids();requestAnimationFrame(fitGrids);if(view==='inventory')void loadGuild();}
+  async function guildApi(body){const response=await fetch('/api/battle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}),data=await response.json();if(!response.ok)throw Object.assign(Error(data.error||'Guild stash is unavailable.'),{status:response.status});return data;}
+  function guildStatus(text,retry=false){el('hi-guild-state').hidden=!text;el('hi-guild-message').textContent=text;el('hi-guild-retry').hidden=!retry;el('hr-guild').setAttribute('aria-disabled',String(!!text));}
+  async function loadGuild(){if(guildLoading||guildBusy||!state)return;guildLoading=true;if(!guildLoaded)guildStatus('Loading your guild…');try{const data=await guildApi({action:'guildStash'});const next=data.guildStash,changed=!guildLoaded||guildData.revision!==next.revision||guildData.guild?.id!==next.guild?.id||guildData.guild?.name!==next.guild?.name;guildData=next;guildLoaded=true;if(changed){renderGrid('guild');renderInspector();}guildStatus(guildData.guild?'':'Join a Chess Burger guild to use shared storage.');}catch(error){guildStatus(error.message,true);}finally{guildLoading=false;requestAnimationFrame(fitGrids);}}
+  async function guildTransfer(item,to,x,y,rotation=item.rotation){if(guildBusy||!guildData.guild){feedback('Join a Chess Burger guild to use shared storage.');return;}guildBusy=true;hideTooltip();room.inert=true;feedback('Moving item…');try{if(await window.RPGLive.flush?.()===false)throw Error('Your inventory is still saving. Reconnect and retry.');const data=await guildApi({action:'guildTransfer',guildId:guildData.guild.id,requestId:transferId(),uid:item.uid,from:item.where,to,x,y,rotation,stashRevision:guildData.revision,inventoryRevision:state.inventoryRevision||0});guildData=data.guildStash;Object.assign(state,data.game);localStorage.setItem(key(),JSON.stringify(state));selectedItem=null;render();window.RPGWorld.refresh?.();feedback(to==='guild'?'Item placed in the shared guild stash.':'Item moved to your '+(to==='bag'?'Hero Bag.':'Hero Stash.'));}catch(error){feedback(error.message);try{const fresh=await guildApi({action:'init'});if(fresh.game){Object.assign(state,fresh.game);localStorage.setItem(key(),JSON.stringify(state));render();}}catch{}}finally{guildBusy=false;room.inert=false;void loadGuild();}}
+  function guildDestination(to){const item=itemById(selectedItem);if(!item)return;const layout=to==='guild'?guildLayout():state,spot=C.findSpace(layout,item,to==='guild'?'stash':to);if(!spot){feedback('There is no room for this item in '+(to==='guild'?'the Guild Stash.':to==='bag'?'your Hero Bag.':'your Hero Stash.'));return;}void guildTransfer(item,to,spot.x,spot.y,spot.rotation);}
+  setInterval(()=>{if(!room.hidden&&room.dataset.view==='inventory'&&!document.hidden&&!drag)void loadGuild();},8000);
+  el('hr-inventory-open').onclick=()=>showView('inventory');el('hi-hero-room').onclick=()=>showView('hero');el('hi-explore').onclick=()=>el('hr-explore').click();el('hi-guild-retry').onclick=()=>void loadGuild();
+  window.addEventListener('resize',fitGrids);if(typeof ResizeObserver!=='undefined'){const observer=new ResizeObserver(fitGrids);for(const node of document.querySelectorAll('.hi-main .hr-grid-wrap'))observer.observe(node);}
+
   const itemName=item=>`${C.itemMap[item.defId].name}${C.isConsumable(item)?'':' of '+item.enhancement.name}${item.sandboxTest?' (Test)':''}`;
   const compactBonuses=list=>list.map((v,i)=>v?`+${v} ${abbreviations[i]}`:'').filter(Boolean).join(' · ');
-  function feedback(message){el('hr-feedback').textContent=message;}
+  function feedback(message){el('hr-feedback').textContent=message;el('hr-feedback').title=message;}
   function save(notify=false){
+    if(guildBusy)return true;
     try{localStorage.setItem(key(),JSON.stringify(state));window.RPGLive.save(state);if(notify)feedback('Saving your hero…');return true;}
     catch(error){feedback('Browser storage is unavailable. Keep this tab open to retain your current room.');return false;}
   }
@@ -30,9 +47,9 @@
     state.name=name;selectedItem=null;selectedSpell=null;lastTap=null;
     document.querySelector('.app').hidden=true;room.hidden=false;
     el('toast').classList.remove('show');
-    el('hr-portrait').src=(typeof HERO_HEADS!=='undefined'&&HERO_HEADS[hero.id])||hero.img;el('hr-portrait').alt=`${hero.name}, ${hero.heroClass}, portrait`;
-    render();save();el('hr-back').focus();
-    feedback('Double-tap items to rotate clockwise. Hover or open Details to inspect them.');
+    el('hr-portrait').src=`assets/heroes/${hero.id}-right.webp`;el('hr-portrait').alt=`${hero.name}, ${hero.heroClass}, full-body hero facing right`;
+    render();showView('hero');save();el('hr-back').focus();
+    feedback('');
   }
   function renderStats(){
     el('hr-name').textContent=state.name;el('hr-class').textContent=`${hero.name} · ${hero.heroClass} · ${window.RPGElements.label(window.RPGElements.affinity(hero.id))}`;
@@ -50,7 +67,7 @@
         const group=groups.get(key),isSpell=key==='spells',label=`${isSpell?'Active spells':C.rarityMap[key].name} · +${group.total} ${name}\n${group.sources.join('\n')}`;
         return `<small class="hr-stat-bonus${isSpell?' hr-stat-spell':''}" ${isSpell?'data-bonus-kind="spells"':`data-bonus-rarity="${key}"`} data-bonus-count="${group.sources.length}" style="--bonus-color:${isSpell?'#65e3eb':bonusColors[key]}" title="${escape(label)}" aria-label="${escape(label)}">+${group.total}</small>`;
       });
-      return `<div class="hr-stat" title="${window.RPGProgression.baseStats(state.level)[i]} level base + ${bag[i]} bag + ${spells[i]} active spells"><span>${name}</span><b data-stat="${i}"><span class="hr-stat-total">${totals[i]}</span>${parts.length?`<span class="hr-stat-bonuses" tabindex="0" aria-label="${name} bonuses grouped by color; scroll to see every group">${parts.join('')}</span>`:''}</b><button type="button" data-upgrade="${i}" aria-label="Increase ${name} by one" ${state.points?'':'hidden'}>+</button></div>`;
+      return `<div class="hr-stat" role="group" aria-label="${name}: ${totals[i]}" title="${window.RPGProgression.baseStats(state.level)[i]} level base + ${bag[i]} bag + ${spells[i]} active spells"><span>${name}</span><b data-stat="${i}"><span class="hr-stat-total">${totals[i]}</span>${parts.length?`<span class="hr-stat-bonuses" tabindex="0" aria-label="${name} bonuses grouped by color; scroll to see every group">${parts.join('')}</span>`:''}</b><button type="button" data-upgrade="${i}" aria-label="Increase ${name} by one" ${state.points?'':'hidden'}>+</button></div>`;
     }).join('');
     el('hr-points').textContent=state.points?`${state.points} upgrade point${state.points===1?'':'s'}`:'Automatic stat gains every level';
     const remaining=C.spells.length-state.learned.length;
@@ -58,18 +75,18 @@
     el('hr-learn').disabled=false;el('hr-learn').classList.toggle('skill-ready',state.learnCredits>0&&remaining>0);
   }
   function renderGrid(where){
-    const grid=C.gridFor(state,where),node=el(`hr-${where}`),scroll=node.parentElement.scrollTop;
+    const grid=roomGrid(where),node=el(`hr-${where}`),scroll=node.parentElement.scrollTop;
     node.setAttribute('aria-label',`${where}, ${grid.cols} columns by ${grid.rows} rows`);
-    el(`hr-${where}-size`).textContent=`${grid.cols} × ${grid.rows} · ${where==='bag'?'Equipped bonuses':'Storage only'}`;
+    if(where==='guild')el('hi-guild-name').textContent=guildData.guild?guildData.guild.name+' · 12 × 12':'12 × 12 · Shared storage';else el(`hr-${where}-size`).textContent=`${grid.cols} × ${grid.rows}`;
     node.style.setProperty('--grid-cols',grid.cols);node.style.setProperty('--grid-rows',grid.rows);
     node.style.gridTemplateColumns=`repeat(${grid.cols},minmax(0,1fr))`;
     node.style.gridTemplateRows=`repeat(${grid.rows},minmax(0,1fr))`;
     let html='';
     for(let y=0;y<grid.rows;y++)for(let x=0;x<grid.cols;x++)html+=`<button type="button" class="hr-cell" data-where="${where}" data-x="${x}" data-y="${y}" aria-label="${where} row ${y+1}, column ${x+1}"></button>`;
     let occupied=0;
-    for(const item of state.items.filter(i=>i.where===where)){
+    for(const item of (where==='guild'?guildData.items:state.items.filter(i=>i.where===where))){
       const def=C.itemMap[item.defId],size=C.size(def,item.rotation),rarity=C.rarityMap[item.rarity],locked=!C.canEquip(state,item);occupied+=size.w*size.h;
-      html+=`<button type="button" class="hr-item rarity-${item.rarity}${item.rotated?' rotated':''}${locked?' level-locked':''}${selectedItem===item.uid?' selected':''}" data-uid="${item.uid}" aria-pressed="${selectedItem===item.uid}" aria-label="${escape(itemName(item))}, ${rarity.name}, ${C.isConsumable(item)?'consumable, restores 20 '+(item.defId==='health_potion'?'HP':'mana'):'item level '+item.iLvl+', requires level '+item.requiredLevel}, ${size.w} by ${size.h} cells, in ${where}" style="--rarity:${rarity.color};--angle:${item.rotation*90}deg;--cols:${size.w};--rows:${size.h};left:${item.x/grid.cols*100}%;top:${item.y/grid.rows*100}%;width:${size.w/grid.cols*100}%;height:${size.h/grid.rows*100}%"><img class="hr-item-img" src="${images[def.sprite]}" alt="" draggable="false">${C.isConsumable(item)?'':'<span class="hr-tier">'+item.iLvl+'</span>'}${window.RPGElements.property(item)?window.RPGElements.badge(item.elemental.element):''}${locked?`<span class="hr-item-lock">L${item.requiredLevel}</span>`:''}</button>`;
+      html+=`<button type="button" class="hr-item rarity-${item.rarity}${item.rotated?' rotated':''}${locked?' level-locked':''}${selectedItem===item.uid?' selected':''}" data-uid="${item.uid}" aria-pressed="${selectedItem===item.uid}" aria-label="${escape(itemName(item))}, ${rarity.name}, ${C.isConsumable(item)?'consumable, restores 20 '+(item.defId==='health_potion'?'HP':'mana'):'item level '+item.iLvl+', requires level '+item.requiredLevel}, ${size.w} by ${size.h} cells, in ${where}" style="--rarity:${rarity.color};--angle:${item.rotation*90}deg;--cols:${size.w};--rows:${size.h};left:${item.x/grid.cols*100}%;top:${item.y/grid.rows*100}%;width:${size.w/grid.cols*100}%;height:${size.h/grid.rows*100}%"><img class="hr-item-img" src="${images[def.sprite]}" alt="" draggable="false">${C.isConsumable(item)?'':'<span class="hr-tier">'+item.iLvl+'</span>'}${locked?`<span class="hr-item-lock">L${item.requiredLevel}</span>`:''}</button>`;
     }
     node.innerHTML=html;node.parentElement.scrollTop=scroll;el(`hr-${where}-count`).textContent=`${occupied}/${grid.cols*grid.rows}`;
   }
@@ -89,17 +106,19 @@
       }).join('');
     }
   }
-  function renderInspector(){
+  function renderInspectorContent(){
     const item=itemById(selectedItem),node=el('hr-inspector');
     if(!item){node.innerHTML='';return;}
     const def=C.itemMap[item.defId],rarity=C.rarityMap[item.rarity],locked=!C.canEquip(state,item);
+    if(item.where==='guild'){node.innerHTML=description(item)+`<div class="hr-actions"><button type="button" class="hr-btn" data-item-action="to-bag">To Hero Bag</button><button type="button" class="hr-btn" data-item-action="to-stash">To Hero Stash</button><button type="button" class="hr-btn" data-item-action="rotate">↻ Rotate</button></div>`;return;}
     if(C.isConsumable(item)){node.innerHTML=description(item)+`<div class="hr-actions"><button class="hr-btn primary" type="button" data-item-action="consume" ${consumeBusy?'disabled':''}>Use potion</button><button class="hr-btn" type="button" data-item-action="transfer">To ${item.where==='bag'?'stash':'bag'}</button><button class="hr-btn ghost" type="button" data-item-action="discard">Throw away</button></div>`;return;}
     node.innerHTML=`<h3 style="color:${rarity.color}">${def.name}</h3><p>${rarity.name} · iLvl ${item.iLvl} · <span class="${locked?'hr-requirement-locked':''}">Req. L${item.requiredLevel}</span> · T${item.gearTier}</p><p class="hr-bonus-summary">${compactBonuses(C.itemBonus(item))}</p><p>${escape(window.RPGElements.itemText(item))}</p><p>${escape(C.affixText(item))}<br>✧ ${escape(item.enhancement.name)} +${item.enhancement.value} ${abbreviations[item.enhancement.stat]} · ${item.where==='bag'?'Active':'Stored'}</p><div class="hr-actions"><button class="hr-btn" type="button" data-item-action="rotate" title="Rotate 90 degrees clockwise">↻ Rotate</button><button class="hr-btn" type="button" data-item-action="transfer" ${item.where==='stash'&&locked?'disabled':''}>To ${item.where==='bag'?'stash':'bag'}</button><button class="hr-btn" type="button" data-item-action="details">Details</button><button class="hr-btn ghost" type="button" data-item-action="discard">Throw away</button></div>`;
   }
-  function render(){renderVitals();const cap=C.totals(state,hero.stats)[0];el('hr-drink-potion').disabled=consumeBusy||state.currentHp===undefined||state.currentHp>=cap||!state.items.some(i=>i.defId==='health_potion');hideTooltip();renderStats();renderGrid('bag');renderGrid('stash');renderSpells();renderInspector();}
+  function renderInspector(){renderInspectorContent();const node=el('hr-inspector');if(node.innerHTML){node.insertAdjacentHTML('afterbegin','<button class="hr-btn hi-inspector-close" type="button" data-item-action="close" aria-label="Close item details">×</button>');if(itemById(selectedItem)?.where!=='guild')node.insertAdjacentHTML('beforeend',`<div class="hr-actions"><button type="button" class="hr-btn" data-item-action="to-guild" ${!guildData.guild||guildBusy?'disabled':''}>To Guild Stash</button></div>`);}}
+  function render(){renderVitals();const cap=C.totals(state,hero.stats)[0];el('hr-drink-potion').disabled=consumeBusy||state.currentHp===undefined||state.currentHp>=cap||!state.items.some(i=>i.defId==='health_potion');hideTooltip();renderStats();renderGrid('bag');renderGrid('stash');renderGrid('guild');renderSpells();renderInspector();requestAnimationFrame(fitGrids);}
   function renderVitals(){const totals=C.totals(state,hero.stats),ap=C.maxAp(state);el('hr-current-hp').innerHTML=[['Health','currentHp',totals[0],'#7bc89f'],['Mana','currentMp',totals[4],'#58c8dd'],['Attack Points','currentAp',ap,'#f29b65']].map(([name,key,max,color])=>{const value=Math.max(0,Math.min(max,state[key]??max));return `<div class="hr-resource"><span>${name}<b>${value} / ${max}</b></span><div role="meter" aria-label="${name}" aria-valuemin="0" aria-valuemax="${max}" aria-valuenow="${value}"><i style="width:${value/max*100}%;background:${color}"></i></div></div>`;}).join('');}
   function selectItem(uid){
-    selectedItem=uid;selectedSpell=null;
+    hideTooltip();selectedItem=uid;selectedSpell=null;
     // Keep the touched element connected throughout the pointer gesture.
     for(const node of room.querySelectorAll('.hr-item')){
       const active=node.dataset.uid===uid;node.classList.toggle('selected',active);node.setAttribute('aria-pressed',String(active));
@@ -112,11 +131,13 @@
       drag.rotation=(drag.rotation+1)%4;drag.anchorX=0;drag.anchorY=0;
       updateDrag(drag.lastX,drag.lastY);return;
     }
+    if(item.where==='guild'){void guildTransfer(item,'guild',item.x,item.y,(item.rotation+1)%4);return;}
     if(C.rotateItem(state,item))changed('Rotated 90° clockwise. Its bonuses stay the same.');
     else feedback('There is not enough space to rotate here. Move the item into a clear area first.');
   }
   function transfer(){
     const item=itemById(selectedItem);if(!item)return;
+    if(item.where==='guild'){guildDestination('stash');return;}
     if(item.where==='stash'&&!C.canEquip(state,item)){feedback(`Reach level ${item.requiredLevel} to equip this item.`);return;}
     const where=item.where==='bag'?'stash':'bag',spot=C.findSpace(state,item,where);
     if(!spot){feedback(`Your ${where} has no space for this item. Make room or move it manually.`);return;}
@@ -178,7 +199,7 @@
   };
   function description(item){
     const def=C.itemMap[item.defId],rarity=C.rarityMap[item.rarity],size=C.size(def,item.rotation),allowed=C.canEquip(state,item);
-    if(C.isConsumable(item))return `<div class="hr-description-head"><img src="${images[def.sprite]}" alt=""><div><h3>${def.name}</h3><p>Consumable · 1 × 1 tile</p></div></div><p class="hr-description-total">Restores 20 ${item.defId==='health_potion'?'Health':'mana'}, up to your maximum.</p><p>Drag onto your hero to use. Consumed after activation.</p>`;
+    if(C.isConsumable(item))return `<div class="hr-description-head"><img src="${images[def.sprite]}" alt=""><div><h3>${def.name}</h3><p>Consumable · 1 × 1 tile</p></div></div><p class="hr-description-total">Restores 20 ${item.defId==='health_potion'?'Health':'mana'}, up to your maximum.</p><p>${item.where==='guild'?'Withdraw this potion to your inventory before use.':'Choose Use potion to restore your hero. Consumed after activation.'}</p>`;
     const start=item.gearTier===1?1:(item.gearTier-1)*10,end=item.gearTier*10-1;
     const list=values=>values.map((v,i)=>v?`<li>+${v} ${C.stats[i]}</li>`:'').join('');
     return `<div class="hr-description-head"><img src="${images[def.sprite]}" alt=""><div><span class="hr-rarity-tag" style="--rarity:${rarity.color}">${rarity.name}${item.rarity==='mythic'?' / Legendary':item.rarity==='divine'?' / Artifact':''}</span><h3>${escape(itemName(item))}</h3><p>${def.category} · ${size.w} × ${size.h} tiles</p></div></div><dl class="hr-item-metrics"><div><dt>Item level</dt><dd>${item.iLvl}</dd></div><div><dt>Requires level</dt><dd class="${allowed?'':'hr-requirement-locked'}">${item.requiredLevel}${allowed?'':' · Locked'}</dd></div><div><dt>Gear tier</dt><dd>T${item.gearTier} · L${start}–${end}</dd></div></dl><p>${escape(window.RPGElements.itemText(item))}</p><section><h4>Base attributes · ${item.iLvl+3} power</h4><ul>${list(item.baseBonus)}</ul></section><section class="hr-additional-attributes"><h4>Additional attributes · ${item.attributes.length}</h4>${item.attributes.length?`<ul>${item.attributes.map(a=>`<li>+${a.value} ${C.stats[a.stat]}</li>`).join('')}</ul>`:'<p>Common gear has no rarity bonus attributes.</p>'}</section><section class="hr-enhancement"><h4>One enhancement</h4><p>${escape(window.RPGElements.itemText(item))}</p><p>${escape(C.affixText(item))}<br>✧ ${escape(item.enhancement.name)} · +${item.enhancement.value} ${C.stats[item.enhancement.stat]}</p></section><p class="hr-description-total">Total: ${compactBonuses(C.itemBonus(item))}</p><p class="hr-description-status">${item.where==='bag'?'Equipped in bag · All bonuses active.':allowed?'Stored in stash · No bonuses active.':`Stored in stash · Reach level ${item.requiredLevel} to equip.`}</p>`;
@@ -188,7 +209,7 @@
     el('hr-item-tooltip').hidden=true;
   }
   function showTooltip(node){
-    if(drag||modal||tooltipAnchor===node)return;
+    if(drag||modal||selectedItem===node.dataset.uid||tooltipAnchor===node)return;
     const item=itemById(node.dataset.uid);if(!item)return;
     hideTooltip();tooltipAnchor=node;node.setAttribute('aria-describedby','hr-item-tooltip');
     const box=el('hr-item-tooltip');box.innerHTML=description(item);box.hidden=false;
@@ -212,9 +233,9 @@
   }
   function clearDrag(){el('hr-portrait').closest('.hr-hero-scene').classList.remove('hr-potion-ready');ghost?.remove();preview?.remove();ghost=null;preview=null;drag=null;}
   function candidate(x,y){
-    if(drag?.kind==='item'&&C.isConsumable(itemById(drag.uid)||{})){const rect=el('hr-portrait').closest('.hr-hero-scene').getBoundingClientRect();if(x>=rect.left&&x<=rect.right&&y>=rect.top&&y<=rect.bottom)return {hero:true};}
-    for(const where of ['bag','stash']){
-      const node=el(`hr-${where}`),r=node.getBoundingClientRect(),visible=node.parentElement.getBoundingClientRect(),grid=C.gridFor(state,where);
+    if(room.dataset.view==='hero'&&drag?.kind==='item'&&C.isConsumable(itemById(drag.uid)||{})){const rect=el('hr-portrait').closest('.hr-hero-scene').getBoundingClientRect();if(x>=rect.left&&x<=rect.right&&y>=rect.top&&y<=rect.bottom)return {hero:true};}
+    for(const where of ['bag','stash','guild']){
+      const node=el(`hr-${where}`),r=node.getBoundingClientRect(),visible=node.parentElement.getBoundingClientRect(),grid=roomGrid(where);
       if(x>=Math.max(r.left,visible.left)&&x<Math.min(r.right,visible.right)&&y>=Math.max(r.top,visible.top)&&y<Math.min(r.bottom,visible.bottom))return {where,x:Math.floor((x-r.left)/r.width*grid.cols)-drag.anchorX,y:Math.floor((y-r.top)/r.height*grid.rows)-drag.anchorY};
     }
     return null;
@@ -226,7 +247,7 @@
     if(!ghost){ghost=document.createElement('div');ghost.className='hr-drag-ghost';ghost.innerHTML=`<img alt="" src="${drag.image}">`;document.body.appendChild(ghost);}
     if(drag.kind==='item'){
       const item=itemById(drag.uid),def=C.itemMap[item.defId],size=C.size(def,drag.rotation);
-      const cell=Math.min(45,el(`hr-${item.where}`).getBoundingClientRect().width/C.gridFor(state,item.where).cols);
+      const cell=Math.min(45,el(`hr-${item.where}`).getBoundingClientRect().width/roomGrid(item.where).cols);
       ghost.style.width=`${size.w*cell}px`;ghost.style.height=`${size.h*cell}px`;
       const image=ghost.querySelector('img');
       image.style.width=drag.rotation%2?`${90*size.h/size.w}%`:'90%';image.style.height=drag.rotation%2?`${90*size.w/size.h}%`:'90%';
@@ -234,7 +255,7 @@
       drag.target=candidate(x,y);preview?.remove();preview=null;
       el('hr-portrait').closest('.hr-hero-scene').classList.toggle('hr-potion-ready',!!drag.target?.hero);
       if(drag.target&&!drag.target.hero){
-        const target=drag.target,grid=C.gridFor(state,target.where),valid=C.canPlace(state,item,target.where,target.x,target.y,drag.rotation);
+        const target=drag.target,grid=roomGrid(target.where),valid=canPlace(item,target.where,target.x,target.y,drag.rotation);
         preview=document.createElement('div');preview.className=`hr-placement${valid?'':' invalid'}`;
         Object.assign(preview.style,{left:`${target.x/grid.cols*100}%`,top:`${target.y/grid.rows*100}%`,width:`${size.w/grid.cols*100}%`,height:`${size.h/grid.rows*100}%`});
         el(`hr-${target.where}`).appendChild(preview);
@@ -243,7 +264,7 @@
     ghost.style.left=`${x+10}px`;ghost.style.top=`${y+10}px`;
   }
   room.addEventListener('pointerdown',event=>{
-    if(event.button!==0||consumeBusy)return;
+    if(event.button!==0||consumeBusy||guildBusy)return;
     hideTooltip();
     const itemNode=event.target.closest('.hr-item'),spellNode=event.target.closest('.hr-spell-slot.filled');
     if(!itemNode&&!spellNode)return;
@@ -273,6 +294,7 @@
       if(current.kind==='item'){
         const target=current.target,item=itemById(current.uid);
         if(target?.hero){clearDrag();void consumePotion(item.uid);}else{
+        if(target&&(item.where==='guild'||target.where==='guild')){clearDrag();void guildTransfer(item,target.where,target.x,target.y,current.rotation);return;}
         const success=target&&C.place(state,item,target.where,target.x,target.y,current.rotation);
         clearDrag();if(success)finish(()=>changed(`Item moved to ${target.where}.`));else feedback(target?.where==='bag'&&!C.canEquip(state,item)?`Reach level ${item.requiredLevel} to equip this item.`:'That space is blocked or outside the grid. Your item stays in its original position.');}
       }else{
@@ -309,6 +331,7 @@
     if(item){selectItem(item.dataset.uid);return;}
     if(cell&&selectedItem){
       const selected=itemById(selectedItem),where=cell.dataset.where;
+      if(selected.where==='guild'||where==='guild'){void guildTransfer(selected,where,Number(cell.dataset.x),Number(cell.dataset.y),selected.rotation);return;}
       if(C.place(state,selected,where,Number(cell.dataset.x),Number(cell.dataset.y),selected.rotation))changed(`Item placed in ${where}.`);
       else feedback(where==='bag'&&!C.canEquip(state,selected)?`Reach level ${selected.requiredLevel} to equip this item.`:'The item does not fit there. Choose an empty area or rotate it.');
     }
@@ -316,11 +339,15 @@
     const upgrade=event.target.closest('[data-upgrade]');
     if(upgrade){const stat=Number(upgrade.dataset.upgrade);upgrade.disabled=true;fetch('/api/battle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'upgrade',stat})}).then(async r=>{const d=await r.json();if(!r.ok)throw Error(d.error);Object.assign(state,d.game);localStorage.setItem(key(),JSON.stringify(state));render();feedback(`${C.stats[stat]} increased by 1.`);}).catch(e=>{feedback(e.message);render();});}
     const action=event.target.closest('[data-item-action]')?.dataset.itemAction;
+    if(action==='close'){selectedItem=null;renderInspector();return;}
+    if(action==='to-guild')guildDestination('guild');
+    if(action==='to-bag')guildDestination('bag');
+    if(action==='to-stash')guildDestination('stash');
     if(action==='consume')void consumePotion(selectedItem);
     if(action==='rotate')rotate();
     if(action==='transfer')transfer();
     if(action==='details')showDetails();
-    if(action==='discard'){state.items=state.items.filter(i=>i.uid!==selectedItem);selectedItem=null;changed('Item thrown away. You can now accept drops that fit in the freed space.');}
+    if(action==='discard'&&itemById(selectedItem)?.where!=='guild'){state.items=state.items.filter(i=>i.uid!==selectedItem);selectedItem=null;changed('Item thrown away. You can now accept drops that fit in the freed space.');}
   });
   room.addEventListener('pointerover',event=>{if(event.pointerType==='mouse'){const node=event.target.closest('.hr-item');if(node)showTooltip(node);}});
   room.addEventListener('pointerout',event=>{if(tooltipAnchor&&!tooltipAnchor.contains(event.relatedTarget))hideTooltip();});
@@ -404,6 +431,6 @@
   el('hr-drink-potion').onclick=()=>{const item=state.items.find(i=>i.defId==='health_potion');if(item)void consumePotion(item.uid);};
   el('hr-claim-loot').onclick=async()=>{el('hr-claim-loot').disabled=true;try{const response=await fetch('/api/battle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'claimLoot'})}),data=await response.json();if(!response.ok)throw Error(data.error);Object.assign(state,data.game);localStorage.setItem(key(),JSON.stringify(state));feedback(data.pendingLoot?.length?'Stash full. Throw away unwanted items, then collect the remaining drops.':'Saved drops collected.');}catch(error){feedback(error.message);}finally{el('hr-claim-loot').disabled=false;render();}};
 
- window.RPGRoom={accept(game){Object.assign(state,game);localStorage.setItem(key(),JSON.stringify(state));render();window.RPGWorld.refresh?.();},persist:save,open,refresh:render,utility(kind){if(kind==='book'){window.BabaylanBook.open();showModal('hr-book-modal');}if(kind==='shop'){window.RPGWorld.merchantArea?.();}}};
+ window.RPGRoom={inventory:()=>showView('inventory'),heroRoom:()=>showView('hero'),view:()=>room.dataset.view,accept(game){Object.assign(state,game);localStorage.setItem(key(),JSON.stringify(state));render();window.RPGWorld.refresh?.();},persist:save,open,refresh:render,utility(kind){if(kind==='book'){window.BabaylanBook.open();showModal('hr-book-modal');}if(kind==='shop'){window.RPGWorld.merchantArea?.();}}};
   el('saveBtn').addEventListener('click',()=>{const name=el('heroName').value.trim();if(name.length>=2)open(selected,name);});
 })();
