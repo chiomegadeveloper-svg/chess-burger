@@ -1,0 +1,34 @@
+{
+  "mode": "built-in imagegen edit",
+  "reviewedCharacters": 24,
+  "reviewed": "Idle, four attack frames, six injury poses and death poses; mirrored hero directions share the same anatomy.",
+  "corrected": [
+    "archer",
+    "tank",
+    "donkuber",
+    "mhakiduk",
+    "odeksa",
+    "pektu",
+    "windee"
+  ],
+  "prompt": "Remove only stray floating feet, neighboring sprite fragments, edge streaks and rectangular clutter; preserve central character identity, pose, equipment and direction. Transparent background.",
+  "sources": {
+    "archer": "exec-c03a624a-7c3b-49a3-a5dd-35e3a57e0da0.png",
+    "tank": "exec-c0bc2402-1a6b-4bd2-ac4c-a130ab39babe.png",
+    "donkuber": "exec-7f8562c1-f7f7-4059-a825-41fa39790813.png",
+    "mhakiduk": "exec-151ee400-76ac-4030-9dcb-e25d9e9fda28.png",
+    "odeksa": "exec-90ff6003-fa15-4df8-80fb-b2c64c1676e7.png",
+    "pektu": "exec-767e59b4-312d-4c49-ace5-0582b4c5732c.png",
+    "windee": "exec-0aacefc3-d88f-4ce2-b859-d8de3d7db795.png"
+  },
+  "outputDirectory": "public/rpg/assets/idle",
+  "normalization": "512px transparent tiles, max silhouette extent 200px, baseline y356; attack and death scale normalized to measured idle height.",
+  "deathScaleCorrections": [
+    "archer-left",
+    "archer-right",
+    "buhokba-left",
+    "tank-left",
+    "tank-right"
+  ],
+  "validation": "Nine character geometry/animation checks passed across all 24 characters; generation artifacts removed from seven idles."
+}

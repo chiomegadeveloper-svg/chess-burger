@@ -62,7 +62,7 @@ window.RPG_CHARACTER_ATTACKS={
   "tile": 512,
   "visible": 200,
   "facing": "right",
-  "idleHeight": 200,
+  "idleHeight": 190,
   "frameHeights": [
    188,
    188,
@@ -76,7 +76,7 @@ window.RPG_CHARACTER_ATTACKS={
   "tile": 512,
   "visible": 200,
   "facing": "right",
-  "idleHeight": 200,
+  "idleHeight": 189,
   "frameHeights": [
    176,
    173,
