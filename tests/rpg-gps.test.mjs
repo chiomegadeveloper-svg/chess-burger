@@ -57,22 +57,38 @@ test('road candidates and new monster sets span 800 meters while combat stays wi
  const selected=await call({action:'select-encounter',target:far.id,gps:{lat:far.lat-199/111195,lng:far.lng,accuracy:5,time:Date.now()}});assert.ok(selected.selectionToken);
 });
 
-test('fresh sets reserve 3–5 distinct road monsters inside 200m, with the rest out to 800m',async()=>{
+test('fresh Explorer sets reserve 35% of road monsters inside 200m, rounded to six of sixteen',async()=>{
  const Layout=(await import('../api/_rpg/src/encounter-layout.js')).default,{distanceMeters}=await import('../api/_rpg/world.mjs');
  const points=[30,60,90,120,150,180,199,...Array.from({length:24},(_,i)=>220+i*24)].map(m=>({lat:at.lat+m/111195,lng:at.lng}));
- const counts=new Set();for(let seed=0;seed<100;seed++){
+ for(let seed=0;seed<100;seed++){
   const batch=Layout.create(at,10,[{id:'mhakiduk'}],1700000000000+seed,points),near=batch.filter(e=>distanceMeters(at,e)<=200);
-  assert.equal(batch.length,16);assert.ok(near.length>=3&&near.length<=5);counts.add(near.length);
+  assert.equal(batch.length,16);assert.equal(near.length,6);
   assert.equal(new Set(batch.map(e=>`${e.lat},${e.lng}`)).size,16);assert.ok(batch.every(e=>points.some(p=>p.lat===e.lat&&p.lng===e.lng)));
   assert.ok(batch.every(e=>distanceMeters(at,e)<=800));assert.equal(batch.filter(e=>e.level===8).length,5);assert.equal(batch.filter(e=>e.level===10).length,4);assert.equal(batch.filter(e=>e.level===11||e.level===12).length,4);assert.equal(batch.filter(e=>e.level===13).length,3);
  }
- assert.deepEqual([...counts].sort(),[3,4,5]);
  const db=database(),call=input=>gameRequest(db,'a','POST',input,{roadPoints:async()=>points});await call({action:'register',heroId:'rogue',name:'Nearby Warrior',skill:'punch'});
- const row=[...db.rows.values()].find(r=>r.item_kind==='rpg_profile');row.metadata.monsterSet={radius:800,refreshAt:Date.now()+1800000};row.metadata.encounters=[];
+ const row=[...db.rows.values()].find(r=>r.item_kind==='rpg_profile');row.metadata.monsterSet={version:2,cityId:null,radius:800,refreshAt:Date.now()+1800000};row.metadata.encounters=[{id:'old-set',lat:at.lat,lng:at.lng,expires_at:Date.now()+1800000}];
  assert.equal((await call({action:'init'})).spawnCache,null);
- const gps={...at,accuracy:5,time:Date.now()},batch=await call({action:'spawn',gps});assert.ok(batch.encounters.filter(e=>distanceMeters(at,e)<=200).length>=3);
+ const gps={...at,accuracy:5,time:Date.now()},batch=await call({action:'spawn',gps});assert.equal(batch.encounters.filter(e=>distanceMeters(at,e)<=200).length,6);assert.ok(batch.encounters.every(e=>e.id!=='old-set'));
  assert.deepEqual((await call({action:'spawn',gps})).encounters,batch.encounters,'GPS refresh must not reroll or refill pinned monsters');
+ assert.deepEqual((await call({action:'init'})).spawnCache.encounters,batch.encounters,'reopening restores the same thirty-minute set');
  const sparse=Layout.create(at,10,[{id:'mhakiduk'}],1700000000000,points.slice(0,2));assert.equal(sparse.length,2,'never invent off-road positions or stack duplicates when road coverage is sparse');
+});
+
+test('nearby share adapts to sparse roads without inventing coordinates or dropping available encounters',async()=>{
+ const Layout=(await import('../api/_rpg/src/encounter-layout.js')).default,{distanceMeters}=await import('../api/_rpg/world.mjs');
+ const point=meters=>({lat:at.lat+meters/111195,lng:at.lng});
+ for(const [distances,expectedNear]of[
+  [[30,60,90,120,250,300,350,400,450,500],4],
+  [[30,...Array.from({length:20},(_,i)=>220+i*20)],1],
+  [[30,60,90,120,150,180,199],7],
+  [[220,250,300,400],0],
+ ]){
+  const points=distances.map(point),batch=Layout.create(at,10,[{id:'chaanack'}],1700000000000,points);
+  assert.equal(batch.length,Math.min(16,points.length));assert.equal(batch.filter(e=>distanceMeters(at,e)<=200).length,expectedNear);
+  assert.ok(batch.every(e=>points.some(p=>p.lat===e.lat&&p.lng===e.lng)));
+ }
+ const {readFile}=await import('node:fs/promises');assert.equal(await readFile('rpg/src/encounter-layout.js','utf8'),await readFile('api/_rpg/src/encounter-layout.js','utf8'),'browser and server share the same spawn policy');
 });
 
 test('missing or expired selection tickets fall back to fresh 200-meter GPS validation',async()=>{

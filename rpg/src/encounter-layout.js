@@ -1,5 +1,5 @@
 (function(root){
- const SPAWN_RADIUS=800,ATTACK_RADIUS=200,SPAWN_VERSION=2;
+ const SPAWN_RADIUS=800,ATTACK_RADIUS=200,SPAWN_VERSION=3,NEARBY_SHARE=.35;
  const distance=(a,b)=>{const r=Math.PI/180,x=Math.sin((b.lat-a.lat)*r/2)**2+Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin((b.lng-a.lng)*r/2)**2;return 12742000*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));};
  function rngFor(text){let seed=2166136261;for(const c of text)seed=Math.imul(seed^c.charCodeAt(0),16777619);return ()=>{seed+=0x6D2B79F5;let t=seed;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return ((t^t>>>14)>>>0)/4294967296;};}
  function levels(level,rng=Math.random){level=Math.max(1,Math.min(88,Math.floor(level)||1));return [...Array(5).fill(level-2),...Array(4).fill(level),...Array.from({length:4},()=>level+1+Math.floor(rng()*2)),...Array(3).fill(level+3)].map(n=>Math.max(1,Math.min(88,n)));}
@@ -9,10 +9,10 @@
   for(let i=mix.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[mix[i],mix[j]]=[mix[j],mix[i]];}
   const available=points.filter(p=>p&&Number.isFinite(p.lat)&&Number.isFinite(p.lng)&&distance(center,p)<=SPAWN_RADIUS);
   for(let i=available.length-1;i>0;i--){const j=Math.floor(rng()*(i+1));[available[i],available[j]]=[available[j],available[i]];}
-  // Reserve 3–5 reachable road encounters; place the remainder outside attack range.
+  // Reserve about 35% within attack range, rounded to whole monsters. Use only real road points.
   const near=available.filter(p=>distance(center,p)<=ATTACK_RADIUS),far=available.filter(p=>distance(center,p)>ATTACK_RADIUS);
-  const nearbyCount=Math.min(near.length,Math.max(3+Math.floor(rng()*3),Math.min(5,16-far.length)));
-  const selected=[...near.slice(0,nearbyCount),...far.slice(0,16-nearbyCount)];
+  const count=Math.min(mix.length,available.length),nearbyCount=Math.min(near.length,Math.max(Math.round(count*NEARBY_SHARE),count-far.length));
+  const selected=[...near.slice(0,nearbyCount),...far.slice(0,count-nearbyCount)];
   return selected.map((p,i)=>{const m=species[Math.floor(rng()*species.length)];return {...m,id:`guest-road-${batch}-${i}`,monsterId:m.id,level:mix[i],lat:p.lat,lng:p.lng,expires_at:now+1800000,training:true};});
  }
  function roadPoints(ways,center){
@@ -25,5 +25,5 @@
   }
   return points;
  }
- const api={SPAWN_RADIUS,ATTACK_RADIUS,SPAWN_VERSION,create,levels,roadPoints};root.RPGEncounterLayout=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
+ const api={SPAWN_RADIUS,ATTACK_RADIUS,SPAWN_VERSION,NEARBY_SHARE,create,levels,roadPoints};root.RPGEncounterLayout=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(globalThis);
