@@ -4,8 +4,16 @@ import C from '../api/_rpg/src/inventory-core.js';
 import {makeHero,saveInventory} from '../api/_rpg/store.mjs';
 import {normalize} from '../api/_rpg/rewards.mjs';
 import {guildRequest} from '../api/_rpg/guild-stash.mjs';
+import {gameRequest} from '../api/_rpg/service.mjs';
 
 import {fixture} from './helpers/rpg-guild-sql.mjs';
+
+test('read-only guild snapshots skip hero reads and writes',async()=>{
+ const f=await fixture();try{
+  const from=f.client.from;f.client.from=table=>{assert.notEqual(table,'cb_inventory_items','a stash refresh must not load or normalize the hero');return from(table);};
+  const result=await gameRequest(f.client,f.users[0],'POST',{action:'guildStash'});assert.equal(result.guildStash.guild.id,f.guild);assert.equal(result.guildStash.cbg,0);assert.equal(result.walletCbg,0);
+ }finally{await f.close();}
+});
 
 test('members share a 12×12 stash; transfers retain exact item rolls and remove bag bonuses',async()=>{
  const f=await fixture();try{

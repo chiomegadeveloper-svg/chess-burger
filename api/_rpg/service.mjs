@@ -16,6 +16,7 @@ import {read,insert,write,fail,makeHero,saveInventory,progression} from './store
 const uci=m=>({from:m.slice(0,2),to:m.slice(2,4),promotion:m[4]||'q'});
 const rand=n=>crypto.getRandomValues(new Uint32Array(1))[0]%n;
 export async function gameRequest(client,user,method,input={},services={}){
+ if(input.action==='guildStash')return guildRequest(client,user,null,input);
  const now=services.now?.()??Date.now();let doc=await read(client,user),shared=null;
  if(doc?.state&&!doc.feedCursor)doc.feedCursor={registered:true,level:doc.state.level};
  const persist=async()=>{await write(client,user,'rpg_profile','hero',doc);await publishRpgFeed(client,user,doc);};

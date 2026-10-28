@@ -11,7 +11,7 @@
   const key=()=>window.RPGLive.key(hero.id);
   const escape=value=>String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const bonuses=list=>list.map((value,i)=>value?`+${value} ${C.stats[i]}`:'').filter(Boolean).join(' · ')||'No attribute bonus';
-  let guildData={guild:null,revision:0,items:[],cbg:0,cbgReady:false,cols:12,rows:12},guildLoaded=false,guildLoading=false,guildBusy=false,guildConnected=false;
+  let guildData={guild:null,revision:0,items:[],cbg:0,cbgReady:false,cols:12,rows:12},guildLoaded=false,guildLoading=false,guildBusy=false,guildConnected=false,guildEpoch=0,guildPreview=null;
   const itemById=uid=>state.items.find(item=>item.uid===uid)||guildData.items.find(item=>item.uid===uid);
   const roomGrid=where=>where==='guild'?{cols:12,rows:12}:C.gridFor(state,where);
   const guildLayout=()=>({...state,grids:{...state.grids,stash:{cols:12,rows:12}},items:guildData.items.map(item=>({...item,where:'stash'}))});
@@ -20,8 +20,57 @@
   function showView(view){hideTooltip();clearDrag();selectedItem=null;selectedSpell=null;room.dataset.view=view;feedback('');el('hr-character-page').hidden=view!=='hero';el('hr-inventory-page').hidden=view!=='inventory';el('hr-view-title').textContent=view==='hero'?'Hero Room':'Hero Inventory';room.setAttribute('aria-label',el('hr-view-title').textContent);renderInspector();fitGrids();requestAnimationFrame(fitGrids);if(view==='inventory')void loadGuild();}
   async function guildApi(body){const response=await fetch('/api/battle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}),data=await response.json();if(!response.ok)throw Object.assign(Error(data.error||'Guild stash is unavailable.'),{status:response.status,code:data.code});return data;}
   function guildStatus(text,retry=false){el('hi-guild-state').hidden=!text;el('hi-guild-message').textContent=text;el('hi-guild-retry').hidden=!retry;el('hr-guild').setAttribute('aria-disabled',String(!!text));}
-  async function loadGuild(){if(guildLoading||guildBusy||!state)return;guildLoading=true;if(!guildLoaded)guildStatus('Loading your guild…');try{const data=await guildApi({action:'guildStash'});const next=data.guildStash,changed=!guildLoaded||guildData.revision!==next.revision||guildData.guild?.id!==next.guild?.id||guildData.guild?.name!==next.guild?.name;guildData=next;guildConnected=true;walletCbg=data.walletCbg??walletCbg;guildLoaded=true;renderGuildCbg();if(changed){renderGrid('guild');renderInspector();}guildStatus(guildData.guild?'':'Join a Chess Burger guild to use shared storage.');}catch(error){guildConnected=false;renderGuildCbg();guildStatus(error.message,error.code!=='guild_setup_required');}finally{guildLoading=false;requestAnimationFrame(fitGrids);}}
-  async function guildTransfer(item,to,x,y,rotation=item.rotation){if(guildBusy||!guildData.guild){feedback('Join a Chess Burger guild to use shared storage.');return;}guildBusy=true;hideTooltip();room.inert=true;feedback('Moving item…');try{if(await window.RPGLive.flush?.()===false)throw Error('Your inventory is still saving. Reconnect and retry.');const data=await guildApi({action:'guildTransfer',guildId:guildData.guild.id,requestId:transferId(),uid:item.uid,from:item.where,to,x,y,rotation,stashRevision:guildData.revision,inventoryRevision:state.inventoryRevision||0});guildData=data.guildStash;renderGuildCbg();Object.assign(state,data.game);localStorage.setItem(key(),JSON.stringify(state));selectedItem=null;render();window.RPGWorld.refresh?.();feedback(to==='guild'?'Item placed in the shared guild stash.':'Item moved to your '+(to==='bag'?'Hero Bag.':'Hero Stash.'));}catch(error){feedback(error.message);try{const fresh=await guildApi({action:'init'});if(fresh.game){Object.assign(state,fresh.game);localStorage.setItem(key(),JSON.stringify(state));render();}}catch{}}finally{guildBusy=false;room.inert=false;void loadGuild();}}
+  async function loadGuild(){
+    if(guildLoading||guildBusy||!state)return;
+    const epoch=guildEpoch;guildLoading=true;if(!guildLoaded)guildStatus('Loading your guild…');
+    try{
+      const data=await guildApi({action:'guildStash'});if(guildBusy||epoch!==guildEpoch)return;
+      const next=data.guildStash,changed=!guildLoaded||guildData.revision!==next.revision||guildData.guild?.id!==next.guild?.id||guildData.guild?.name!==next.guild?.name;
+      guildData=next;guildConnected=true;walletCbg=data.walletCbg??walletCbg;guildLoaded=true;renderGuildCbg();
+      if(changed){renderGrid('guild');renderInspector();}guildStatus(guildData.guild?'':'Join a Chess Burger guild to use shared storage.');
+    }catch(error){if(epoch!==guildEpoch||guildBusy)return;guildConnected=false;renderGuildCbg();guildStatus(error.message,error.code!=='guild_setup_required');}
+    finally{guildLoading=false;requestAnimationFrame(fitGrids);}
+  }
+  function previewGuildMove(item,to,x,y,rotation){
+    const next=structuredClone(state),items=structuredClone(guildData.items),copy=structuredClone(item);
+    if(to==='guild'){
+      const layout={...next,grids:{...next.grids,stash:{cols:12,rows:12}},items:items.map(i=>({...i,where:'stash'}))};
+      if(!C.canPlace(layout,copy,'stash',x,y,rotation))return null;
+      const placed={...copy,where:'guild',x,y,rotation,rotated:Boolean(rotation%2)},index=items.findIndex(i=>i.uid===copy.uid);
+      if(index<0)items.push(placed);else items[index]=placed;
+      if(item.where!=='guild')next.items=next.items.filter(i=>i.uid!==item.uid);
+    }else{
+      if(!C.place(next,copy,to,x,y,rotation))return null;
+      const index=items.findIndex(i=>i.uid===copy.uid);if(index<0)return null;items.splice(index,1);
+    }
+    return {state:next,items,uid:item.uid};
+  }
+  function setGuildMoving(moving){
+    guildBusy=moving;room.classList.toggle('hr-guild-moving',moving);
+    el('hr-inventory-page').setAttribute('aria-busy',String(moving));
+    for(const node of room.querySelectorAll('.hi-main,.hi-inspector,.hr-attributes-panel,.hr-active-section,.hr-storage-top,.hr-storage-slots'))node.inert=moving;
+    for(const id of ['hr-explore','hi-explore','hr-back'])el(id).disabled=moving;
+    renderGuildCbg();
+  }
+  async function guildTransfer(item,to,x,y,rotation=item.rotation){
+    if(guildBusy||consumeBusy)return;if(!guildData.guild){feedback('Join a Chess Burger guild to use shared storage.');return;}
+    const preview=previewGuildMove(item,to,x,y,rotation);if(!preview){feedback('The item does not fit there. Choose an empty area.');return;}
+    const body={action:'guildTransfer',guildId:guildData.guild.id,requestId:transferId(),uid:item.uid,from:item.where,to,x,y,rotation,stashRevision:guildData.revision,inventoryRevision:state.inventoryRevision||0};
+    guildEpoch++;guildPreview=preview;hideTooltip();selectedItem=null;setGuildMoving(true);
+    for(const where of ['bag','stash','guild'])renderGrid(where);renderInspector();feedback('Moving item…');
+    try{
+      if(await window.RPGLive.flush?.()===false)throw Error('Your inventory is still saving. Reconnect and retry.');
+      const data=await guildApi(body);guildPreview=null;guildData=data.guildStash;Object.assign(state,data.game);
+      localStorage.setItem(key(),JSON.stringify(state));render();feedback(to==='guild'?'Item placed in the shared guild stash.':'Item moved to your '+(to==='bag'?'Hero Bag.':'Hero Stash.'));
+    }catch(error){
+      guildPreview=null;render();feedback(error.message);
+      try{
+        const [fresh,shared]=await Promise.all([guildApi({action:'init'}),guildApi({action:'guildStash'})]);
+        if(fresh.game){Object.assign(state,fresh.game);localStorage.setItem(key(),JSON.stringify(state));}
+        guildData=shared.guildStash;walletCbg=shared.walletCbg??walletCbg;render();
+      }catch{}
+    }finally{guildPreview=null;setGuildMoving(false);}
+  }
   function guildDestination(to){const item=itemById(selectedItem);if(!item)return;const layout=to==='guild'?guildLayout():state,spot=C.findSpace(layout,item,to==='guild'?'stash':to);if(!spot){feedback('There is no room for this item in '+(to==='guild'?'the Guild Stash.':to==='bag'?'your Hero Bag.':'your Hero Stash.'));return;}void guildTransfer(item,to,spot.x,spot.y,spot.rotation);}
   setInterval(()=>{if(!room.hidden&&room.dataset.view==='inventory'&&!document.hidden&&!drag)void loadGuild();},8000);
   el('hr-inventory-open').onclick=()=>showView('inventory');el('hi-hero-room').onclick=()=>showView('hero');el('hi-explore').onclick=()=>el('hr-explore').click();el('hi-guild-retry').onclick=()=>void loadGuild();
@@ -35,7 +84,7 @@
   async function openCbg(direction){if(guildBusy||!guildData.guild)return;await loadGuild();if(!guildData.guild||guildData.cbgReady===false||!guildConnected)return;cbgPending=readPendingCbg();cbgDirection=cbgPending?.direction||direction;el('hi-cbg-title').textContent=(cbgDirection==='deposit'?'Deposit':'Withdraw')+' CBG';el('hi-cbg-amount').value=String(cbgPending?.amount||1);el('hi-cbg-status').textContent=cbgPending?'The previous transfer was not confirmed. Retry it to check the result.':'';updateCbgForm();el('hi-cbg-modal').showModal();el('hi-cbg-amount').focus();}
   function closeCbg(){if(!cbgSending)el('hi-cbg-modal').close();}
   el('hi-cbg-deposit').onclick=()=>void openCbg('deposit');el('hi-cbg-withdraw').onclick=()=>void openCbg('withdraw');el('hi-cbg-amount').oninput=updateCbgForm;el('hi-cbg-cancel').onclick=closeCbg;el('hi-cbg-close').onclick=closeCbg;el('hi-cbg-modal').addEventListener('cancel',event=>{if(cbgSending)event.preventDefault();});
-  el('hi-cbg-form').onsubmit=async event=>{event.preventDefault();if(cbgSending||guildBusy||el('hi-cbg-confirm').disabled)return;const amount=Number(el('hi-cbg-amount').value);if(!Number.isSafeInteger(amount)||amount<1||amount>1000000)return;const attempt=cbgPending||{requestId:transferId(),guildId:guildData.guild.id,direction:cbgDirection,amount};try{localStorage.setItem(cbgKey(),JSON.stringify(attempt));}catch{el('hi-cbg-status').textContent='Storage is unavailable. Reopen RPG before transferring CBG.';return;}cbgPending=attempt;cbgSending=true;guildBusy=true;updateCbgForm();el('hi-cbg-status').textContent='Transferring CBG…';try{if(await window.RPGLive.flush?.()===false)throw Error('Your inventory is still saving. Reconnect and retry.');const data=await guildApi({action:'guildCbg',...attempt});guildData=data.guildStash;walletCbg=data.walletCbg;Object.assign(state,data.game);localStorage.setItem(key(),JSON.stringify(state));localStorage.removeItem(cbgKey());cbgPending=null;render();renderGuildCbg();window.parent.postMessage({type:'CB_RPG_WALLET_CHANGED'},location.origin);el('hi-cbg-modal').close();feedback((cbgDirection==='deposit'?'Deposited ':'Withdrew ')+amount.toLocaleString()+' CBG.');}catch(error){if(error.status>=400&&error.status<500){localStorage.removeItem(cbgKey());cbgPending=null;}el('hi-cbg-status').textContent=error.message;feedback(error.message);}finally{cbgSending=false;guildBusy=false;updateCbgForm();renderGuildCbg();void loadGuild();}};
+  el('hi-cbg-form').onsubmit=async event=>{event.preventDefault();if(cbgSending||guildBusy||el('hi-cbg-confirm').disabled)return;const amount=Number(el('hi-cbg-amount').value);if(!Number.isSafeInteger(amount)||amount<1||amount>1000000)return;const attempt=cbgPending||{requestId:transferId(),guildId:guildData.guild.id,direction:cbgDirection,amount};try{localStorage.setItem(cbgKey(),JSON.stringify(attempt));}catch{el('hi-cbg-status').textContent='Storage is unavailable. Reopen RPG before transferring CBG.';return;}cbgPending=attempt;cbgSending=true;guildBusy=true;guildEpoch++;updateCbgForm();el('hi-cbg-status').textContent='Transferring CBG…';try{if(await window.RPGLive.flush?.()===false)throw Error('Your inventory is still saving. Reconnect and retry.');const data=await guildApi({action:'guildCbg',...attempt});guildData=data.guildStash;walletCbg=data.walletCbg;Object.assign(state,data.game);localStorage.setItem(key(),JSON.stringify(state));localStorage.removeItem(cbgKey());cbgPending=null;render();renderGuildCbg();window.parent.postMessage({type:'CB_RPG_WALLET_CHANGED'},location.origin);el('hi-cbg-modal').close();feedback((cbgDirection==='deposit'?'Deposited ':'Withdrew ')+amount.toLocaleString()+' CBG.');}catch(error){if(error.status>=400&&error.status<500){localStorage.removeItem(cbgKey());cbgPending=null;}el('hi-cbg-status').textContent=error.message;feedback(error.message);}finally{cbgSending=false;guildBusy=false;updateCbgForm();renderGuildCbg();void loadGuild();}};
   const itemName=item=>`${C.itemMap[item.defId].name}${C.isConsumable(item)?'':' of '+item.enhancement.name}${item.sandboxTest?' (Test)':''}`;
   const compactBonuses=list=>list.map((v,i)=>v?`+${v} ${abbreviations[i]}`:'').filter(Boolean).join(' · ');
   function feedback(message){el('hr-feedback').textContent=message;el('hr-feedback').title=message;}
@@ -93,11 +142,11 @@
     let html='';
     for(let y=0;y<grid.rows;y++)for(let x=0;x<grid.cols;x++)html+=`<button type="button" class="hr-cell" data-where="${where}" data-x="${x}" data-y="${y}" aria-label="${where} row ${y+1}, column ${x+1}"></button>`;
     let occupied=0;
-    for(const item of (where==='guild'?guildData.items:state.items.filter(i=>i.where===where))){
+    for(const item of (where==='guild'?(guildPreview?.items||guildData.items):(guildPreview?.state||state).items.filter(i=>i.where===where))){
       const def=C.itemMap[item.defId],size=C.size(def,item.rotation),rarity=C.rarityMap[item.rarity],locked=!C.canEquip(state,item);occupied+=size.w*size.h;
       html+=`<button type="button" class="hr-item rarity-${item.rarity}${item.rotated?' rotated':''}${locked?' level-locked':''}${selectedItem===item.uid?' selected':''}" data-uid="${item.uid}" aria-pressed="${selectedItem===item.uid}" aria-label="${escape(itemName(item))}, ${rarity.name}, ${C.isConsumable(item)?'consumable, restores 20 '+(item.defId==='health_potion'?'HP':'mana'):'item level '+item.iLvl+', requires level '+item.requiredLevel}, ${size.w} by ${size.h} cells, in ${where}" style="--rarity:${rarity.color};--angle:${item.rotation*90}deg;--cols:${size.w};--rows:${size.h};left:${item.x/grid.cols*100}%;top:${item.y/grid.rows*100}%;width:${size.w/grid.cols*100}%;height:${size.h/grid.rows*100}%"><img class="hr-item-img" src="${images[def.sprite]}" alt="" draggable="false">${C.isConsumable(item)?'':'<span class="hr-tier">'+item.iLvl+'</span>'}${locked?`<span class="hr-item-lock">L${item.requiredLevel}</span>`:''}</button>`;
     }
-    node.innerHTML=html;node.parentElement.scrollTop=scroll;el(`hr-${where}-count`).textContent=`${occupied}/${grid.cols*grid.rows}`;
+    node.innerHTML=html;node.querySelector(`[data-uid="${guildPreview?.uid||''}"]`)?.classList.add('hr-transfer-pending');node.parentElement.scrollTop=scroll;el(`hr-${where}-count`).textContent=`${occupied}/${grid.cols*grid.rows}`;
   }
   let libraryPage=0,previewSkill='basic',pendingSkill=null,activationSlot=-1,skillTrigger=null;
   const skillImage=spell=>`assets/skills/runes/${spell.id}.webp`;
@@ -325,6 +374,7 @@
   room.addEventListener('pointercancel',clearDrag);
   room.addEventListener('dragstart',event=>event.preventDefault());
   room.addEventListener('click',event=>{
+    if(guildBusy)return;
     const arrange=event.target.closest('[data-arrange]');
     if(arrange){
       const where=arrange.dataset.arrange;clearDrag();lastTap=null;
@@ -436,7 +486,7 @@
   });
   for(const node of document.querySelectorAll('[data-room-icon]'))node.src=images[node.dataset.roomIcon];
   el('hr-rarity-legend').innerHTML=C.rarities.map(r=>`<span class="hr-rarity-tag" style="--rarity:${r.color}">${r.name} <small>${r.range[0]===r.range[1]?r.range[0]:r.range.join('–')} bonus</small></span>`).join('');
-  async function consumePotion(uid){if(consumeBusy||!C.isConsumable(itemById(uid)||{}))return;consumeBusy=true;hideTooltip();render();try{const response=await fetch('/api/battle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'usePotion',uid})}),data=await response.json();if(!response.ok)throw Error(data.error);Object.assign(state,data.game);selectedItem=null;localStorage.setItem(key(),JSON.stringify(state));window.RPGWorld.refresh?.();feedback(`Potion used · +${data.restored.amount} ${data.restored.resource==='hp'?'Health':'mana'}.`);}catch(error){feedback(error.message);}finally{consumeBusy=false;render();}}
+  async function consumePotion(uid){if(guildBusy||consumeBusy||!C.isConsumable(itemById(uid)||{}))return;consumeBusy=true;hideTooltip();render();try{const response=await fetch('/api/battle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'usePotion',uid})}),data=await response.json();if(!response.ok)throw Error(data.error);Object.assign(state,data.game);selectedItem=null;localStorage.setItem(key(),JSON.stringify(state));window.RPGWorld.refresh?.();feedback(`Potion used · +${data.restored.amount} ${data.restored.resource==='hp'?'Health':'mana'}.`);}catch(error){feedback(error.message);}finally{consumeBusy=false;render();}}
   el('hr-drink-potion').onclick=()=>{const item=state.items.find(i=>i.defId==='health_potion');if(item)void consumePotion(item.uid);};
   el('hr-claim-loot').onclick=async()=>{el('hr-claim-loot').disabled=true;try{const response=await fetch('/api/battle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'claimLoot'})}),data=await response.json();if(!response.ok)throw Error(data.error);Object.assign(state,data.game);localStorage.setItem(key(),JSON.stringify(state));feedback(data.pendingLoot?.length?'Stash full. Throw away unwanted items, then collect the remaining drops.':'Saved drops collected.');}catch(error){feedback(error.message);}finally{el('hr-claim-loot').disabled=false;render();}};
 

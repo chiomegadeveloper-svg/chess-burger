@@ -3,7 +3,7 @@
   <button type="button" class="hr-btn ghost hr-hero-only" id="hr-back" aria-label="Exit RPG">← <span class="hr-back-label">Exit RPG</span></button>
   <div class="hr-screen-title"><small>YOUR ADVENTURE</small><h1 id="hr-view-title">Hero Room</h1></div>
   <div class="hr-live-meta"><button id="hr-save" type="button" class="hr-btn" hidden>Save</button></div>
-  <nav class="hr-screen-nav" aria-label="Hero navigation"><button type="button" class="hr-btn hr-hero-only" id="hr-inventory-open">▦ <span>Inventory</span></button><button type="button" class="hr-btn hr-inventory-only" id="hi-hero-room">♟ <span>Hero Room</span></button><button type="button" class="hr-btn primary hr-inventory-only" id="hi-explore">Explore World ↗</button></nav>
+  <nav class="hr-screen-nav" aria-label="Hero navigation"><button type="button" class="hr-btn hr-inventory-only" id="hi-hero-room">♟ <span>Hero Room</span></button><button type="button" class="hr-nav-action hr-nav-explore hr-inventory-only" id="hi-explore" aria-label="Explore World" data-nav-label="Explore World"><img src="assets/navigation/explore-v2.webp" alt="" draggable="false"></button></nav>
   <button id="hr-collect" type="button" hidden>Items</button><button id="hr-damage" type="button" hidden>Sprite Lab</button><small id="hr-wallet" hidden></small>
  </header>
  <main class="hr-main hr-character-page" id="hr-character-page">
@@ -22,8 +22,11 @@
    <div class="hr-storage-top"><h2 class="hr-section-label">POWER LIBRARY</h2><div class="hr-library-choice"><span id="hr-skill-progress"></span><button type="button" class="hr-btn" id="hr-learn" aria-label="Open Skill Book">Skill Book</button></div></div>
    <div class="hr-storage-slots" id="hr-spell-storage" role="group" aria-label="Stored attacks and spells"></div>
    <div class="hr-library-nav"><button type="button" class="hr-btn" id="hr-library-prev" aria-label="Previous library page">←</button><span id="hr-library-page"></span><button type="button" class="hr-btn" id="hr-library-next" aria-label="Next library page">→</button></div>
-   <button type="button" class="hr-btn hr-book-trigger" id="hr-book" title="Babaylan Book"><img src="{{BABAYLAN_BOOK_ICON}}" alt=""><span>Babaylan Book</span><span aria-hidden="true">↗</span></button>
-   <button type="button" class="hr-explore-cta" id="hr-explore"><span>Explore World</span><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 19 19 5M5 5h14v14"/></svg></button>
+   <nav class="hr-room-actions" aria-label="Adventure navigation">
+    <button type="button" class="hr-nav-action hr-nav-cyan" id="hr-inventory-open" aria-label="Hero Inventory" data-nav-label="Hero Inventory"><img src="assets/navigation/inventory-v2.webp" alt="" draggable="false"></button>
+    <button type="button" class="hr-nav-action hr-nav-cyan" id="hr-book" aria-label="Babaylan Book" data-nav-label="Babaylan Book"><img src="assets/navigation/babaylan-v2.webp" alt="" draggable="false"></button>
+    <button type="button" class="hr-nav-action hr-nav-explore" id="hr-explore" aria-label="Explore World" data-nav-label="Explore World"><img src="assets/navigation/explore-v2.webp" alt="" draggable="false"></button>
+   </nav>
   </section>
  </main>
  <main class="hi-main" id="hr-inventory-page" aria-label="Hero Inventory" hidden>

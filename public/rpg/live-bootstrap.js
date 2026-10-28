@@ -9,7 +9,7 @@
    requests.set(id,{resolve,reject,timeout});parent.postMessage({type:'CB_RPG_API',id,method,body},location.origin);
   });
  }
- async function rpc(method,body){const snapshot=clone(body);if(snapshot.channel==='presence'||snapshot.action==='chests')return request(method,snapshot);if(!['save','init'].includes(snapshot.action)&&savePromise){await flushSave();if(pendingSave)throw Error('Your inventory is still saving. Reconnect before continuing.');}else if(!['save','init'].includes(snapshot.action)&&pendingSave){await flushSave();if(pendingSave)throw Error('Your inventory is still saving. Reconnect before continuing.');}const pending=queue.catch(()=>{}).then(()=>request(method,snapshot));queue=pending;return pending;}
+ async function rpc(method,body){const snapshot=clone(body);if(snapshot.channel==='presence'||['chests','guildStash'].includes(snapshot.action))return request(method,snapshot);if(!['save','init'].includes(snapshot.action)&&savePromise){await flushSave();if(pendingSave)throw Error('Your inventory is still saving. Reconnect before continuing.');}else if(!['save','init'].includes(snapshot.action)&&pendingSave){await flushSave();if(pendingSave)throw Error('Your inventory is still saving. Reconnect before continuing.');}const pending=queue.catch(()=>{}).then(()=>request(method,snapshot));queue=pending;return pending;}
  window.addEventListener('message',event=>{
   if(event.source!==parent||event.origin!==location.origin)return;
   const data=event.data;if(data?.type==='CB_RPG_REPLY'){const task=requests.get(data.id);if(!task)return;clearTimeout(task.timeout);requests.delete(data.id);if(data.data?.code==='hero_reset'){location.reload();return;}task.resolve({status:data.status,data:data.data});}

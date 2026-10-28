@@ -8,7 +8,7 @@ import {read} from '../api/_rpg/store.mjs';
 import {database} from './helpers/rpg-db.mjs';
 import {guildDatabase} from './helpers/rpg-guild-db.mjs';
 const pause=()=>new Promise(r=>setTimeout(r,25));
-function open(db,services={}){
+function open(db,services={},transport={}){
  const errors=[],messages=[],vc=new VirtualConsole();vc.on('jsdomError',e=>{if(e.type!=='css-parsing')errors.push(e.message)});
  const html=fs.readFileSync('public/rpg/index.html','utf8').replace('<script src="live-skill-picker.js"></script>','<script>'+fs.readFileSync('public/rpg/live-skill-picker.js','utf8')+'</script>').replace('<script src="live-bootstrap.js"></script>','<script>'+fs.readFileSync('public/rpg/live-bootstrap.js','utf8')+'</script>');
  const dom=new JSDOM(html,{url:'https://chessburger.site/rpg/index.html',runScripts:'dangerously',pretendToBeVisual:true,virtualConsole:vc,beforeParse(w){
@@ -16,7 +16,7 @@ function open(db,services={}){
   w.eval(fs.readFileSync('public/rpg/vendor/chess.js','utf8'));w.eval(fs.readFileSync('public/rpg/vendor/battle-core.js','utf8'));
   w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};w.HTMLDialogElement.prototype.close=function(){this.open=false;};
   const send=data=>w.dispatchEvent(new w.MessageEvent('message',{source:w,origin:w.location.origin,data}));
-  w.postMessage=data=>{messages.push(data);if(data.type==='CB_RPG_READY')setTimeout(()=>send({type:'CB_RPG_BOOT',userId:'player-a'}),0);if(data.type==='CB_RPG_API')gameRequest(db,'player-a',data.method,data.body,services).then(result=>send({type:'CB_RPG_REPLY',id:data.id,status:200,data:result})).catch(e=>send({type:'CB_RPG_REPLY',id:data.id,status:e.status||500,data:{error:e.message,...(e.code?{code:e.code}:{})}}));};
+  w.postMessage=data=>{messages.push(data);if(data.type==='CB_RPG_READY')setTimeout(()=>send({type:'CB_RPG_BOOT',userId:'player-a'}),0);if(data.type==='CB_RPG_API')gameRequest(db,'player-a',data.method,data.body,services).then(async result=>{await transport.beforeReply?.(data,result);send({type:'CB_RPG_REPLY',id:data.id,status:200,data:result});}).catch(e=>send({type:'CB_RPG_REPLY',id:data.id,status:e.status||500,data:{error:e.message,...(e.code?{code:e.code}:{})}}));};
  }});
  return {dom,w:dom.window,d:dom.window.document,errors,messages,close:()=>dom.window.close()};
 }
@@ -162,7 +162,7 @@ test('battle bag potion drag uses one turn, empties its slot and presents enemy 
 });
 
 test('saved harvest feedback stays closed after RPG reopening while a new harvest still shows immediately',async()=>{
- const db=database(),saved=await gameRequest(db,'player-a','POST',{action:'register',heroId:'rogue',name:'No Replay',skill:'punch'}),row=[...db.rows.values()].find(r=>r.item_kind==='rpg_profile').metadata;row.state.currentMp=2;const gps={lat:11.26,lng:125,accuracy:40,time:Date.now()},batch=await gameRequest(db,'player-a','POST',{action:'spawn',gps},{roadPoints:async()=>[{lat:11.26,lng:125}]});let result=await gameRequest(db,'player-a','POST',{action:'encounter',target:batch.encounters[0].id,gps});result=await gameRequest(db,'player-a','POST',{action:'harvest',resource:'mp',version:result.battle.version});await gameRequest(db,'player-a','POST',{action:'abandon',version:result.battle.version});
+ const db=database(),saved=await gameRequest(db,'player-a','POST',{action:'register',heroId:'rogue',name:'No Replay',skill:'punch'}),row=[...db.rows.values()].find(r=>r.item_kind==='rpg_profile').metadata;row.state.currentMp=2;const gps={lat:11.26,lng:125,accuracy:40,time:Date.now()},batch=await gameRequest(db,'player-a','POST',{action:'spawn',gps},{roadPoints:async()=>[{lat:11.26,lng:125}]});[...db.rows.values()].find(r=>r.item_kind==='rpg_profile').metadata.encounters[0].level=1;let result=await gameRequest(db,'player-a','POST',{action:'encounter',target:batch.encounters[0].id,gps});result=await gameRequest(db,'player-a','POST',{action:'harvest',resource:'mp',version:result.battle.version});await gameRequest(db,'player-a','POST',{action:'abandon',version:result.battle.version});
  const a=open(db);try{await pause();await pause();a.d.querySelector('#rpg-world').hidden=false;a.w.RPGBattle.connect({id:'rogue',name:'Varkesh',stats:[20,4,4,4,20,4]},saved.game);await pause();await pause();assert.equal(a.d.querySelector('#bt-harvest-modal').hidden,true);a.d.querySelector('#bt-mp').click();await pause();await pause();a.d.querySelector('#bt-abandon').click();await pause();await pause();assert.equal(a.d.querySelector('#bt-harvest-modal').hidden,false);a.d.querySelector('#bt-harvest-done').click();await pause();a.w.RPGBattle.stop();a.d.querySelector('#rpg-world').hidden=false;a.w.RPGBattle.connect({id:'rogue',name:'Varkesh',stats:[20,4,4,4,20,4]},saved.game);await pause();await pause();assert.equal(a.d.querySelector('#bt-harvest-modal').hidden,true);assert.deepEqual(a.errors,[]);}finally{a.close();}
  const reopened=open(db);try{await pause();await pause();reopened.d.querySelector('#rpg-world').hidden=false;reopened.w.RPGBattle.connect({id:'rogue',name:'Varkesh',stats:[20,4,4,4,20,4]},saved.game);await pause();await pause();assert.equal(reopened.d.querySelector('#bt-harvest-modal').hidden,true);}finally{reopened.close();}
 });
@@ -340,4 +340,53 @@ test('an unconfirmed CBG transfer keeps its request ID across closing and retryi
 test('missing guild setup shows an activation state rather than an ineffective Retry action',async()=>{
  const db=guildDatabase();db.guildMembers.set('player-a','guild-a');await gameRequest(db,'player-a','POST',{action:'register',heroId:'rogue',name:'Setup Pending',skill:'punch'});const from=db.from;db.from=table=>table==='cb_rpg_guild_stashes'?{select(){return this;},eq(){return this;},async maybeSingle(){return {data:null,error:{code:'PGRST205'}};}}:from(table);
  const a=open(db);try{await pause();await pause();a.d.querySelector('#hr-inventory-open').click();await pause();await pause();assert.match(a.d.querySelector('#hi-guild-message').textContent,/not enabled yet/);assert.equal(a.d.querySelector('#hi-guild-retry').hidden,true);assert.equal(a.d.querySelector('#hi-cbg-deposit').disabled,true);assert.equal(a.d.querySelectorAll('#hr-guild .hr-cell').length,144);assert.deepEqual(a.errors,[]);}finally{a.close();}
+});
+
+async function transferFixture(){
+ const C=(await import('../api/_rpg/src/inventory-core.js')).default,db=guildDatabase();db.guildMembers.set('player-a','guild-a');
+ await gameRequest(db,'player-a','POST',{action:'register',heroId:'assassin',name:'Quick Transfer',skill:'punch'});
+ const doc=[...db.rows.values()].find(r=>r.item_kind==='rpg_profile').metadata;
+ const item={uid:'quick-transfer-item',defId:'iron_dagger_v1',rotation:0,rotated:false,...C.rollItem(C.itemMap.iron_dagger_v1,1,()=>0,{rarity:'rare',requiredLevel:1})};
+ C.place(doc.state,item,'bag',0,0);return {db,item};
+}
+
+test('guild transfer previews immediately without saving unconfirmed ownership, then confirms without freezing navigation or refetching the snapshot',async()=>{
+ const {db,item}=await transferFixture();let release;const gate=new Promise(r=>release=r),rpc=db.rpc;db.rpc=async(name,args)=>{if(name==='cb_rpg_guild_transfer')await gate;return rpc(name,args);};
+ const a=open(db);try{
+  await pause();await pause();a.d.querySelector('#hr-inventory-open').click();await pause();await pause();
+  const reads=a.messages.filter(m=>m.body?.action==='guildStash').length;
+  a.d.querySelector('#hr-bag [data-uid="quick-transfer-item"]').click();a.d.querySelector('[data-item-action="to-guild"]').click();
+  assert.equal(a.d.querySelector('#hr-bag [data-uid="quick-transfer-item"]'),null);assert.ok(a.d.querySelector('#hr-guild [data-uid="quick-transfer-item"].hr-transfer-pending'));
+  assert.equal(a.d.querySelector('#hr-room').inert||false,false);assert.equal(a.d.querySelector('#hr-inventory-page').getAttribute('aria-busy'),'true');assert.equal(a.d.querySelector('#hr-explore').disabled,true);
+  const persisted=JSON.parse(a.w.localStorage.getItem(a.w.RPGLive.key('assassin')));assert.equal(persisted.items.find(i=>i.uid===item.uid).where,'bag');assert.equal((await read(db,'player-a')).state.items.find(i=>i.uid===item.uid).where,'bag');
+  a.d.querySelector('#hi-hero-room').click();assert.equal(a.w.RPGRoom.view(),'hero');a.d.querySelector('#hr-inventory-open').click();
+  a.w.RPGRoom.persist();assert.equal(a.messages.filter(m=>m.body?.action==='save').length,0);
+  release();await pause();await pause();await pause();assert.equal(a.d.querySelector('#hr-inventory-page').getAttribute('aria-busy'),'false');assert.equal(a.d.querySelector('#hr-explore').disabled,false);assert.equal(a.d.querySelectorAll('.hr-transfer-pending').length,0);
+  assert.equal((await read(db,'player-a')).state.items.some(i=>i.uid===item.uid),false);assert.equal(db.guildStashes.get('guild-a').items.filter(i=>i.uid===item.uid).length,1);assert.equal(a.messages.filter(m=>m.body?.action==='guildStash').length,reads);assert.deepEqual(a.errors,[]);
+ }finally{release();a.close();}
+});
+
+test('failed guild previews restore authoritative ownership, including a lost reply after the transfer committed',async()=>{
+ for(const committed of [false,true]){
+  const {db,item}=await transferFixture(),rpc=db.rpc;db.rpc=async(name,args)=>{if(name==='cb_rpg_guild_transfer'){if(committed)await rpc(name,args);return {error:{code:'NETWORK_ERROR',message:'Transfer connection lost'}};}return rpc(name,args);};
+  const a=open(db);try{
+   await pause();await pause();a.d.querySelector('#hr-inventory-open').click();await pause();await pause();a.d.querySelector('#hr-bag [data-uid="quick-transfer-item"]').click();a.d.querySelector('[data-item-action="to-guild"]').click();
+   assert.ok(a.d.querySelector('.hr-transfer-pending'));await pause();await pause();await pause();
+   const game=await read(db,'player-a'),shared=db.guildStashes.get('guild-a')?.items||[];
+   assert.equal(game.state.items.filter(i=>i.uid===item.uid).length+shared.filter(i=>i.uid===item.uid).length,1);
+   assert.equal(a.d.querySelectorAll('#hr-bag [data-uid="quick-transfer-item"]').length,committed?0:1);assert.equal(a.d.querySelectorAll('#hr-guild [data-uid="quick-transfer-item"]').length,committed?1:0);
+   assert.equal(a.d.querySelectorAll('.hr-transfer-pending').length,0);assert.equal(a.d.querySelector('#hr-inventory-page').getAttribute('aria-busy'),'false');assert.deepEqual(a.errors,[]);
+  }finally{a.close();}
+ }
+});
+
+test('a delayed background guild snapshot neither queues the next transfer nor overwrites its newer result',async()=>{
+ const {db}=await transferFixture();let hold=false,release;const gate=new Promise(r=>release=r);
+ const a=open(db,{}, {beforeReply:async(message)=>{if(hold&&message.body?.action==='guildStash')await gate;}});try{
+  await pause();await pause();a.d.querySelector('#hr-inventory-open').click();await pause();await pause();hold=true;
+  a.d.querySelector('#hi-hero-room').click();a.d.querySelector('#hr-inventory-open').click();await pause();
+  a.d.querySelector('#hr-bag [data-uid="quick-transfer-item"]').click();a.d.querySelector('[data-item-action="to-guild"]').click();await pause();await pause();await pause();
+  assert.equal(db.guildReceipts.size,1);assert.equal(a.d.querySelector('#hr-inventory-page').getAttribute('aria-busy'),'false');assert.ok(a.d.querySelector('#hr-guild [data-uid="quick-transfer-item"]'));
+  hold=false;release();await pause();await pause();assert.ok(a.d.querySelector('#hr-guild [data-uid="quick-transfer-item"]'));assert.equal(a.d.querySelector('#hr-bag [data-uid="quick-transfer-item"]'),null);assert.deepEqual(a.errors,[]);
+ }finally{release();a.close();}
 });

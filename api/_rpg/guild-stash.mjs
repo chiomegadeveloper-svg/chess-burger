@@ -9,26 +9,32 @@ async function wallet(client,user){const result=await client.from('cb_profiles')
 
 async function membership(client,user){
  const member=await client.from('cb_guild_members').select('guild_id').eq('user_id',user).maybeSingle();
- if(member.error)unavailable();if(!member.data)return null;
- const guild=await client.from('cb_guilds').select('id,name').eq('id',member.data.guild_id).maybeSingle();
- if(guild.error)unavailable();return guild.data||null;
+ if(member.error)unavailable();return member.data?.guild_id||null;
 }
 
 export async function guildSnapshot(client,user){
- const guild=await membership(client,user);
+ const guildId=await membership(client,user);
+ if(!guildId)return {guild:null,revision:0,items:[],cbg:0,cbgReady:false,...GUILD_GRID};
+ let [details,result]=await Promise.all([
+  client.from('cb_guilds').select('id,name').eq('id',guildId).maybeSingle(),
+  client.from('cb_rpg_guild_stashes').select('revision,items,cbg_balance').eq('guild_id',guildId).maybeSingle(),
+ ]),cbgReady=true;
+ if(details.error)unavailable();const guild=details.data;
  if(!guild)return {guild:null,revision:0,items:[],cbg:0,cbgReady:false,...GUILD_GRID};
- let result=await client.from('cb_rpg_guild_stashes').select('revision,items,cbg_balance').eq('guild_id',guild.id).maybeSingle(),cbgReady=true;
  if(result.error&&/42703|PGRST204/.test(result.error.code||'')){cbgReady=false;result=await client.from('cb_rpg_guild_stashes').select('revision,items').eq('guild_id',guild.id).maybeSingle();}
  if(result.error)unavailable(setupError(result.error));
  return {guild,revision:result.data?.revision||0,items:result.data?.items||[],cbg:Number(result.data?.cbg_balance||0),cbgReady,...GUILD_GRID};
 }
 
 export async function guildRequest(client,user,doc,input){
- const stash=await guildSnapshot(client,user);
+ if(input.action!=='guildStash'&&!/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(input.requestId||''))fail('Please retry this transfer.',400);
+ const [stash,receipt]=await Promise.all([
+  guildSnapshot(client,user),
+  input.action==='guildTransfer'?client.from('cb_rpg_guild_transfers').select('user_id,guild_id').eq('request_id',input.requestId).maybeSingle():null,
+ ]);
  if(input.action==='guildStash')return {guildStash:stash,walletCbg:stash.guild?await wallet(client,user):0};
  if(!stash.guild)fail('Join a Chess Burger guild to use its stash.',403);
  if(input.guildId!==stash.guild.id)fail('Your guild changed. Refresh the inventory before transferring.');
- if(!/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(input.requestId||''))fail('Please retry this transfer.',400);
  if(input.action==='guildCbg'){
   if(!['deposit','withdraw'].includes(input.direction)||!Number.isSafeInteger(input.amount)||input.amount<1||input.amount>1000000)fail('Enter a whole CBG amount from 1 to 1,000,000.',400);
   if(!stash.cbgReady)unavailable(true);
@@ -37,7 +43,6 @@ export async function guildRequest(client,user,doc,input){
   Object.assign(doc,result.data.document);
   return {game:doc.state,walletCbg:result.data.walletCbg,guildStash:{...result.data.guildStash,guild:stash.guild,cbgReady:true,...GUILD_GRID},transferred:true};
  }
- const receipt=await client.from('cb_rpg_guild_transfers').select('user_id,guild_id').eq('request_id',input.requestId).maybeSingle();
  if(receipt.error)unavailable(setupError(receipt.error));
  if(receipt.data){if(receipt.data.user_id!==user||receipt.data.guild_id!==stash.guild.id)fail('Transfer reference is unavailable.');return {game:doc.state,guildStash:stash,transferred:true};}
  if(input.stashRevision!==stash.revision||(input.inventoryRevision||0)!==(doc.state.inventoryRevision||0))fail('This inventory changed. Refresh and retry.');
