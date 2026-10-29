@@ -2,6 +2,7 @@
  <div class="hr-modal-card bb-volume">
   <header class="bb-binding"><div><small>CHRONICLES OF THE LOST</small><h2 id="bb-title">Babaylan Book</h2></div><button type="button" class="bb-close" data-close-modal aria-label="Close Babaylan Book">✕</button></header>
   <nav class="bb-index" aria-label="Book contents"><label for="bb-contents">Contents</label><select id="bb-contents"></select><span id="bb-kind"></span></nav>
+  <div class="bb-stage" id="bb-stage" aria-busy="false">
   <main class="bb-spread" id="bb-spread" aria-label="Monster chronicle">
    <section id="bb-introduction" class="bb-introduction" hidden>
     <div class="bb-leaf bb-portrait bb-title-leaf"><p class="bb-eyebrow">CHRONICLES OF THE LOST</p><img class="bb-cover-icon" src="{{BABAYLAN_BOOK_ICON}}" alt="An old leather-bound book with brass corners"><h3>Babaylan Book</h3><p class="bb-title-subtitle">The names the darkness could not erase</p><div class="bb-authors"><span>WRITTEN BY</span><strong>CHI EO <i>&amp;</i> BOB A.</strong></div></div>
@@ -10,6 +11,8 @@
    <section class="bb-leaf bb-portrait" id="bb-monster-portrait"><div class="bb-entry-heading"><p id="bb-number"></p><h3 id="bb-name"></h3><p id="bb-epithet"></p></div><figure class="bb-plate"><img id="bb-image" alt=""><figcaption id="bb-caption"></figcaption></figure><dl class="bb-facts" id="bb-facts"></dl></section>
    <article class="bb-leaf bb-story" id="bb-monster-story" aria-labelledby="bb-story-title"><div class="bb-ornament" aria-hidden="true">✦</div><p class="bb-eyebrow">A NAME REMEMBERED</p><h3 id="bb-story-title">Before the darkness</h3><p id="bb-before"></p><h4>The turning</h4><p id="bb-turning"></p><blockquote id="bb-echo"></blockquote><p class="bb-colophon">An original chronicle from the world of Chess Burger RPG.</p></article>
   </main>
+  <button type="button" class="bb-page-corner bb-corner-prev" id="bb-corner-prev" aria-label="Turn previous page"></button><button type="button" class="bb-page-corner bb-corner-next" id="bb-corner-next" aria-label="Turn next page"></button>
+  </div>
   <footer class="bb-pagination"><button type="button" id="bb-prev" aria-label="Previous monster page">← Previous</button><span id="bb-page" role="status" aria-live="polite"></span><button type="button" id="bb-next" aria-label="Next monster page">Next →</button></footer>
  </div>
 </div>

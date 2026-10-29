@@ -129,7 +129,7 @@
     }).join('');
     el('hr-points').textContent=state.points?`${state.points} upgrade point${state.points===1?'':'s'}`:'Automatic stat gains every level';
     const remaining=C.spells.length-state.learned.length;
-    el('hr-learn').innerHTML='<span aria-hidden="true">📖</span>';el('hr-learn').title=`Skill Book · ${Math.min(state.learnCredits,remaining)} skill choices available`;el('hr-learn').setAttribute('aria-label',el('hr-learn').title);
+    el('hr-learn').innerHTML='<img src="assets/navigation/attack-book.svg" alt="" draggable="false">';el('hr-learn').title=`Attack Skill Book · ${Math.min(state.learnCredits,remaining)} skill choices available`;el('hr-learn').setAttribute('aria-label',el('hr-learn').title);
     el('hr-learn').disabled=false;el('hr-learn').classList.toggle('skill-ready',state.learnCredits>0&&remaining>0);
   }
   function renderGrid(where){

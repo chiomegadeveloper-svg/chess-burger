@@ -103,3 +103,16 @@
  #hr-room .hr-xp-track{margin-top:0}
 }
 @media(prefers-reduced-motion:reduce){#hr-room .hr-neon-meter>i{transition:none}}
+
+/* Give the Attack Skill Book its own readable art and a generous touch target. */
+.hr-split .hr-storage-top{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto auto;column-gap:10px;row-gap:4px;align-items:center}
+.hr-split .hr-storage-top>.hr-section-label{grid-column:1;grid-row:1;align-self:end}
+.hr-split .hr-library-choice{display:contents}
+.hr-split #hr-skill-progress{grid-column:1;grid-row:2;align-self:start;max-width:none;font-size:10px;line-height:1.4}
+.hr-split #hr-learn{--book-size:clamp(68px,10vh,88px);position:relative;grid-column:2;grid-row:1/3;display:block;width:var(--book-size);height:var(--book-size);min-width:var(--book-size);min-height:var(--book-size);padding:4px;border:1px solid #62cbd8;border-radius:13px;background:radial-gradient(ellipse at 50% 30%,#2b6575,#102936 75%);box-shadow:inset 0 1px #c2ffff33,0 0 10px #22cee51f;flex:none}
+.hr-split #hr-learn>img{display:block;width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 2px 4px #0006);pointer-events:none}
+.hr-split #hr-learn:hover{border-color:#c5fcff;background:#204a5b}.hr-split #hr-learn:focus-visible{outline:2px solid #c5fcff;outline-offset:3px}
+.hr-split #hr-learn.skill-ready{border-color:#c5f786;box-shadow:inset 0 1px #c2ffff33,0 0 15px #b0ff6866}
+@media(orientation:landscape) and (max-height:520px){.hr-split #hr-learn{--book-size:56px}.hr-split #hr-skill-progress{font-size:9px}}
+@media(orientation:landscape) and (max-height:350px){.hr-split #hr-learn{--book-size:52px}.hr-split .hr-storage-top{column-gap:6px}}
+@media(orientation:portrait){.hr-split #hr-learn{--book-size:60px}}
