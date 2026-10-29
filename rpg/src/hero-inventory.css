@@ -116,3 +116,17 @@
 @media(orientation:landscape) and (max-height:520px){.hr-split #hr-learn{--book-size:56px}.hr-split #hr-skill-progress{font-size:9px}}
 @media(orientation:landscape) and (max-height:350px){.hr-split #hr-learn{--book-size:52px}.hr-split .hr-storage-top{column-gap:6px}}
 @media(orientation:portrait){.hr-split #hr-learn{--book-size:60px}}
+
+/* One aligned loadout row: four attacks followed by the Skill Book. */
+.hr-split .hr-loadout-row{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:clamp(3px,.6vw,7px);width:100%;min-width:0;align-items:stretch}
+.hr-split .hr-loadout-row #hr-active{display:contents}
+.hr-split .hr-loadout-row .hr-spell-slot,.hr-split .hr-loadout-row #hr-learn{box-sizing:border-box;grid-column:auto;grid-row:auto;aspect-ratio:1;width:100%;height:auto;min-width:0;min-height:0;max-height:none;border-radius:10px;padding:3px}
+.hr-split .hr-storage-top{grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto;row-gap:4px}
+@media(orientation:portrait){
+ .hr-split .hr-storage-panel{grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto minmax(0,1fr) auto auto}
+ .hr-split .hr-active-section{grid-column:1;grid-row:1;justify-content:flex-start}
+ .hr-split .hr-storage-top{grid-column:1;grid-row:2}
+ .hr-split .hr-storage-slots{grid-column:1;grid-row:3}
+ .hr-split .hr-library-nav{grid-column:1;grid-row:4}
+ .hr-split .hr-room-actions{grid-column:1;grid-row:5}
+}
