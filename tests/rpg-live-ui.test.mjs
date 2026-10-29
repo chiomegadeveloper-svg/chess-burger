@@ -220,19 +220,38 @@ test('equipping gear and entering Explorer survives JSONB object key ordering wi
  }finally{a.close();}
 });
 
+test('Skill Book hover and touch previews show details and animate without spending a skill choice',async()=>{
+ const db=database();await gameRequest(db,'player-a','POST',{action:'register',heroId:'assassin',name:'Rune Reader',skill:'punch'});
+ const a=open(db);try{await pause();await pause();const plays=[],stops=[];a.w.RPGSkillFX={play:(host,id)=>plays.push(id),stop:host=>stops.push(host.id)};
+ a.d.querySelector('#hr-learn').click();const pop=a.d.querySelector('#hr-skill-popover'),list=a.d.querySelector('#hr-learn-list');assert.equal(pop.hidden,true);assert.equal(plays.length,0);
+ const known=list.querySelector('[data-learn="basic"]');assert.equal(known.disabled,false);known.dispatchEvent(new a.w.MouseEvent('pointerover',{bubbles:true}));
+ assert.equal(pop.hidden,false);assert.equal(plays.at(-1),'basic');assert.equal(a.d.querySelector('#hr-skill-preview-name').textContent,'Basic Tackle');assert.match(a.d.querySelector('#hr-skill-preview-detail').textContent,/4 AP \/ 2 MP.*0 turn cooldown.*38% Attack/);assert.match(a.d.querySelector('#hr-skill-preview-description').textContent,/shoulder/);assert.equal(a.d.querySelector('#hr-skill-preview-choose').disabled,true);
+ const fire=list.querySelector('[data-learn="fireball"]');fire.focus();assert.equal(plays.at(-1),'fireball');assert.equal(known.hasAttribute('aria-describedby'),false);assert.equal(fire.hasAttribute('aria-describedby'),true);
+ fire.getBoundingClientRect=()=>({left:100,right:180,top:100,bottom:180,width:80,height:80});list.getBoundingClientRect=()=>({top:20,bottom:600});list.dispatchEvent(new a.w.Event('scroll'));assert.equal(pop.hidden,false,'keyboard scrolling keeps the focused rune preview visible');
+ a.d.querySelector('#hr-skill-replay').click();assert.equal(plays.at(-1),'fireball');
+ fire.dispatchEvent(new a.w.MouseEvent('pointerout',{bubbles:true,relatedTarget:a.d.body}));await new Promise(r=>setTimeout(r,210));assert.equal(pop.hidden,true);assert.equal(stops.at(-1),'hr-skill-fx');
+ known.click();assert.equal(pop.hidden,false);assert.equal(a.d.querySelector('#hr-skill-confirm').open,false);assert.equal((await read(db,'player-a')).state.learnCredits,0);
+ a.d.dispatchEvent(new a.w.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));assert.equal(pop.hidden,true);assert.equal(a.d.querySelector('#hr-learn-modal').hidden,false);
+ const C=(await import('../api/_rpg/src/inventory-core.js')).default,P=(await import('../api/_rpg/src/progression.js')).default,row=[...db.rows.values()].find(r=>r.item_kind==='rpg_profile');C.gainXp(row.metadata.state,P.threshold(2));a.w.RPGRoom.accept(structuredClone(row.metadata.state));a.d.querySelector('#hr-skill-category').dispatchEvent(new a.w.Event('change'));
+ const next=list.querySelector('[data-can-learn="true"]'),touch=new a.w.Event('pointerdown',{bubbles:true});Object.defineProperty(touch,'pointerType',{value:'touch'});next.dispatchEvent(touch);next.click();assert.equal(pop.hidden,false);assert.equal(a.d.querySelector('#hr-skill-confirm').open,false);assert.equal(a.d.querySelector('#hr-skill-preview-choose').disabled,false);
+ a.d.querySelector('#hr-skill-preview-choose').click();assert.equal(pop.hidden,true);assert.equal(a.d.querySelector('#hr-skill-confirm').open,true);assert.equal((await read(db,'player-a')).state.learnCredits,1);
+ a.d.querySelector('#hr-skill-cancel').click();a.d.querySelector('#hr-learn-modal [data-close-modal]').click();assert.equal(pop.hidden,true);assert.deepEqual(a.errors,[]);
+ }finally{a.close();}
+});
+
 test('Skill Book glows for unspent choices; Cancel keeps the choice and Activate learns and equips only the confirmed rune',async()=>{
  const db=database();await gameRequest(db,'player-a','POST',{action:'register',heroId:'assassin',name:'Skill Student',skill:'punch'});
  const C=(await import('../api/_rpg/src/inventory-core.js')).default,P=(await import('../api/_rpg/src/progression.js')).default;
  const row=[...db.rows.values()].find(r=>r.item_kind==='rpg_profile');C.gainXp(row.metadata.state,P.threshold(4));
  const a=open(db);try{await pause();await pause();assert.equal(a.d.querySelector('#hr-learn').classList.contains('skill-ready'),true);
- a.d.querySelector('#hr-learn').click();const candidates=[...a.d.querySelectorAll('[data-learn]:not([disabled])')].map(n=>n.dataset.learn),first=candidates[0],second=candidates[1];
+ a.d.querySelector('#hr-learn').click();const candidates=[...a.d.querySelectorAll('[data-learn][data-can-learn="true"]')].map(n=>n.dataset.learn),first=candidates[0],second=candidates[1];
  a.d.querySelector(`[data-learn="${first}"]`).click();assert.equal(a.d.querySelector('#hr-skill-confirm').open,true);assert.equal((await read(db,'player-a')).state.learned.includes(first),false);
  a.d.querySelector('#hr-skill-cancel').click();await pause();assert.equal(a.d.querySelector('#hr-learn-modal').hidden,false);assert.equal((await read(db,'player-a')).state.learnCredits,2);
  a.d.querySelector(`[data-learn="${second}"]`).click();a.d.querySelector('#hr-skill-activate').click();await pause();await a.w.RPGLive.flush();let saved=await read(db,'player-a');assert.equal(saved.state.learned.includes(first),false);assert.equal(saved.state.active[2],second);assert.equal(saved.state.learnCredits,1);assert.equal(a.d.querySelector('#hr-learn').classList.contains('skill-ready'),true);
  a.d.querySelector('#hr-learn').click();a.d.querySelector(`[data-learn="${first}"]`).click();a.d.querySelector('#hr-skill-activate').click();await pause();await a.w.RPGLive.flush();saved=await read(db,'player-a');assert.equal(saved.state.active[3],first);assert.equal(saved.state.learnCredits,0);assert.equal(a.d.querySelector('#hr-learn').classList.contains('skill-ready'),false);
  // A later level reward makes the book glow again. Full loadouts require an explicit replacement.
  const current=[...db.rows.values()].find(r=>r.item_kind==='rpg_profile');C.gainXp(current.metadata.state,P.threshold(6));a.w.RPGRoom.accept(structuredClone(current.metadata.state));assert.equal(a.d.querySelector('#hr-learn').classList.contains('skill-ready'),true);
- a.d.querySelector('#hr-learn').click();const third=a.d.querySelector('[data-learn]:not([disabled])').dataset.learn;a.d.querySelector(`[data-learn="${third}"]`).click();assert.equal(a.d.querySelector('#hr-skill-activate').disabled,true);assert.equal(a.d.querySelector('#hr-skill-confirm-slots').hidden,false);
+ a.d.querySelector('#hr-learn').click();const third=a.d.querySelector('[data-learn][data-can-learn="true"]').dataset.learn;a.d.querySelector(`[data-learn="${third}"]`).click();assert.equal(a.d.querySelector('#hr-skill-activate').disabled,true);assert.equal(a.d.querySelector('#hr-skill-confirm-slots').hidden,false);
  a.d.querySelector('[data-activate-slot="1"]').click();a.d.querySelector('#hr-skill-activate').click();await pause();await a.w.RPGLive.flush();saved=await read(db,'player-a');assert.equal(saved.state.active[1],third);assert.ok(saved.state.spellStorage.includes('punch'));assert.equal(saved.state.learnCredits,0);assert.deepEqual(a.errors,[]);
  }finally{a.close();}
 });

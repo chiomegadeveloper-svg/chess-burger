@@ -85,9 +85,14 @@
   <div class="hr-modal-card">
     <div class="hr-modal-head"><div><h2 id="hr-learn-title">Attack Skill Book</h2><p id="hr-learn-note"></p></div><button type="button" class="hr-btn hr-modal-close" data-close-modal aria-label="Close spell selection">✕</button></div>
     <div class="hr-skill-tools"><label>Attack family <select id="hr-skill-category"><option value="">All 30 skills</option><option value="physical">Physical · 6</option><option value="elemental">Elemental · 6</option><option value="wind">Wind · 6</option><option value="fire">Fire · 6</option><option value="lightning">Lightning · 6</option></select></label><span>Heroes & monsters share the same costs and cooldowns.</span></div>
-    <div class="hr-skill-preview"><div id="hr-skill-fx" aria-label="Attack animation preview"></div><div><strong id="hr-skill-preview-name">Basic Tackle</strong><p id="hr-skill-preview-detail"></p><button type="button" class="hr-btn" id="hr-skill-replay">↻ Replay animation</button><small id="hr-skill-fx-status" role="status"></small></div></div>
     <div class="hr-learn-list" id="hr-learn-list"></div>
   </div>
+  <aside class="hr-skill-preview" id="hr-skill-popover" role="region" aria-label="Attack skill preview" hidden>
+    <header><strong id="hr-skill-preview-name"></strong><button type="button" class="hr-btn" id="hr-skill-preview-close" aria-label="Close skill preview">×</button></header>
+    <div id="hr-skill-fx" aria-label="Attack animation preview"></div>
+    <p id="hr-skill-preview-description"></p><p id="hr-skill-preview-detail"></p><p id="hr-skill-preview-bonus"></p>
+    <footer><button type="button" class="hr-btn" id="hr-skill-replay">↻ Replay</button><button type="button" class="hr-btn primary" id="hr-skill-preview-choose">Select skill</button></footer><small id="hr-skill-fx-status" role="status"></small>
+  </aside>
 </div>
 
 <div class="hr-modal" id="hr-damage-modal" role="dialog" aria-modal="true" aria-labelledby="damage-title" hidden>

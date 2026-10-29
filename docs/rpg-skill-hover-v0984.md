@@ -1,0 +1,7 @@
+# Attack Skill Book previews — v0.0984
+
+The book's fixed animation strip is replaced by a floating preview beside the inspected rune. Pointer hover and keyboard focus show the skill name, description, element, AP/MP cost, cooldown, damage formula, attribute bonuses and the existing ct.js animation. Learned skills and skills unavailable for learning remain inspectable. Previewing does not spend a skill choice or modify the loadout.
+
+Touch taps open the preview first; Select skill opens the existing confirmation and replacement flow when learning is allowed. Replay repeats the effect. Pointer exit, Escape, category changes, resize and book closure dismiss the preview and stop its renderer. Keyboard scrolling preserves the preview while its focused rune remains visible. The card is bounded to the viewport, with internal scrolling on short screens.
+
+Verification: live UI checks cover hover, focus, touch preview, replay, costs, learned/locked skills, keyboard scrolling, dismissal and unchanged learning credits, plus the existing cancel/activate/replacement flow. A local fixture with real ct.js rendering showed Fireball in a 320 × 308 preview within a 1363 × 936 desktop viewport; a 720 × 360 iframe review showed a 320 × 257 preview fully within the viewport. Browser review used disposable fixture state, with no production account or wallet. Screenshot: images/rpg-skill-hover-v0984.jpg.

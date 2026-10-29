@@ -148,7 +148,7 @@
     }
     node.innerHTML=html;node.querySelector(`[data-uid="${guildPreview?.uid||''}"]`)?.classList.add('hr-transfer-pending');node.parentElement.scrollTop=scroll;el(`hr-${where}-count`).textContent=`${occupied}/${grid.cols*grid.rows}`;
   }
-  let libraryPage=0,previewSkill='basic',pendingSkill=null,activationSlot=-1,skillTrigger=null;
+  let libraryPage=0,previewSkill='basic',pendingSkill=null,activationSlot=-1,skillTrigger=null,previewAnchor=null,previewHideTimer=null,touchSkillTap=false;
   const skillImage=spell=>`assets/skills/runes/${spell.id}.webp`;
   function renderSpells(){
     el('hr-library-page').textContent=`${libraryPage+1} / 4`;
@@ -215,7 +215,7 @@
     hideTooltip();closeModal();returnFocus=document.activeElement;modal=el(id);modal.hidden=false;room.inert=true;el('rpg-world').inert=!el('rpg-world').hidden;
     const first=modal.querySelector('input,button:not([disabled])');first?.focus();
   }
-  function closeModal(){if(el('hr-skill-confirm').open)el('hr-skill-confirm').close();pendingSkill=null;if(!modal)return;if(modal.id==='hr-learn-modal')window.RPGSkillFX?.stop(el('hr-skill-fx'));modal.hidden=true;modal=null;room.inert=false;el('rpg-world').inert=false;if(!el('rpg-world').hidden)window.RPGWorld.refresh(hero,state);returnFocus?.focus();returnFocus=null;}
+  function closeModal(){hideSkillPreview();if(el('hr-skill-confirm').open)el('hr-skill-confirm').close();pendingSkill=null;if(!modal)return;modal.hidden=true;modal=null;room.inert=false;el('rpg-world').inert=false;if(!el('rpg-world').hidden)window.RPGWorld.refresh(hero,state);returnFocus?.focus();returnFocus=null;}
   function renderCatalog(){
     const query=el('hr-search').value.trim().toLowerCase(),category=el('hr-category').value,tier=Number(el('hr-tier-filter').value);
     const defs=C.items.filter(d=>(!query||d.name.toLowerCase().includes(query))&&(!category||d.category===category)&&(!tier||d.tier===tier));
@@ -224,23 +224,39 @@
   function playSkillPreview(){
     const spell=C.spellMap[previewSkill];if(!spell)return;
     el('hr-skill-preview-name').textContent=spell.name;
+    el('hr-skill-preview-description').textContent=spell.description;
     el('hr-skill-preview-detail').textContent=`${window.RPGElements.label(window.RPGElements.skillElement(spell))} · ${spell.ap} AP / ${spell.mp} MP · ${spell.cooldown} turn cooldown · ${Math.round(spell.scale*100)}% ${spell.magic?'Magic':'Attack'} + 2 − 15% Armor`;
+    el('hr-skill-preview-bonus').textContent=bonuses(spell.bonus);
     window.RPGSkillFX?.play(el('hr-skill-fx'),spell.id,{status:el('hr-skill-fx-status')});
   }
+  function hideSkillPreview(){clearTimeout(previewHideTimer);previewAnchor?.removeAttribute('aria-describedby');previewAnchor=null;el('hr-skill-popover').hidden=true;window.RPGSkillFX?.stop(el('hr-skill-fx'));}
+  function positionSkillPreview(){
+    if(!previewAnchor)return;const box=el('hr-skill-popover'),anchor=previewAnchor.getBoundingClientRect(),rect=box.getBoundingClientRect(),width=rect.width||300,height=rect.height||300,gap=10;
+    let left=anchor.right+gap;if(left+width>innerWidth-gap)left=anchor.left-width-gap;if(left<gap)left=Math.max(gap,(innerWidth-width)/2);
+    const top=Math.max(gap,Math.min(innerHeight-height-gap,anchor.top));box.style.left=`${left}px`;box.style.top=`${top}px`;
+  }
+  function showSkillPreview(button){
+    clearTimeout(previewHideTimer);if(!button||el('hr-learn-modal').hidden||el('hr-skill-confirm').open)return;
+    if(previewAnchor===button&&!el('hr-skill-popover').hidden)return;
+    hideSkillPreview();previewAnchor=button;previewSkill=button.dataset.learn;button.setAttribute('aria-describedby','hr-skill-preview-description hr-skill-preview-detail hr-skill-preview-bonus');
+    const choose=el('hr-skill-preview-choose');choose.disabled=button.dataset.canLearn!=='true';choose.textContent=state.learned.includes(previewSkill)?'Learned':choose.disabled?'No skill choice':'Select skill';
+    el('hr-skill-popover').hidden=false;playSkillPreview();positionSkillPreview();
+  }
+  function deferSkillPreviewHide(){clearTimeout(previewHideTimer);previewHideTimer=setTimeout(hideSkillPreview,180);}
   function renderLearn(){
+    hideSkillPreview();
     const remaining=C.spells.length-state.learned.length;
     el('hr-learn-note').textContent=remaining===0?'All 30 skills learned · Equip attacks from your Power Library.':state.learnCredits?`${Math.min(state.learnCredits,remaining)} skill choice(s) available · New choice every 2 levels.`:`Next skill choice: level ${Math.floor(state.level/2)*2+2} · Equip up to 4 attacks.`;
     const category=el('hr-skill-category').value;
     el('hr-learn-list').innerHTML=C.spells.filter(s=>!category||s.category===category).map(spell=>{
       const known=state.learned.includes(spell.id);
       const detail=`${spell.name} · ${window.RPGElements.label(window.RPGElements.skillElement(spell))} · ${spell.ap} AP · ${spell.mp} MP · ${Math.round(spell.scale*100)}% ${spell.magic?'Magic':'Attack'} damage · cooldown ${spell.cooldown} · ${bonuses(spell.bonus)}${known?' · Learned':''}`;
-      return `<button type="button" class="hr-catalog-rune" data-family="${spell.category}" data-learn="${spell.id}" title="${escape(detail)}" aria-label="${escape(detail)}" ${known||state.level<2||!state.learnCredits?'disabled':''}><img src="${skillImage(spell)}" alt="">${window.RPGElements.badge(window.RPGElements.skillElement(spell))}${known?'<span aria-hidden="true">✓</span>':''}</button>`;
+      return `<button type="button" class="hr-catalog-rune" data-family="${spell.category}" data-learn="${spell.id}" data-can-learn="${!known&&state.level>=2&&!!state.learnCredits}" aria-label="${escape(detail)}"><img src="${skillImage(spell)}" alt="">${window.RPGElements.badge(window.RPGElements.skillElement(spell))}${known?'<span aria-hidden="true">✓</span>':''}</button>`;
     }).join('');
-    playSkillPreview();
   }
   function confirmSkill(id,button){
-    const spell=C.spellMap[id];if(!spell||state.learned.includes(id)||!state.learnCredits)return;
-    pendingSkill=id;skillTrigger=button;activationSlot=state.active.indexOf(null);previewSkill=id;playSkillPreview();
+    const spell=C.spellMap[id];if(!spell||state.learned.includes(id)||state.level<2||!state.learnCredits)return;
+    hideSkillPreview();pendingSkill=id;skillTrigger=button;activationSlot=state.active.indexOf(null);
     el('hr-skill-confirm-icon').src=skillImage(spell);el('hr-skill-confirm-name').textContent=spell.name;
     el('hr-skill-confirm-detail').textContent=`${spell.ap} AP · ${spell.mp} MP · ${Math.round(spell.scale*100)}% ${spell.magic?'Magic':'Attack'} + 2 − 15% Armor · ${spell.cooldown} turn cooldown · ${bonuses(spell.bonus)}`;
     el('hr-skill-confirm-note').textContent=activationSlot>=0?'Use one skill choice and activate this attack in an empty slot?':'Choose an attack to replace. Your previous attack will move to the Power Library.';
@@ -434,8 +450,8 @@
     if(C.buyBag(state,where)){changed(`Purchased 6 new ${where} tiles for ${C.BAG_PRICE} CBG.`);renderShop();el('hr-shop-status').textContent=`${where==='bag'?'Hero bag':'Item stash'} expanded by 6 tiles. Purchase saved.`;}
   });
   el('hr-test-cbg').addEventListener('click',()=>{if(C.addTestCBG(state)){changed('Added 100 sandbox CBG.');renderShop();el('hr-shop-status').textContent='100 test CBG added to this local hero.';}});
-  el('hr-levelup').addEventListener('click',()=>{if(!C.levelUp(state))return;changed(`Practice level ${state.level}! Base attributes increased automatically. Online XP stays separate.`);if(state.level%2===0&&state.learnCredits&&state.learned.length<C.spells.length){renderLearn();showModal('hr-learn-modal');playSkillPreview();}});
-  el('hr-learn').addEventListener('click',()=>{renderLearn();showModal('hr-learn-modal');playSkillPreview();});
+  el('hr-levelup').addEventListener('click',()=>{if(!C.levelUp(state))return;changed(`Practice level ${state.level}! Base attributes increased automatically. Online XP stays separate.`);if(state.level%2===0&&state.learnCredits&&state.learned.length<C.spells.length){renderLearn();showModal('hr-learn-modal');}});
+  el('hr-learn').addEventListener('click',()=>{renderLearn();showModal('hr-learn-modal');});
   for(const id of ['hr-search','hr-category','hr-tier-filter'])el(id).addEventListener(id==='hr-search'?'input':'change',renderCatalog);
   el('hr-catalog').addEventListener('click',event=>{
     const id=event.target.closest('[data-collect]')?.dataset.collect;if(!id)return;
@@ -447,9 +463,23 @@
   el('hr-library-next').addEventListener('click',()=>{libraryPage=Math.min(3,libraryPage+1);renderSpells();});
   el('hr-skill-category').addEventListener('change',renderLearn);
   el('hr-skill-replay').addEventListener('click',playSkillPreview);
+  el('hr-skill-preview-close').onclick=()=>{hideSkillPreview();el('hr-skill-category').focus();};
+  el('hr-skill-preview-choose').onclick=()=>{if(previewAnchor)confirmSkill(previewSkill,previewAnchor);};
+  el('hr-learn-list').addEventListener('pointerdown',event=>{touchSkillTap=event.pointerType==='touch';});
+  el('hr-learn-list').addEventListener('pointerover',event=>{if(event.pointerType!=='touch')showSkillPreview(event.target.closest('[data-learn]'));});
+  el('hr-learn-list').addEventListener('pointerout',event=>{if(!event.target.closest('[data-learn]')?.contains(event.relatedTarget)&&!el('hr-skill-popover').contains(event.relatedTarget))deferSkillPreviewHide();});
+  el('hr-learn-list').addEventListener('focusin',event=>showSkillPreview(event.target.closest('[data-learn]')));
+  el('hr-learn-list').addEventListener('focusout',event=>{if(!el('hr-skill-popover').contains(event.relatedTarget))deferSkillPreviewHide();});
+  el('hr-skill-popover').addEventListener('pointerenter',()=>clearTimeout(previewHideTimer));
+  el('hr-skill-popover').addEventListener('pointerleave',deferSkillPreviewHide);
+  el('hr-skill-popover').addEventListener('focusin',()=>clearTimeout(previewHideTimer));
+  el('hr-skill-popover').addEventListener('focusout',event=>{if(!el('hr-skill-popover').contains(event.relatedTarget))deferSkillPreviewHide();});
+  el('hr-learn-list').addEventListener('scroll',()=>{const r=previewAnchor?.getBoundingClientRect(),list=el('hr-learn-list').getBoundingClientRect();if(previewAnchor===document.activeElement&&r&&r.bottom>list.top&&r.top<list.bottom)positionSkillPreview();else hideSkillPreview();});
+  window.addEventListener('resize',hideSkillPreview);
   el('hr-learn-list').addEventListener('click',event=>{
-    const preview=event.target.closest('[data-preview-skill]')?.dataset.previewSkill;if(preview){previewSkill=preview;playSkillPreview();return;}
-    const button=event.target.closest('[data-learn]');if(!button||button.disabled)return;confirmSkill(button.dataset.learn,button);
+    const button=event.target.closest('[data-learn]');if(!button)return;
+    const touch=touchSkillTap||event.pointerType==='touch';touchSkillTap=false;
+    if(touch||button.dataset.canLearn!=='true'){showSkillPreview(button);return;}confirmSkill(button.dataset.learn,button);
   });
   for(const node of document.querySelectorAll('.hr-modal'))node.addEventListener('click',event=>{if(event.target===node||event.target.closest('[data-close-modal]'))closeModal();});
   // Activate touch controls on release and ignore the duplicate browser click.
@@ -475,7 +505,7 @@
   document.addEventListener('keydown',event=>{
     if(room.hidden&&el('rpg-world').hidden)return;
     if(el('hr-skill-confirm').open)return;
-    if(event.key==='Escape'){if(modal)closeModal();else{clearDrag();selectedItem=null;selectedSpell=null;render();}return;}
+    if(event.key==='Escape'){if(!el('hr-skill-popover').hidden){event.preventDefault();hideSkillPreview();el('hr-skill-category').focus();return;}if(modal)closeModal();else{clearDrag();selectedItem=null;selectedSpell=null;render();}return;}
     if(modal&&event.key==='Tab'){
       const nodes=[...modal.querySelectorAll('button:not([disabled]),input,select')].filter(n=>n.offsetParent!==null),first=nodes[0],last=nodes.at(-1);
       if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus();}
