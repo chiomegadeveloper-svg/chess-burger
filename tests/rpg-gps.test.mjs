@@ -4,7 +4,7 @@ import {gameRequest} from '../api/_rpg/service.mjs';
 import {read} from '../api/_rpg/store.mjs';
 import {database} from './helpers/rpg-db.mjs';
 const at={lat:11.26,lng:125};
-function fixture(){const db=database();let now=Date.now(),loads=0;const roads=async()=>{loads++;return Array.from({length:20},(_,i)=>({lat:at.lat+(i+1)*.0002,lng:at.lng}));};const call=(input,method='POST',user='a')=>gameRequest(db,user,method,input,{now:()=>now,roadPoints:roads});const gps=(offset=0)=>({...at,lat:at.lat+offset/111195,accuracy:40,time:now});return {db,call,gps,time:n=>now=n,now:()=>now,loads:()=>loads};}
+function fixture(){const db=database();let now=Date.now(),loads=0;const roads=async()=>{loads++;return Array.from({length:40},(_,i)=>({lat:at.lat+(i+1)*.0002,lng:at.lng}));};const call=(input,method='POST',user='a')=>gameRequest(db,user,method,input,{now:()=>now,roadPoints:roads});const gps=(offset=0)=>({...at,lat:at.lat+offset/111195,accuracy:40,time:now});return {db,call,gps,time:n=>now=n,now:()=>now,loads:()=>loads};}
 const register=f=>f.call({action:'register',heroId:'rogue',name:'GPS Warrior',skill:'punch'});
 test('pinned sets last a full rolling 30 minutes across clock boundaries and movement, and reopen without fetching roads',async()=>{
  const f=fixture();await register(f);const start=Math.floor(f.now()/3600000)*3600000+3590000;f.time(start);
@@ -59,7 +59,7 @@ test('road candidates and new monster sets span 800 meters while combat stays wi
 
 test('fresh Explorer sets reserve 35% of road monsters inside 200m, rounded to six of sixteen',async()=>{
  const Layout=(await import('../api/_rpg/src/encounter-layout.js')).default,{distanceMeters}=await import('../api/_rpg/world.mjs');
- const points=[30,60,90,120,150,180,199,...Array.from({length:24},(_,i)=>220+i*24)].map(m=>({lat:at.lat+m/111195,lng:at.lng}));
+ const points=[...Array.from({length:8},(_,i)=>[80,140,185].map(m=>({lat:at.lat+Math.cos(i*Math.PI/4)*m/111195,lng:at.lng+Math.sin(i*Math.PI/4)*m/(111195*Math.cos(at.lat*Math.PI/180))}))).flat(),...Array.from({length:24},(_,i)=>({lat:at.lat+(220+i*24)/111195,lng:at.lng}))];
  for(let seed=0;seed<100;seed++){
   const batch=Layout.create(at,10,[{id:'mhakiduk'}],1700000000000+seed,points),near=batch.filter(e=>distanceMeters(at,e)<=200);
   assert.equal(batch.length,16);assert.equal(near.length,6);
@@ -67,7 +67,7 @@ test('fresh Explorer sets reserve 35% of road monsters inside 200m, rounded to s
   assert.ok(batch.every(e=>distanceMeters(at,e)<=800));assert.ok(batch.every(e=>e.level>=9&&e.level<=30));
  }
  const db=database(),call=input=>gameRequest(db,'a','POST',input,{roadPoints:async()=>points});await call({action:'register',heroId:'rogue',name:'Nearby Warrior',skill:'punch'});
- const row=[...db.rows.values()].find(r=>r.item_kind==='rpg_profile');row.metadata.monsterSet={version:3,cityId:null,radius:800,refreshAt:Date.now()+1800000};row.metadata.encounters=[{id:'old-set',lat:at.lat,lng:at.lng,expires_at:Date.now()+1800000}];
+ const row=[...db.rows.values()].find(r=>r.item_kind==='rpg_profile');row.metadata.monsterSet={version:4,cityId:null,radius:800,refreshAt:Date.now()+1800000};row.metadata.encounters=[{id:'old-set',lat:at.lat,lng:at.lng,expires_at:Date.now()+1800000}];
  assert.equal((await call({action:'init'})).spawnCache,null);
  const gps={...at,accuracy:5,time:Date.now()},batch=await call({action:'spawn',gps});assert.equal(batch.encounters.filter(e=>distanceMeters(at,e)<=200).length,6);assert.ok(batch.encounters.every(e=>e.id!=='old-set'));
  assert.deepEqual((await call({action:'spawn',gps})).encounters,batch.encounters,'GPS refresh must not reroll or refill pinned monsters');
@@ -75,17 +75,17 @@ test('fresh Explorer sets reserve 35% of road monsters inside 200m, rounded to s
  const sparse=Layout.create(at,10,[{id:'mhakiduk'}],1700000000000,points.slice(0,2));assert.equal(sparse.length,2,'never invent off-road positions or stack duplicates when road coverage is sparse');
 });
 
-test('nearby share adapts to sparse roads without inventing coordinates or dropping available encounters',async()=>{
+test('nearby share adapts to sparse roads without inventing coordinates or crowding the hero',async()=>{
  const Layout=(await import('../api/_rpg/src/encounter-layout.js')).default,{distanceMeters}=await import('../api/_rpg/world.mjs');
  const point=meters=>({lat:at.lat+meters/111195,lng:at.lng});
- for(const [distances,expectedNear]of[
-  [[30,60,90,120,250,300,350,400,450,500],4],
-  [[30,...Array.from({length:20},(_,i)=>220+i*20)],1],
-  [[30,60,90,120,150,180,199],7],
-  [[220,250,300,400],0],
+ for(const [distances,expectedNear,expectedCount]of[
+  [[30,60,90,120,250,300,350,400,450,500],3,9],
+  [[30,...Array.from({length:20},(_,i)=>220+i*20)],0,16],
+  [[30,60,90,120,150,180,199],5,5],
+  [[220,250,300,400],0,4],
  ]){
   const points=distances.map(point),batch=Layout.create(at,10,[{id:'chaanack'}],1700000000000,points);
-  assert.equal(batch.length,Math.min(16,points.length));assert.equal(batch.filter(e=>distanceMeters(at,e)<=200).length,expectedNear);
+  assert.equal(batch.length,expectedCount);assert.equal(batch.filter(e=>distanceMeters(at,e)<=200).length,expectedNear);
   assert.ok(batch.every(e=>points.some(p=>p.lat===e.lat&&p.lng===e.lng)));
  }
  const {readFile}=await import('node:fs/promises');assert.equal(await readFile('rpg/src/encounter-layout.js','utf8'),await readFile('api/_rpg/src/encounter-layout.js','utf8'),'browser and server share the same spawn policy');

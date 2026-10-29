@@ -277,3 +277,28 @@
 #bt-drops-list .bt-drop-icon>img{position:absolute;inset:6px;width:calc(100% - 12px);height:calc(100% - 12px);min-width:0;min-height:0;max-width:calc(100% - 12px);max-height:calc(100% - 12px);object-fit:contain}
 
 .rpg-skill-fallback{position:absolute;left:15%;top:40%;width:64px;height:64px;z-index:4;animation:bt-quick-impact .32s ease-out both;pointer-events:none}.rpg-skill-fallback img{width:100%;height:100%;object-fit:contain}.rpg-skill-fallback.reverse{left:auto;right:15%;animation-name:bt-quick-impact-reverse}@keyframes bt-quick-impact{to{left:80%;opacity:.2;scale:1.2}}@keyframes bt-quick-impact-reverse{to{right:80%;opacity:.2;scale:1.2}}
+
+/* One tall battlefield: animated fighters replace the duplicate portrait panels. */
+.bt-playing:not(.bt-chess-mode) .bt-center{grid-template-rows:minmax(220px,1fr) auto auto auto auto}
+.bt-playing:not(.bt-chess-mode) .bt-center>.bt-turn{height:auto;min-height:220px;display:flex;flex-direction:column;align-items:stretch;position:relative}
+.bt-playing:not(.bt-chess-mode) .bt-fx-bar{height:100%;min-height:220px;flex:1;background-position:center;}
+.bt-playing:not(.bt-chess-mode) .bt-stage{display:flex;align-items:center;justify-content:center;min-height:38px;height:auto;gap:12px;padding:2px 0;flex:none}
+.bt-playing:not(.bt-chess-mode) .bt-stage-round,.bt-playing:not(.bt-chess-mode) .bt-stage-turn{position:static;inset:auto;transform:none;margin:0;max-width:100%;text-align:center}
+.bt-playing:not(.bt-chess-mode) .bt-stage-turn{font-size:clamp(13px,1.6vw,22px);padding:5px 14px}
+.bt-idle-actor{left:20%;width:min(34cqw,85cqh);height:min(34cqw,85cqh)}
+.bt-idle-actor[data-side=enemy]{left:80%}
+.bt-idle-actor.is-health{animation:none;filter:none;transform:scaleX(var(--health-facing,1));pointer-events:auto}
+.bt-idle-actor.is-health>img{width:882.7586206897%;height:1324.1379310345%;left:var(--health-x);top:var(--health-y);transform:none;object-fit:fill}
+.bt-idle-actor.bt-potion-target{outline:2px solid #8fffc7;outline-offset:-3px;border-radius:12px;background:#6bffc220}
+.bt-idle-actor.bt-impact-reaction{animation:bt-impact-reaction .24s ease-out}
+@media(orientation:landscape) and (max-height:540px){
+ .bt-playing:not(.bt-chess-mode) .bt-center{grid-template-rows:minmax(110px,1fr) auto auto auto auto;gap:4px}
+ .bt-playing:not(.bt-chess-mode) .bt-center>.bt-turn,.bt-playing:not(.bt-chess-mode) .bt-fx-bar{min-height:110px;height:100%}
+ .bt-playing:not(.bt-chess-mode) .bt-stage{min-height:27px;gap:6px}
+ .bt-playing:not(.bt-chess-mode) .bt-stage-turn{padding:3px 8px;font-size:12px}
+ .bt-playing:not(.bt-chess-mode) .bt-stage-round{font-size:10px}
+}
+@media(orientation:portrait){.bt-playing:not(.bt-chess-mode) .bt-fx-bar{min-height:38dvh}.bt-playing:not(.bt-chess-mode) .bt-center{grid-template-rows:minmax(220px,38dvh) auto auto auto auto}}
+.bt-idle-actor.is-health>img{image-rendering:pixelated}
+.bt-idle-actor.bt-impact-reaction{animation:bt-fighter-hit .24s ease-out}
+@keyframes bt-fighter-hit{0%{filter:brightness(1.5)}25%{translate:calc(-50% - 4px) 6.8966%}60%{translate:calc(-50% + 3px) 6.8966%}100%{translate:-50% 6.8966%}}

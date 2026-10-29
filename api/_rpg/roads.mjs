@@ -1,14 +1,14 @@
 import Layout from './src/encounter-layout.js';
 import {distanceMeters} from './world.mjs';
 export function walkingCandidates(elements,center){
- const points=[];
+ const collector=Layout.roadCollector(center);
  for(const way of elements||[]){const t=way.tags||{};if(!['footway','pedestrian','path','living_street','residential','unclassified','service'].includes(t.highway)||['no','private','customers','permit','military'].includes(t.access)||['no','private','use_sidepath'].includes(t.foot)||t.footway==='crossing'||t.crossing||t.tunnel==='yes'||t.area==='yes'||t.bridge==='yes'||t.construction||t.proposed)continue;
   const geometry=way.geometry||[];for(let i=1;i<geometry.length;i++){
    const a=geometry[i-1],b=geometry[i];if(![a.lat,a.lon,b.lat,b.lon].every(Number.isFinite))continue;
    const start={lat:a.lat,lng:a.lon},end={lat:b.lat,lng:b.lon},length=distanceMeters(start,end),steps=Math.min(80,Math.max(1,Math.ceil(length/15)));
-   for(let n=0;n<=steps;n++){const f=n/steps,p={lat:start.lat+(end.lat-start.lat)*f,lng:start.lng+(end.lng-start.lng)*f};const d=distanceMeters(center,p);if(d>=15&&d<=Layout.SPAWN_RADIUS&&points.every(q=>distanceMeters(p,q)>=12))points.push(p);if(points.length>=512)return points;}
+   for(let n=0;n<=steps;n++){const f=n/steps,p={lat:start.lat+(end.lat-start.lat)*f,lng:start.lng+(end.lng-start.lng)*f};collector.add(p);}
   }
- }return points;
+ }return collector.finish();
 }
 const roadCache=new Map();
 export async function fetchWalking(center,fetcher=fetch){

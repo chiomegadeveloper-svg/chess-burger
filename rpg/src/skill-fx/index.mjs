@@ -18,7 +18,7 @@ async function characterFrames(id){
 function character(app,data,x,facing){
  if(!data)return null;
  const actor=new PIXI.AnimatedSprite(data.frames);actor.anchor.set(.5,.5);actor.gotoAndStop(0);
- const scale=Math.min(app.screen.height*.9/232,app.screen.width*.25/232);
+ const scale=Math.min(app.screen.height*.85/232,app.screen.width*.34/232);
  actor.showPose=frame=>{actor.gotoAndStop(frame);const ratio=data.entry.idleHeight&&data.entry.frameHeights?.[frame]?data.entry.idleHeight/data.entry.frameHeights[frame]:1,sized=scale*ratio;actor.scale.set(sized*(data.entry.facing===facing?1:-1),sized);actor.position.set(app.screen.width*x,app.screen.height*.94-100*sized);};actor.showPose(0);
  app.stage.addChild(actor);return actor;
 }
@@ -58,8 +58,8 @@ async function animate(host,s,options,session){
  const source=options.reverse?.78:.22,target=options.reverse?.22:.78;
  const attackerData=characterReady.get(options.attackerId),defenderData=characterReady.get(options.defenderId);
  if(session.cancelled)return;
- const attacker=battle?character(app,attackerData,options.reverse?.85:.15,options.reverse?'left':'right'):null;
- const defender=battle&&!options.persistentFighters?character(app,defenderData,options.reverse?.15:.85,options.reverse?'right':'left'):null;
+ const attacker=battle?character(app,attackerData,options.reverse?.8:.2,options.reverse?'left':'right'):null;
+ const defender=battle&&!options.persistentFighters?character(app,defenderData,options.reverse?.2:.8,options.reverse?'right':'left'):null;
  if(attacker&&options.persistentFighters&&host.dataset)host.dataset.caster=options.reverse?'enemy':'hero';
  sprite.position.set(battle?w*source:w*.5,h*(battle?.72:.48));
  const scale=window.RPGSkillFrames.fitScale(s.id,w,h,battle);

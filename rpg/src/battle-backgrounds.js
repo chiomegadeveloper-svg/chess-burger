@@ -20,7 +20,7 @@
  function apply(host,battleId){
   const scene=select(battleId);if(!host||!scene||host.dataset.battleBackground===scene)return;
   host.dataset.battleBackground=scene;
-  host.style.setProperty('--battle-background',`url("assets/backgrounds/${scene}.webp")`);
+  host.style.setProperty('--battle-background',`url("assets/backgrounds/tall/${scene}.webp")`);
  }
  const api={scenes,createSelector,apply};
  root.RPGBattleBackgrounds=api;if(typeof module!=='undefined')module.exports=api;
