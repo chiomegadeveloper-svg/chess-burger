@@ -1,12 +1,13 @@
 import {randomInt,randomUUID} from 'node:crypto';
 import * as R from './core.mjs';
+import Potions from './src/potion-catalog.js';
 import Offline from './src/offline-rules.js';
 import {Chess} from 'chess.js';
 const engine=Offline.create({Rules:R,Chess});
 export function issueOffline(battle,doc,puzzles,now){
  const seen=new Set(doc.history),pool=battle.actors[1].boss?'hard':'regular',eligible=puzzles.filter(p=>p.pool===pool&&!seen.has(p.id));
  for(let i=eligible.length-1;i>0;i--){const j=randomInt(i+1);[eligible[i],eligible[j]]=[eligible[j],eligible[i]];}
- return {id:randomUUID(),battleId:battle.id,baseVersion:battle.version,initial:structuredClone(battle),puzzleIds:eligible.slice(0,128).map(p=>p.id),elos:Array.from({length:64},()=>battle.actors[1].boss?1480+randomInt(621):750+randomInt(731)),potions:doc.state.items.filter(i=>i.where==='bag'&&['health_potion','mana_potion'].includes(i.defId)).map(({uid,defId})=>({uid,defId})),issuedAt:now,expiresAt:now+86400000};
+ return {id:randomUUID(),battleId:battle.id,baseVersion:battle.version,initial:structuredClone(battle),puzzleIds:eligible.slice(0,128).map(p=>p.id),elos:Array.from({length:64},()=>battle.actors[1].boss?1480+randomInt(621):750+randomInt(731)),potions:doc.state.items.filter(i=>i.where==='bag'&&Potions.get(i)).map(({uid,defId})=>({uid,defId})),issuedAt:now,expiresAt:now+86400000};
 }
 export function publicOffline(session,puzzles){if(!session)return null;return {id:session.id,battleId:session.battleId,baseVersion:session.baseVersion,puzzles:session.puzzleIds.map(id=>puzzles.find(p=>p.id===id)),elos:session.elos,potions:session.potions,issuedAt:session.issuedAt};}
 export function replayOffline(session,commands,puzzles,now){

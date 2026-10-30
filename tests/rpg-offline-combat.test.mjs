@@ -49,7 +49,7 @@ test('offline puzzle, chess, potion and five-minute expiry replay with the same 
  const moves=['e2e4','e7e5','d1h5','b8c6','f1c4','g8f6','h5f7'];
  for(let i=0;i<moves.length;i++)engine.apply(b,{action:i===moves.length-1?'chessFinish':'chessSave',move:moves[i]},ctx,t++);
  assert.equal(b.harvestResult.amount,20);assert.equal(b.actors[0].ap,20);assert.equal(b.harvestResult.success,true);
- const before=b.actors[0].hp;engine.apply(b,{action:'usePotion',uid:'owned'},ctx,t++);assert.deepEqual(ctx.usedPotions,['owned']);assert.equal(b.events.findLast(e=>e.kind==='potion').hpAfter,before+20);assert.throws(()=>engine.apply(b,{action:'usePotion',uid:'owned'},ctx,t++),/not available/);
+ const before=b.actors[0].hp;engine.apply(b,{action:'usePotion',uid:'owned'},ctx,t++);assert.deepEqual(ctx.usedPotions,['owned']);assert.equal(b.events.findLast(e=>e.kind==='potion').hpAfter,Math.min(500,before+100));assert.throws(()=>engine.apply(b,{action:'usePotion',uid:'owned'},ctx,t++),/not available/);
  engine.apply(b,{action:'timeout'},ctx,300000);assert.equal(b.status,'finished');assert.equal(b.endReason,'battle_limit');assert.equal(b.winner,null);
 });
 test('offline chess flag is an unsuccessful harvest and cannot grant a victory by submitting after the clock',()=>{

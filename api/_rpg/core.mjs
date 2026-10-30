@@ -2,6 +2,7 @@
 import attackSkills from './src/skill-catalog.js';
 import P from './src/progression.js';
 import E from './src/elements.js';
+import Potions from './src/potion-catalog.js';
 export const SKILLS=Object.fromEntries(attackSkills.map(s=>[s.id,s]));
 export const MONSTERS=[['chaanack','Chaanack'],['erpack','Erpack'],['donkuber','Donkuber'],['windee','Windee'],['kalaagg','Kalaagg'],['pektu','Pektu'],['mhakiduk','Mhakiduk'],['odeksa','Odeksa'],['buhokba','Buhokba'],['muraduk','Muraduk'],['punsuck','Punsuck'],['conchita','Conchita'],['jengot','Jengot'],['draguu','Draguu'],['baluu','Baluu'],['kassag','Kassag']].map(([id,name],i)=>({id,name,boss:i>=10}));
 export function profile(input){
@@ -29,6 +30,7 @@ export function potion(b,side,resource,amount=20){
  b.eventSeq=(b.eventSeq||0)+1;b.events=[...(b.events||[]),{id:b.eventSeq,kind:'potion',resource,side,target:side,amount:restored,hpAfter:actor.hp}].slice(-12);
  note(b,`${actor.name} used a ${resource==='hp'?'health':'mana'} potion · +${restored} ${resource.toUpperCase()} · turn ended.`);return restored;
 }
+export function potionFromItem(b,side,item){const def=Potions.get(item);if(!def)throw Error('Unknown potion.');const resource=def.restore.resource,cap=b.actors[side][resource==='hp'?'maxHp':'maxMp'];return potion(b,side,resource,Potions.amount(item,cap));}
 export function harvestAmount(actor,resource){if(!['ap','mp'].includes(resource))throw Error('Invalid harvest resource.');return Math.max(1,Math.round(actor[resource==='ap'?'maxAp':'maxMp']*.2));}
 export function harvestResult(b,side,resource,success,reason){
  const amount=success?gainResource(b,side,resource,harvestAmount(b.actors[side],resource)):0;

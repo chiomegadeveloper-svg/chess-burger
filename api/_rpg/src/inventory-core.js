@@ -2,6 +2,7 @@
   'use strict';
   const P=root.RPGProgression||(typeof require==='function'?require('./progression.js'):null);
   const E=root.RPGElements||(typeof require==='function'?require('./elements.js'):null);
+  const Potions=root.RPGPotions||(typeof require==='function'?require('./potion-catalog.js'):null);
   const stats=['Health','Attack','Magic','Armor','Mana','Wisdom'];
   const tiers=['Worn','Forged','Runed','Enchanted'];
   // id, display name, footprint, category, Health/Attack/Magic/Armor/Mana/Wisdom bonuses.
@@ -25,8 +26,7 @@
     ['helm','Helm',2,2,'Armor',[0,0,0,2,0,2]]
   ];
   const items=types.flatMap(([id,name,w,h,category,bonus])=>tiers.map((tier,i)=>({id:`${id}_v${i+1}`,type:id,name:`${tier} ${name}`,w,h,category,tier:i+1,sprite:`${id}_v${i+1}`,bonus:bonus.map(v=>v*(i+1))})));
-  items.push({id:'health_potion',type:'health_potion',name:'Health Potion',w:1,h:1,category:'Potions',tier:1,sprite:'health_potion',bonus:[0,0,0,0,0,0]},
-    {id:'mana_potion',type:'mana_potion',name:'Mana Potion',w:1,h:1,category:'Potions',tier:1,sprite:'mana_potion',bonus:[0,0,0,0,0,0]});
+  items.push(...Potions.items);
   const spells=root.RPG_ATTACK_SKILLS||(typeof require==='function'?require('./skill-catalog.js'):[]);
   const itemMap=Object.fromEntries(items.map(i=>[i.id,i]));
   const spellMap=Object.fromEntries(spells.map(s=>[s.id,s]));
@@ -52,13 +52,15 @@
   const integer=(low,high,rng=Math.random)=>low+Math.floor(Math.max(0,Math.min(1-Number.EPSILON,rng()))*(high-low+1));
   const gearTier=required=>Math.floor(required/10)+1;
   function rollRarity(rng){let ticket=integer(1,1000,rng);for(const rarity of rarities){ticket-=rarity.weight;if(ticket<=0)return rarity.id;}return 'divine';}
-  const isConsumable=item=>['health_potion','mana_potion'].includes(item.defId||item.id);
-  const potionRoll=(def,rarity='common')=>({rarity,consumable:true,restore:{resource:(def.defId||def.id)==='health_potion'?'hp':'mp',amount:20}});
-  function normalizePotions(state){let changed=false;for(const item of state.items||[]){if(!isConsumable(item))continue;const roll=potionRoll(item,rarityMap[item.rarity]?item.rarity:'common');if(item.restore?.resource!==roll.restore.resource||item.restore?.amount!==roll.restore.amount||!item.consumable||['enhancement','attributes','baseBonus','iLvl','requiredLevel','gearTier','elemental'].some(k=>k in item)){for(const key of ['enhancement','attributes','baseBonus','iLvl','requiredLevel','gearTier','elemental'])delete item[key];Object.assign(item,roll);changed=true;}}return changed;}
+  const isConsumable=item=>!!Potions.get(item);
+  const potionRoll=(def,rarity='common')=>({rarity,consumable:true,restore:{...Potions.get(def).restore}});
+  const potionRestoreMatches=(item,effect)=>Object.keys(effect).every(k=>item.restore?.[k]===effect[k])&&Object.keys(item.restore||{}).length===Object.keys(effect).length;
+  const potionGearKeys=['enhancement','attributes','baseBonus','iLvl','requiredLevel','gearTier','elemental','affix'];
+  function normalizePotions(state){let changed=false;for(const item of state.items||[]){if(!isConsumable(item))continue;const roll=potionRoll(item,rarityMap[item.rarity]?item.rarity:'common');if(!potionRestoreMatches(item,roll.restore)||!item.consumable||potionGearKeys.some(k=>k in item)){for(const key of potionGearKeys)delete item[key];Object.assign(item,roll);changed=true;}}return changed;}
   const affixes=[['cbgChance','CBG luck',88,88],['cbgGain','CBG gain',28,68],['attack','Attack',8,48],['ap','Attack Points',2,10],['mana','Mana Points',8,28],['monsterDamage','Monster damage',2,8],['health','Health',2,8],['magic','Magic',2,8],['armor','Armor',2,8],['wisdom','Wisdom',2,8],['physicalDamage','Physical damage',2,8],['magicDamage','Magic damage',2,8],['damageReduction','Damage resistance',2,8],['potionPower','Potion effectiveness',2,8]].map(([id,name,min,max])=>({id,name,min,max}));
   const affixMap=Object.fromEntries(affixes.map(a=>[a.id,a]));
   const affixText=item=>item.affix?`${item.affix.id==='cbgChance'?'':'+'}${item.affix.value}% ${affixMap[item.affix.id]?.name||''}`:'';
-  const passives=state=>Object.assign(E.gearBonuses(state,{itemMap,canEquip,isConsumable}),state.items.filter(i=>i.where==='bag'&&canEquip(state,i)&&i.affix).reduce((out,item)=>{const a=item.affix;out[a.id]=a.id==='cbgChance'?Math.max(out[a.id]||0,a.value):Math.min(a.id==='damageReduction'?60:200,(out[a.id]||0)+a.value);return out;},{}));
+  const passives=state=>Object.assign(E.gearBonuses(state,{itemMap,canEquip,isConsumable}),state.items.filter(i=>i.where==='bag'&&!isConsumable(i)&&canEquip(state,i)&&i.affix).reduce((out,item)=>{const a=item.affix;out[a.id]=a.id==='cbgChance'?Math.max(out[a.id]||0,a.value):Math.min(a.id==='damageReduction'?60:200,(out[a.id]||0)+a.value);return out;},{}));
   const maxAp=state=>Math.round(P.maxAp(state.level)*(1+(passives(state).ap||0)/100));
   function rollItem(def,level,rng=Math.random,options={}){
     if(isConsumable(def))return potionRoll(def,options.rarity??rollRarity(rng));
@@ -211,7 +213,7 @@
     return true;
   }
   function validRoll(item){
-    if(isConsumable(item))return !!rarityMap[item.rarity]&&item.consumable===true&&item.restore?.resource===(item.defId==='health_potion'?'hp':'mp')&&item.restore?.amount===20&&!['enhancement','attributes','baseBonus','iLvl','requiredLevel','gearTier','elemental'].some(k=>k in item)&&Number.isInteger(item.rotation)&&item.rotation>=0&&item.rotation<4&&item.rotated===Boolean(item.rotation%2);
+    if(isConsumable(item))return !!rarityMap[item.rarity]&&item.consumable===true&&potionRestoreMatches(item,Potions.get(item).restore)&&!potionGearKeys.some(k=>k in item)&&Number.isInteger(item.rotation)&&item.rotation>=0&&item.rotation<4&&item.rotated===Boolean(item.rotation%2);
     if(item.elemental&&(!E.property(item)||item.elemental.kind!==(itemMap[item.defId]?.category==='Armor'?'resistance':'damage')))return false;
     if(item.affix){const a=affixMap[item.affix.id];if(!a||!Number.isInteger(item.affix.value)||item.affix.value<a.min||item.affix.value>a.max)return false;}
     const rarity=rarityMap[item.rarity],positive=v=>Number.isSafeInteger(v)&&v>0;
@@ -239,6 +241,6 @@
     }
     return validState(state,heroId)?state:null;
   }
-  const api={affixes,affixMap,affixText,passives,maxAp,isConsumable,normalizePotions,stats,tiers,types,items,itemMap,spells,spellMap,grids,rarities,rarityMap,enhancements,BAG_PRICE,STARTING_CBG,newState,size,rotationOf,gridFor,gearTier,rollItem,itemBonus,canEquip,canPlace,place,findSpace,collect,rotateItem,addTestGear,autoArrange,buyBag,addTestCBG,bagBonus,spellBonus,totals,applyProgress,gainXp,levelUp,upgrade,learn,moveSpell,validState,migrate};
+  const api={potions:Potions,affixes,affixMap,affixText,passives,maxAp,isConsumable,normalizePotions,stats,tiers,types,items,itemMap,spells,spellMap,grids,rarities,rarityMap,enhancements,BAG_PRICE,STARTING_CBG,newState,size,rotationOf,gridFor,gearTier,rollItem,itemBonus,canEquip,canPlace,place,findSpace,collect,rotateItem,addTestGear,autoArrange,buyBag,addTestCBG,bagBonus,spellBonus,totals,applyProgress,gainXp,levelUp,upgrade,learn,moveSpell,validState,migrate};
   root.RPGInventory=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(globalThis);

@@ -1,0 +1,45 @@
+{
+  "mode": "built-in image_gen",
+  "sprites": [
+    {
+      "id": "normal",
+      "source": "/workspace/scratch/11e1a4629bcf/generated_images/exec-6a778857-9dd1-4777-97a2-d84e55e36b96.png",
+      "footprint": [
+        1,
+        1
+      ],
+      "output": "public/rpg/assets/potions/normal-v1.webp",
+      "prompt": "Use case: stylized-concept. Asset type: one isolated inventory item sprite for Chess Burger RPG. Subject: NORMAL HEALTH POTION, a small round clear glass fantasy flask filled with luminous ruby red healing liquid, short neck with a cork stopper, subtle antique bronze rim and bright glass highlights. Style: polished isometric fantasy pixel-art game item, crisp deliberate pixel clusters, dark clean outline, painterly shaded pixel art matching medieval sword-and-armor backpack RPG sprites; readable at 64 pixels. Composition: exactly one complete upright potion centered in a square canvas, three-quarter view, object occupies about 55% of canvas height, very generous entirely transparent surrounding margin for clean cropping. No frame, no floor, no shadow outside the object, no lettering, no numbers, no watermark, no additional objects. Genuinely transparent background."
+    },
+    {
+      "id": "cola",
+      "source": "/workspace/scratch/11e1a4629bcf/generated_images/exec-27ac652a-bb10-44a3-b9a9-bb1f8665ca30.png",
+      "footprint": [
+        1,
+        2
+      ],
+      "output": "public/rpg/assets/potions/cola-v1.webp",
+      "prompt": "Use case: stylized-concept. Asset type: one isolated inventory item sprite for Chess Burger RPG. Subject: COLA HEALTH POTION, a tall slender vintage clear glass cola bottle filled with dark reddish brown sparkling cola, capped with a bronze crown cap, a simple red wraparound band with a small white healing cross symbol but absolutely no letters or brand. Style: polished isometric fantasy pixel-art game item, crisp deliberate pixel clusters, dark clean outline, painterly shaded pixel art matching medieval sword-and-armor backpack RPG sprites; readable at 64 pixels. Composition: exactly one complete upright tall bottle centered on a square canvas, clear two-slots-tall silhouette, three-quarter view, object occupies about 60% of canvas height with very generous entirely transparent surrounding margin for clean cropping. No frame, no floor, no shadow outside the object, no lettering, no numbers, no watermark, no additional objects. Genuinely transparent background."
+    },
+    {
+      "id": "coconut",
+      "source": "/workspace/scratch/11e1a4629bcf/generated_images/exec-79b84589-efe1-454a-8761-2133501405a1.png",
+      "footprint": [
+        2,
+        2
+      ],
+      "output": "public/rpg/assets/potions/coconut-v1.webp",
+      "prompt": "Use case: stylized-concept. Asset type: one isolated inventory item sprite for Chess Burger RPG. Subject: COCONUT HEALTH POTION, a fresh green Philippine young coconut with a neatly opened pale ivory top, visible refreshing coconut water, a short natural bamboo drinking straw and one small carved wooden stopper charm attached with twine. Not a glass bottle. Style: polished isometric fantasy pixel-art game item, crisp deliberate pixel clusters, dark clean outline, painterly shaded pixel art matching medieval sword-and-armor backpack RPG sprites; readable at 64 pixels. Composition: exactly one whole round coconut drink centered on a square canvas, compact broad 2-by-2 bag footprint silhouette, three-quarter view, object occupies about 60% of canvas with very generous entirely transparent surrounding margin for clean cropping. Bright green shell with subtle amber fantasy healing glint, no magical particles outside object. No frame, no floor, no shadow outside object, no lettering, no numbers, no watermark, no additional objects. Genuinely transparent background."
+    },
+    {
+      "id": "tuba-wine",
+      "source": "/workspace/scratch/11e1a4629bcf/generated_images/exec-8bc23274-9325-4578-8c52-a9f25318e615.png",
+      "footprint": [
+        2,
+        2
+      ],
+      "output": "public/rpg/assets/potions/tuba-wine-v1.webp",
+      "prompt": "Use case: stylized-concept. Asset type: one isolated inventory item sprite for Chess Burger RPG. Subject: TUBA WINE HEALTH POTION, a squat broad traditional Philippine earthenware coconut palm wine jug, rich reddish-brown glazed ceramic with warm amber highlights, a short corked neck, a small side handle, woven palm-fiber net and a small emerald healing gem inset in the front. Evoke Visayan tuba palm wine, not grapes, not a wine glass. Style: polished isometric fantasy pixel-art game item, crisp deliberate pixel clusters, dark clean outline, painterly shaded pixel art matching medieval sword-and-armor backpack RPG sprites; readable at 64 pixels. Composition: exactly one complete jug centered on a square canvas, compact broad 2-by-2 bag footprint silhouette, three-quarter view, object occupies about 60% of canvas with very generous entirely transparent surrounding margin for clean cropping. No frame, no floor, no shadow outside the object, no lettering, no numbers, no watermark, no additional objects. Genuinely transparent background."
+    }
+  ]
+}

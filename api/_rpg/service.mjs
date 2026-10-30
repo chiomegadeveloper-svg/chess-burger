@@ -84,10 +84,10 @@ export async function gameRequest(client,user,method,input={},services={}){
  if(['merchant','merchantBuy','merchantSell'].includes(input.action)){const active=await current();await result(active);if(['active','pending'].includes(active?.status))fail('Finish your battle before trading.');return merchantRequest(client,user,doc,input,now,services);}
  if(['drinkPotion','usePotion'].includes(input.action)&&!input.battlePotion){await result(await current());
   const ongoing=await read(client,user,'rpg_profile','hero');let active=ongoing?.battle?.status==='active';if(ongoing?.pvpId){const rows=await client.from('cb_inventory_items').select('metadata').eq('item_kind','rpg_battle').eq('item_id',ongoing.pvpId).contains('metadata',{participants:[user]}).maybeSingle();if(rows.error)fail('Battle unavailable.',503);active=['pending','active'].includes(rows.data?.metadata?.status);}if(active)fail('Finish your battle before using a potion.');
-  const index=doc.state.items.findIndex(i=>input.action==='usePotion'?i.uid===input.uid&&C.isConsumable(i):i.defId==='health_potion');if(index<0)fail('This potion is no longer available.');
-  const item=doc.state.items[index],resource=item.defId==='health_potion'?'hp':'mp',balance=resource==='hp'?health(doc.state):mana(doc.state),cap=resource==='hp'?healthCap(doc.state):manaCap(doc.state);
+  const index=doc.state.items.findIndex(i=>input.action==='usePotion'?i.uid===input.uid&&C.isConsumable(i):C.potions.get(i)?.restore.resource==='hp');if(index<0)fail('This potion is no longer available.');
+  const item=doc.state.items[index],resource=C.potions.get(item).restore.resource,balance=resource==='hp'?health(doc.state):mana(doc.state),cap=resource==='hp'?healthCap(doc.state):manaCap(doc.state);
   if(balance>=cap)fail(resource==='hp'?'Health is already full.':'Mana is already full.');
-  doc.state.items.splice(index,1);doc.state.inventoryRevision=(doc.state.inventoryRevision||0)+1;doc.state[resource==='hp'?'currentHp':'currentMp']=Math.min(cap,balance+Math.round(20*(1+(C.passives(doc.state).potionPower||0)/100)));stash(doc);await persist();return {game:doc.state,pendingLoot:doc.pendingLoot,restored:{resource,amount:Math.min(Math.round(20*(1+(C.passives(doc.state).potionPower||0)/100)),cap-balance)}};
+  const amount=Math.min(Math.round(C.potions.amount(item,cap)*(1+(C.passives(doc.state).potionPower||0)/100)),cap-balance);doc.state.items.splice(index,1);doc.state.inventoryRevision=(doc.state.inventoryRevision||0)+1;doc.state[resource==='hp'?'currentHp':'currentMp']=balance+amount;stash(doc);await persist();return {game:doc.state,pendingLoot:doc.pendingLoot,restored:{resource,amount}};
  }
  if(input.action==='upgrade'){const b=await current();if(['active','pending'].includes(b?.status))fail('Finish your battle before upgrading.');if(!C.upgrade(doc.state,input.stat))fail('No upgrade points are available.');await persist();return {game:doc.state};}
  if(input.action==='exploreRecover'){const b=await current();if(['active','pending'].includes(b?.status))return {game:doc.state};if(!validateFix(input.gps,now))fail('Wait for a fresh GPS fix.');const last=doc.explorerRecovery;const continuous=last&&now-last.pulse<=45000;if(continuous&&now-last.tick>=30000){doc.state.currentHp=Math.min(healthCap(doc.state),health(doc.state)+1);doc.state.currentMp=Math.min(manaCap(doc.state),mana(doc.state)+1);last.tick=now;}doc.explorerRecovery=continuous?{...last,pulse:now}:{pulse:now,tick:now};await persist();return {game:doc.state};}
@@ -188,7 +188,7 @@ export async function gameRequest(client,user,method,input={},services={}){
   if(b.challenge)fail('Finish or abandon your harvest first.');
   if(input.action==='usePotion'&&input.battlePotion){
    const index=doc.state.items.findIndex(item=>item.uid===input.uid&&item.where==='bag'&&C.isConsumable(item));if(index<0)fail('Choose an owned potion from your hero bag.');
-   if((b.potions||[]).some(p=>p.side===side&&p.uid===input.uid))fail('This potion was already used.');R.potion(b,side,doc.state.items[index].defId==='health_potion'?'hp':'mp');
+   if((b.potions||[]).some(p=>p.side===side&&p.uid===input.uid))fail('This potion was already used.');R.potionFromItem(b,side,doc.state.items[index]);
    if(b.kind==='pvp')b.potions=[...(b.potions||[]),{side,uid:input.uid}];else{doc.state.items.splice(index,1);doc.state.inventoryRevision=(doc.state.inventoryRevision||0)+1;}
   }else if(input.action==='attack')R.attack(b,side,input.skill,now);
   else if(input.action==='defend')R.defend(b,side);

@@ -5,3 +5,5 @@
 .merchant-quantity{display:grid;gap:5px;font-size:13px;color:#e4cb95}.merchant-quantity input{width:70px;min-height:38px;padding:6px;background:#0d202b;color:white;border:1px solid #9c885f;border-radius:6px}.merchant-details{flex-wrap:wrap}
 
 #merchant-bag-upgrade{width:100%;margin-top:10px;background:#5c4223;color:#ffe0a0;border-color:#a48753;font-weight:700}.merchant-bag.merchant-drop-target{outline:3px solid #83d7aa;background:#17443460}.merchant-item,.merchant-potions button{touch-action:none;cursor:grab}
+.merchant-potions{grid-template-columns:repeat(5,minmax(0,1fr));gap:5px;flex:none}.rpg-merchant .merchant-potions button{min-width:0;flex-direction:column;justify-content:center;text-align:center;padding:5px}.merchant-potions span{font-size:9px;line-height:1.2;overflow-wrap:anywhere}.merchant-potions b{margin-left:0}
+@media(max-height:540px){.rpg-merchant .merchant-potions button{flex-direction:row;gap:3px;padding:3px}.merchant-potions span{display:none}.merchant-potions img{width:22px;height:26px}.merchant-potions b{font-size:8px}}

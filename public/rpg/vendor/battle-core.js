@@ -818,7 +818,24 @@
  if(typeof module!=="undefined"&&module.exports)module.exports=skills;
 })(globalThis);
 
-const attackSkills=globalThis.RPG_ATTACK_SKILLS,P=globalThis.RPGProgression,E=globalThis.RPGElements;
+// Shared, authoritative potion effects, footprints, prices and independent monster drop rolls.
+(function(root){
+ const health=[
+  ['health_potion','Normal Potion',1,1,20,40,.8],
+  ['cola_potion','Cola Potion',1,2,30,80,.4],
+  ['coconut_potion','Coconut Potion',2,2,60,120,.3],
+  ['tuba_wine_potion','Tuba Wine Potion',2,2,80,160,.1]
+ ].map(([id,name,w,h,percent,basePrice,dropChance])=>({id,type:id,name,w,h,category:'Potions',tier:1,sprite:id,bonus:[0,0,0,0,0,0],restore:{resource:'hp',percent},basePrice,dropChance}));
+ const items=[...health,{id:'mana_potion',type:'mana_potion',name:'Mana Potion',w:1,h:1,category:'Potions',tier:1,sprite:'mana_potion',bonus:[0,0,0,0,0,0],restore:{resource:'mp',amount:20},basePrice:8}];
+ const byId=Object.fromEntries(items.map(item=>[item.id,item]));
+ const get=item=>byId[typeof item==='string'?item:item?.defId||item?.id]||null;
+ const amount=(item,cap)=>{const effect=get(item)?.restore;if(!effect)throw Error('Unknown potion.');return effect.percent?Math.max(1,Math.round(cap*effect.percent/100)):effect.amount;};
+ const price=(item,level=1)=>{const def=get(item);if(!def)throw Error('Unknown potion.');return def.basePrice+(def.restore.resource==='hp'?Math.max(1,Math.min(88,Math.floor(Number(level)||1))):0);};
+ const describe=item=>{const effect=get(item)?.restore;return effect?(effect.percent?`Restores ${effect.percent}% of maximum Health`:`Restores ${effect.amount} mana`):'';};
+ const api={items,health,get,amount,price,describe};root.RPGPotions=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
+})(globalThis);
+
+const attackSkills=globalThis.RPG_ATTACK_SKILLS,P=globalThis.RPGProgression,E=globalThis.RPGElements,Potions=globalThis.RPGPotions;
 // Shared deterministic rules. The server owns all combat mutations.
 const SKILLS=Object.fromEntries(attackSkills.map(s=>[s.id,s]));
 const MONSTERS=[['chaanack','Chaanack'],['erpack','Erpack'],['donkuber','Donkuber'],['windee','Windee'],['kalaagg','Kalaagg'],['pektu','Pektu'],['mhakiduk','Mhakiduk'],['odeksa','Odeksa'],['buhokba','Buhokba'],['muraduk','Muraduk'],['punsuck','Punsuck'],['conchita','Conchita'],['jengot','Jengot'],['draguu','Draguu'],['baluu','Baluu'],['kassag','Kassag']].map(([id,name],i)=>({id,name,boss:i>=10}));
@@ -847,6 +864,7 @@ function potion(b,side,resource,amount=20){
  b.eventSeq=(b.eventSeq||0)+1;b.events=[...(b.events||[]),{id:b.eventSeq,kind:'potion',resource,side,target:side,amount:restored,hpAfter:actor.hp}].slice(-12);
  note(b,`${actor.name} used a ${resource==='hp'?'health':'mana'} potion · +${restored} ${resource.toUpperCase()} · turn ended.`);return restored;
 }
+function potionFromItem(b,side,item){const def=Potions.get(item);if(!def)throw Error('Unknown potion.');const resource=def.restore.resource,cap=b.actors[side][resource==='hp'?'maxHp':'maxMp'];return potion(b,side,resource,Potions.amount(item,cap));}
 function harvestAmount(actor,resource){if(!['ap','mp'].includes(resource))throw Error('Invalid harvest resource.');return Math.max(1,Math.round(actor[resource==='ap'?'maxAp':'maxMp']*.2));}
 function harvestResult(b,side,resource,success,reason){
  const amount=success?gainResource(b,side,resource,harvestAmount(b.actors[side],resource)):0;
@@ -890,4 +908,4 @@ function timeout(b,now=Date.now()){
 }
 function publicBattle(b,me){if(!b)return null;const c=b.challenge;return {...b,me,actors:b.actors.map(a=>{const {userId,...visible}=a;return visible;}),challenge:c?{kind:c.kind,side:c.side,clocks:c.clocks,clockAt:c.clockAt,...(c.side===me?{fen:c.fen,moves:c.moves||[],elo:c.elo,puzzleId:c.puzzleId,rating:c.rating,pool:c.pool}:{} )}:null};}
 
-globalThis.RPGBattleRules={damageFor,SKILLS,MONSTERS,profile,monster,createBattle,usable,attack,advance,enemyTurn,finishTurn,defend,timeout,note,endBattle,gainResource,harvestAmount,harvestResult,potion,battleSummary,publicBattle};})();
+globalThis.RPGBattleRules={damageFor,SKILLS,MONSTERS,profile,monster,createBattle,usable,attack,advance,enemyTurn,finishTurn,defend,timeout,note,endBattle,gainResource,harvestAmount,harvestResult,potion,potionFromItem,battleSummary,publicBattle};})();
