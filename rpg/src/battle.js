@@ -1,9 +1,9 @@
 (function(){
  'use strict';
  const el=id=>document.getElementById(id),root=el('rpg-battle'),R=window.RPGBattleRules,C=window.RPGInventory,E=window.RPGElements;
- let connectionVersion=0,offline=null,syncPromise=null,syncRetry=null,selectionRetry=null;
+ let connectionVersion=0,offline=null,syncPromise=null,syncRetry=null;
  let seenBattle='',seenEvent=0,shownHp=[],lastImpact=0,presenting=false,presentationToken=0;
- let pendingProgress=null,refreshing=false,encounterDialog=null,previewTarget=null,selectionPromise=null;
+ let pendingProgress=null,refreshing=false,encounterDialog=null,previewTarget=null,previewPosition=null;
  let premove=null,clockRequest=false,lastDrops=[],lastCbg=0,cbgPending=false;
  let attackQueue=[],enemyThinking=false,enemyCasting=null;
  let hero,state,battle=null,local=false,busy=false,pollTimer=null,clockTimer=null,dismissed=false,selected=null,chess=null,chessKey='',engine=null,engineReady=null,engineResolve=null,engineTimer=null,aiThinking=false,engineBroken=false,puzzleData=null,lastLog='';
@@ -194,7 +194,7 @@
   if(!encounterDialog)return;const status=encounterDialog.querySelector('[data-encounter-status]');status.textContent=message;status.classList.toggle('error',error);status.classList.toggle('updating',!error&&/^Updating/.test(message));
   for(const button of encounterDialog.querySelectorAll('footer button'))button.disabled=busy;
  }
- function closeEncounter(){previewTarget=null;selectionPromise=null;clearTimeout(selectionRetry);encounterDialog?.close();}
+ function closeEncounter(){previewTarget=null;previewPosition=null;encounterDialog?.close();}
  function previewEncounter(target,enemy){
   if(!hero||!state)return;
   if(!encounterDialog){
@@ -209,9 +209,8 @@
   encounterDialog.querySelector('[data-hero-name]').textContent=state.name;encounterDialog.querySelector('[data-hero-level]').textContent=`LVL ${state.level}`;
   encounterDialog.querySelector('[data-monster-name]').textContent=enemy.name;encounterDialog.querySelector('[data-monster-level]').textContent=`LVL ${enemy.level}`;
   if(!encounterDialog.open)encounterDialog.showModal();encounterDialog.querySelector('[data-run]').focus();
-  encounterStatus('Updating your location…');clearTimeout(selectionRetry);
-  const select=async()=>{try{let result;for(let attempt=0;attempt<2;attempt++){const gps=await window.RPGWorld.freshPosition({force:attempt>0});if(previewTarget!==target)return null;try{result=await api({action:'select-encounter',target,gps});break;}catch(error){if(attempt||!/fresh|map again/i.test(error.message))throw error;}}if(previewTarget===target&&!busy)encounterStatus('');return result.selectionToken;}catch(error){if(previewTarget===target){encounterStatus(error.message,true);selectionRetry=setTimeout(()=>{if(previewTarget===target&&!busy&&encounterDialog.open){encounterStatus('Updating your location…');selectionPromise=select();}},5000);}return null;}};
-  selectionPromise=select();
+  previewPosition=window.RPGWorld.position?.();previewPosition=previewPosition?{...previewPosition}:null;
+
  }
  async function encounter(target,pvp=false){
   if(offline&&offline.battle.status==='finished'){void syncOffline();notice('Saving your previous battle. Please wait a moment.',true);show();return;}
@@ -227,10 +226,10 @@
   if(battle&&['active','pending'].includes(battle.status)){show();notice('Finish your current battle first.',true);return;}
   local=true;pendingProgress=null;battle=R.createBattle(R.profile(loadout()),R.monster(enemy.monsterId,enemy.level),'monster');battle.id=`device-${target}`;battle.me=0;lastLog='';window.RPGWorld.consume(target);show();notice('Device practice · sign in to earn saved online XP.');draw();return;
  }local=false;busy=true;encounterStatus('Starting battle…');try{
-  const selectionToken=!pvp?await selectionPromise:null;
-  const gps=!pvp&&!selectionToken?await window.RPGWorld.freshPosition():window.RPGWorld.position?.();
+  const gps=!pvp?(window.RPGWorld.position?.()||previewPosition):null;
+  if(!pvp&&!gps)throw Error('Return to Explorer to load your map location.');
   if(!pvp&&previewTarget!==target)return;
-  const data=await api(pvp?{action:'challenge',target,profile:loadout()}:{action:'encounter',target,selectionToken,gps,profile:loadout(),offline:window.RPGOfflineCombatEnabled!==false});if(!data.battle)throw Error('The encounter could not start. Please tap ATTACK again.');
+  const data=await api(pvp?{action:'challenge',target,profile:loadout()}:{action:'encounter',target,gps,profile:loadout(),offline:window.RPGOfflineCombatEnabled!==false});if(!data.battle)throw Error('The encounter could not start. Please tap ATTACK again.');
   battle=data.battle;enableOffline(data);lastLog='';show();notice(pvp?'Challenge sent. Waiting for the other player.':'Nearby encounter started.');
  }catch(e){if(e.code==='out_of_range'){closeEncounter();window.RPGWorld.outOfRange(e.distance,pvp);}else if(encounterDialog?.open)encounterStatus(e.message,true);else el('world-gps-status').textContent=e.message;}
  finally{busy=false;if(encounterDialog?.open)for(const button of encounterDialog.querySelectorAll('footer button'))button.disabled=false;if(battle)draw();}}

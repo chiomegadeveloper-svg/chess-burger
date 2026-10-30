@@ -86,7 +86,7 @@ test('monster tap previews hero versus monster; Run makes no battle and Attack o
  a.w.RPGWorld.position=()=>({...gps,time:Date.now()});a.w.RPGWorld.monster=()=>enemy;
  await a.w.RPGBattle.encounter(enemy.id);const dialog=a.d.querySelector('.world-encounter-choice');assert.equal(dialog.open,true);assert.equal(dialog.querySelector('[data-hero-name]').textContent,'Preview Warrior');assert.equal(dialog.querySelector('[data-monster-name]').textContent,enemy.name);assert.match(dialog.querySelector('[data-hero]').src,/heroes\/rogue-right/);assert.match(dialog.querySelector('[data-monster]').src,/-100-left/);
  assert.equal((await read(db,'player-a')).battle,undefined);dialog.querySelector('[data-run]').click();assert.equal(dialog.open,false);assert.equal((await read(db,'player-a')).battle,undefined);
- a.w.RPGWorld.position=()=>null;await a.w.RPGBattle.encounter(enemy.id);dialog.querySelector('[data-attack]').click();await pause();await pause();assert.equal(dialog.open,true);assert.match(dialog.querySelector('[data-encounter-status]').textContent,/device GPS/);assert.equal(a.d.querySelector('#rpg-battle').hidden,true);assert.equal(dialog.querySelector('[data-attack]').disabled,false);assert.equal((await read(db,'player-a')).battle,undefined);dialog.querySelector('[data-run]').click();
+ a.w.RPGWorld.position=()=>null;await a.w.RPGBattle.encounter(enemy.id);dialog.querySelector('[data-attack]').click();await pause();await pause();assert.equal(dialog.open,true);assert.match(dialog.querySelector('[data-encounter-status]').textContent,/map location/);assert.equal(a.d.querySelector('#rpg-battle').hidden,true);assert.equal(dialog.querySelector('[data-attack]').disabled,false);assert.equal((await read(db,'player-a')).battle,undefined);dialog.querySelector('[data-run]').click();
  a.w.RPGWorld.position=()=>({...gps,accuracy:500,time:Date.now()});await a.w.RPGBattle.encounter(enemy.id);await pause();await pause();a.w.RPGWorld.position=()=>null;
  let pauses=0,resumes=0;a.w.RPGWorld.pauseForBattle=()=>pauses++;a.w.RPGWorld.resumeAfterBattle=()=>resumes++;
  dialog.querySelector('[data-attack]').click();await pause();await pause();assert.equal(dialog.open,false);assert.equal((await read(db,'player-a')).battle.encounterId,enemy.id);assert.equal(a.d.querySelector('#rpg-battle').hidden,false);assert.equal(a.d.querySelector('#bt-fight').hidden,false);assert.equal(a.d.querySelector('#bt-title').textContent,'Monster encounter');assert.ok(a.d.querySelectorAll('#bt-skills button').length>0);assert.ok(pauses>0);
@@ -339,15 +339,16 @@ test('crossing towns clears all encounter types and blocks delayed monster resul
  }finally{a.close();}
 });
 
-test('ATTACK retries current GPS after preview validation fails and needs no second map tap',async()=>{
+test('ATTACK uses a cached map location without fetching device GPS or a preview ticket',async()=>{
  const db=database(),saved=await gameRequest(db,'player-a','POST',{action:'register',heroId:'assassin',name:'Reach Test',skill:'punch'}),gps={lat:11.26,lng:125,accuracy:5,time:Date.now()};
  const batch=await gameRequest(db,'player-a','POST',{action:'spawn',gps},{roadPoints:async()=>[{lat:11.2602,lng:125}]}),enemy=batch.encounters[0],a=open(db);
  try{
-  await pause();await pause();a.w.RPGBattle.connect({id:'assassin',name:'Morvex',stats:[20,4,4,4,20,4]},saved.game);a.w.RPGWorld.position=()=>({...gps,time:Date.now()});a.w.RPGWorld.monster=()=>enemy;
+  await pause();await pause();a.w.RPGBattle.connect({id:'assassin',name:'Morvex',stats:[20,4,4,4,20,4]},saved.game);a.w.RPGWorld.position=()=>({...gps,time:Date.now()-120000});a.w.RPGWorld.monster=()=>enemy;
+  let gpsRequests=0;a.w.RPGWorld.freshPosition=()=>{gpsRequests++;throw Error('Must not fetch GPS');};
   const original=a.w.fetch;a.w.fetch=(url,options)=>JSON.parse(options?.body||'{}').action==='select-encounter'?Promise.resolve(new a.w.Response(JSON.stringify({error:'Your game changed in another window. Refresh and try again.'}),{status:409})):original(url,options);
-  await a.w.RPGBattle.encounter(enemy.id);await pause();await pause();const dialog=a.d.querySelector('.world-encounter-choice');assert.equal(dialog.open,true);assert.match(dialog.querySelector('[data-encounter-status]').textContent,/another window/);
+  await a.w.RPGBattle.encounter(enemy.id);await pause();await pause();const dialog=a.d.querySelector('.world-encounter-choice');assert.equal(dialog.open,true);assert.equal(dialog.querySelector('[data-encounter-status]').textContent,'');a.w.RPGWorld.position=()=>null;
   dialog.querySelector('[data-attack]').click();await pause();await pause();assert.equal(dialog.open,false);assert.equal(a.d.querySelector('#rpg-battle').hidden,false);assert.equal((await read(db,'player-a')).battle.encounterId,enemy.id);
-  const call=a.messages.find(m=>m.type==='CB_RPG_API'&&m.body.action==='encounter');assert.ok(call.body.gps);assert.equal(call.body.target,enemy.id);assert.deepEqual(a.errors,[]);
+  assert.equal(gpsRequests,0);assert.ok(!a.messages.some(m=>m.type==='CB_RPG_API'&&m.body.action==='select-encounter'));const call=a.messages.find(m=>m.type==='CB_RPG_API'&&m.body.action==='encounter');assert.ok(call.body.gps);assert.equal(call.body.target,enemy.id);assert.deepEqual(a.errors,[]);
  }finally{a.close();}
 });
 
