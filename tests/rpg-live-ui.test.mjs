@@ -352,6 +352,22 @@ test('ATTACK uses a cached map location without fetching device GPS or a preview
  }finally{a.close();}
 });
 
+test('a pending background GPS reading cannot block ATTACK in the account queue',async()=>{
+ const db=database(),saved=await gameRequest(db,'player-a','POST',{action:'register',heroId:'rogue',name:'No GPS Wait',skill:'punch'}),gps={lat:11.26,lng:125,accuracy:5,time:Date.now()};
+ const batch=await gameRequest(db,'player-a','POST',{action:'spawn',gps},{roadPoints:async()=>[{lat:11.2602,lng:125}]}),enemy=batch.encounters[0],a=open(db);let releaseGPS,background;
+ try{
+  await pause();await pause();a.w.RPGBattle.connect({id:'rogue',name:'Varkesh',stats:[20,4,4,4,20,4]},saved.game);a.w.RPGWorld.position=()=>({...gps,time:Date.now()-120000});a.w.RPGWorld.monster=()=>enemy;
+  a.w.RPGWorld.freshPosition=()=>new Promise(resolve=>releaseGPS=resolve);
+  background=a.w.fetch('/api/battle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'exploreRecover',gps})}).catch(()=>{});
+  await pause();assert.equal(typeof releaseGPS,'function');
+  await a.w.RPGBattle.encounter(enemy.id);a.d.querySelector('[data-attack]').click();
+  for(let i=0;i<10&&!((await read(db,'player-a')).battle);i++)await pause();
+  assert.equal((await read(db,'player-a')).battle?.encounterId,enemy.id,'combat must start before the background GPS promise resolves');
+  assert.equal(a.d.querySelector('.world-encounter-choice').open,false);assert.equal(a.d.querySelector('#rpg-battle').hidden,false);
+  releaseGPS({...gps,time:Date.now()});await background;assert.deepEqual(a.errors,[]);
+ }finally{releaseGPS?.({...gps,time:Date.now()});a.close();}
+});
+
 test('monster ground pins update distance and reach labels as GPS moves across 200 meters',async()=>{
  const db=database(),saved=await gameRequest(db,'player-a','POST',{action:'register',heroId:'rogue',name:'Map Reach',skill:'punch'}),a=open(db);
  try{
