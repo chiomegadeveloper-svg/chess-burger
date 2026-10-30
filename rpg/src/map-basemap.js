@@ -2,6 +2,31 @@
 (function(){
  'use strict';
  const roadClasses=new Set(['motorway','trunk','primary','secondary','tertiary','minor','service','track','path']);
+ let metadataRequest=null,metadataUntil=0;
+ function warm(){
+  if(metadataRequest&&Date.now()<metadataUntil)return metadataRequest;
+  metadataUntil=Date.now()+3600000;
+  metadataRequest=fetch('https://tiles.openfreemap.org/planet',{credentials:'omit',signal:globalThis.AbortSignal?.timeout?.(6000)}).then(async response=>{
+   if(!response.ok)throw Error('Map data unavailable.');const data=await response.json();
+   if(!data.tiles?.some(url=>typeof url==='string'&&url.startsWith('https://')))throw Error('Map source unavailable.');return data;
+  }).catch(error=>{metadataRequest=null;metadataUntil=0;throw error;});return metadataRequest;
+ }
+ function prepare(tile){
+  if(Array.isArray(tile.layers))throw Error('Map tile unavailable.');const layers={};
+  for(const name of ['water','transportation']){const source=tile.layers[name];if(!source)continue;
+   const features=[];for(const feature of source.features){
+    if(name==='transportation'&&(!roadClasses.has(feature.properties.class)||feature.type!==2))continue;
+    let left=Infinity,top=Infinity,right=-Infinity,bottom=-Infinity;
+    for(const ring of feature.geometry)for(const p of ring){left=Math.min(left,p.x);right=Math.max(right,p.x);top=Math.min(top,p.y);bottom=Math.max(bottom,p.y);}
+    features.push({...feature,bounds:[left,top,right,bottom]});
+   }layers[name]={extent:source.extent||4096,features};
+  }return {layers};
+ }
+ function canvasTile(L){return (coords,size,options)=>{
+  const renderer=L.canvas.tile(coords,size,options),canvas=renderer.getContainer(),ratio=Math.min(2,Math.max(1,window.devicePixelRatio||1));
+  // Keep vector roads sharp on retina displays without creating SVG nodes per road.
+  canvas.width=size.x*ratio;canvas.height=size.y*ratio;canvas.style.width=size.x+'px';canvas.style.height=size.y+'px';renderer._ctx.scale(ratio,ratio);return renderer;
+ };}
  function styles(){
   const visible={
    water:{fill:true,fillColor:'#0b1e2c',fillOpacity:1,stroke:false},
@@ -15,6 +40,7 @@
   return new Proxy(visible,{get:(target,key)=>Object.hasOwn(target,key)?target[key]:[]});
  }
  function retile(tile,coords,parent,factor){
+  if(factor===1)return tile;
   const layers={};
   for(const name of ['water','transportation']){
    const source=tile.layers[name];if(!source)continue;
@@ -23,8 +49,7 @@
    const features=[];
    for(const feature of source.features){
     if(name==='transportation'&&(!roadClasses.has(feature.properties.class)||feature.type!==2))continue;
-    let left=Infinity,top=Infinity,right=-Infinity,bottom=-Infinity;
-    for(const ring of feature.geometry)for(const p of ring){left=Math.min(left,p.x);right=Math.max(right,p.x);top=Math.min(top,p.y);bottom=Math.max(bottom,p.y);}
+    const [left,top,right,bottom]=feature.bounds;
     if(right<minX||left>maxX||bottom<minY||top>maxY)continue;
     features.push({type:feature.type,id:feature.id,properties:feature.properties,geometry:feature.geometry.map(ring=>ring.map(p=>({x:p.x*factor-offsetX,y:p.y*factor-offsetY})))});
    }
@@ -33,20 +58,18 @@
   return {layers};
  }
  async function create(L){
-  if(!L.vectorGrid?.protobuf||!L.svg?.tile)throw Error('Map renderer unavailable.');
-  const response=await fetch('https://tiles.openfreemap.org/planet',{credentials:'omit'});
-  if(!response.ok)throw Error('Map data unavailable.');
-  const metadata=await response.json(),url=metadata.tiles?.find(url=>typeof url==='string'&&url.startsWith('https://'));
+  if(!L.vectorGrid?.protobuf||!L.canvas?.tile)throw Error('Map renderer unavailable.');
+  const metadata=await warm(),url=metadata.tiles?.find(url=>typeof url==='string'&&url.startsWith('https://'));
   if(!url)throw Error('Map source unavailable.');
   const sourceZoom=Number.isFinite(metadata.maxzoom)?Math.max(0,Math.min(19,Math.floor(metadata.maxzoom))):14;
-  const layer=L.vectorGrid.protobuf(url,{rendererFactory:L.svg.tile,vectorTileLayerStyles:styles(),interactive:false,maxNativeZoom:19,maxZoom:19,fetchOptions:{credentials:'omit'},keepBuffer:1});
+  const layer=L.vectorGrid.protobuf(url,{rendererFactory:canvasTile(L),vectorTileLayerStyles:styles(),interactive:false,maxNativeZoom:19,maxZoom:19,fetchOptions:{credentials:'omit'},keepBuffer:1,updateWhenIdle:true,updateWhenZooming:false});
   const getTile=layer._getVectorTilePromise.bind(layer),cache=new Map(),roadTiles=new Map();
   layer.rpgRoads=()=>[...roadTiles.values()].flat();
   layer._getVectorTilePromise=async coords=>{
    const z=Math.min(coords.z,sourceZoom),factor=2**(coords.z-z),parent={x:Math.floor(coords.x/factor),y:Math.floor(coords.y/factor),z},key=`${z}/${parent.x}/${parent.y}`;
    try{
     let pending=cache.get(key);
-    if(!pending){pending=getTile(parent).then(tile=>{if(Array.isArray(tile.layers))throw Error('Map tile unavailable.');return tile;});cache.set(key,pending);if(cache.size>24)cache.delete(cache.keys().next().value);}
+    if(!pending){pending=getTile(parent).then(prepare);cache.set(key,pending);if(cache.size>24)cache.delete(cache.keys().next().value);}
     else{cache.delete(key);cache.set(key,pending);}
     const tile=await pending;
     if(!roadTiles.has(key)){
@@ -56,10 +79,10 @@
      }
      roadTiles.set(key,ways);if(roadTiles.size>24)roadTiles.delete(roadTiles.keys().next().value);
     }
-    return retile(tile,coords,parent,factor);
+    layer.rpgLoadFailed=false;return retile(tile,coords,parent,factor);
    }catch(error){cache.delete(key);layer.rpgLoadFailed=true;layer.fire('tileerror',{error,coords});return {layers:{}};}
   };
   return layer;
  }
- window.RPGBasemap={create,styles};
+ window.RPGBasemap={create,styles,warm};
 })();

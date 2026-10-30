@@ -60,4 +60,12 @@
 .world-merchant-finder{position:absolute;left:10px;top:10px;z-index:600;display:flex;align-items:center;gap:5px;border:1px solid #ba9559;border-radius:8px;background:#102330ee;color:#ffe5ae;padding:5px 8px;font:700 10px system-ui;cursor:pointer}.world-merchant-finder img{width:28px;height:28px;object-fit:contain}
 
 /* Reach uses the marker's ground coordinate, not the tall sprite silhouette. */
+/* Orthographic 45° ground camera. The enlarged map fills the viewport after projection.
+   Leaflet measures the scaled container for correct drag, wheel and touch coordinates.
+   Billboard compensation is anchored to each pin's exact ground coordinate. */
+.world-map{top:-20.710678%;bottom:auto;height:141.421356%;transform:rotateX(45deg);transform-origin:50% 50%;background:#1b3036}
+.world-pin-upright{position:relative;width:100%;height:100%;transform:scaleY(1.41421356237);transform-origin:var(--pin-x) var(--pin-y)}
+.world-map .leaflet-control-attribution{transform:scaleY(1.41421356237);transform-origin:0 100%}
+.world-map .leaflet-popup-content-wrapper{transform:scaleY(1.41421356237);transform-origin:50% 100%}
+.world-map .leaflet-tile{pointer-events:none}
 .world-monster-location{position:absolute;top:84px;left:39px;width:7px;height:7px;border:1px solid #fff4dc;background:#b9a680;border-radius:50%;box-shadow:0 0 0 2px #10212f}.world-monster-marker>.world-monster-distance{margin-top:2px;font-size:9px;color:#e8d3ad;overflow:visible;max-width:none}.world-in-range .world-monster-location{background:#6ff0a7;box-shadow:0 0 0 2px #10212f,0 0 7px #6ff0a7}.world-in-range .world-monster-distance{color:#9affc4;border:1px solid #42785b}.world-monster-marker{height:124px}

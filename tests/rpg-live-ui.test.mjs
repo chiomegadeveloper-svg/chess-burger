@@ -20,6 +20,25 @@ function open(db,services={},transport={}){
  }});
  return {dom,w:dom.window,d:dom.window.document,errors,messages,close:()=>dom.window.close()};
 }
+test('stationary Explorer updates do not rebuild pins or recenter; projected sprites stay upright and retain click targets',async()=>{
+ const db=database(),saved=await gameRequest(db,'player-a','POST',{action:'register',heroId:'rogue',name:'Fast Explorer',skill:'punch'}),a=open(db);
+ try{await pause();await pause();let fix,centers=0,invalidates=0;const clicked=[];
+ Object.defineProperty(a.w,'isSecureContext',{value:true});Object.defineProperty(a.w.navigator,'geolocation',{value:{watchPosition(fn){fix=fn;return 1;},getCurrentPosition(){},clearWatch(){}}});
+ const map={setView(){centers++;return this;},getZoom:()=>16,on(){},invalidateSize(){invalidates++;},attributionControl:{addAttribution(){}}};
+ const marker=(ll,options={})=>{const node=a.d.createElement('div');node.className=options.icon?.className||'';node.innerHTML=options.icon?.html||'';return {addTo(){a.d.querySelector('#world-map').append(node);return this;},remove(){node.remove();},on(event,fn){node.addEventListener(event,fn);return this;},bindTooltip(){return this;},setLatLng(){return this;},setRadius(){return this;},getElement:()=>node};};
+ a.w.L={map:()=>map,marker,circle:marker,divIcon:x=>x};a.w.RPGBasemap.create=async()=>({on(){},addTo(){},remove(){}});a.w.RPGChests.refresh=async()=>{};
+ const enemies=Array.from({length:16},(_,i)=>({id:'fast-'+i,monsterId:'chaanack',name:'Chaanack',level:1,lat:11.26+(50+i*20)/111195,lng:125,expires_at:Date.now()+1800000}));
+ a.w.RPGBattle.spawn=async()=>({encounters:enemies,spawnStatus:'ready',refreshAt:Date.now()+1800000});a.w.RPGBattle.encounter=id=>clicked.push(id);
+ a.w.RPGWorld.open(a.w.eval('HEROES[0]'),saved.game);const send=offset=>fix({coords:{latitude:11.26+offset/111195,longitude:125,accuracy:5},timestamp:Date.now()});send(0);await pause();await pause();
+ const pins=[...a.d.querySelectorAll('.world-monster-pin')],before=centers;let mutations=0;const observer=new a.w.MutationObserver(rows=>mutations+=rows.length);observer.observe(a.d.querySelector('#world-map'),{subtree:true,attributes:true,childList:true,characterData:true});
+ for(let i=0;i<100;i++){send(0);a.w.RPGWorld.encounters(enemies);}await pause();assert.equal(mutations,0);assert.equal(centers,before);
+ send(6);await pause();assert.equal(centers,before+1);assert.ok(mutations>0);assert.equal(a.d.querySelector('.world-monster-pin'),pins[0]);pins[0].click();assert.deepEqual(clicked,['fast-0']);
+ a.w.RPGWorld.showMerchants([{id:'merchant',name:'Merchant',lat:11.26,lng:125}]);a.w.RPGWorld.showChests([{id:'chest',kind:'golden',name:'Golden Chest',lat:11.26,lng:125}]);
+ for(const selector of ['.world-self-pin','.world-monster-pin','.world-merchant-pin','.world-chest-pin']){const billboard=a.d.querySelector(selector+' .world-pin-upright');assert.ok(billboard,selector);assert.equal(a.w.getComputedStyle(billboard).transform,'scaleY(1.41421356237)');}
+ assert.equal(a.w.getComputedStyle(a.d.querySelector('#world-map')).transform,'rotateX(45deg)');assert.ok(invalidates<=2);observer.disconnect();assert.deepEqual(a.errors,[]);
+ }finally{a.close();}
+});
+
 test('Hero Room neon meters preserve zero health, update after a real potion, and show capped resources and maximum XP accurately',async()=>{
  const C=(await import('../api/_rpg/src/inventory-core.js')).default,P=(await import('../api/_rpg/src/progression.js')).default,db=database();
  await gameRequest(db,'player-a','POST',{action:'register',heroId:'assassin',name:'Neon Hero',skill:'punch'});

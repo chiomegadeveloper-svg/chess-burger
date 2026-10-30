@@ -4,7 +4,9 @@
  let battlePaused=false,nextOnlineAttempt=0,permissionStatus=null,freshRequest=null;
  let monsterRows=[],monsterRefreshAt=0,monsterRequest=false,lastMonsterAttempt=0,monsterTimer=null,rangeCircle=null,gpsTimer=null;
  let resumeFix=null,currentCity=null,cityPending=false,cityEpoch=0,merchantRows=[];
- let hero,state,map,tileLayer,mapLoadingTimer,basemapVersion=0,selfMarker,accuracyCircle,peerMarkers=[],watch=null,timer=null,position=null,sharing=false,busy=false,follow=true,requestVersion=0,onlineVersion=0,apiQueue=Promise.resolve();
+ let hero,state,map,tileLayer,mapLoadingTimer,basemapVersion=0,basemapPending=false,selfMarker,accuracyCircle,watch=null,timer=null,position=null,sharing=false,busy=false,follow=true,requestVersion=0,onlineVersion=0,apiQueue=Promise.resolve();
+ const peerMarkers=new Map();let cameraFix=null,drawnFix=null,bagSignature='',skillsSignature='',lastEncounterSignature='',nextEncounterExpiry=0;
+ const upright=(html,x,y)=>`<div class="world-pin-upright" style="--pin-x:${x}px;--pin-y:${y}px">${html}</div>`;
  const status=text=>{el('world-gps-status').textContent=text;};
  function ensureOnline(){if(!battlePaused&&!world.hidden&&!document.hidden&&navigator.onLine!==false&&!sharing&&position&&position.accuracy<=1000&&Date.now()-position.time<30000&&Date.now()>=nextOnlineAttempt)online();}
  function observePermission(){if(permissionStatus||!navigator.permissions?.query)return;navigator.permissions.query({name:'geolocation'}).then(permission=>{permissionStatus=permission;permission.onchange=()=>{if(permission.state==='granted'&&!world.hidden&&!battlePaused)refreshGPS();};}).catch(()=>{});}
@@ -18,12 +20,14 @@
   const grid=C.gridFor(state,'bag'),bag=el('world-bag');bag.style.aspectRatio=`${grid.cols}/${grid.rows}`;bag.style.setProperty('--bag-ratio',grid.cols/grid.rows);el('world-bag-size').textContent=`${grid.cols} × ${grid.rows}`;let html='';
   for(let y=0;y<grid.rows;y++)for(let x=0;x<grid.cols;x++)html+=`<i style="left:${x/grid.cols*100}%;top:${y/grid.rows*100}%;width:${100/grid.cols}%;height:${100/grid.rows}%"></i>`;
   for(const item of state.items.filter(i=>i.where==='bag')){const def=C.itemMap[item.defId],size=C.size(def,item.rotation),rarity=C.rarityMap[item.rarity];html+=`<span class="world-bag-item${item.rotation%2?' rotated':''}" data-item-uid="${safe(item.uid)}" role="img" aria-label="${safe(def.name)}, ${safe(rarity.name)}" title="${safe(def.name)} · ${safe(rarity.name)}${C.isConsumable(item)?' · Consumable · '+C.potions.describe(item):' · iLvl '+item.iLvl}" style="--rarity:${rarity.color};--angle:${item.rotation*90}deg;--cols:${size.w};--rows:${size.h};left:${item.x/grid.cols*100}%;top:${item.y/grid.rows*100}%;width:${size.w/grid.cols*100}%;height:${size.h/grid.rows*100}%"><img src="${images[def.sprite]}" alt=""></span>`;}
-  bag.innerHTML=html;
-  el('world-attacks').innerHTML=state.active.map((id,index)=>{const spell=C.spellMap[id];return `<div class="world-spell" role="img" aria-label="${spell?safe(spell.name):`Empty attack slot ${index+1}`}" title="${spell?safe(spell.description):'Empty attack slot'}">${spell?`<img src="assets/skills/runes/${spell.id}.webp" alt="">`:`<span>${index+1}</span>`}</div>`;}).join('');
+  if(html!==bagSignature){bag.innerHTML=html;bagSignature=html;}
+  const attacks=state.active.map((id,index)=>{const spell=C.spellMap[id];return `<div class="world-spell" role="img" aria-label="${spell?safe(spell.name):`Empty attack slot ${index+1}`}" title="${spell?safe(spell.description):'Empty attack slot'}">${spell?`<img src="assets/skills/runes/${spell.id}.webp" alt="">`:`<span>${index+1}</span>`}</div>`;}).join('');
+  if(attacks!==skillsSignature){el('world-attacks').innerHTML=attacks;skillsSignature=attacks;}
  }
  let recovering=false;setInterval(async()=>{if(recovering||!state||!position||world.hidden||document.hidden||battlePaused)return;recovering=true;const version=requestVersion;try{await queue(async()=>{const r=await fetch('/api/battle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'exploreRecover',gps:position})});const d=await r.json();if(r.ok&&d.game&&!world.hidden&&!battlePaused&&version===requestVersion){Object.assign(state,d.game);localStorage.setItem(window.RPGLive.key(state.heroId),JSON.stringify(state));refresh();window.RPGRoom.refresh?.();}});}catch{}finally{recovering=false;}},10000);
- function clearPeers(){for(const marker of peerMarkers)marker.remove();peerMarkers=[];el('world-players').replaceChildren();el('world-player-count').textContent='Nearby adventurers';}
+ function clearPeers(){for(const {marker,row} of peerMarkers.values()){marker?.remove();row.remove();}peerMarkers.clear();el('world-player-count').textContent='Nearby adventurers';}
  async function loadBasemap(){
+  if(basemapPending)return;basemapPending=true;
   const version=++basemapVersion;clearTimeout(mapLoadingTimer);
   if(tileLayer){tileLayer.remove();tileLayer=null;}
   mapLoadingTimer=setTimeout(()=>{if(version===basemapVersion)el('world-map-fallback').hidden=false;},15000);
@@ -34,21 +38,26 @@
    layer.on('tileerror',()=>{if(version===basemapVersion)el('world-map-fallback').hidden=false;});
    layer.addTo(map);
   }catch(error){if(version===basemapVersion){clearTimeout(mapLoadingTimer);el('world-map-fallback').hidden=false;}console.warn('RPG basemap unavailable:',error);}
+  finally{if(version===basemapVersion)basemapPending=false;}
  }
  function initMap(){
   if(map){requestAnimationFrame(()=>map.invalidateSize());return;}
   if(!window.L){el('world-map-fallback').hidden=false;return;}
   try{
-   map=L.map('world-map',{zoomControl:false,attributionControl:true,maxZoom:19}).setView([11.26,125.0],13);
+   map=L.map('world-map',{zoomControl:false,attributionControl:true,maxZoom:19,preferCanvas:true,fadeAnimation:false,inertia:false}).setView(position?[position.lat,position.lng]:[11.26,125.0],17);
    map.attributionControl?.addAttribution('<a href="https://openfreemap.org/" target="_blank" rel="noopener">OpenFreeMap</a> · <a href="https://openmaptiles.org/" target="_blank" rel="noopener">© OpenMapTiles</a> · <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a>');
-   loadBasemap();map.on('dragstart',()=>{follow=false;});requestAnimationFrame(()=>map.invalidateSize());
+   // Warm only metadata until GPS arrives; avoid downloading tiles for the default city.
+   void window.RPGBasemap.warm?.().catch(()=>{});map.on('dragstart',()=>{follow=false;cameraFix=null;});requestAnimationFrame(()=>map.invalidateSize());
+   if(window.ResizeObserver){let resizeFrame=0;new ResizeObserver(()=>{cancelAnimationFrame(resizeFrame);resizeFrame=requestAnimationFrame(()=>{if(!world.hidden)map.invalidateSize({pan:false});});}).observe(el('world-map'));}
   }catch{el('world-map-fallback').hidden=false;}
  }
  function drawPosition(){if(!map||!position)return;const ll=[position.lat,position.lng];
-  if(!selfMarker){selfMarker=L.marker(ll,{icon:L.divIcon({className:'world-player-pin world-self-pin',html:`<div class="world-self-avatar"><img src="${HERO_HEADS[hero.id]}" alt="${safe(hero.name)}"><b>YOU</b></div>`,iconSize:[56,66],iconAnchor:[28,64],tooltipAnchor:[0,-58]}),alt:`Your hero: ${hero.name}`,zIndexOffset:500}).addTo(map);const tooltip=document.createElement('span');tooltip.textContent=`You · ${hero.name}`;selfMarker.bindTooltip(tooltip);accuracyCircle=L.circle(ll,{radius:position.accuracy,color:'#65c9de',weight:1,fillColor:'#4dc6dd',fillOpacity:.08}).addTo(map);}
-  else{selfMarker.setLatLng(ll);accuracyCircle.setLatLng(ll).setRadius(position.accuracy);}
-  if(!rangeCircle)rangeCircle=L.circle(ll,{radius:200,color:'#d4b263',weight:1,dashArray:'6 6',fillOpacity:.015,interactive:false}).addTo(map);else rangeCircle.setLatLng(ll);
-  if(follow)map.setView(ll,Math.max(map.getZoom(),16),{animate:false});
+  const moved=!drawnFix||drawnFix.lat!==position.lat||drawnFix.lng!==position.lng;
+  if(!selfMarker){selfMarker=L.marker(ll,{icon:L.divIcon({className:'world-player-pin world-self-pin',html:upright(`<div class="world-self-avatar"><img src="${HERO_HEADS[hero.id]}" alt="${safe(hero.name)}"><b>YOU</b></div>`,28,64),iconSize:[56,66],iconAnchor:[28,64],tooltipAnchor:[0,-58]}),alt:`Your hero: ${hero.name}`,zIndexOffset:500}).addTo(map);const tooltip=document.createElement('span');tooltip.textContent=`You · ${hero.name}`;selfMarker.bindTooltip(tooltip);accuracyCircle=L.circle(ll,{radius:position.accuracy,color:'#65c9de',weight:1,fillColor:'#4dc6dd',fillOpacity:.08,interactive:false}).addTo(map);}
+  else{if(moved){selfMarker.setLatLng(ll);accuracyCircle.setLatLng(ll);}if(drawnFix?.accuracy!==position.accuracy)accuracyCircle.setRadius(position.accuracy);}
+  if(!rangeCircle)rangeCircle=L.circle(ll,{radius:200,color:'#d4b263',weight:1,dashArray:'6 6',fillOpacity:.015,interactive:false}).addTo(map);else if(moved)rangeCircle.setLatLng(ll);
+  if(follow&&(!cameraFix||meters(cameraFix,position)>=5||map.getZoom()<16)){map.setView(ll,Math.max(map.getZoom(),16),{animate:false});cameraFix={...position};}
+  drawnFix={...position};if(!tileLayer&&!basemapPending)void loadBasemap();
  }
  function queue(operation){const next=apiQueue.catch(()=>{}).then(operation);apiQueue=next;return next;}
  function forgetPresence(){return queue(()=>fetch('/api/world/presence',{method:'DELETE',credentials:'same-origin',keepalive:true}).catch(()=>{}));}
@@ -61,7 +70,7 @@
  }
  function resumeAfterBattle(){if(!battlePaused)return;battlePaused=false;if(!world.hidden)startGPS();}
  function stopGPS(message='GPS is off. Your location is not being shared.'){
-  battlePaused=false;nextOnlineAttempt=0;
+  battlePaused=false;nextOnlineAttempt=0;drawnFix=null;cameraFix=null;lastEncounterSignature='';
   clearInterval(gpsTimer);gpsTimer=null;requestVersion++;monsterRequest=false;lastMonsterAttempt=0;clearInterval(monsterTimer);monsterTimer=null;for(const pin of encounterPins.values())pin.remove();encounterPins.clear();if(rangeCircle){rangeCircle.remove();rangeCircle=null;}if(watch!==null)navigator.geolocation?.clearWatch(watch);watch=null;position=null;showChests([]);showMerchants([]);offline();if(selfMarker){selfMarker.remove();selfMarker=null;accuracyCircle.remove();accuracyCircle=null;}
   el('world-gps').textContent='◎ Enable GPS';el('world-share').disabled=true;el('world-map-mode').textContent='PREVIEW AREA';el('world-position').textContent='Enable GPS to find your place in the realm.';status(message);
  }
@@ -87,10 +96,10 @@
   let quickPending=false;
   function quickFix(){
    if(quickPending||!navigator.geolocation.getCurrentPosition)return;quickPending=true;
-   try{navigator.geolocation.getCurrentPosition(value=>{quickPending=false;acceptFix(value);},error=>{quickPending=false;if(version===requestVersion&&error.code===1)gpsError(error);},{enableHighAccuracy:false,maximumAge:0,timeout:5000});}catch{quickPending=false;}
+   try{navigator.geolocation.getCurrentPosition(value=>{quickPending=false;acceptFix(value);},error=>{quickPending=false;if(version===requestVersion&&error.code===1)gpsError(error);},{enableHighAccuracy:false,maximumAge:15000,timeout:5000});}catch{quickPending=false;}
   }
   status(position?'Refreshing GPS · showing your last known position…':'Finding your GPS location…');if(position){el('world-map-mode').textContent='UPDATING GPS';el('world-position').textContent=`Last known: ${position.lat.toFixed(5)}, ${position.lng.toFixed(5)} · refreshing GPS…`;}el('world-gps').textContent='◎ Refresh GPS';follow=true;clearInterval(gpsTimer);
-  gpsTimer=setInterval(()=>{if(world.hidden||document.hidden||battlePaused)return;map?.invalidateSize({pan:false});drawPosition();encounters(monsterRows);if(!position||Date.now()-position.time>15000)quickFix();else ensureOnline();discoverMonsters();window.RPGChests?.updateRange();},5000);
+  gpsTimer=setInterval(()=>{if(world.hidden||document.hidden||battlePaused)return;drawPosition();encounters(monsterRows);if(!position||Date.now()-position.time>15000)quickFix();else ensureOnline();discoverMonsters();window.RPGChests?.updateRange();},5000);
   try{watch=navigator.geolocation.watchPosition(acceptFix,error=>{if(version===requestVersion&&!world.hidden)gpsError(error);},{enableHighAccuracy:true,maximumAge:10000,timeout:30000});quickFix();}catch{stopGPS('GPS could not start. Check location permissions and try again.');}
 
  }
@@ -114,11 +123,16 @@
   return freshRequest;
  }
  function showPeers(players){
-  clearPeers();const valid=players.filter(p=>p&&['rogue','theft','assassin','mage','tank','archer','queen','crusader'].includes(p.heroId)&&typeof p.name==='string'&&Number.isFinite(p.lat)&&Number.isFinite(p.lng)&&p.updatedAt>Date.now()-45000);
+  const valid=players.filter(p=>p&&typeof p.peerId==='string'&&['rogue','theft','assassin','mage','tank','archer','queen','crusader'].includes(p.heroId)&&typeof p.name==='string'&&Number.isFinite(p.lat)&&Number.isFinite(p.lng)&&p.updatedAt>Date.now()-45000),ids=new Set(valid.map(p=>p.peerId));
+  for(const [id,entry] of peerMarkers)if(!ids.has(id)){entry.marker?.remove();entry.row.remove();peerMarkers.delete(id);}
   el('world-player-count').textContent=`${valid.length} nearby adventurer${valid.length===1?'':'s'}`;
   el('world-online-status').textContent=valid.length?'Online players within 5 km. Updated every 8 seconds.':'You are online. No other adventurers are nearby yet.';
-  for(const p of valid){const src=window.DamageSprites.sprite(p.heroId,100,'right'),row=document.createElement('button');row.type='button';row.className='world-player';row.addEventListener('click',()=>window.RPGBattle.encounter(p.peerId,true));const img=document.createElement('img');img.src=src;img.alt='';const text=document.createElement('span');text.textContent=p.name;const small=document.createElement('small');small.textContent=`Level ${p.level} · GPS ±${Math.round(p.accuracy)} m · Tap to challenge`;text.append(small);row.append(img,text);el('world-players').append(row);
-   if(map){const icon=L.divIcon({className:'world-player-pin',html:`<img src="${src}" alt=""><span>${safe(p.name)}</span>`,iconSize:[48,60],iconAnchor:[24,48]});const marker=L.marker([p.lat,p.lng],{icon}).addTo(map);const popup=document.createElement('div');popup.textContent=`${p.name} · Level ${p.level}`;marker.bindPopup(popup);marker.on('click',()=>window.RPGBattle.encounter(p.peerId,true));peerMarkers.push(marker);}
+  for(const p of valid){const src=window.DamageSprites.sprite(p.heroId,100,'right'),key=`${p.heroId}:${p.name}:${p.level}:${Math.round(p.accuracy)}`;let entry=peerMarkers.get(p.peerId);
+   if(!entry){const row=document.createElement('button');row.type='button';row.className='world-player';row.addEventListener('click',()=>window.RPGBattle.encounter(p.peerId,true));el('world-players').append(row);entry={row};peerMarkers.set(p.peerId,entry);}
+   if(entry.key!==key){const img=document.createElement('img');img.src=src;img.alt='';const text=document.createElement('span');text.textContent=p.name;const small=document.createElement('small');small.textContent=`Level ${p.level} · GPS ±${Math.round(p.accuracy)} m · Tap to challenge`;text.append(small);entry.row.replaceChildren(img,text);entry.key=key;}
+   const pinKey=`${p.heroId}:${p.name}:${p.level}`;if(entry.pinKey!==pinKey){entry.marker?.remove();entry.marker=null;entry.pinKey=pinKey;}
+   if(map&&!entry.marker){const icon=L.divIcon({className:'world-player-pin',html:upright(`<img src="${src}" alt=""><span>${safe(p.name)}</span>`,24,48),iconSize:[48,60],iconAnchor:[24,48]});entry.marker=L.marker([p.lat,p.lng],{icon}).addTo(map);const popup=document.createElement('div');popup.textContent=`${p.name} · Level ${p.level}`;entry.marker.bindPopup(popup);entry.marker.on('click',()=>window.RPGBattle.encounter(p.peerId,true));}
+   else if(entry.lat!==p.lat||entry.lng!==p.lng)entry.marker?.setLatLng([p.lat,p.lng]);entry.lat=p.lat;entry.lng=p.lng;
   }
  }
  async function sync(){
@@ -137,7 +151,7 @@
  el('world-gps').addEventListener('click',refreshGPS);el('world-share').addEventListener('click',online);el('world-exit').addEventListener('click',()=>leave(true));
  for(const id of ['world-equipment','world-bag-open'])el(id).addEventListener('click',()=>leave(false));
  el('world-book').addEventListener('click',()=>window.RPGRoom.utility('book'));el('world-shop').addEventListener('click',()=>window.RPGRoom.utility('shop'));
- el('world-center').addEventListener('click',()=>{if(!position){status('Enable GPS to center the map on your location.');return;}follow=true;drawPosition();});el('world-zoom-in').addEventListener('click',()=>map?.zoomIn());el('world-zoom-out').addEventListener('click',()=>map?.zoomOut());
+ el('world-center').addEventListener('click',()=>{if(!position){status('Enable GPS to center the map on your location.');return;}follow=true;cameraFix=null;drawPosition();});el('world-zoom-in').addEventListener('click',()=>map?.zoomIn());el('world-zoom-out').addEventListener('click',()=>map?.zoomOut());
  el('world-map-retry').addEventListener('click',()=>{if(!map){initMap();return;}el('world-map-fallback').hidden=true;loadBasemap();});
  document.addEventListener('visibilitychange',()=>{if(world.hidden)return;if(document.hidden){offline();status('GPS tracking remains enabled. Your browser may pause updates in the background.');}else refreshGPS();});window.addEventListener('pageshow',()=>{if(!world.hidden)refreshGPS();});window.addEventListener('pagehide',()=>{if(!world.hidden)stopGPS();});window.addEventListener('online',()=>{if(!world.hidden&&!battlePaused){nextOnlineAttempt=0;refreshGPS();}});window.addEventListener('offline',()=>{if(!world.hidden){offline('Network offline. Player sharing has stopped.');status('Network offline. GPS can continue on this device.');}});
  let rangeNotice=null,rangeDismissTimer=null,rangeHideTimer=null;
@@ -164,7 +178,7 @@
   if(data.spawnStatus==='ready'){monsterRefreshAt=data.refreshAt||Date.now()+1800000;encounters(data.encounters||[]);if(data.message)el('world-monster-status').textContent=data.message;}
  }
  async function discoverMonsters(force=false){
-  if(battlePaused||cityPending||world.hidden||!position||Date.now()-position.time>30000)return;
+  if(battlePaused||cityPending||world.hidden||document.hidden||!position||Date.now()-position.time>30000)return;
   const now=Date.now();encounters(monsterRows);
   if(monsterRequest||(!force&&now<monsterRefreshAt))return;
   if(now-lastMonsterAttempt<2000)return;
@@ -175,24 +189,27 @@
   finally{if(version===requestVersion&&epoch===cityEpoch)monsterRequest=false;}
  }
  function encounters(rows){
+  const signature=`${cityEpoch}:${position?.lat}:${position?.lng}:${state?.practiceAwards?.length||0}:`+rows.map(e=>`${e.id},${e.lat},${e.lng},${e.level},${e.monsterId},${e.name},${e.expires_at}`).join(';');
+  if(map&&signature===lastEncounterSignature&&Date.now()<nextEncounterExpiry)return;
+  lastEncounterSignature=signature;nextEncounterExpiry=Math.min(...rows.map(e=>e.expires_at),Infinity);
   monsterRows=(cityPending?[]:rows).filter(e=>(!currentCity||window.RPGCityBoundary.contains(currentCity,e))&&e.expires_at>Date.now()&&!state?.practiceAwards?.some(a=>a.id===`device-${e.id}`));
   const visible=position?monsterRows.filter(e=>meters(position,e)<=window.RPGEncounterLayout.SPAWN_RADIUS):[];
   if(!map)return;const ids=new Set(visible.map(e=>e.id));for(const [id,pin] of encounterPins)if(!ids.has(id)){pin.remove();encounterPins.delete(id);}
   for(const e of visible){
    const distance=meters(position,e),reachable=distance<=200,label=`${Math.ceil(distance)} m · ${reachable?'In reach':'Move closer'}`;
    let pin=encounterPins.get(e.id);
-   if(!pin){const src=window.DamageSprites.sprite(e.monsterId,100,'left');const icon=L.divIcon({className:'world-monster-pin',html:`<div class="world-monster-marker"><b class="world-monster-level">LVL ${Number(e.level)}</b><img src="${src}" alt=""><i class="world-monster-location" aria-hidden="true"></i><span>${safe(e.name)}</span><span class="world-monster-distance"></span></div>`,iconSize:[84,124],iconAnchor:[42,87]});pin=L.marker([e.lat,e.lng],{icon,alt:`${e.name}, LVL ${e.level}`}).addTo(map);pin.on('click',()=>window.RPGBattle.encounter(e.id));encounterPins.set(e.id,pin);}
+   if(!pin){const src=window.DamageSprites.sprite(e.monsterId,100,'left');const icon=L.divIcon({className:'world-monster-pin',html:upright(`<div class="world-monster-marker"><b class="world-monster-level">LVL ${Number(e.level)}</b><img src="${src}" alt=""><i class="world-monster-location" aria-hidden="true"></i><span>${safe(e.name)}</span><span class="world-monster-distance"></span></div>`,42,87),iconSize:[84,124],iconAnchor:[42,87]});pin=L.marker([e.lat,e.lng],{icon,alt:`${e.name}, LVL ${e.level}`}).addTo(map);pin.on('click',()=>window.RPGBattle.encounter(e.id));encounterPins.set(e.id,pin);}
    const node=pin.getElement?.();if(node){node.classList.toggle('world-in-range',reachable);const range=node.querySelector('.world-monster-distance');if(range)range.textContent=label;node.setAttribute('aria-label',`${e.name}, LVL ${e.level}, ${label}`);node.title=`${e.name} · ${label} · 200 m attack range`;}
   }
  }
  const merchantPins=new Map();
- function showMerchants(rows){merchantRows=rows;if(!map)return;const ids=new Set(rows.map(m=>m.id));for(const [id,pin] of merchantPins)if(!ids.has(id)){pin.remove();merchantPins.delete(id);}for(const merchant of rows){if(merchantPins.has(merchant.id))continue;const icon=L.divIcon({className:'world-merchant-pin',html:`<div class="world-merchant-marker"><img src="assets/merchant/merchant-pin.webp" alt=""><span>Merchant</span></div>`,iconSize:[70,80],iconAnchor:[35,65]}),pin=L.marker([merchant.lat,merchant.lng],{icon,alt:merchant.name,zIndexOffset:900}).addTo(map);pin.on('click',()=>{if(cityPending||!position)return;if(meters(position,merchant)>200){outOfRange(meters(position,merchant),false,'merchant');return;}window.RPGMerchant?.open(state,merchant);});merchantPins.set(merchant.id,pin);}}
+ function showMerchants(rows){merchantRows=rows;if(!map)return;const ids=new Set(rows.map(m=>m.id));for(const [id,pin] of merchantPins)if(!ids.has(id)){pin.remove();merchantPins.delete(id);}for(const merchant of rows){if(merchantPins.has(merchant.id))continue;const icon=L.divIcon({className:'world-merchant-pin',html:upright(`<div class="world-merchant-marker"><img src="assets/merchant/merchant-pin.webp" alt=""><span>Merchant</span></div>`,35,65),iconSize:[70,80],iconAnchor:[35,65]}),pin=L.marker([merchant.lat,merchant.lng],{icon,alt:merchant.name,zIndexOffset:900}).addTo(map);pin.on('click',()=>{if(cityPending||!position)return;if(meters(position,merchant)>200){outOfRange(meters(position,merchant),false,'merchant');return;}window.RPGMerchant?.open(state,merchant);});merchantPins.set(merchant.id,pin);}}
  function clearCity(){cityEpoch++;cityPending=true;monsterRequest=false;monsterRefreshAt=0;lastMonsterAttempt=0;encounters([]);showChests([]);showMerchants([]);window.RPGMerchant?.clear();window.RPGBattle?.clearCity?.();window.RPGChests?.clearCity();el('world-monster-status').textContent='Entering a new city · discovering local encounters…';}
  function checkCity(){const gps=window.RPGWorld.position();if(currentCity&&!cityPending&&gps&&!window.RPGCityBoundary.contains(currentCity,gps))clearCity();}
  function applyCity(city,merchants=[]){const gps=window.RPGWorld.position();if(!gps||!window.RPGCityBoundary.contains(city,gps))return false;const changed=cityPending||currentCity?.id!==city.id;if(changed){cityEpoch++;monsterRequest=false;monsterRefreshAt=0;lastMonsterAttempt=0;monsterRows=[];encounters([]);}currentCity=city;cityPending=false;showMerchants(merchants);if(changed)void discoverMonsters(true);return true;}
  function merchantArea(){if(currentCity&&!cityPending)chestArea(currentCity.bounds);else{status('Finding merchants in your current city…');void window.RPGChests?.refresh(true);}}
  const chestPins=new Map();
- function showChests(rows){if(!map)return;const ids=new Set(rows.map(c=>c.id));for(const [id,pin]of chestPins)if(!ids.has(id)){pin.remove();chestPins.delete(id);}for(const chest of rows){if(chestPins.get(chest.id)?.chestClaimed===!!chest.claimed)continue;if(chestPins.has(chest.id)){chestPins.get(chest.id).remove();chestPins.delete(chest.id);}const icon=L.divIcon({className:'world-chest-pin',html:`<div class="world-chest-marker chest-${chest.kind}${chest.claimed?' chest-claimed':''}"><img src="assets/chests/${['golden','emerald','enchanted'].includes(chest.kind)?chest.kind:'golden'}.webp" alt=""><span>${safe(chest.name)}${chest.claimed?' · Claimed':''}</span></div>`,iconSize:[80,79],iconAnchor:[40,60]}),marker=L.marker([chest.lat,chest.lng],{icon,alt:chest.name,zIndexOffset:1000}).addTo(map);marker.chestClaimed=!!chest.claimed;marker.on('click',()=>window.RPGChests?.open(chest));chestPins.set(chest.id,marker);}}
+ function showChests(rows){if(!map)return;const ids=new Set(rows.map(c=>c.id));for(const [id,pin]of chestPins)if(!ids.has(id)){pin.remove();chestPins.delete(id);}for(const chest of rows){if(chestPins.get(chest.id)?.chestClaimed===!!chest.claimed)continue;if(chestPins.has(chest.id)){chestPins.get(chest.id).remove();chestPins.delete(chest.id);}const icon=L.divIcon({className:'world-chest-pin',html:upright(`<div class="world-chest-marker chest-${chest.kind}${chest.claimed?' chest-claimed':''}"><img src="assets/chests/${['golden','emerald','enchanted'].includes(chest.kind)?chest.kind:'golden'}.webp" alt=""><span>${safe(chest.name)}${chest.claimed?' · Claimed':''}</span></div>`,40,60),iconSize:[80,79],iconAnchor:[40,60]}),marker=L.marker([chest.lat,chest.lng],{icon,alt:chest.name,zIndexOffset:1000}).addTo(map);marker.chestClaimed=!!chest.claimed;marker.on('click',()=>window.RPGChests?.open(chest));chestPins.set(chest.id,marker);}}
  function chestArea(bounds){if(!map)return;follow=false;map.fitBounds([[bounds[0],bounds[2]],[bounds[1],bounds[3]]],{padding:[45,45],maxZoom:15});}
  el('world-battle-lab').addEventListener('click',()=>window.RPGBattle.openLab());
  window.RPGWorld={freshPosition,checkCity,applyCity,merchants:()=>merchantRows.slice(),merchantArea,showMerchants,city:()=>currentCity,cityPending:()=>cityPending,showChests,chestArea,version:()=>requestVersion,open,refresh,pauseForBattle,resumeAfterBattle,primeEncounters,outOfRange,stop:stopGPS,encounters,syncEncounters,offline,position:()=>position&&({...position}),monster:id=>monsterRows.find(e=>e.id===id),consume(id){encounters(monsterRows.filter(e=>e.id!==id));}};
