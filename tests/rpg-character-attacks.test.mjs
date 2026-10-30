@@ -28,7 +28,7 @@ async function renderer({loadImages=true}={}){
  const host={id:'bt-fx-bar',clientWidth:600,clientHeight:120,appendChild(){},querySelectorAll:()=>[]};
  const win={RPG_CHARACTER_ATTACKS:window.RPG_CHARACTER_ATTACKS,RPG_ATTACK_SKILLS:[{id:'basic',category:'physical',name:'Tackle',animation:{frames:6,fps:12,row:0}}],RPGSkillFrames:{frame:()=>({}),fitScale:()=>1},matchMedia:()=>({matches:false})};
  const source=(await readFile(new URL('../rpg/src/skill-fx/index.mjs',import.meta.url),'utf8')).replace(/^import .*;\n/gm,'');
- vm.runInNewContext(source,{PIXI,CtAnimatedSprite:Effect,textures:resources,window:win,Image,document:{createElement:()=>({remove(){},appendChild(){}})},performance:{now:()=>0},console,setTimeout,clearTimeout});
+ vm.runInNewContext(source,{PIXI,CtAnimatedSprite:Effect,textures:resources,window:win,Image,document:{createElement:()=>({style:{},remove(){},appendChild(){}})},performance:{now:()=>0},console,setTimeout,clearTimeout});
  return {win,host,sprites,apps};
 }
 const settle=()=>new Promise(resolve=>setImmediate(resolve));
@@ -36,7 +36,7 @@ test('both characters render in the animation area and health impact waits for c
  const {win,host,sprites,apps}=await renderer();let hits=0;
  const running=win.RPGSkillFX.sequence(host,[{skill:'basic',attackerId:'rogue',defenderId:'draguu'}],{onImpact:()=>hits++});await settle();
  const effect=sprites.find(s=>s instanceof Object&&s.playing),actors=apps[0].stage.children.filter(s=>s!==effect);
- assert.equal(effect.spec.animationFPS,9,'play at half the previous 18 FPS');
+ assert.equal(effect.spec.animationFPS,9*.7,'play 30% slower than the previous 9 FPS');
  assert.equal(actors.length,2);assert.equal(actors[0].position.x,60);assert.equal(actors[1].position.x,540);assert.equal(effect.position.x,60);assert.ok(effect.position.y>host.clientHeight*.7&&effect.position.y<host.clientHeight*.94);assert.equal(hits,0);
  effect.currentFrame=2;effect.onFrameChange();assert.equal(hits,0);
  effect.currentFrame=3;effect.onFrameChange();assert.equal(hits,1);assert.equal(effect.x,540);assert.equal(actors[0].currentFrame,2);
@@ -66,6 +66,6 @@ test('slow image loads use a bounded fallback with one impact and release the tu
  const {win,host}=await renderer({loadImages:false});let hits=0;const start=Date.now();await win.RPGSkillFX.sequence(host,[{skill:'basic',attackerId:'rogue',defenderId:'draguu'}],{onImpact:()=>hits++});assert.equal(hits,1);assert.ok(Date.now()-start<1800);
 });
 test('slower playback retains a bounded watchdog and cancellation suppresses fallback damage',async()=>{
- const {win,host,sprites}=await renderer();let hits=0;const start=Date.now();await win.RPGSkillFX.sequence(host,[{skill:'basic'}],{onImpact:()=>hits++});assert.equal(hits,1);assert.ok(Date.now()-start<1800);assert.ok(sprites.some(s=>s.spec?.animationFPS===9));
+ const {win,host,sprites}=await renderer();let hits=0;const start=Date.now();await win.RPGSkillFX.sequence(host,[{skill:'basic'}],{onImpact:()=>hits++});assert.equal(hits,1);assert.ok(Date.now()-start<1800);assert.ok(sprites.some(s=>s.spec?.animationFPS===9*.7));
  const slow=await renderer({loadImages:false});let cancelledHits=0;const pending=slow.win.RPGSkillFX.sequence(slow.host,[{skill:'basic'}],{onImpact:()=>cancelledHits++});slow.win.RPGSkillFX.stop(slow.host);await pending;assert.equal(cancelledHits,0);
 });

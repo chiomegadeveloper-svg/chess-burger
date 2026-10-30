@@ -2,6 +2,7 @@ import * as PIXI from 'pixi.js-legacy';
 import CtAnimatedSprite from '../../vendor/ctjs/PixiAnimatedSprite.ts';
 import {textures} from './resources.mjs';
 
+const ATTACK_SPEED_FACTOR=.7;
 const sessions=new Map(),sheetPromises=new Map();let protectedSkills=new Set();
 const skill=id=>window.RPG_ATTACK_SKILLS.find(s=>s.id===id);
 const characterSheets=new Map(),characterReady=new Map();
@@ -52,7 +53,7 @@ async function animate(host,s,options,session){
  if(session.cancelled)return;
  const {app}=session;
  const reduced=window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
- const fps=Math.max(18,s.animation.fps)*.5;
+ const fps=Math.max(18,s.animation.fps)*.5*ATTACK_SPEED_FACTOR;
  const sprite=new CtAnimatedSprite({baseClass:'AnimatedSprite',texture:s.id,anchorX:.5,anchorY:.5,loopAnimation:false,animationFPS:fps,playAnimationOnStart:false},{});
  const battle=['bt-stage','bt-fx-bar'].includes(host.id);
  const w=app.screen.width,h=app.screen.height;
@@ -100,8 +101,8 @@ async function waitForReply(event,session){
 // Cold image requests must not hold the turn open for many seconds.
 async function preload(events){await Promise.allSettled(events.flatMap(e=>{const s=skill(e.skill);return [s?frames(s):null,characterFrames(e.attackerId),characterFrames(e.defenderId)];}));}
 async function fallback(host,event,session,options){
- const node=document.createElement('span');node.className='rpg-skill-fallback'+(event.reverse?' reverse':'');const image=document.createElement('img');image.src=`assets/skills/runes/${event.skill}.webp`;image.alt='';node.appendChild(image);host.appendChild(node);
- await new Promise(resolve=>{let hit=false;const impact=()=>{if(!session.cancelled&&!hit){hit=true;options.onImpact?.(event);}};const hitTimer=setTimeout(impact,360),endTimer=setTimeout(()=>{impact();finish();},640);const finish=()=>{clearTimeout(hitTimer);clearTimeout(endTimer);node.remove();session.finish=null;resolve();};session.finish=finish;});
+ const node=document.createElement('span');node.className='rpg-skill-fallback'+(event.reverse?' reverse':'');node.style.animationDuration=`${640/ATTACK_SPEED_FACTOR}ms`;const image=document.createElement('img');image.src=`assets/skills/runes/${event.skill}.webp`;image.alt='';node.appendChild(image);host.appendChild(node);
+ await new Promise(resolve=>{let hit=false;const impact=()=>{if(!session.cancelled&&!hit){hit=true;options.onImpact?.(event);}};const hitTimer=setTimeout(impact,360/ATTACK_SPEED_FACTOR),endTimer=setTimeout(()=>{impact();finish();},640/ATTACK_SPEED_FACTOR);const finish=()=>{clearTimeout(hitTimer);clearTimeout(endTimer);node.remove();session.finish=null;resolve();};session.finish=finish;});
 }
 async function sequence(host,events,options={}){
  if(!host||!events.length)return;let session;
