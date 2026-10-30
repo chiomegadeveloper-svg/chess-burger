@@ -1,0 +1,109 @@
+{
+  "mode": "built-in image_gen",
+  "sprites": [
+    {
+      "id": "mana_potion",
+      "name": "Azure Dew Potion",
+      "prompt": "Use case: stylized-concept. Asset type: one isolated inventory potion sprite for Chess Burger RPG. Subject: Azure Dew Potion, a small pear-shaped clear glass flask filled with luminous sky BLUE mana, silver collar, cork stopper and one tiny blue droplet gem. Style: polished isometric fantasy pixel-art item, crisp deliberate pixel clusters, dark clean outlines and painterly pixel shading, readable at 64 pixels, matching medieval sword-and-armor backpack RPG item sprites. Three-quarter view. Exactly one complete upright bottle centered in square canvas, entire object occupies about 55% of canvas height with at least 20% completely transparent padding on every edge. All liquid and magical accents are BLUE; metal is silver. No letters, numbers, logos, frame, floor, cast shadow, particles outside the object or watermark. Genuinely transparent background.",
+      "file": "azure-dew-v1.webp",
+      "source": "/workspace/scratch/11e1a4629bcf/generated_images/exec-59f52e58-bff5-41f9-bebd-8f8e0627cfdf.png",
+      "footprint": [
+        1,
+        1
+      ],
+      "output": "public/rpg/assets/potions/azure-dew-v1.webp"
+    },
+    {
+      "id": "sapphire_tonic",
+      "name": "Sapphire Tonic",
+      "prompt": "Use case: stylized-concept. Asset type: one isolated inventory potion sprite for Chess Burger RPG. Subject: Sapphire Tonic, a tall narrow faceted clear glass vial filled with rich sapphire BLUE mana, silver spiral neck collar, pointed blue crystal stopper; distinctly tall and slim silhouette. Style: polished isometric fantasy pixel-art item, crisp deliberate pixel clusters, dark clean outlines and painterly pixel shading, readable at 64 pixels, matching medieval sword-and-armor backpack RPG item sprites. Three-quarter view. Exactly one complete upright bottle centered in square canvas, entire object occupies about 55% of canvas height with at least 20% completely transparent padding on every edge. All liquid and magical accents are BLUE; metal is silver. No letters, numbers, logos, frame, floor, cast shadow, particles outside the object or watermark. Genuinely transparent background.",
+      "file": "sapphire-tonic-v1.webp",
+      "source": "/workspace/scratch/11e1a4629bcf/generated_images/exec-c9731357-b4f7-4a1b-96fa-af8624b7b5f5.png",
+      "footprint": [
+        1,
+        2
+      ],
+      "output": "public/rpg/assets/potions/sapphire-tonic-v1.webp"
+    },
+    {
+      "id": "deepwell_elixir",
+      "name": "Deepwell Elixir",
+      "prompt": "Use case: stylized-concept. Asset type: one isolated inventory potion sprite for Chess Burger RPG. Subject: Deepwell Elixir, a broad squat hexagonal crystal decanter filled with deep ocean BLUE mana, two small silver side handles and luminous blue droplet-shaped stopper; broad compact silhouette. Style: polished isometric fantasy pixel-art item, crisp deliberate pixel clusters, dark clean outlines and painterly pixel shading, readable at 64 pixels, matching medieval sword-and-armor backpack RPG item sprites. Three-quarter view. Exactly one complete upright bottle centered in square canvas, entire object occupies about 55% of canvas height with at least 20% completely transparent padding on every edge. All liquid and magical accents are BLUE; metal is silver. No letters, numbers, logos, frame, floor, cast shadow, particles outside the object or watermark. Genuinely transparent background.",
+      "file": "deepwell-elixir-v1.webp",
+      "source": "/workspace/scratch/11e1a4629bcf/generated_images/exec-6c5440e1-5a75-442f-a53b-fa92ba397984.png",
+      "footprint": [
+        2,
+        2
+      ],
+      "output": "public/rpg/assets/potions/deepwell-elixir-v1.webp"
+    },
+    {
+      "id": "arcane_tide",
+      "name": "Arcane Tide Potion",
+      "prompt": "Use case: stylized-concept. Asset type: one isolated inventory potion sprite for Chess Burger RPG. Subject: Arcane Tide Potion, an ornate broad round crystal mana flask filled with brilliant royal BLUE mana, silver crescent-shaped frame and a blue crystal crown stopper; powerful elegant broad silhouette. Style: polished isometric fantasy pixel-art item, crisp deliberate pixel clusters, dark clean outlines and painterly pixel shading, readable at 64 pixels, matching medieval sword-and-armor backpack RPG item sprites. Three-quarter view. Exactly one complete upright bottle centered in square canvas, entire object occupies about 55% of canvas height with at least 20% completely transparent padding on every edge. All liquid and magical accents are BLUE; metal is silver. No letters, numbers, logos, frame, floor, cast shadow, particles outside the object or watermark. Genuinely transparent background.",
+      "file": "arcane-tide-v1.webp",
+      "source": "/workspace/scratch/11e1a4629bcf/generated_images/exec-ba74f044-cf75-4688-8cff-b9fc02df3d95.png",
+      "footprint": [
+        2,
+        2
+      ],
+      "output": "public/rpg/assets/potions/arcane-tide-v1.webp"
+    },
+    {
+      "id": "cyan_spark",
+      "name": "Cyan Spark Potion",
+      "color": "ELECTRIC CYAN",
+      "subject": "a small round clear glass energy flask, silver lightning-bolt clasp, cork stopper",
+      "file": "cyan-spark-v1.webp",
+      "prompt": "Use case: stylized-concept. Asset type: one isolated Attack Points potion inventory sprite for Chess Burger RPG. Subject: Cyan Spark Potion, a small round clear glass energy flask, silver lightning-bolt clasp, cork stopper, filled with intensely luminous ELECTRIC CYAN energy liquid. The unmistakable dominant magical color is ELECTRIC CYAN. A simple lightning bolt symbol on the vessel indicates action energy, no lettering. Style: polished isometric fantasy pixel-art item, crisp deliberate pixel clusters, clean dark outline, painterly shaded pixel art matching medieval sword-and-armor backpack RPG item sprites, readable at 64 pixels. Exactly one complete upright bottle centered in square canvas, three-quarter view, entire object occupies about 55% of canvas height, at least 20% fully transparent padding on every edge. Small magical highlights contained inside the glass. No letters, numbers, logos, frame, floor, cast shadow, detached sparks or particles, other objects or watermark. Genuinely transparent background.",
+      "source": "/workspace/scratch/11e1a4629bcf/generated_images/exec-0f2c2290-789b-415e-b03c-45b62b16c3a3.png",
+      "footprint": [
+        1,
+        1
+      ],
+      "output": "public/rpg/assets/potions/cyan-spark-v1.webp"
+    },
+    {
+      "id": "volt_surge",
+      "name": "Volt Surge Potion",
+      "color": "ELECTRIC YELLOW",
+      "subject": "a tall slim angular glass energy vial, brass lightning-bolt neck clasp, pointed yellow crystal stopper",
+      "file": "volt-surge-v1.webp",
+      "prompt": "Use case: stylized-concept. Asset type: one isolated Attack Points potion inventory sprite for Chess Burger RPG. Subject: Volt Surge Potion, a tall slim angular glass energy vial, brass lightning-bolt neck clasp, pointed yellow crystal stopper, filled with intensely luminous ELECTRIC YELLOW energy liquid. The unmistakable dominant magical color is ELECTRIC YELLOW. A simple lightning bolt symbol on the vessel indicates action energy, no lettering. Style: polished isometric fantasy pixel-art item, crisp deliberate pixel clusters, clean dark outline, painterly shaded pixel art matching medieval sword-and-armor backpack RPG item sprites, readable at 64 pixels. Exactly one complete upright bottle centered in square canvas, three-quarter view, entire object occupies about 55% of canvas height, at least 20% fully transparent padding on every edge. Small magical highlights contained inside the glass. No letters, numbers, logos, frame, floor, cast shadow, detached sparks or particles, other objects or watermark. Genuinely transparent background.",
+      "source": "/workspace/scratch/11e1a4629bcf/generated_images/exec-e41749a8-e5c0-43ce-a03d-5eed15802f00.png",
+      "footprint": [
+        1,
+        2
+      ],
+      "output": "public/rpg/assets/potions/volt-surge-v1.webp"
+    },
+    {
+      "id": "ember_rush",
+      "name": "Ember Rush Potion",
+      "color": "ELECTRIC ORANGE",
+      "subject": "a broad squat octagonal glass energy flask, dark bronze frame, a small orange lightning-bolt medallion, orange crystal stopper",
+      "file": "ember-rush-v1.webp",
+      "prompt": "Use case: stylized-concept. Asset type: one isolated Attack Points potion inventory sprite for Chess Burger RPG. Subject: Ember Rush Potion, a broad squat octagonal glass energy flask, dark bronze frame, a small orange lightning-bolt medallion, orange crystal stopper, filled with intensely luminous ELECTRIC ORANGE energy liquid. The unmistakable dominant magical color is ELECTRIC ORANGE. A simple lightning bolt symbol on the vessel indicates action energy, no lettering. Style: polished isometric fantasy pixel-art item, crisp deliberate pixel clusters, clean dark outline, painterly shaded pixel art matching medieval sword-and-armor backpack RPG item sprites, readable at 64 pixels. Exactly one complete upright bottle centered in square canvas, three-quarter view, entire object occupies about 55% of canvas height, at least 20% fully transparent padding on every edge. Small magical highlights contained inside the glass. No letters, numbers, logos, frame, floor, cast shadow, detached sparks or particles, other objects or watermark. Genuinely transparent background.",
+      "source": "/workspace/scratch/11e1a4629bcf/generated_images/exec-8471d0e4-8523-44e9-b5b6-7aaf7a66c552.png",
+      "footprint": [
+        2,
+        2
+      ],
+      "output": "public/rpg/assets/potions/ember-rush-v1.webp"
+    },
+    {
+      "id": "violet_overdrive",
+      "name": "Violet Overdrive Potion",
+      "color": "ELECTRIC PURPLE",
+      "subject": "a broad ornate round glass energy flask, silver angular lightning-bolt frame, purple crystal crown stopper",
+      "file": "violet-overdrive-v1.webp",
+      "prompt": "Use case: stylized-concept. Asset type: one isolated Attack Points potion inventory sprite for Chess Burger RPG. Subject: Violet Overdrive Potion, a broad ornate round glass energy flask, silver angular lightning-bolt frame, purple crystal crown stopper, filled with intensely luminous ELECTRIC PURPLE energy liquid. The unmistakable dominant magical color is ELECTRIC PURPLE. A simple lightning bolt symbol on the vessel indicates action energy, no lettering. Style: polished isometric fantasy pixel-art item, crisp deliberate pixel clusters, clean dark outline, painterly shaded pixel art matching medieval sword-and-armor backpack RPG item sprites, readable at 64 pixels. Exactly one complete upright bottle centered in square canvas, three-quarter view, entire object occupies about 55% of canvas height, at least 20% fully transparent padding on every edge. Small magical highlights contained inside the glass. No letters, numbers, logos, frame, floor, cast shadow, detached sparks or particles, other objects or watermark. Genuinely transparent background.",
+      "source": "/workspace/scratch/11e1a4629bcf/generated_images/exec-61373c09-ac07-4c0a-bc89-016bfd58bf59.png",
+      "footprint": [
+        2,
+        2
+      ],
+      "output": "public/rpg/assets/potions/violet-overdrive-v1.webp"
+    }
+  ]
+}

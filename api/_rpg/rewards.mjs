@@ -12,7 +12,8 @@ export function normalize(doc){let changed=C.normalizePotions(doc.state);const s
  if(changed)doc.state.inventoryRevision=(doc.state.inventoryRevision||0)+1;return changed;}
 export function stash(doc){doc.pendingLoot=doc.pendingLoot||[];const left=[];for(const item of doc.pendingLoot){const spot=C.findSpace(doc.state,item,'stash');if(spot)C.place(doc.state,item,'stash',spot.x,spot.y,spot.rotation);else left.push(item);}if(left.length!==doc.pendingLoot.length)doc.state.inventoryRevision=(doc.state.inventoryRevision||0)+1;doc.pendingLoot=left;}
 export function potionItem(level=1,rarity='common',rng=Math.random){const def=C.itemMap.health_potion;return {uid:crypto.randomUUID(),defId:def.id,rotation:0,rotated:false,...C.rollItem(def,level,rng,{rarity,iLvl:level,requiredLevel:1})};}
-export function healthPotionDrops(level,rng=Math.random){return C.potions.health.filter(def=>rng()<def.dropChance).map(def=>({uid:crypto.randomUUID(),defId:def.id,rotation:0,rotated:false,...C.rollItem(def,level,rng,{rarity:'common'})}));}
+export function potionDrops(level,rng=Math.random,definitions=C.potions.items){return definitions.filter(def=>rng()<def.dropChance).map(def=>({uid:crypto.randomUUID(),defId:def.id,rotation:0,rotated:false,...C.rollItem(def,level,rng,{rarity:'common'})}));}
+export function healthPotionDrops(level,rng=Math.random){return potionDrops(level,rng,C.potions.health);}
 export function loot(level,rng=Math.random){
  const count=1+Math.floor(rng()*3),drops=[];
  for(let i=0;i<count;i++){
@@ -20,10 +21,10 @@ export function loot(level,rng=Math.random){
   // Item type is independent from rarity: 85% equipment, 15% consumables.
   const category=rng()<.5?'Weapons':'Armor',pool=C.items.filter(d=>d.category===category);
   const def=rng()<.85?pool[Math.floor(rng()*pool.length)]:C.itemMap[rng()<.5?'health_potion':'mana_potion'];
-  // Percentage health drops replace the old flat-health slots; gear and mana rolls are retained.
-  if(def.id!=='health_potion')drops.push({uid:crypto.randomUUID(),defId:def.id,rotation:0,rotated:false,...C.rollItem(def,level,rng,{rarity,iLvl:level})});
+  // Each percentage potion has its own independent roll below; avoid duplicate legacy potion slots.
+  if(!C.isConsumable({defId:def.id}))drops.push({uid:crypto.randomUUID(),defId:def.id,rotation:0,rotated:false,...C.rollItem(def,level,rng,{rarity,iLvl:level})});
  }
- drops.push(...healthPotionDrops(level,rng));
+ drops.push(...potionDrops(level,rng));
  return drops;
 }
 export function recovery(doc){if(doc.recoveryGranted)return false;doc.recoveryGranted=true;doc.pendingLoot=[...(doc.pendingLoot||[]),...Array.from({length:3},()=>potionItem())];stash(doc);return true;}

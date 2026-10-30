@@ -826,13 +826,17 @@
   ['coconut_potion','Coconut Potion',2,2,60,120,.3],
   ['tuba_wine_potion','Tuba Wine Potion',2,2,80,160,.1]
  ].map(([id,name,w,h,percent,basePrice,dropChance])=>({id,type:id,name,w,h,category:'Potions',tier:1,sprite:id,bonus:[0,0,0,0,0,0],restore:{resource:'hp',percent},basePrice,dropChance}));
- const items=[...health,{id:'mana_potion',type:'mana_potion',name:'Mana Potion',w:1,h:1,category:'Potions',tier:1,sprite:'mana_potion',bonus:[0,0,0,0,0,0],restore:{resource:'mp',amount:20},basePrice:8}];
+ const family=(resource,rows)=>rows.map(([id,name],i)=>{const tier=health[i];return {...tier,id,type:id,name,sprite:id,bonus:[0,0,0,0,0,0],restore:{resource,percent:tier.restore.percent}};});
+ const mana=family('mp',[['mana_potion','Azure Dew Potion'],['sapphire_tonic','Sapphire Tonic'],['deepwell_elixir','Deepwell Elixir'],['arcane_tide','Arcane Tide Potion']]);
+ const attack=family('ap',[['cyan_spark','Cyan Spark Potion'],['volt_surge','Volt Surge Potion'],['ember_rush','Ember Rush Potion'],['violet_overdrive','Violet Overdrive Potion']]);
+ const resources={hp:{name:'Health',cap:'maxHp',state:'currentHp'},mp:{name:'Mana',cap:'maxMp',state:'currentMp'},ap:{name:'Attack Points',cap:'maxAp',state:'currentAp'}};
+ const items=[...health,...mana,...attack];
  const byId=Object.fromEntries(items.map(item=>[item.id,item]));
  const get=item=>byId[typeof item==='string'?item:item?.defId||item?.id]||null;
  const amount=(item,cap)=>{const effect=get(item)?.restore;if(!effect)throw Error('Unknown potion.');return effect.percent?Math.max(1,Math.round(cap*effect.percent/100)):effect.amount;};
- const price=(item,level=1)=>{const def=get(item);if(!def)throw Error('Unknown potion.');return def.basePrice+(def.restore.resource==='hp'?Math.max(1,Math.min(88,Math.floor(Number(level)||1))):0);};
- const describe=item=>{const effect=get(item)?.restore;return effect?(effect.percent?`Restores ${effect.percent}% of maximum Health`:`Restores ${effect.amount} mana`):'';};
- const api={items,health,get,amount,price,describe};root.RPGPotions=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
+ const price=(item,level=1)=>{const def=get(item);if(!def)throw Error('Unknown potion.');return def.basePrice+Math.max(1,Math.min(88,Math.floor(Number(level)||1)));};
+ const describe=item=>{const effect=get(item)?.restore;return effect?`Restores ${effect.percent}% of maximum ${resources[effect.resource].name}`:'';};
+ const api={items,health,mana,attack,resources,get,amount,price,describe};root.RPGPotions=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(globalThis);
 
 const attackSkills=globalThis.RPG_ATTACK_SKILLS,P=globalThis.RPGProgression,E=globalThis.RPGElements,Potions=globalThis.RPGPotions;
@@ -858,13 +862,13 @@ function gainResource(b,side,resource,amount=20){
  const gained=a[resource]-before;reportFor(b,side)[resource+'Gained']+=gained;return gained;
 }
 function potion(b,side,resource,amount=20){
- if(b.status!=='active'||b.turn!==side||b.challenge||!['hp','mp'].includes(resource))throw Error('Use a potion only on your turn, outside a harvest.');
- const actor=b.actors[side],cap=actor[resource==='hp'?'maxHp':'maxMp'];if(actor.hp<=0||actor[resource]>=cap)throw Error(resource==='hp'?'Health is already full.':'Mana is already full.');
- amount=Math.round(amount*(1+(actor.passives?.potionPower||0)/100));const restored=resource==='mp'?gainResource(b,side,'mp',amount):Math.min(amount,cap-actor.hp);if(resource==='hp')actor.hp+=restored;
+ if(b.status!=='active'||b.turn!==side||b.challenge||!Potions.resources[resource])throw Error('Use a potion only on your turn, outside a harvest.');
+ const actor=b.actors[side],cap=actor[Potions.resources[resource].cap];if(actor.hp<=0||actor[resource]>=cap)throw Error(`${Potions.resources[resource].name} is already full.`);
+ amount=Math.round(amount*(1+(actor.passives?.potionPower||0)/100));const restored=resource!=='hp'?gainResource(b,side,resource,amount):Math.min(amount,cap-actor.hp);if(resource==='hp')actor.hp+=restored;
  b.eventSeq=(b.eventSeq||0)+1;b.events=[...(b.events||[]),{id:b.eventSeq,kind:'potion',resource,side,target:side,amount:restored,hpAfter:actor.hp}].slice(-12);
- note(b,`${actor.name} used a ${resource==='hp'?'health':'mana'} potion · +${restored} ${resource.toUpperCase()} · turn ended.`);return restored;
+ note(b,`${actor.name} used a ${Potions.resources[resource].name} potion · +${restored} ${resource.toUpperCase()} · turn ended.`);return restored;
 }
-function potionFromItem(b,side,item){const def=Potions.get(item);if(!def)throw Error('Unknown potion.');const resource=def.restore.resource,cap=b.actors[side][resource==='hp'?'maxHp':'maxMp'];return potion(b,side,resource,Potions.amount(item,cap));}
+function potionFromItem(b,side,item){const def=Potions.get(item);if(!def)throw Error('Unknown potion.');const resource=def.restore.resource,cap=b.actors[side][Potions.resources[resource].cap];return potion(b,side,resource,Potions.amount(item,cap));}
 function harvestAmount(actor,resource){if(!['ap','mp'].includes(resource))throw Error('Invalid harvest resource.');return Math.max(1,Math.round(actor[resource==='ap'?'maxAp':'maxMp']*.2));}
 function harvestResult(b,side,resource,success,reason){
  const amount=success?gainResource(b,side,resource,harvestAmount(b.actors[side],resource)):0;

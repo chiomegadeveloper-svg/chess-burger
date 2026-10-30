@@ -22,7 +22,7 @@ test('four health consumables have the requested footprints, percentages, level 
   assert.deepEqual(C.size(def,1),{w:h,h:w});assert.equal(C.canPlace(state,item(id),'bag',0,0),false);
   const forged=structuredClone(state);forged.items[0].restore.percent=99;assert.equal(C.validState(forged,'rogue'),false);
  }
- assert.equal(buyPrice({defId:'mana_potion'},88),8);assert.equal(C.potions.amount('mana_potion',300),20);
+ assert.equal(buyPrice({defId:'mana_potion'},88),128);assert.equal(C.potions.amount('mana_potion',300),60);
 });
 
 test('each health drop chance has its exact boundary and rolls independently, including all four at once',()=>{
