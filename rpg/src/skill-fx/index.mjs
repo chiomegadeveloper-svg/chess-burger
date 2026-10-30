@@ -2,7 +2,9 @@ import * as PIXI from 'pixi.js-legacy';
 import CtAnimatedSprite from '../../vendor/ctjs/PixiAnimatedSprite.ts';
 import {textures} from './resources.mjs';
 
-const ATTACK_SPEED_FACTOR=.7;
+const ATTACK_SPEED_FACTOR=.35;
+// Match the bottom-aligned 3:2 landscape and CSS --fighter-ground-bottom.
+const groundY=(width,height)=>height-Math.min(height*.4,Math.max(height,width*2/3)*.16);
 const sessions=new Map(),sheetPromises=new Map();let protectedSkills=new Set();
 const skill=id=>window.RPG_ATTACK_SKILLS.find(s=>s.id===id);
 const characterSheets=new Map(),characterReady=new Map();
@@ -20,7 +22,7 @@ function character(app,data,x,facing){
  if(!data)return null;
  const actor=new PIXI.AnimatedSprite(data.frames);actor.anchor.set(.5,.5);actor.gotoAndStop(0);
  const scale=Math.min(app.screen.height*.85/232,app.screen.width*.34/232)*.45;
- actor.showPose=frame=>{actor.gotoAndStop(frame);const ratio=data.entry.idleHeight&&data.entry.frameHeights?.[frame]?data.entry.idleHeight/data.entry.frameHeights[frame]:1,sized=scale*ratio;actor.scale.set(sized*(data.entry.facing===facing?1:-1),sized);actor.position.set(app.screen.width*x,app.screen.height*.94-100*sized);};actor.showPose(0);
+ actor.showPose=frame=>{actor.gotoAndStop(frame);const ratio=data.entry.idleHeight&&data.entry.frameHeights?.[frame]?data.entry.idleHeight/data.entry.frameHeights[frame]:1,sized=scale*ratio;actor.scale.set(sized*(data.entry.facing===facing?1:-1),sized);actor.position.set(app.screen.width*x,groundY(app.screen.width,app.screen.height)-100*sized);};actor.showPose(0);
  app.stage.addChild(actor);return actor;
 }
 function sheet(group){
@@ -63,7 +65,7 @@ async function animate(host,s,options,session){
  const attacker=battle?character(app,attackerData,source,options.reverse?'left':'right'):null;
  const defender=battle&&!options.persistentFighters?character(app,defenderData,target,options.reverse?'right':'left'):null;
  if(attacker&&options.persistentFighters&&host.dataset)host.dataset.caster=options.reverse?'enemy':'hero';
- const impactY=h*.94-(defenderData?.entry.idleHeight||200)*Math.min(h*.85/232,w*.34/232)*.45/2;
+ const impactY=groundY(w,h)-(defenderData?.entry.idleHeight||200)*Math.min(h*.85/232,w*.34/232)*.45/2;
  sprite.position.set(battle?w*source:w*.5,battle?impactY:h*.48);
  const scale=window.RPGSkillFrames.fitScale(s.id,w,h,battle);
  sprite.scale.set(scale*(options.reverse?-1:1),scale);

@@ -1,0 +1,9 @@
+# Clear battle ground and slower attacks — v0.1152
+
+Fighters now stand higher on the clear path above foreground plants and rocks. The 3:2 battle landscapes align to the bottom so compact frames retain the ground instead of cropping into the sea or skyline. CSS idle, injured and death frames and the ct.js attacker/effect renderer share the same responsive ground geometry: a 16% inset from the covered landscape's bottom, bounded to 40% of the frame height on very wide frames. Sprite scale and horizontal positions retain their existing values.
+
+Attack playback runs at half the previous speed: the speed factor changes from 0.7 to 0.35, taking the standard six-frame effect from 6.3 FPS to 3.15 FPS. Normal playback is approximately 1.9 seconds. The fallback rune's travel and contact timers slow by the same factor. The completion watchdog follows the new duration (about 2.15 seconds), while asset preparation retains its 150 ms bound. Damage still waits for contact, and cancellation suppresses pending hits. Enemy thinking time and reduced-motion presentation keep their existing behavior.
+
+Validation: 14 renderer, sprite geometry and background checks and two focused battle UI checks passed. Coverage includes desktop, compact landscape and tall frame baselines, equal idle/attack scale, damage contact, one impact per attack, delayed assets, stalled tickers and cancellation. Production build passed. An isolated browser component preview used the production CSS, artwork and ct.js bundle with no account or GPS data; desktop (990×660) and compact (700×230) views showed the fighters standing on the path. The preview completed within the approximately 2.16-second watchdog envelope. This component measurement does not measure production request latency.
+
+![Higher battle positions on the clear ground](images/rpg-raised-battle-v1152.jpg)
