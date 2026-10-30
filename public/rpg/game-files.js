@@ -41,7 +41,7 @@
     if(data.type==='error'){active=false;start.disabled=false;start.textContent='Retry';status.textContent=data.error;release();return;}
     paint(data);
     if(data.type==='progress')status.textContent='Downloading · keep this window open…';
-    else{active=false;paint(data);status.textContent=data.type==='complete'?'Game files saved. They will update automatically when needed.':data.type==='cancelled'?'Paused. Saved files will be reused next time.':'Files save automatically as you play. You can download the rest now.';release();}
+    else{active=false;paint(data);status.textContent=data.type==='complete'?'Game files saved. They will update automatically when needed.':data.type==='cancelled'?'Paused. Saved files will be reused next time.':data.files===data.totalFiles&&data.totalFiles?'All game files are saved on this device.':'Files save automatically as you play. You can download the rest now.';release();}
    };
    resetTimeout();worker.postMessage({type,id:job},[channel.port2]);
   }
