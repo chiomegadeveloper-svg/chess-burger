@@ -407,6 +407,83 @@ async function transferFixture(){
  C.place(doc.state,item,'bag',0,0);return {db,item};
 }
 
+test('guild withdrawals survive a newer shared revision and remain in the personal destination after reopening',async()=>{
+ for(const destination of ['stash','bag']){
+  const {db,item}=await transferFixture();
+  const doc=[...db.rows.values()].find(r=>r.item_kind==='rpg_profile').metadata;
+  doc.state.items=doc.state.items.filter(i=>i.uid!==item.uid);
+  db.guildStashes.set('guild-a',{revision:1,items:[{...item,where:'guild',x:0,y:0}]});
+  let a=open(db);
+  try{
+   await pause();await pause();a.d.querySelector('#hr-inventory-open').click();await pause();await pause();
+   // Another member changes shared storage after this user has opened it.
+   db.guildStashes.get('guild-a').revision++;
+   a.d.querySelector('#hr-guild [data-uid="quick-transfer-item"]').click();
+   a.d.querySelector(`[data-item-action="to-${destination}"]`).click();
+   for(let i=0;i<8;i++)await pause();
+   assert.equal((await read(db,'player-a')).state.items.find(i=>i.uid===item.uid)?.where,destination);
+   assert.equal(db.guildStashes.get('guild-a').items.some(i=>i.uid===item.uid),false);
+   assert.ok(a.d.querySelector(`#hr-${destination} [data-uid="quick-transfer-item"]`));
+   assert.equal(db.guildReceipts.size,1);
+   const attempts=a.messages.filter(m=>m.body?.action==='guildTransfer');
+   assert.equal(attempts.length,2);assert.equal(attempts[0].body.requestId,attempts[1].body.requestId);
+   assert.deepEqual(attempts.map(m=>m.body.stashRevision),[1,2]);
+   a.w.RPGRoom.persist();await a.w.RPGLive.flush();
+   assert.deepEqual(a.errors,[]);
+  }finally{a.close();}
+  a=open(db);try{
+   await pause();await pause();a.d.querySelector('#hr-inventory-open').click();await pause();await pause();
+   assert.ok(a.d.querySelector(`#hr-${destination} [data-uid="quick-transfer-item"]`));
+   assert.equal(a.d.querySelector('#hr-guild [data-uid="quick-transfer-item"]'),null);
+   assert.deepEqual(a.errors,[]);
+  }finally{a.close();}
+ }
+});
+
+test('guild withdrawal retry preserves another members ownership and newly occupied personal slots',async()=>{
+ const C=(await import('../api/_rpg/src/inventory-core.js')).default;
+ for(const conflict of ['moved','occupied']){
+  const {db,item}=await transferFixture(),doc=[...db.rows.values()].find(r=>r.item_kind==='rpg_profile').metadata;
+  doc.state.items=[];db.guildStashes.set('guild-a',{revision:1,items:[{...item,where:'guild',x:0,y:0}]});
+  await gameRequest(db,'player-b','POST',{action:'register',heroId:'mage',name:'Other Member',skill:'punch'});
+  const other=[...db.rows.values()].find(r=>r.user_id==='player-b'&&r.item_kind==='rpg_profile').metadata;
+  other.state.items=[];
+  const a=open(db);try{
+   await pause();await pause();a.d.querySelector('#hr-inventory-open').click();await pause();await pause();
+   if(conflict==='moved'){
+    db.guildStashes.get('guild-a').items=[];db.guildStashes.get('guild-a').revision++;
+    assert.ok(C.place(other.state,item,'stash',0,0));
+   }else{
+    C.place(doc.state,{...item,uid:'new-owned-item'},'stash',0,0);doc.state.inventoryRevision=(doc.state.inventoryRevision||0)+1;
+   }
+   a.d.querySelector('#hr-guild [data-uid="quick-transfer-item"]').click();a.d.querySelector('[data-item-action="to-stash"]').click();
+   for(let i=0;i<8;i++)await pause();
+   assert.equal((await read(db,'player-a')).state.items.some(i=>i.uid===item.uid),false);
+   assert.equal(db.guildReceipts.size,0);
+   assert.match(a.d.querySelector('#hr-feedback').textContent,conflict==='moved'?/already moved/:/no longer available/);
+   if(conflict==='moved')assert.equal(other.state.items.filter(i=>i.uid===item.uid).length,1);
+   else{assert.equal(db.guildStashes.get('guild-a').items.filter(i=>i.uid===item.uid).length,1);assert.ok(a.d.querySelector('#hr-stash [data-uid="new-owned-item"]'));}
+   assert.deepEqual(a.errors,[]);
+  }finally{a.close();}
+ }
+});
+
+test('level-locked guild gear explains the bag requirement and can still be withdrawn to Hero Stash',async()=>{
+ const C=(await import('../api/_rpg/src/inventory-core.js')).default,{db,item}=await transferFixture();
+ const doc=[...db.rows.values()].find(r=>r.item_kind==='rpg_profile').metadata;doc.state.items=[];
+ const locked={...item,...C.rollItem(C.itemMap[item.defId],10,()=>0,{rarity:'rare',iLvl:10,requiredLevel:10}),where:'guild',x:0,y:0};
+ db.guildStashes.set('guild-a',{revision:1,items:[locked]});
+ const a=open(db);try{
+  await pause();await pause();a.d.querySelector('#hr-inventory-open').click();await pause();await pause();
+  a.d.querySelector('#hr-guild [data-uid="quick-transfer-item"]').click();a.d.querySelector('[data-item-action="to-bag"]').click();
+  assert.match(a.d.querySelector('#hr-feedback').textContent,/Reach level 10.*Hero Stash/);assert.equal(a.messages.filter(m=>m.body?.action==='guildTransfer').length,0);
+  a.d.querySelector('[data-item-action="to-stash"]').click();for(let i=0;i<6;i++)await pause();
+  assert.equal((await read(db,'player-a')).state.items.find(i=>i.uid===item.uid)?.where,'stash');
+  assert.equal((await read(db,'player-a')).state.items.find(i=>i.uid===item.uid)?.requiredLevel,10);
+  assert.equal(db.guildStashes.get('guild-a').items.length,0);assert.deepEqual(a.errors,[]);
+ }finally{a.close();}
+});
+
 test('guild transfer previews immediately without saving unconfirmed ownership, then confirms without freezing navigation or refetching the snapshot',async()=>{
  const {db,item}=await transferFixture();let release;const gate=new Promise(r=>release=r),rpc=db.rpc;db.rpc=async(name,args)=>{if(name==='cb_rpg_guild_transfer')await gate;return rpc(name,args);};
  const a=open(db);try{

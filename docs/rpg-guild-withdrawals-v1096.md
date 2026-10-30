@@ -1,0 +1,7 @@
+# Guild item withdrawals — v0.1096
+
+A guild stash revision can change after a player opens Inventory, for example when another member transfers equipment or CBG. Previously a valid withdrawal was rejected on that stale revision and the optimistic item preview returned to Guild Stash. The regression test reproduced this before the fix.
+
+On a revision conflict, item transfers now refresh the confirmed hero inventory and guild snapshot, then retry once with the same request ID and updated revisions. The retry rechecks guild membership, source ownership, destination space and equipment level. It does not apply the preview as an owned item or bypass the existing atomic database transfer. Taken items and newly occupied slots stop safely. Level-locked gear shows the required level and points to Hero Stash, which accepts storage without equipping.
+
+Verification: seven focused UI checks passed, covering ordinary transfers, both personal destinations after a stale guild snapshot, persistence through autosave and reopening, request-ID reuse, one-retry bounds, concurrent ownership changes, occupied slots, level requirements, pending previews, lost replies and delayed background reads. Eleven server/PostgreSQL checks passed for shared equipment and CBG, including atomic rollback, membership, duplicate prevention and database permissions. The production build passed. Public live health probes report the guild item and CBG functions available; no authenticated production inventory was modified for testing. No database migration is required.

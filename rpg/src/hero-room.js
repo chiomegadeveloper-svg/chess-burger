@@ -52,26 +52,47 @@
     for(const id of ['hr-explore','hi-explore','hr-back'])el(id).disabled=moving;
     renderGuildCbg();
   }
+  async function refreshTransferState(){
+    const [fresh,shared]=await Promise.all([guildApi({action:'init'}),guildApi({action:'guildStash'})]);
+    if(!fresh.game)throw Error('Reopen RPG to load your hero.');
+    Object.assign(state,fresh.game);localStorage.setItem(key(),JSON.stringify(state));
+    guildData=shared.guildStash;walletCbg=shared.walletCbg??walletCbg;
+  }
   async function guildTransfer(item,to,x,y,rotation=item.rotation){
     if(guildBusy||consumeBusy)return;if(!guildData.guild){feedback('Join a Chess Burger guild to use shared storage.');return;}
+    if(to==='bag'&&!C.canEquip(state,item)){feedback(`Reach level ${item.requiredLevel} to equip this item. You can withdraw it to Hero Stash instead.`);return;}
     const preview=previewGuildMove(item,to,x,y,rotation);if(!preview){feedback('The item does not fit there. Choose an empty area.');return;}
     const body={action:'guildTransfer',guildId:guildData.guild.id,requestId:transferId(),uid:item.uid,from:item.where,to,x,y,rotation,stashRevision:guildData.revision,inventoryRevision:state.inventoryRevision||0};
     guildEpoch++;guildPreview=preview;hideTooltip();selectedItem=null;setGuildMoving(true);
     for(const where of ['bag','stash','guild'])renderGrid(where);renderInspector();feedback('Moving item…');
     try{
       if(await window.RPGLive.flush?.()===false)throw Error('Your inventory is still saving. Reconnect and retry.');
-      const data=await guildApi(body);guildPreview=null;guildData=data.guildStash;Object.assign(state,data.game);
+      let data;
+      for(let attempt=0;attempt<2;attempt++){
+        try{data=await guildApi(body);break;}
+        catch(error){
+          if(attempt||error.status!==409||!/(?:This inventory changed|Your inventory changed|Your game changed in another window)/i.test(error.message))throw error;
+          await refreshTransferState();
+          if(guildData.guild?.id!==body.guildId)throw Error('Your guild changed. Reopen Inventory before transferring.');
+          const source=body.from==='guild'?guildData.items:state.items,current=source.find(i=>i.uid===body.uid&&i.where===body.from);
+          if(!current)throw Error('This item has already moved. Choose another item.');
+          if(to==='bag'&&!C.canEquip(state,current))throw Error(`Reach level ${current.requiredLevel} to equip this item. You can withdraw it to Hero Stash instead.`);
+          guildPreview=previewGuildMove(current,to,x,y,rotation);
+          if(!guildPreview)throw Error('That space is no longer available. Choose an empty area and retry.');
+          body.stashRevision=guildData.revision;body.inventoryRevision=state.inventoryRevision||0;
+          for(const where of ['bag','stash','guild'])renderGrid(where);renderInspector();feedback('Guild inventory updated. Retrying your transfer…');
+        }
+      }
+      guildPreview=null;guildData=data.guildStash;Object.assign(state,data.game);
       localStorage.setItem(key(),JSON.stringify(state));render();feedback(to==='guild'?'Item placed in the shared guild stash.':'Item moved to your '+(to==='bag'?'Hero Bag.':'Hero Stash.'));
     }catch(error){
       guildPreview=null;render();feedback(error.message);
       try{
-        const [fresh,shared]=await Promise.all([guildApi({action:'init'}),guildApi({action:'guildStash'})]);
-        if(fresh.game){Object.assign(state,fresh.game);localStorage.setItem(key(),JSON.stringify(state));}
-        guildData=shared.guildStash;walletCbg=shared.walletCbg??walletCbg;render();
+        await refreshTransferState();render();
       }catch{}
     }finally{guildPreview=null;setGuildMoving(false);}
   }
-  function guildDestination(to){const item=itemById(selectedItem);if(!item)return;const layout=to==='guild'?guildLayout():state,spot=C.findSpace(layout,item,to==='guild'?'stash':to);if(!spot){feedback('There is no room for this item in '+(to==='guild'?'the Guild Stash.':to==='bag'?'your Hero Bag.':'your Hero Stash.'));return;}void guildTransfer(item,to,spot.x,spot.y,spot.rotation);}
+  function guildDestination(to){const item=itemById(selectedItem);if(!item)return;if(to==='bag'&&!C.canEquip(state,item)){feedback(`Reach level ${item.requiredLevel} to equip this item. You can withdraw it to Hero Stash instead.`);return;}const layout=to==='guild'?guildLayout():state,spot=C.findSpace(layout,item,to==='guild'?'stash':to);if(!spot){feedback('There is no room for this item in '+(to==='guild'?'the Guild Stash.':to==='bag'?'your Hero Bag.':'your Hero Stash.'));return;}void guildTransfer(item,to,spot.x,spot.y,spot.rotation);}
   setInterval(()=>{if(!room.hidden&&room.dataset.view==='inventory'&&!document.hidden&&!drag)void loadGuild();},8000);
   el('hr-inventory-open').onclick=()=>showView('inventory');el('hi-hero-room').onclick=()=>showView('hero');el('hi-explore').onclick=()=>el('hr-explore').click();el('hi-guild-retry').onclick=()=>void loadGuild();
   window.addEventListener('resize',fitGrids);if(typeof ResizeObserver!=='undefined'){const observer=new ResizeObserver(fitGrids);for(const node of document.querySelectorAll('.hi-main .hr-grid-wrap'))observer.observe(node);}
