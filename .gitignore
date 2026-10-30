@@ -48,3 +48,4 @@ next-env.d.ts
 /work/
 
 /public/rpg/index.html
+/public/rpg/cache-manifest.json

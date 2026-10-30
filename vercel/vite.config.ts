@@ -18,7 +18,8 @@ export default defineConfig({
     async closeBundle() {
       await writeFile(new URL('../vercel-dist/version.json',import.meta.url),JSON.stringify({buildId,version:APP_VERSION}));
       const sw = new URL('../vercel-dist/sw.js',import.meta.url);
-      await writeFile(sw,(await readFile(sw,'utf8')).replace('__BUILD_ID__',buildId));
+      const gameFiles=await readFile(new URL('../public/rpg/cache-manifest.json',import.meta.url),'utf8');
+      await writeFile(sw,(await readFile(sw,'utf8')).replaceAll('__BUILD_ID__',buildId).replace('"__RPG_ASSET_MANIFEST__"',gameFiles));
     },
   }],
   define: {__CHESS_BURGER_BUILD_ID__: JSON.stringify(buildId)},
