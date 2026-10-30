@@ -276,7 +276,7 @@
 #bt-drops-list .bt-drop-icon{box-sizing:border-box;width:52px;height:52px;min-width:52px;min-height:52px;padding:0;overflow:visible}
 #bt-drops-list .bt-drop-icon>img{position:absolute;inset:6px;width:calc(100% - 12px);height:calc(100% - 12px);min-width:0;min-height:0;max-width:calc(100% - 12px);max-height:calc(100% - 12px);object-fit:contain}
 
-.rpg-skill-fallback{position:absolute;left:15%;top:40%;width:64px;height:64px;z-index:4;animation:bt-quick-impact .32s ease-out both;pointer-events:none}.rpg-skill-fallback img{width:100%;height:100%;object-fit:contain}.rpg-skill-fallback.reverse{left:auto;right:15%;animation-name:bt-quick-impact-reverse}@keyframes bt-quick-impact{to{left:80%;opacity:.2;scale:1.2}}@keyframes bt-quick-impact-reverse{to{right:80%;opacity:.2;scale:1.2}}
+.rpg-skill-fallback{position:absolute;left:15%;top:40%;width:64px;height:64px;z-index:4;animation:bt-quick-impact .64s ease-out both;pointer-events:none}.rpg-skill-fallback img{width:100%;height:100%;object-fit:contain}.rpg-skill-fallback.reverse{left:auto;right:15%;animation-name:bt-quick-impact-reverse}@keyframes bt-quick-impact{to{left:80%;opacity:.2;scale:1.2}}@keyframes bt-quick-impact-reverse{to{right:80%;opacity:.2;scale:1.2}}
 
 /* One tall battlefield: animated fighters replace the duplicate portrait panels. */
 .bt-playing:not(.bt-chess-mode) .bt-center{grid-template-rows:minmax(220px,1fr) auto auto auto auto}
@@ -338,7 +338,7 @@
 /* 45% of the previous fighter size, with room for future enemy formations. */
 .bt-idle-actor{left:10%;width:min(15.3cqw,38.25cqh);height:min(15.3cqw,38.25cqh)}
 .bt-idle-actor[data-side=enemy]{left:90%}
-.rpg-skill-fallback{left:10%;top:auto;bottom:8%;width:clamp(24px,8cqh,48px);height:clamp(24px,8cqh,48px);translate:-50% 0}
+.rpg-skill-fallback{left:10%;top:auto;bottom:8%;width:clamp(17px,5.6cqh,34px);height:clamp(17px,5.6cqh,34px);translate:-50% 0}
 .rpg-skill-fallback.reverse{left:auto;right:10%;translate:50% 0}
 @keyframes bt-quick-impact{to{left:90%;opacity:.2;scale:1.2}}
 @keyframes bt-quick-impact-reverse{to{right:90%;opacity:.2;scale:1.2}}

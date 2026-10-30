@@ -52,7 +52,8 @@ async function animate(host,s,options,session){
  if(session.cancelled)return;
  const {app}=session;
  const reduced=window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
- const sprite=new CtAnimatedSprite({baseClass:'AnimatedSprite',texture:s.id,anchorX:.5,anchorY:.5,loopAnimation:false,animationFPS:Math.max(18,s.animation.fps),playAnimationOnStart:false},{});
+ const fps=Math.max(18,s.animation.fps)*.5;
+ const sprite=new CtAnimatedSprite({baseClass:'AnimatedSprite',texture:s.id,anchorX:.5,anchorY:.5,loopAnimation:false,animationFPS:fps,playAnimationOnStart:false},{});
  const battle=['bt-stage','bt-fx-bar'].includes(host.id);
  const w=app.screen.width,h=app.screen.height;
  const source=options.reverse?.9:.1,target=options.reverse?.1:.9;
@@ -68,7 +69,7 @@ async function animate(host,s,options,session){
  app.stage.addChild(sprite);
  const caption=document.createElement('span');caption.className='rpg-skill-caption';caption.textContent=s.name;host.appendChild(caption);
  await new Promise(resolve=>{
-  let done=false,hit=false,watchdog;const started=performance.now(),travelMs=3000/Math.max(18,s.animation.fps);
+  let done=false,hit=false,watchdog;const started=performance.now(),travelMs=3000/fps;
   const impact=()=>{
    if(hit||session.cancelled)return;hit=true;
    if(battle)sprite.x=app.screen.width*target;
@@ -86,7 +87,7 @@ async function animate(host,s,options,session){
   const finish=()=>{if(done)return;if(!session.cancelled)impact();done=true;clearTimeout(watchdog);app.ticker.remove(update);sprite.stop();attacker?.destroy();defender?.destroy();if(host.dataset)delete host.dataset.caster;if(battle||session.cancelled){sprite.destroy();caption.remove();}else{sprite.gotoAndStop(3);app.renderer.render(app.stage);}session.finish=null;resolve();};session.finish=finish;
   const update=()=>{if(session.cancelled){finish();return;}if(battle&&!reduced){const t=Math.min(1,(performance.now()-started)/travelMs);sprite.x=app.screen.width*(source+(target-source)*t);sprite.y=impactY;}};
   if(reduced){sprite.gotoAndStop(3);attacker?.showPose(2);impact();const timer=setTimeout(finish,450);session.finish=()=>{clearTimeout(timer);finish();};}
-  else{sprite.onComplete=finish;app.ticker.add(update);sprite.gotoAndPlay(0);watchdog=setTimeout(finish,500);}
+  else{sprite.onComplete=finish;app.ticker.add(update);sprite.gotoAndPlay(0);watchdog=setTimeout(finish,Math.max(1000,s.animation.frames/fps*1000+250));}
  });
 }
 async function waitForReply(event,session){
@@ -100,7 +101,7 @@ async function waitForReply(event,session){
 async function preload(events){await Promise.allSettled(events.flatMap(e=>{const s=skill(e.skill);return [s?frames(s):null,characterFrames(e.attackerId),characterFrames(e.defenderId)];}));}
 async function fallback(host,event,session,options){
  const node=document.createElement('span');node.className='rpg-skill-fallback'+(event.reverse?' reverse':'');const image=document.createElement('img');image.src=`assets/skills/runes/${event.skill}.webp`;image.alt='';node.appendChild(image);host.appendChild(node);
- await new Promise(resolve=>{let hit=false;const impact=()=>{if(!session.cancelled&&!hit){hit=true;options.onImpact?.(event);}};const hitTimer=setTimeout(impact,180),endTimer=setTimeout(()=>{impact();finish();},320);const finish=()=>{clearTimeout(hitTimer);clearTimeout(endTimer);node.remove();session.finish=null;resolve();};session.finish=finish;});
+ await new Promise(resolve=>{let hit=false;const impact=()=>{if(!session.cancelled&&!hit){hit=true;options.onImpact?.(event);}};const hitTimer=setTimeout(impact,360),endTimer=setTimeout(()=>{impact();finish();},640);const finish=()=>{clearTimeout(hitTimer);clearTimeout(endTimer);node.remove();session.finish=null;resolve();};session.finish=finish;});
 }
 async function sequence(host,events,options={}){
  if(!host||!events.length)return;let session;
