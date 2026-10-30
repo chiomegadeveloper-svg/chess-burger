@@ -7,7 +7,7 @@ export async function writeRpgCacheManifest(){
   for(const entry of await readdir(new URL(relative,root),{withFileTypes:true})){
    const name=relative+entry.name;
    if(entry.isDirectory())await walk(name+'/');
-   else if(/\.(html|js|css|json|wasm|webp|png|svg|woff2?)$/.test(name)&&name!=='cache-manifest.json'){
+   else if(/\.(html|js|css|json|wasm|webp|png|jpe?g|svg|woff2?)$/.test(name)&&name!=='cache-manifest.json'){
     const data=await readFile(new URL(name,root));
     assets.push({path:'/rpg/'+name,bytes:data.length,revision:createHash('sha256').update(data).digest('hex')});
    }

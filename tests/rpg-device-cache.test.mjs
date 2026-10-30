@@ -55,6 +55,14 @@ test('an update reuses identical files, removes obsolete revisions and fetches c
  assert.ok(keys.every(r=>!r.url.endsWith(assets[1].revision)));
 });
 
+test('versioned RPG entry reuses the matching pack but bypasses an older worker and unrelated queries',async()=>{
+ const asset={path:'/rpg/index.html',bytes:100,revision:'e'.repeat(64)},f=worker({assets:[asset]});
+ assert.equal((await f.request('/rpg/index.html?v=0.test')).status,200);
+ assert.equal((await f.request('/rpg/index.html?v=0.test')).status,200);
+ assert.equal(f.calls.length,1);assert.match(f.calls[0],/rpg-revision=/);
+ for(const path of ['/rpg/index.html?v=0.next','/rpg/index.html?v=0.test&other=1','/rpg/index.html?other=1'])assert.equal(await f.request(path),undefined);
+});
+
 test('cache budgets evict old files and unavailable storage never prevents an online asset load',async()=>{
  const assets=records(2).map(a=>({...a,bytes:50*1024*1024})),f=worker({assets});
  for(const asset of assets)assert.equal((await f.request(asset.path)).status,200);

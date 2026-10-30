@@ -49,3 +49,4 @@ next-env.d.ts
 
 /public/rpg/index.html
 /public/rpg/cache-manifest.json
+/public/rpg/assets/embedded/

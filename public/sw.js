@@ -213,7 +213,11 @@ self.addEventListener("fetch", (event) => {
   const u = new URL(event.request.url);
   if (event.request.method !== "GET" || event.request.headers.has("authorization")) return;
   if (mapAsset(u)) {event.respondWith(mapFile(event.request, event));return;}
-  const asset = u.origin === self.location.origin && !u.search && gameAssets.get(u.pathname);
+  // A new app must bypass an older worker's HTML, while the matching worker can
+  // still serve the small RPG entry page instantly from its revision cache.
+  const currentRpgEntry = u.pathname === '/rpg/index.html' &&
+    u.searchParams.size === 1 && u.searchParams.get('v') === RPG_MANIFEST.version;
+  const asset = u.origin === self.location.origin && (!u.search || currentRpgEntry) && gameAssets.get(u.pathname);
   if (asset) {
     event.respondWith(gameFile(asset, event).catch(() => new Response("Reconnect to load this game file.", {status: 503})));
     return;

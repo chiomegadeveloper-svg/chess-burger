@@ -4,6 +4,7 @@ import './build-rpg-skill-fx.mjs';
 import './build-rpg-runes.mjs';
 import {readFile,writeFile,mkdir} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
+import {extractRpgImages} from './extract-rpg-images.mjs';
 const root=new URL('../rpg/',import.meta.url),out=new URL('../public/rpg/',import.meta.url);
 const read=path=>readFile(new URL(path,root),'utf8');
 let html=await read('src/hero-forge.html');
@@ -31,6 +32,9 @@ parts[3]=parts[3].replace('Battle Lab','Battle').replaceAll('10 m','200 m')
 html=html.replace('</body>',parts.join('\n')+'<script src="vendor/skill-frame.js"></script><script src="vendor/ctjs-skill-fx.js"></script><script src="vendor/chess.js"></script><script src="vendor/battle-core.js"></script><script src="vendor/leaflet/leaflet.js"></script><script src="vendor/leaflet/Leaflet.VectorGrid.bundled.js"></script>'+scripts.join('\n')+'</body>');
 html=html.replaceAll('{{BABAYLAN_BOOK_ICON}}','data:image/svg+xml;base64,'+Buffer.from(await read('babaylan-book.svg')).toString('base64'));
 html=html.replaceAll('RPG SANDBOX','RPG').replaceAll('SANDBOX','ADVENTURE');
-await mkdir(out,{recursive:true});await writeFile(new URL('index.html',out),html);
+await mkdir(out,{recursive:true});
+const extracted=await extractRpgImages(html,out);
+await writeFile(new URL('index.html',out),extracted.html);
+console.log(`RPG opening page: ${Buffer.byteLength(html)} → ${Buffer.byteLength(extracted.html)} bytes; ${extracted.images} images load separately.`);
 console.log('Built live Chess Burger RPG: '+fileURLToPath(new URL('index.html',out)));
 await (await import('./build-rpg-cache.mjs')).writeRpgCacheManifest();
