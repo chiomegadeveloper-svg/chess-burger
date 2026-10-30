@@ -407,6 +407,41 @@ async function transferFixture(){
  C.place(doc.state,item,'bag',0,0);return {db,item};
 }
 
+test('dragging guild gear by its lower corner into the top-left bag cell clamps the footprint and persists the withdrawal',async()=>{
+ for(const pointerType of ['mouse','touch']){
+  const {db,item}=await transferFixture(),doc=[...db.rows.values()].find(r=>r.item_kind==='rpg_profile').metadata;
+  doc.state.items=[];db.guildStashes.set('guild-a',{revision:1,items:[{...item,where:'guild',x:0,y:0}]});
+  const a=open(db);try{
+   await pause();await pause();a.d.querySelector('#hr-inventory-open').click();await pause();await pause();
+   const room=a.d.querySelector('#hr-room');room.setPointerCapture=()=>{};room.hasPointerCapture=()=>false;
+   const rect=(left,top,width,height)=>({left,top,width,height,right:left+width,bottom:top+height});
+   for(const [zone,left,width]of[['bag',0,240],['stash',300,240],['guild',600,240]]){
+    const grid=a.d.querySelector('#hr-'+zone);grid.getBoundingClientRect=()=>rect(left,0,width,240);grid.parentElement.getBoundingClientRect=()=>rect(left,0,width,240);
+   }
+   const node=a.d.querySelector('#hr-guild [data-uid="quick-transfer-item"]');node.getBoundingClientRect=()=>rect(600,0,20,40);
+   const pointer=(target,type,x,y)=>{const e=new a.w.MouseEvent(type,{bubbles:true,button:0,clientX:x,clientY:y});Object.defineProperties(e,{pointerId:{value:1},pointerType:{value:pointerType}});target.dispatchEvent(e);};
+   pointer(node,'pointerdown',610,35);pointer(room,'pointermove',5,5);
+   assert.ok(a.d.querySelector('#hr-bag .hr-placement:not(.invalid)'),'the visible preview must fit at the grid edge');
+   pointer(room,'pointerup',5,5);for(let n=0;n<6;n++)await pause();
+   const saved=(await read(db,'player-a')).state.items.find(i=>i.uid===item.uid);
+   assert.equal(saved?.where,'bag');assert.equal(saved.x,0);assert.equal(saved.y,0);assert.equal(db.guildStashes.get('guild-a').items.length,0);
+   assert.equal(db.guildReceipts.size,1);assert.deepEqual(a.errors,[]);
+  }finally{a.close();}
+ }
+});
+
+test('legacy guild potions display as consumables and withdraw without inheriting an old equipment level lock',async()=>{
+ const {db}=await transferFixture(),doc=[...db.rows.values()].find(r=>r.item_kind==='rpg_profile').metadata;
+ doc.state.items=[];db.guildStashes.set('guild-a',{revision:1,items:[{uid:'legacy-potion',defId:'health_potion',where:'guild',x:0,y:0,rotation:0,rotated:false,rarity:'common',consumable:true,restore:{hp:20},requiredLevel:10,enhancement:{stat:0,name:'Vitality',value:1}}]});
+ const a=open(db);try{
+  await pause();await pause();a.d.querySelector('#hr-inventory-open').click();await pause();await pause();
+  const node=a.d.querySelector('#hr-guild [data-uid="legacy-potion"]');assert.equal(node.classList.contains('level-locked'),false);
+  node.click();a.d.querySelector('[data-item-action="to-bag"]').click();for(let n=0;n<6;n++)await pause();
+  const item=(await read(db,'player-a')).state.items.find(i=>i.uid==='legacy-potion');assert.equal(item.where,'bag');assert.equal(item.requiredLevel,undefined);assert.equal(item.enhancement,undefined);
+  assert.equal(db.guildStashes.get('guild-a').items.length,0);assert.equal(db.guildReceipts.size,1);assert.deepEqual(a.errors,[]);
+ }finally{a.close();}
+});
+
 test('guild withdrawals survive a newer shared revision and remain in the personal destination after reopening',async()=>{
  for(const destination of ['stash','bag']){
   const {db,item}=await transferFixture();

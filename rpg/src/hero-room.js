@@ -18,7 +18,7 @@
   const canPlace=(item,where,x,y,rotation)=>where==='guild'?!!guildData.guild&&!guildBusy&&C.canPlace(guildLayout(),item,'stash',x,y,rotation):C.canPlace(state,item,where,x,y,rotation);
   function fitGrids(){if(!state)return;for(const where of ['bag','stash','guild']){const node=el('hr-'+where),wrap=node.parentElement,grid=roomGrid(where),w=wrap.clientWidth-14,h=wrap.clientHeight-14;if(w<=0||h<=0)continue;const cell=Math.min((w-2)/grid.cols,(h-2)/grid.rows),width=Math.floor(cell*grid.cols)+2;node.style.width=width+'px';node.style.height=((width-2)*grid.rows/grid.cols+2)+'px';}}
   function showView(view){hideTooltip();clearDrag();selectedItem=null;selectedSpell=null;room.dataset.view=view;feedback('');el('hr-character-page').hidden=view!=='hero';el('hr-inventory-page').hidden=view!=='inventory';el('hr-view-title').textContent=view==='hero'?'Hero Room':'Hero Inventory';room.setAttribute('aria-label',el('hr-view-title').textContent);renderInspector();fitGrids();requestAnimationFrame(fitGrids);if(view==='inventory')void loadGuild();}
-  async function guildApi(body){const response=await fetch('/api/battle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}),data=await response.json();if(!response.ok)throw Object.assign(Error(data.error||'Guild stash is unavailable.'),{status:response.status,code:data.code});return data;}
+  async function guildApi(body){const response=await fetch('/api/battle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}),data=await response.json();if(!response.ok)throw Object.assign(Error(data.error||'Guild stash is unavailable.'),{status:response.status,code:data.code});if(data.guildStash)C.normalizePotions(data.guildStash);return data;}
   function guildStatus(text,retry=false){el('hi-guild-state').hidden=!text;el('hi-guild-message').textContent=text;el('hi-guild-retry').hidden=!retry;el('hr-guild').setAttribute('aria-disabled',String(!!text));}
   async function loadGuild(){
     if(guildLoading||guildBusy||!state)return;
@@ -331,7 +331,12 @@
     if(room.dataset.view==='hero'&&drag?.kind==='item'&&C.isConsumable(itemById(drag.uid)||{})){const rect=el('hr-portrait').closest('.hr-hero-scene').getBoundingClientRect();if(x>=rect.left&&x<=rect.right&&y>=rect.top&&y<=rect.bottom)return {hero:true};}
     for(const where of ['bag','stash','guild']){
       const node=el(`hr-${where}`),r=node.getBoundingClientRect(),visible=node.parentElement.getBoundingClientRect(),grid=roomGrid(where);
-      if(x>=Math.max(r.left,visible.left)&&x<Math.min(r.right,visible.right)&&y>=Math.max(r.top,visible.top)&&y<Math.min(r.bottom,visible.bottom))return {where,x:Math.floor((x-r.left)/r.width*grid.cols)-drag.anchorX,y:Math.floor((y-r.top)/r.height*grid.rows)-drag.anchorY};
+      if(x>=Math.max(r.left,visible.left)&&x<Math.min(r.right,visible.right)&&y>=Math.max(r.top,visible.top)&&y<Math.min(r.bottom,visible.bottom)){
+        const size=C.size(C.itemMap[itemById(drag.uid).defId],drag.rotation);
+        // Keep the full footprint in the target grid even when the item was
+        // grabbed by a lower corner or moves between differently sized cells.
+        return {where,x:Math.max(0,Math.min(grid.cols-size.w,Math.floor((x-r.left)/r.width*grid.cols)-drag.anchorX)),y:Math.max(0,Math.min(grid.rows-size.h,Math.floor((y-r.top)/r.height*grid.rows)-drag.anchorY))};
+      }
     }
     return null;
   }

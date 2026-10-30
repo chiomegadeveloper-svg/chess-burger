@@ -15,6 +15,19 @@ test('read-only guild snapshots skip hero reads and writes',async()=>{
  }finally{await f.close();}
 });
 
+test('legacy guild potions withdraw atomically into either personal zone using the current consumable format',async()=>{
+ const f=await fixture();try{
+  for(const [index,to]of ['stash','bag'].entries()){
+   const old={uid:'legacy-potion-'+index,defId:'health_potion',where:'guild',x:0,y:0,rotation:0,rotated:false,rarity:'common',consumable:true,restore:{hp:20},enhancement:{stat:0,name:'Vitality',value:1}};
+   await f.db.query('insert into cb_rpg_guild_stashes(guild_id,revision,items) values($1,$2,$3) on conflict(guild_id) do update set revision=excluded.revision,items=excluded.items',[f.guild,index*2,JSON.stringify([old])]);
+   const doc=await f.load(1),result=await guildRequest(f.client,f.users[1],doc,{...f.request(doc,'guild',to,index*2),uid:old.uid});
+   const owned=result.game.items.find(i=>i.uid===old.uid);assert.equal(owned.where,to);assert.deepEqual(owned.restore,C.potions.get(owned).restore);assert.equal('enhancement' in owned,false);
+   assert.equal(result.guildStash.items.length,0);assert.equal(C.validState(result.game,doc.heroId),true);
+   assert.equal((await f.load(1)).state.items.filter(i=>i.uid===old.uid).length,1);
+  }
+ }finally{await f.close();}
+});
+
 test('members share a 12×12 stash; transfers retain exact item rolls and remove bag bonuses',async()=>{
  const f=await fixture();try{
   const before=C.totals(f.docs[0].state),deposit=f.request(f.docs[0],'bag','guild');

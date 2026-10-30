@@ -52,6 +52,9 @@ export async function guildRequest(client,user,doc,input){
  if(!Number.isInteger(input.rotation)||input.rotation<0||input.rotation>3)fail('Invalid item rotation.',400);
  const next=structuredClone(doc),items=structuredClone(stash.items),source=from==='guild'?items:next.state.items;
  const item=source.find(i=>i.uid===input.uid&&i.where===from);if(!item)fail('This item has already moved. Refresh the stash.');
+ // Shared potions can predate the current consumable catalog. Normalize only
+ // the transferred copy, then commit its migration with the ownership change.
+ C.normalizePotions({items:[item]});
  const rotation=input.rotation;
  if(to==='guild'){
   const layout=guildLayout(next.state,items);
