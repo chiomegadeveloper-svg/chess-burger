@@ -36,9 +36,9 @@ test('both characters render in the animation area and health impact waits for c
  const {win,host,sprites,apps}=await renderer();let hits=0;
  const running=win.RPGSkillFX.sequence(host,[{skill:'basic',attackerId:'rogue',defenderId:'draguu'}],{onImpact:()=>hits++});await settle();
  const effect=sprites.find(s=>s instanceof Object&&s.playing),actors=apps[0].stage.children.filter(s=>s!==effect);
- assert.equal(actors.length,2);assert.ok(actors[0].position.x<actors[1].position.x);assert.equal(hits,0);
+ assert.equal(actors.length,2);assert.equal(actors[0].position.x,60);assert.equal(actors[1].position.x,540);assert.equal(effect.position.x,60);assert.ok(effect.position.y>host.clientHeight*.7&&effect.position.y<host.clientHeight*.94);assert.equal(hits,0);
  effect.currentFrame=2;effect.onFrameChange();assert.equal(hits,0);
- effect.currentFrame=3;effect.onFrameChange();assert.equal(hits,1);assert.equal(actors[0].currentFrame,2);
+ effect.currentFrame=3;effect.onFrameChange();assert.equal(hits,1);assert.equal(effect.x,540);assert.equal(actors[0].currentFrame,2);
  effect.onComplete();await running;assert.equal(hits,1);assert.ok(actors.every(a=>a.destroyed));
 });
 test('enemy and future PvP heroes face inward; cancelling never reveals pending damage',async()=>{
@@ -55,7 +55,7 @@ test('persistent battle portraits stay in the DOM while only the attacking chara
 });
 test('every attack pose keeps the idle height and planted ground baseline',async()=>{
  const {win,host,sprites,apps}=await renderer();const running=win.RPGSkillFX.sequence(host,[{skill:'basic',attackerId:'assassin',defenderId:'windee',persistentFighters:true}],{});await settle();
- const actor=apps[0].stage.children[0],entry=window.RPG_CHARACTER_ATTACKS.assassin,scale=Math.min(120*.85/232,600*.34/232);
+ const actor=apps[0].stage.children[0],entry=window.RPG_CHARACTER_ATTACKS.assassin,scale=Math.min(120*.85/232,600*.34/232)*.45;
  for(let frame=0;frame<4;frame++){actor.showPose(frame);assert.ok(Math.abs(actor.scale.y*entry.frameHeights[frame]-scale*entry.idleHeight)<1e-8);assert.ok(Math.abs(actor.position.y+100*actor.scale.y-120*.94)<1e-8);}
  sprites.find(s=>s.playing).onComplete();await running;
 });

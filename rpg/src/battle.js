@@ -127,7 +127,7 @@
   root.classList.toggle('bt-chess-mode',ownChallenge);
   const turnLabel=el('bt-turn-label'),turnHome=ownChallenge?root.querySelector('.bt-turn'):el('bt-stage');if(turnLabel.parentElement!==turnHome){if(ownChallenge)turnHome.insertBefore(turnLabel,el('bt-turn-tools'));else turnHome.append(turnLabel);}
   const tools=el('bt-global-tools'),toolHome=battle?el('bt-own-actions'):root.querySelector('.bt-header');if(tools.parentElement!==toolHome)toolHome.appendChild(tools);const sound=el('bt-sound');if(sound&&sound.parentElement!==tools)tools.appendChild(sound);
-  const runHome=ownChallenge?el('bt-own-actions'):root.querySelector('.bt-actions');if(el('bt-run').parentElement!==runHome)runHome.prepend(el('bt-run'));
+  const runHome=ownChallenge?el('bt-own-actions'):el('bt-run-slot');if(el('bt-run').parentElement!==runHome)runHome.appendChild(el('bt-run'));
   const abandonHome=ownChallenge?el('bt-own-actions'):el('bt-challenge').querySelector('header');if(el('bt-abandon').parentElement!==abandonHome)abandonHome.prepend(el('bt-abandon'));
   el('bt-lobby').hidden=!!battle;el('bt-fight').hidden=!battle;if(!battle){el('bt-title').textContent='Battle';el('bt-clock').textContent='';return;}
   const me=battle.me??0,a={...battle.actors[me],hp:shownHp[me]??battle.actors[me].hp},enemy={...battle.actors[1-me],hp:shownHp[1-me]??battle.actors[1-me].hp},pending=battle.status==='pending',active=battle.status==='active',mine=battle.turn===me&&active,challenge=!!battle.challenge;
@@ -142,7 +142,9 @@
    image.style.setProperty('--idle-facing',useIdle&&idle.facing!==facing?-1:1);
   }
   for(const [id,actor] of [['bt-own-stats',a],['bt-enemy-stats',enemy]])el(id).innerHTML=['Health','Attack','Magic','Armor','Mana','Wisdom'].map((name,i)=>`<div><span>${name}</span><b>${actor.stats[i]}</b></div>`).join('');window.RPGWorld.refresh?.(hero,state);el('bt-bag').innerHTML=el('world-bag').innerHTML;el('bt-bag').style.aspectRatio=el('world-bag').style.aspectRatio;for(const node of el('bt-bag').querySelectorAll('[data-item-uid]')){const item=state.items.find(i=>i.uid===node.dataset.itemUid);if(C.isConsumable(item||{})){node.setAttribute('role','button');node.tabIndex=0;node.setAttribute('aria-label',`${C.itemMap[item.defId].name} · restores 20 ${item.defId==='health_potion'?'HP':'mana'} · uses your turn`);node.setAttribute('aria-disabled',String(busy||presenting||!mine||challenge));node.classList.add('bt-potion-item');}}
-  el('bt-round').textContent=`ROUND ${battle.round}`;el('bt-turn-label').textContent=(presenting||busy)?(enemyThinking?`${enemy.name} is choosing a skill…`:'Attacking…'):pending?'Challenge pending':active?(mine?'Your turn':`${enemy.name}’s turn`):battle.status==='cancelled'?'Challenge closed':'Battle complete';el('bt-mode').textContent=local?'DEVICE PRACTICE':battle.training?'ONLINE PRACTICE':battle.kind==='pvp'?'PLAYER DUEL':'MONSTER BATTLE';
+  const enemyTurn=enemyThinking||!!enemyCasting||active&&!mine;
+  root.dataset.turn=pending?'pending':!active?'finished':enemyTurn?'enemy':'hero';
+  el('bt-round').textContent=`ROUND ${battle.round}`;el('bt-turn-label').textContent=pending?'Challenge pending':active?(enemyTurn?'Enemy’s turn':'Your turn'):battle.status==='cancelled'?'Challenge closed':'Battle complete';el('bt-mode').textContent=local?'DEVICE PRACTICE':battle.training?'ONLINE PRACTICE':battle.kind==='pvp'?'PLAYER DUEL':'MONSTER BATTLE';
   el('bt-stage').hidden=ownChallenge;el('bt-challenge').hidden=!ownChallenge;el('bt-pending').hidden=!pending;
   el('bt-pending-title').textContent=me===1?`${enemy.name} challenges you.`:`Waiting for ${enemy.name}…`;el('bt-accept').hidden=me!==1;el('bt-accept').disabled=busy;el('bt-decline').disabled=busy;
   el('bt-skills').innerHTML=Array.from({length:4},(_,i)=>a.active[i]||null).map(id=>{

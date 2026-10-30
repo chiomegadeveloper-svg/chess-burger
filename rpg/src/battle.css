@@ -302,3 +302,54 @@
 .bt-idle-actor.is-health>img{image-rendering:pixelated}
 .bt-idle-actor.bt-impact-reaction{animation:bt-fighter-hit .24s ease-out}
 @keyframes bt-fighter-hit{0%{filter:brightness(1.5)}25%{translate:calc(-50% - 4px) 6.8966%}60%{translate:calc(-50% + 3px) 6.8966%}100%{translate:-50% 6.8966%}}
+
+/* Arcade turn HUD lives inside the battlefield, above the fighters. */
+.bt-playing:not(.bt-chess-mode) .bt-center{grid-template-rows:minmax(220px,1fr) auto auto auto}
+.rpg-battle.bt-playing:not(.bt-chess-mode) #bt-stage{position:absolute;inset:clamp(10px,2cqh,20px) auto auto 50%;transform:translateX(-50%);display:grid;grid-template-columns:1fr;grid-template-rows:auto auto;justify-items:center;align-content:start;gap:3px;width:max-content;max-width:calc(100% - 20px);height:auto;min-height:0;padding:0;border:0;background:none;z-index:7;pointer-events:none}
+.rpg-battle.bt-playing:not(.bt-chess-mode) #bt-round{position:static;inset:auto;transform:none;padding:3px 14px;margin:0;border:1px solid #edbb63;border-radius:3px;background:linear-gradient(135deg,#14394cf2,#092331f2);color:#ffe5a4;font:900 clamp(10px,1.6cqw,16px)/1.25 'Poppins',sans-serif;letter-spacing:.14em;text-shadow:0 2px #000;box-shadow:0 2px 0 #04151f,0 0 13px #ffb83c44;white-space:nowrap}
+.rpg-battle.bt-playing:not(.bt-chess-mode) #bt-turn-label{position:static;inset:auto;transform:none;width:auto;max-width:100%;margin:0;padding:0;border:0;border-radius:0;background:none;box-shadow:none;color:#a9f8ff;font:900 italic clamp(20px,3.6cqw,40px)/1.2 'Poppins','Arial Black',sans-serif;letter-spacing:.035em;text-align:center;text-transform:uppercase;-webkit-text-stroke:1px #102a3b;paint-order:stroke fill;text-shadow:0 2px 0 #06131f,0 4px 0 #06131f,2px 4px 0 #000c,0 0 15px #49d9f39c}
+.rpg-battle[data-turn=enemy]:not(.bt-chess-mode) #bt-turn-label{color:#ffd797;text-shadow:0 2px 0 #3f1720,0 4px 0 #3f1720,2px 4px 0 #000c,0 0 15px #ff623daa}
+
+/* Four attacks, then four aligned action slots. Opponent skills keep their own row. */
+.bt-playing:not(.bt-chess-mode) .bt-loadouts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:clamp(12px,3vw,40px);align-items:start}
+.bt-playing:not(.bt-chess-mode) .bt-loadouts>section{display:grid;grid-template-rows:auto auto auto;gap:5px;align-content:start;min-width:0}
+.bt-playing:not(.bt-chess-mode) .bt-loadouts>section>h3{grid-row:1;margin:0;font-size:clamp(8px,1vw,12px)}
+.bt-playing:not(.bt-chess-mode) .bt-loadouts>section>.bt-skills{grid-row:2;grid-template-columns:repeat(4,minmax(0,1fr))}
+.bt-playing:not(.bt-chess-mode) .bt-loadouts .bt-skill-slot,.bt-playing:not(.bt-chess-mode) .bt-loadouts .bt-empty-skill{height:clamp(36px,8dvh,76px)}
+.bt-action-slots{grid-row:3;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:clamp(5px,.7vw,12px);min-width:0}
+.bt-loadouts .bt-action-slot{position:relative;display:block;width:100%;height:clamp(36px,8dvh,76px);min-width:0;border:1px solid #557886;border-radius:9px;background:linear-gradient(145deg,#244654,#10242e);outline-offset:3px}
+.rpg-battle .bt-action-slot>button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-width:0;min-height:0;width:100%;height:100%;margin:0;padding:4px 2px;border:0;border-radius:inherit;background:none;color:#daeff2;font:800 9px/1.1 'Poppins',sans-serif;letter-spacing:.025em}
+.bt-action-slot svg{display:block;flex:none;width:clamp(18px,3.1dvh,29px);height:clamp(18px,3.1dvh,29px);pointer-events:none}
+.bt-action-slot:has(#bt-defend){border-color:#a89b62;background:linear-gradient(145deg,#3f4533,#202b24)}
+#bt-run-slot{border-color:#9d6469;background:linear-gradient(145deg,#503440,#2b202a)}
+#bt-run-slot>button{color:#ffc6b9}
+.bt-action-slot:hover,.bt-action-slot:focus-visible,.bt-action-slot:focus-within{outline:1px solid #8ce3ed;box-shadow:0 0 12px #43c5df33}
+.bt-action-slot::after{content:attr(data-tooltip);position:absolute;bottom:calc(100% + 8px);left:0;z-index:30;width:max-content;max-width:min(250px,65vw);padding:8px 10px;border:1px solid #7199a5;border-radius:7px;background:#071722f5;color:#f4e7c9;font:600 11px/1.5 'Poppins',sans-serif;box-shadow:0 4px 16px #0009;opacity:0;visibility:hidden;pointer-events:none}
+.bt-action-slot:last-child::after{left:auto;right:0}
+.bt-action-slot:hover::after,.bt-action-slot:focus-visible::after,.bt-action-slot:focus-within::after{opacity:1;visibility:visible}
+.bt-loadouts .bt-player-loadout .bt-skill-slot::after{left:0;right:auto;transform:none;max-width:min(250px,65vw)}
+.bt-loadouts .bt-opponent-loadout .bt-skill-slot::after{left:auto;right:0;transform:none;max-width:min(250px,65vw)}
+.bt-playing:not(.bt-chess-mode) .bt-side{overflow-x:hidden;overflow-y:auto}
+.bt-playing:not(.bt-chess-mode) .bt-actions:has(#bt-result:empty):has(#bt-review-report[hidden]){display:none}
+.bt-chess-mode .bt-loadouts{display:none}
+.bt-own-actions>#bt-run{display:flex;align-items:center;justify-content:center;gap:5px}
+.bt-own-actions>#bt-run svg{width:20px;height:20px;flex:none}
+
+/* 45% of the previous fighter size, with room for future enemy formations. */
+.bt-idle-actor{left:10%;width:min(15.3cqw,38.25cqh);height:min(15.3cqw,38.25cqh)}
+.bt-idle-actor[data-side=enemy]{left:90%}
+.rpg-skill-fallback{left:10%;top:auto;bottom:8%;width:clamp(24px,8cqh,48px);height:clamp(24px,8cqh,48px);translate:-50% 0}
+.rpg-skill-fallback.reverse{left:auto;right:10%;translate:50% 0}
+@keyframes bt-quick-impact{to{left:90%;opacity:.2;scale:1.2}}
+@keyframes bt-quick-impact-reverse{to{right:90%;opacity:.2;scale:1.2}}
+@media(orientation:landscape) and (max-height:540px){
+ .bt-playing:not(.bt-chess-mode) .bt-center{grid-template-rows:minmax(110px,1fr) auto auto auto;gap:4px}
+ .bt-playing:not(.bt-chess-mode) .bt-loadouts>section{gap:3px}
+ .bt-playing:not(.bt-chess-mode) .bt-loadouts .bt-skill-slot,.bt-playing:not(.bt-chess-mode) .bt-loadouts .bt-empty-skill,.bt-loadouts .bt-action-slot{height:clamp(27px,8.2dvh,40px);border-radius:5px}
+ .rpg-battle .bt-action-slot>button{gap:1px;padding:2px;font-size:6px}
+ .bt-action-slot svg{width:15px;height:15px}
+ .rpg-battle.bt-playing:not(.bt-chess-mode) #bt-stage{top:6px;gap:2px}
+ .rpg-battle.bt-playing:not(.bt-chess-mode) #bt-round{font-size:8px;padding:2px 9px}
+ .rpg-battle.bt-playing:not(.bt-chess-mode) #bt-turn-label{font-size:clamp(17px,3.6cqw,26px)}
+}
+@media(orientation:portrait){.bt-playing:not(.bt-chess-mode) .bt-center{grid-template-rows:minmax(220px,38dvh) auto auto auto}}

@@ -18,7 +18,7 @@ async function characterFrames(id){
 function character(app,data,x,facing){
  if(!data)return null;
  const actor=new PIXI.AnimatedSprite(data.frames);actor.anchor.set(.5,.5);actor.gotoAndStop(0);
- const scale=Math.min(app.screen.height*.85/232,app.screen.width*.34/232);
+ const scale=Math.min(app.screen.height*.85/232,app.screen.width*.34/232)*.45;
  actor.showPose=frame=>{actor.gotoAndStop(frame);const ratio=data.entry.idleHeight&&data.entry.frameHeights?.[frame]?data.entry.idleHeight/data.entry.frameHeights[frame]:1,sized=scale*ratio;actor.scale.set(sized*(data.entry.facing===facing?1:-1),sized);actor.position.set(app.screen.width*x,app.screen.height*.94-100*sized);};actor.showPose(0);
  app.stage.addChild(actor);return actor;
 }
@@ -55,13 +55,14 @@ async function animate(host,s,options,session){
  const sprite=new CtAnimatedSprite({baseClass:'AnimatedSprite',texture:s.id,anchorX:.5,anchorY:.5,loopAnimation:false,animationFPS:Math.max(14,s.animation.fps),playAnimationOnStart:false},{});
  const battle=['bt-stage','bt-fx-bar'].includes(host.id);
  const w=app.screen.width,h=app.screen.height;
- const source=options.reverse?.78:.22,target=options.reverse?.22:.78;
+ const source=options.reverse?.9:.1,target=options.reverse?.1:.9;
  const attackerData=characterReady.get(options.attackerId),defenderData=characterReady.get(options.defenderId);
  if(session.cancelled)return;
- const attacker=battle?character(app,attackerData,options.reverse?.8:.2,options.reverse?'left':'right'):null;
- const defender=battle&&!options.persistentFighters?character(app,defenderData,options.reverse?.2:.8,options.reverse?'right':'left'):null;
+ const attacker=battle?character(app,attackerData,source,options.reverse?'left':'right'):null;
+ const defender=battle&&!options.persistentFighters?character(app,defenderData,target,options.reverse?'right':'left'):null;
  if(attacker&&options.persistentFighters&&host.dataset)host.dataset.caster=options.reverse?'enemy':'hero';
- sprite.position.set(battle?w*source:w*.5,h*(battle?.72:.48));
+ const impactY=h*.94-(defenderData?.entry.idleHeight||200)*Math.min(h*.85/232,w*.34/232)*.45/2;
+ sprite.position.set(battle?w*source:w*.5,battle?impactY:h*.48);
  const scale=window.RPGSkillFrames.fitScale(s.id,w,h,battle);
  sprite.scale.set(scale*(options.reverse?-1:1),scale);
  app.stage.addChild(sprite);
@@ -83,7 +84,7 @@ async function animate(host,s,options,session){
   };
   sprite.onFrameChange=frameChanged;
   const finish=()=>{if(done)return;if(!session.cancelled)impact();done=true;clearTimeout(watchdog);app.ticker.remove(update);sprite.stop();attacker?.destroy();defender?.destroy();if(host.dataset)delete host.dataset.caster;if(battle||session.cancelled){sprite.destroy();caption.remove();}else{sprite.gotoAndStop(3);app.renderer.render(app.stage);}session.finish=null;resolve();};session.finish=finish;
-  const update=()=>{if(session.cancelled){finish();return;}if(battle&&!reduced){const t=Math.min(1,(performance.now()-started)/travelMs);sprite.x=app.screen.width*(source+(target-source)*t);sprite.y=app.screen.height*.72;}};
+  const update=()=>{if(session.cancelled){finish();return;}if(battle&&!reduced){const t=Math.min(1,(performance.now()-started)/travelMs);sprite.x=app.screen.width*(source+(target-source)*t);sprite.y=impactY;}};
   if(reduced){sprite.gotoAndStop(3);attacker?.showPose(2);impact();const timer=setTimeout(finish,450);session.finish=()=>{clearTimeout(timer);finish();};}
   else{sprite.onComplete=finish;app.ticker.add(update);sprite.gotoAndPlay(0);watchdog=setTimeout(finish,800);}
  });
