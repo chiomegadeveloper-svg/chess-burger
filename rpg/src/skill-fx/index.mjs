@@ -52,7 +52,7 @@ async function animate(host,s,options,session){
  if(session.cancelled)return;
  const {app}=session;
  const reduced=window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
- const sprite=new CtAnimatedSprite({baseClass:'AnimatedSprite',texture:s.id,anchorX:.5,anchorY:.5,loopAnimation:false,animationFPS:Math.max(14,s.animation.fps),playAnimationOnStart:false},{});
+ const sprite=new CtAnimatedSprite({baseClass:'AnimatedSprite',texture:s.id,anchorX:.5,anchorY:.5,loopAnimation:false,animationFPS:Math.max(18,s.animation.fps),playAnimationOnStart:false},{});
  const battle=['bt-stage','bt-fx-bar'].includes(host.id);
  const w=app.screen.width,h=app.screen.height;
  const source=options.reverse?.9:.1,target=options.reverse?.1:.9;
@@ -68,7 +68,7 @@ async function animate(host,s,options,session){
  app.stage.addChild(sprite);
  const caption=document.createElement('span');caption.className='rpg-skill-caption';caption.textContent=s.name;host.appendChild(caption);
  await new Promise(resolve=>{
-  let done=false,hit=false,watchdog;const started=performance.now(),travelMs=3000/Math.max(14,s.animation.fps);
+  let done=false,hit=false,watchdog;const started=performance.now(),travelMs=3000/Math.max(18,s.animation.fps);
   const impact=()=>{
    if(hit||session.cancelled)return;hit=true;
    if(battle)sprite.x=app.screen.width*target;
@@ -86,7 +86,7 @@ async function animate(host,s,options,session){
   const finish=()=>{if(done)return;if(!session.cancelled)impact();done=true;clearTimeout(watchdog);app.ticker.remove(update);sprite.stop();attacker?.destroy();defender?.destroy();if(host.dataset)delete host.dataset.caster;if(battle||session.cancelled){sprite.destroy();caption.remove();}else{sprite.gotoAndStop(3);app.renderer.render(app.stage);}session.finish=null;resolve();};session.finish=finish;
   const update=()=>{if(session.cancelled){finish();return;}if(battle&&!reduced){const t=Math.min(1,(performance.now()-started)/travelMs);sprite.x=app.screen.width*(source+(target-source)*t);sprite.y=impactY;}};
   if(reduced){sprite.gotoAndStop(3);attacker?.showPose(2);impact();const timer=setTimeout(finish,450);session.finish=()=>{clearTimeout(timer);finish();};}
-  else{sprite.onComplete=finish;app.ticker.add(update);sprite.gotoAndPlay(0);watchdog=setTimeout(finish,800);}
+  else{sprite.onComplete=finish;app.ticker.add(update);sprite.gotoAndPlay(0);watchdog=setTimeout(finish,500);}
  });
 }
 async function waitForReply(event,session){
@@ -105,7 +105,7 @@ async function fallback(host,event,session,options){
 async function sequence(host,events,options={}){
  if(!host||!events.length)return;let session;
  try{
-  session=stage(host);let timer;await Promise.race([preload(events),new Promise(resolve=>{timer=setTimeout(resolve,600);})]);clearTimeout(timer);
+  session=stage(host);let timer;await Promise.race([preload(events),new Promise(resolve=>{timer=setTimeout(resolve,150);})]);clearTimeout(timer);
   for(const event of events){if(session.cancelled)break;
    if(['defend','recover'].includes(event.kind)){options.onPrepare?.(event);await waitForReply(event,session);if(session.cancelled)break;options.onAction?.(event);await waitForReply({delayMs:250},session);continue;}
    const s=skill(event.skill);if(!s)continue;options.onPrepare?.(event);await waitForReply(event,session);if(session.cancelled)break;options.onAttack?.(event);

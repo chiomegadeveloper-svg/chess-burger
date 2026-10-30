@@ -2,6 +2,7 @@ import {publishRpgFeed} from './feed.mjs';
 import {chestRequest,resolveCity,recoverChests} from './chests.mjs';
 import {merchantRequest} from './merchant.mjs';
 import {guildRequest} from './guild-stash.mjs';
+import {issueOffline,publicOffline,replayOffline} from './offline.mjs';
 import {health,healthCap,mana,manaCap,normalize,loot,stash,recovery,cbgDrop} from './rewards.mjs';
 import {Chess} from 'chess.js';
 import puzzles from './puzzles.json' with {type:'json'};
@@ -53,7 +54,7 @@ export async function gameRequest(client,user,method,input={},services={}){
  const player=async (id=user)=>{const d=id===user?doc:await read(client,id);if(!d?.state)fail('This player has not chosen a hero.');const s=d.state;return {...R.profile({heroId:d.heroId,name:d.name,level:s.level,stats:C.totals(s,P.baseStats(s.level)),active:s.active,passives:C.passives(s),maxAp:C.maxAp(s)}),hp:health(s),mp:mana(s),userId:id,heroGeneration:d.generation||null};};
  const me=b=>b.actors.findIndex(a=>a.userId===user),visible=b=>R.publicBattle(b,me(b));
  const save=async (b,solvedId=null)=>{
-  b.version++;if(solvedId){doc.history=[solvedId,...doc.history.filter(id=>id!==solvedId)].slice(0,1000);}
+  b.version++;if(doc.offline?.battleId===b.id)doc.offline=null;if(solvedId){doc.history=[solvedId,...doc.history.filter(id=>id!==solvedId)].slice(0,1000);}
   if(b.kind==='pvp'){shared.state=b;shared.status=b.status;await write(client,shared.owner,'rpg_battle',b.id,shared);if(solvedId)await persist();}
   else{doc.battle=b;await persist();}
  };
@@ -64,6 +65,7 @@ export async function gameRequest(client,user,method,input={},services={}){
   return false;
  }
  async function current(){
+  if(!doc.pvpId&&doc.battle?.kind==='monster'&&doc.battle.status==='active'){if((!doc.offline||doc.offline.expiresAt<=now)&&R.timeout(doc.battle,now))await save(doc.battle);return doc.battle;}
   if(doc.pvpId){const rows=await client.from('cb_inventory_items').select('metadata').eq('item_kind','rpg_battle').eq('item_id',doc.pvpId).contains('metadata',{participants:[user]}).maybeSingle();if(rows.error)fail('Battle unavailable.',503);shared=rows.data?.metadata||null;if(shared){const b=shared.state;if(!await validShared(b))return null;if(R.timeout(b,now))await save(b);return b;}}
   const incoming=await client.from('cb_inventory_items').select('metadata').eq('item_kind','rpg_battle').contains('metadata',{participants:[user]}).in('metadata->>status',['pending','active']).gt('updated_at',new Date(now-7200000).toISOString()).limit(1).maybeSingle();if(incoming.error)fail('Battle unavailable.',503);
   if(incoming.data){shared=incoming.data.metadata;if(!await validShared(shared.state))return null;doc.pvpId=shared.state.id;await persist();if(R.timeout(shared.state,now))await save(shared.state);return shared.state;}
@@ -76,7 +78,7 @@ export async function gameRequest(client,user,method,input={},services={}){
    const xp=Math.min(P.threshold(88)-doc.state.totalXp,P.victoryXp(doc.state.level,b.actors[1].level));C.gainXp(doc.state,xp);const encounter=doc.encounters.find(e=>e.id===b.encounterId);if(encounter)encounter.consumed=true;const drops=loot(b.actors[1].level,services.rng);doc.pendingLoot=[...(doc.pendingLoot||[]),...drops];stash(doc);const cbg=cbgDrop(doc.state,services.rng||Math.random);doc.awards=[...doc.awards,{id:b.id,xp,drops,cbg}].slice(-100);await persist();
   }
   const reward=doc.awards.find(a=>a.id===b?.id);if(reward?.cbg&&!reward.cbgPaid){const paid=await client.rpc('cb_rpg_battle_reward',{p_user_id:user,p_battle_id:b.id});if(!paid.error&&paid.data)Object.assign(doc,paid.data);}
-  return {cbgReward:reward?.cbg||0,cbgPending:!!reward?.cbg&&!doc.awards.find(a=>a.id===b?.id)?.cbgPaid,game:doc.state,pendingLoot:doc.pendingLoot||[],drops:doc.awards.find(a=>a.id===b?.id)?.drops||[],battle:b?visible(b):null,progression:progression(doc,b),defeatedEncounterId:b?.kind==='monster'&&b.status==='finished'&&b.winner===me(b)&&b.endReason==='knockout'?b.encounterId:null};
+  return {cbgReward:reward?.cbg||0,cbgPending:!!reward?.cbg&&!doc.awards.find(a=>a.id===b?.id)?.cbgPaid,game:doc.state,pendingLoot:doc.pendingLoot||[],drops:doc.awards.find(a=>a.id===b?.id)?.drops||[],battle:b?visible(b):null,offline:b?.status==='active'&&doc.offline?.battleId===b.id?publicOffline(doc.offline,puzzles):null,progression:progression(doc,b),defeatedEncounterId:b?.kind==='monster'&&b.status==='finished'&&b.winner===me(b)&&b.endReason==='knockout'?b.encounterId:null};
  };
  if(['chests','openChest'].includes(input.action)){if(input.action==='openChest'){const active=await current();await result(active);if(['active','pending'].includes(active?.status))fail('Finish your battle before opening a chest.');}return chestRequest(client,user,doc,input,now,services);}
  if(['merchant','merchantBuy','merchantSell'].includes(input.action)){const active=await current();await result(active);if(['active','pending'].includes(active?.status))fail('Finish your battle before trading.');return merchantRequest(client,user,doc,input,now,services);}
@@ -123,8 +125,18 @@ export async function gameRequest(client,user,method,input={},services={}){
   else{const p=await getPresence(user),r=await client.from('cb_inventory_items').select('user_id,metadata').eq('item_kind','rpg_presence').eq('metadata->>peerId',input.target).gt('updated_at',new Date(now-30000).toISOString()).maybeSingle();if(r.error||!r.data||r.data.user_id===user)fail('This player is no longer nearby.');near(p,r.data.metadata);enemy=await player(r.data.user_id);kind='pvp';}
   const battle=R.createBattle(a,enemy,kind,now);battle.id=crypto.randomUUID();battle.encounterId=encounter?.id||null;battle.training=false;
   if(kind==='pvp'){shared={revision:0,owner:user,participants:[user,enemy.userId],status:battle.status,state:battle};await insert(client,user,'rpg_battle',battle.id,shared);doc.pvpId=battle.id;await persist();}
-  else{doc.pvpId=null;doc.selection=null;doc.battle=battle;await persist();}
+  else{doc.pvpId=null;doc.selection=null;doc.battle=battle;doc.offline=input.offline===true?issueOffline(battle,doc,puzzles,now):null;await persist();}
   return await result(battle);
+ }
+ if(input.action==='offlineFinish'){
+  if(doc.offlineReceipt?.id===input.sessionId&&doc.offlineReceipt.battleId===input.battleId)return {...await result(doc.battle?.id===input.battleId?doc.battle:null),offlineSynced:true};
+  const session=doc.offline;if(!session||session.id!==input.sessionId||session.battleId!==input.battleId||doc.battle?.id!==session.battleId||doc.battle.version!==session.baseVersion)fail('This local battle is no longer available. Reopen RPG.',409);
+  let replay;try{replay=replayOffline(session,input.commands,puzzles,now);}catch(error){fail(error.message,400);}
+  if(replay.usedPotions.some(uid=>!doc.state.items.some(i=>i.uid===uid&&i.where==='bag'&&session.potions.some(p=>p.uid===uid&&p.defId===i.defId))))fail('A battle potion is no longer owned.',409);
+  if(replay.usedPotions.length){doc.state.items=doc.state.items.filter(i=>!replay.usedPotions.includes(i.uid));doc.state.inventoryRevision=(doc.state.inventoryRevision||0)+replay.usedPotions.length;}
+  for(const id of replay.solved)doc.history=[id,...doc.history.filter(p=>p!==id)].slice(0,1000);
+  doc.battle=replay.battle;doc.offline=null;doc.offlineReceipt={id:session.id,battleId:session.battleId};await persist();
+  return {...await result(doc.battle),offlineSynced:true};
  }
  const b=await current();await settlePotions(b);if(!b)fail('No current battle.',404);const side=me(b);if(side<0)fail('This is not your battle.',403);
  if(input.action==='leave'){
@@ -158,7 +170,7 @@ export async function gameRequest(client,user,method,input={},services={}){
    R.harvestResult(b,side,'mp',false,'Puzzle missed');R.note(b,'Puzzle missed. No mana gained.');R.finishTurn(b,now);
   }else{
    c.moves.push(input.move);c.step++;
-   if(c.step>=p.moves.length||chess.isCheckmate()){R.harvestResult(b,side,'mp',true,'Puzzle solved perfectly');solvedId=p.id;R.note(b,`${a.name} solved the puzzle perfectly · +20 MP (up to cap).`);R.finishTurn(b,now);}
+   if(c.step>=p.moves.length||chess.isCheckmate()){R.harvestResult(b,side,'mp',true,'Puzzle solved perfectly');solvedId=p.id;R.note(b,`${a.name} solved the puzzle perfectly · +20% maximum MP (up to cap).`);R.finishTurn(b,now);}
    else{const reply=p.moves[c.step++];chess.move(uci(reply));c.moves.push(reply);c.fen=chess.fen();}
   }
  }else if(['chessFinish','chessSave'].includes(input.action)){
@@ -168,7 +180,7 @@ export async function gameRequest(client,user,method,input={},services={}){
   if(c.clocks){if(input.moves.length!==c.moves.length+1)fail('Submit one chess move at a time.');const turn=c.moves.length%2;c.clocks[turn]=Math.max(0,c.clocks[turn]-(now-c.clockAt));c.clockAt=now;}
   if(input.action==='chessSave'){if(chess.isGameOver())fail('Submit the completed game.');c.moves=input.moves.slice();c.fen=new Chess().fen();await save(b);return await result(b);}
   if(!chess.isGameOver())fail('Finish the chess game first.');
-  if(chess.isCheckmate()&&chess.turn()==='b'){R.harvestResult(b,side,'ap',true,'Chess victory');R.note(b,`${a.name} won the chess game · +20 AP (up to cap).`);}else{R.harvestResult(b,side,'ap',false,chess.isCheckmate()?'Chess game lost':'Chess game drawn');R.note(b,'Chess game lost or drawn. No AP gained.');}
+  if(chess.isCheckmate()&&chess.turn()==='b'){R.harvestResult(b,side,'ap',true,'Chess victory');R.note(b,`${a.name} won the chess game · +20% maximum AP (up to cap).`);}else{R.harvestResult(b,side,'ap',false,chess.isCheckmate()?'Chess game lost':'Chess game drawn');R.note(b,'Chess game lost or drawn. No AP gained.');}
   R.finishTurn(b,now);
  }else if(input.action==='abandon'){
   if(!b.challenge)fail('No harvest challenge in progress.');R.harvestResult(b,side,b.challenge.kind,false,'Harvest abandoned');R.note(b,`${a.name} abandoned the challenge. No resource gained.`);R.finishTurn(b,now);
@@ -183,6 +195,7 @@ export async function gameRequest(client,user,method,input={},services={}){
   else fail('Unknown battle action.');
   R.finishTurn(b,now);
  }
+ if(doc.offline?.battleId===b.id)doc.offline=null;
  await save(b,solvedId);
  return await result(b);
 }

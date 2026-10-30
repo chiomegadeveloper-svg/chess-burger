@@ -29,9 +29,10 @@ export function potion(b,side,resource,amount=20){
  b.eventSeq=(b.eventSeq||0)+1;b.events=[...(b.events||[]),{id:b.eventSeq,kind:'potion',resource,side,target:side,amount:restored,hpAfter:actor.hp}].slice(-12);
  note(b,`${actor.name} used a ${resource==='hp'?'health':'mana'} potion · +${restored} ${resource.toUpperCase()} · turn ended.`);return restored;
 }
+export function harvestAmount(actor,resource){if(!['ap','mp'].includes(resource))throw Error('Invalid harvest resource.');return Math.max(1,Math.round(actor[resource==='ap'?'maxAp':'maxMp']*.2));}
 export function harvestResult(b,side,resource,success,reason){
- const amount=success?gainResource(b,side,resource):0;
- b.harvestResult={id:(b.harvestResult?.id||0)+1,side,resource,success,amount,reason};
+ const amount=success?gainResource(b,side,resource,harvestAmount(b.actors[side],resource)):0;
+ b.harvestResult={id:(b.harvestResult?.id||0)+1,side,resource,success,amount,requested:harvestAmount(b.actors[side],resource),reason};
  return amount;
 }
 export function battleSummary(b,side=0){

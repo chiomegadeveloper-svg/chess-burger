@@ -847,9 +847,10 @@ function potion(b,side,resource,amount=20){
  b.eventSeq=(b.eventSeq||0)+1;b.events=[...(b.events||[]),{id:b.eventSeq,kind:'potion',resource,side,target:side,amount:restored,hpAfter:actor.hp}].slice(-12);
  note(b,`${actor.name} used a ${resource==='hp'?'health':'mana'} potion · +${restored} ${resource.toUpperCase()} · turn ended.`);return restored;
 }
+function harvestAmount(actor,resource){if(!['ap','mp'].includes(resource))throw Error('Invalid harvest resource.');return Math.max(1,Math.round(actor[resource==='ap'?'maxAp':'maxMp']*.2));}
 function harvestResult(b,side,resource,success,reason){
- const amount=success?gainResource(b,side,resource):0;
- b.harvestResult={id:(b.harvestResult?.id||0)+1,side,resource,success,amount,reason};
+ const amount=success?gainResource(b,side,resource,harvestAmount(b.actors[side],resource)):0;
+ b.harvestResult={id:(b.harvestResult?.id||0)+1,side,resource,success,amount,requested:harvestAmount(b.actors[side],resource),reason};
  return amount;
 }
 function battleSummary(b,side=0){
@@ -889,4 +890,4 @@ function timeout(b,now=Date.now()){
 }
 function publicBattle(b,me){if(!b)return null;const c=b.challenge;return {...b,me,actors:b.actors.map(a=>{const {userId,...visible}=a;return visible;}),challenge:c?{kind:c.kind,side:c.side,clocks:c.clocks,clockAt:c.clockAt,...(c.side===me?{fen:c.fen,moves:c.moves||[],elo:c.elo,puzzleId:c.puzzleId,rating:c.rating,pool:c.pool}:{} )}:null};}
 
-globalThis.RPGBattleRules={damageFor,SKILLS,MONSTERS,profile,monster,createBattle,usable,attack,advance,enemyTurn,finishTurn,defend,timeout,note,endBattle,gainResource,harvestResult,potion,battleSummary,publicBattle};})();
+globalThis.RPGBattleRules={damageFor,SKILLS,MONSTERS,profile,monster,createBattle,usable,attack,advance,enemyTurn,finishTurn,defend,timeout,note,endBattle,gainResource,harvestAmount,harvestResult,potion,battleSummary,publicBattle};})();
