@@ -8,9 +8,9 @@ import * as R from '../api/_rpg/core.mjs';
 import {gameRequest} from '../api/_rpg/service.mjs';
 import {database} from './helpers/rpg-db.mjs';
 
-test('all levels from hero minus one through plus twenty are eligible, bounded to 1–88 without cap pileups',()=>{
- for(const level of [1,6,10,68,80,88]){
-  const min=Math.max(1,level-1),max=Math.min(88,level+20),span=max-min+1;
+test('all levels from hero minus one through plus thirty are eligible, bounded to 1–88 without cap pileups',()=>{
+ for(const level of [1,6,10,58,68,80,88]){
+  const min=Math.max(1,level-1),max=Math.min(88,level+30),span=max-min+1;
   for(let slot=0;slot<span;slot++){
    const values=Layout.levels(level,()=>(slot+.5)/span);
    assert.equal(values.length,16);assert.ok(values.every(n=>n===min+slot));

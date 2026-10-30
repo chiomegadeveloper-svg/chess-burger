@@ -64,7 +64,7 @@ test('fresh Explorer sets reserve 35% of road monsters inside 200m, rounded to s
   const batch=Layout.create(at,10,[{id:'mhakiduk'}],1700000000000+seed,points),near=batch.filter(e=>distanceMeters(at,e)<=200);
   assert.equal(batch.length,16);assert.equal(near.length,6);
   assert.equal(new Set(batch.map(e=>`${e.lat},${e.lng}`)).size,16);assert.ok(batch.every(e=>points.some(p=>p.lat===e.lat&&p.lng===e.lng)));
-  assert.ok(batch.every(e=>distanceMeters(at,e)<=800));assert.ok(batch.every(e=>e.level>=9&&e.level<=30));
+  assert.ok(batch.every(e=>distanceMeters(at,e)<=800));assert.ok(batch.every(e=>e.level>=9&&e.level<=40));
  }
  const db=database(),call=input=>gameRequest(db,'a','POST',input,{roadPoints:async()=>points});await call({action:'register',heroId:'rogue',name:'Nearby Warrior',skill:'punch'});
  const row=[...db.rows.values()].find(r=>r.item_kind==='rpg_profile');row.metadata.monsterSet={version:4,cityId:null,radius:800,refreshAt:Date.now()+1800000};row.metadata.encounters=[{id:'old-set',lat:at.lat,lng:at.lng,expires_at:Date.now()+1800000}];
