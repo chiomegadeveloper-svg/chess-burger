@@ -1,6 +1,7 @@
 import * as PIXI from 'pixi.js-legacy';
 import CtAnimatedSprite from '../../vendor/ctjs/PixiAnimatedSprite.ts';
 import {textures} from './resources.mjs';
+import geometry from './frame-geometry.json';
 
 const ATTACK_SPEED_FACTOR=.35;
 // Match the bottom-aligned 3:2 landscape and CSS --fighter-ground-bottom.
@@ -25,16 +26,17 @@ function character(app,data,x,facing){
  actor.showPose=frame=>{actor.gotoAndStop(frame);const ratio=data.entry.idleHeight&&data.entry.frameHeights?.[frame]?data.entry.idleHeight/data.entry.frameHeights[frame]:1,sized=scale*ratio;actor.scale.set(sized*(data.entry.facing===facing?1:-1),sized);actor.position.set(app.screen.width*x,groundY(app.screen.width,app.screen.height)-100*sized);};actor.showPose(0);
  app.stage.addChild(actor);return actor;
 }
-function sheet(group){
- if(!sheetPromises.has(group))sheetPromises.set(group,new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>resolve(PIXI.Texture.from(image));image.onerror=()=>reject(Error('Skill sheet could not load.'));image.src=`assets/skills/sources/${group}.png`;}).catch(e=>{sheetPromises.delete(group);throw e;}));
- return sheetPromises.get(group);
+function sheet(id){
+ if(!sheetPromises.has(id))sheetPromises.set(id,new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>resolve(PIXI.Texture.from(image));image.onerror=()=>reject(Error('Skill sheet could not load.'));image.src=`assets/skills/frames/${id}.webp`;}).catch(e=>{sheetPromises.delete(id);throw e;}));
+ return sheetPromises.get(id);
 }
 async function frames(s){
  if(textures.has(s.id)){const cached=textures.get(s.id);textures.delete(s.id);textures.set(s.id,cached);return;}
- const base=await sheet(s.category);if(textures.has(s.id))return;const image=base.baseTexture.resource.source;
- const list=Array.from({length:s.animation.frames},(_,i)=>PIXI.Texture.from(window.RPGSkillFrames.frame(image,i,s.animation.row,s.id)));
+ const base=await sheet(s.id);if(textures.has(s.id))return;
+ const list=Array.from({length:s.animation.frames},(_,i)=>new PIXI.Texture(base.baseTexture,new PIXI.Rectangle(i*512,0,512,512)));
+ window.RPGSkillFrames.register(s.id,geometry[s.id]);
  for(const frame of list)frame.defaultAnchor.set(.5,.5);
- textures.set(s.id,list);for(const [id,cached] of textures){if(textures.size<=10)break;if(id!==s.id&&!protectedSkills.has(id)){for(const frame of cached)frame.destroy(true);textures.delete(id);}}
+ textures.set(s.id,list);for(const [id,cached] of textures){if(textures.size<=10)break;if(id!==s.id&&!protectedSkills.has(id)){const base=cached[0]?.baseTexture;for(const frame of cached)frame.destroy(false);base?.destroy();textures.delete(id);sheetPromises.delete(id);}}
 }
 function stop(host){
  if(host.dataset)delete host.dataset.caster;
@@ -57,6 +59,7 @@ async function animate(host,s,options,session){
  const reduced=window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
  const fps=Math.max(18,s.animation.fps)*.5*ATTACK_SPEED_FACTOR;
  const sprite=new CtAnimatedSprite({baseClass:'AnimatedSprite',texture:s.id,anchorX:.5,anchorY:.5,loopAnimation:false,animationFPS:fps,playAnimationOnStart:false},{});
+ sprite.anchor.set(.5,.5);
  const battle=['bt-stage','bt-fx-bar'].includes(host.id);
  const w=app.screen.width,h=app.screen.height;
  const source=options.reverse?.9:.1,target=options.reverse?.1:.9;
@@ -66,8 +69,8 @@ async function animate(host,s,options,session){
  const defender=battle&&!options.persistentFighters?character(app,defenderData,target,options.reverse?'right':'left'):null;
  if(attacker&&options.persistentFighters&&host.dataset)host.dataset.caster=options.reverse?'enemy':'hero';
  const impactY=groundY(w,h)-(defenderData?.entry.idleHeight||200)*Math.min(h*.85/232,w*.34/232)*.45/2;
- sprite.position.set(battle?w*source:w*.5,battle?impactY:h*.48);
- const scale=window.RPGSkillFrames.fitScale(s.id,w,h,battle);
+ sprite.position.set(battle?w*source:w*.5,battle?impactY:h*.5);
+ const scale=window.RPGSkillFrames.fitScale(s.id,w,h,battle,{x:battle?w*Math.min(source,target):w*.5,y:battle?impactY:h*.5});
  sprite.scale.set(scale*(options.reverse?-1:1),scale);
  app.stage.addChild(sprite);
  const caption=document.createElement('span');caption.className='rpg-skill-caption';caption.textContent=s.name;host.appendChild(caption);

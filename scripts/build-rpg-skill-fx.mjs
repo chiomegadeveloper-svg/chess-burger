@@ -1,3 +1,4 @@
+import './build-rpg-skill-frames.mjs';
 import {build} from 'esbuild';
 import {fileURLToPath} from 'node:url';
 const path=file=>fileURLToPath(new URL('../'+file,import.meta.url));

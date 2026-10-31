@@ -21,7 +21,7 @@
   const counts={normal:0,cola:0};if(mode==='potion')for(const item of items)counts[item.defId===families[family][0].id?'normal':'cola']+=C.quantity(item);
   const req=recipes[recipe],ready=mode==='gear'?selected.length>=2:counts.normal>=req.normal&&counts.cola>=req.cola;
   const fee=C.forgeCost(mode==='gear'?selected.length:req.normal+req.cola);
-  q('[data-note]').textContent=(mode==='gear'?'38% success · Failed attempts keep all ingredients.':`${counts.normal} Normal · ${counts.cola} Cola available.`)+` ${fee} CBG per attempt.`+(walletBalance===null?'':` Balance: ${walletBalance} CBG.`);
+  q('[data-note]').textContent=(mode==='gear'?'Merging may fail. Failed attempts keep all ingredients.':`${counts.normal} Normal · ${counts.cola} Cola available.`)+` ${fee} CBG per attempt.`+(walletBalance===null?'':` Balance: ${walletBalance} CBG.`);
   q('[data-forge]').disabled=busy||!ready||walletBalance!==null&&walletBalance<fee;q('[data-forge]').textContent=busy?'Merging…':`${mode==='gear'?'Forge':'Merge potions'} · ${fee} CBG`;
   for(const node of dialog.querySelectorAll('select,[data-close]'))node.disabled=busy;
  }
