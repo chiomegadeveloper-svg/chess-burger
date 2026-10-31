@@ -845,7 +845,7 @@ const SKILLS=Object.fromEntries(attackSkills.map(s=>[s.id,s]));
 const MONSTERS=[['chaanack','Chaanack'],['erpack','Erpack'],['donkuber','Donkuber'],['windee','Windee'],['kalaagg','Kalaagg'],['pektu','Pektu'],['mhakiduk','Mhakiduk'],['odeksa','Odeksa'],['buhokba','Buhokba'],['muraduk','Muraduk'],['punsuck','Punsuck'],['conchita','Conchita'],['jengot','Jengot'],['draguu','Draguu'],['baluu','Baluu'],['kassag','Kassag']].map(([id,name],i)=>({id,name,boss:i>=10}));
 function profile(input){
  if(!input||!['rogue','theft','assassin','mage','tank','archer','queen','crusader'].includes(input.heroId)||typeof input.name!=='string'||input.name.trim().length<2||input.name.length>32||!Number.isInteger(input.level)||input.level<1||input.level>88||!Array.isArray(input.stats)||input.stats.length!==6||input.stats.some(n=>!Number.isInteger(n)||n<4||n>5000)||!Array.isArray(input.active)||input.active.length!==4||input.active.some(id=>id!==null&&!SKILLS[id])||new Set(input.active.filter(Boolean)).size!==input.active.filter(Boolean).length)throw Error('Invalid sandbox hero loadout.');
- const stats=input.stats.slice();return {heroId:input.heroId,name:input.name.trim(),level:input.level,stats,active:input.active.filter(Boolean),hp:stats[0],maxHp:stats[0],mp:stats[4],maxMp:stats[4],passives:input.passives||{},ap:input.maxAp||P.maxAp(input.level),maxAp:input.maxAp||P.maxAp(input.level),turns:0,ready:{},defending:false};
+ const stats=input.stats.slice();return {heroId:input.heroId,name:input.name.trim(),level:input.level,stats,active:input.active.filter(Boolean),hp:stats[0],maxHp:stats[0],mp:stats[4],maxMp:stats[4],passives:{...(input.passives||{})},ap:input.maxAp||P.maxAp(input.level),maxAp:input.maxAp||P.maxAp(input.level),turns:0,ready:{},defending:false};
 }
 const monsterLoadouts=[['basic','punch','ember'],['basic','hammer_crash','stone_shard'],['basic','piercing_thrust','gust'],['basic','thorn_burst','tidal_orb'],['basic','crescent_slash','frost_lance'],['basic','ember','volt_dart'],['basic','frost_lance','crystal_crush'],['basic','wind_blade','thunder_lash'],['basic','punch','gale_burst'],['basic','air_lance','spark'],['basic','earthbreaker','crystal_crush','thorn_burst'],['basic','flame_slash','inferno','phoenix_flare'],['basic','cyclone','tempest','gale_burst'],['basic','fireball','lightning','thunderstorm'],['basic','meteor_fist','chain_surge','hammer_crash'],['basic','scorch_lance','thunder_lash','tidal_orb']];
 function monsterLoadout(id,level){return monsterLoadouts[MONSTERS.findIndex(m=>m.id===id)].filter(skill=>skill==='basic'||SKILLS[skill].animation.row<=Math.floor(level/2));}
@@ -868,7 +868,24 @@ function potion(b,side,resource,amount=20){
  b.eventSeq=(b.eventSeq||0)+1;b.events=[...(b.events||[]),{id:b.eventSeq,kind:'potion',resource,side,target:side,amount:restored,hpAfter:actor.hp}].slice(-12);
  note(b,`${actor.name} used a ${Potions.resources[resource].name} potion · +${restored} ${resource.toUpperCase()} · turn ended.`);return restored;
 }
-function potionFromItem(b,side,item){const def=Potions.get(item);if(!def)throw Error('Unknown potion.');const resource=def.restore.resource,cap=b.actors[side][Potions.resources[resource].cap];return potion(b,side,resource,Potions.amount(item,cap));}
+function potionFromItem(b,side,item){
+ const def=Potions.get(item);if(!def)throw Error('Unknown potion.');const actor=b.actors[side],resource=def.restore.resource,cap=actor[Potions.resources[resource].cap];
+ const restored=potion(b,side,resource,Potions.amount(item,cap));
+ for(const effect of Array.isArray(item?.forged?.restores)?item.forged.restores:[]){
+  const info=Potions.resources[effect.resource];if(!info||!Number.isFinite(effect.percent)||effect.percent<2||effect.percent>8)continue;
+  const amount=Math.min(Math.max(0,actor[info.cap]-actor[effect.resource]),Math.max(1,Math.round(actor[info.cap]*effect.percent/100)));
+  if(effect.resource==='hp')actor.hp+=amount;else gainResource(b,side,effect.resource,amount);
+  recordAction(b,{kind:'potion',forged:true,resource:effect.resource,side,target:side,amount,hpAfter:actor.hp});
+  note(b,`${actor.name}'s forged potion restores +${amount} ${effect.resource.toUpperCase()}.`);
+ }
+ for(const effect of Array.isArray(item?.forged?.curses)?item.forged.curses:[]){
+  const key=curseKeys[effect.id];if(!key||!Number.isFinite(effect.value)||effect.value<2||effect.value>8)continue;
+  actor.passives={...(actor.passives||{}),[key]:Math.min(20,cursePercent(actor,key)+effect.value)};
+  recordAction(b,{kind:'curse',curse:effect.id,applied:true,side,target:side,percent:actor.passives[key],amount:0,hpAfter:actor.hp});
+  note(b,`${actor.name} gains ${effect.id} curse for this battle · ${actor.passives[key]}%.`);
+ }
+ return restored;
+}
 function harvestAmount(actor,resource){if(!['ap','mp'].includes(resource))throw Error('Invalid harvest resource.');return Math.max(1,Math.round(actor[resource==='ap'?'maxAp':'maxMp']*.2));}
 function harvestResult(b,side,resource,success,reason){
  const amount=success?gainResource(b,side,resource,harvestAmount(b.actors[side],resource)):0;
@@ -880,7 +897,7 @@ function battleSummary(b,side=0){
  return {winner:b.winner===side,reason:b.endReason||'unknown',rounds:b.round,durationMs:Number.isFinite(b.startedAt)&&Number.isFinite(b.endedAt)?Math.max(0,b.endedAt-b.startedAt):null,complete:b.report?.complete===true,
   actors:[side,1-side].map(i=>{const a=b.actors[i],r=b.report?.actors[i];return {name:a.name,heroId:a.heroId,level:a.level,hp:a.hp,maxHp:a.maxHp,ap:a.ap,mp:a.mp,stats:r?{damage:r.damage,damageTaken:b.report?.actors[1-i]?.damage??null,attacks:r.attacks,apSpent:r.apSpent,mpSpent:r.mpSpent,apGained:r.apGained,mpGained:r.mpGained,defends:r.defends}:null,skills:r?Object.entries(r.skills).map(([id,v])=>({id,name:SKILLS[id]?.name||id,...v})):[]};})};
 }
-function createBattle(a,b,kind='monster',now=Date.now()){a.turns=1;return {startedAt:kind==='pvp'?null:now,endedAt:null,endReason:null,report:{complete:true,actors:[emptyReport(),emptyReport()]},kind,status:kind==='pvp'?'pending':'active',actors:[a,b],turn:0,round:1,ply:0,version:0,battleEndsAt:kind==='pvp'?null:now+300000,deadline:now+(kind==='pvp'?60000:300000),events:[],eventSeq:0,log:['Battle ready. Equipment and skills are locked for this encounter.'],challenge:null,winner:null};}
+function createBattle(a,b,kind='monster',now=Date.now()){a.turns=1;const battle={startedAt:kind==='pvp'?null:now,endedAt:null,endReason:null,report:{complete:true,actors:[emptyReport(),emptyReport()]},kind,status:kind==='pvp'?'pending':'active',actors:[a,b],turn:0,round:1,ply:0,version:0,battleEndsAt:kind==='pvp'?null:now+300000,deadline:now+(kind==='pvp'?60000:300000),events:[],eventSeq:0,log:['Battle ready. Equipment and skills are locked for this encounter.'],challenge:null,winner:null};if(battle.status==='active')beginTurn(battle,now);return battle;}
 function note(b,s){b.log.push(s);b.log=b.log.slice(-30);}
 function usable(b,side,id){const a=b.actors[side],s=SKILLS[id];return b.status==='active'&&b.turn===side&&!b.challenge&&s&&a.active.includes(id)&&a.ap>=s.ap&&a.mp>=s.mp&&(a.ready[id]||0)<=a.turns;}
 function monsterGapMultiplier(a,d){
@@ -890,11 +907,35 @@ function monsterGapMultiplier(a,d){
 }
 function damageFor(a,d,s,againstMonster=false){let damage=Math.max(1,Math.round(a.stats[s.magic?2:1]*s.scale+2-d.stats[3]*.15));const p=a.passives||{},r=d.passives||{};damage=Math.max(1,Math.round(damage*(1+(p[s.magic?'magicDamage':'physicalDamage']||0)/100)*(1+(againstMonster?(p.monsterDamage||0):0)/100)*(1-(r.damageReduction||0)/100)*E.attackInfo(a,d,s).multiplier));damage=Math.max(1,Math.round(damage*monsterGapMultiplier(a,d)));return d.defending?Math.max(1,Math.ceil(damage/2)):damage;}
 function attack(b,side,id,now=Date.now()){if(!usable(b,side,id))throw Error('Skill unavailable: check AP, mana, cooldown, and whose turn it is.');const a=b.actors[side],d=b.actors[1-side],s=SKILLS[id];a.ap-=s.ap;a.mp-=s.mp;a.ready[id]=a.turns+s.cooldown+1;const elemental=E.attackInfo(a,d,s);const damage=damageFor(a,d,s,b.kind==='monster'&&side===0);const hpBefore=d.hp,effective=Math.min(d.hp,damage);d.hp=Math.max(0,d.hp-damage);const r=reportFor(b,side);r.damage+=effective;r.attacks++;r.apSpent+=s.ap;r.mpSpent+=s.mp;const use=r.skills[id]||(r.skills[id]={uses:0,damage:0});use.uses++;use.damage+=effective;b.eventSeq=(b.eventSeq||0)+1;b.events=[...(b.events||[]),{id:b.eventSeq,skill:id,side,target:1-side,damage,hpBefore,hpAfter:d.hp,element:elemental.element,effectiveness:elemental.label}].slice(-12);note(b,`${a.name} used ${s.name} · ${damage} damage · ${elemental.label}.`);if(d.hp===0){endBattle(b,side,'knockout',now);note(b,`${a.name} wins.`);}return damage;}
+const curseKeys={lifeDrain:'curseLifeDrain',poison:'cursePoison',manaDrain:'curseManaDrain',skip:'curseSkip'};
+function cursePercent(actor,key){const value=actor.passives?.[key];return Number.isFinite(value)?Math.max(0,Math.min(20,value)):0;}
+// Turn-entry effects use only saved battle state, so server and offline replay agree.
+function beginTurn(b,now=Date.now()){
+ if(b.status!=='active'||b.curseTurnPly===b.ply)return false;
+ b.curseTurnPly=b.ply;
+ const side=b.turn,a=b.actors[side];
+ for(const curse of ['lifeDrain','poison','manaDrain']){
+  const percent=cursePercent(a,curseKeys[curse]);if(!percent)continue;
+  const resource=curse==='manaDrain'?'mp':'hp',cap=resource==='mp'?a.maxMp:a.maxHp,amount=Math.min(a[resource],Math.max(1,Math.round(cap*percent/100)));
+  a[resource]=Math.max(0,a[resource]-amount);recordAction(b,{kind:'curse',curse,resource,side,target:side,percent,amount,damage:resource==='hp'?amount:0,hpAfter:a.hp});
+  note(b,`${a.name} suffers ${curse} · −${amount} ${resource.toUpperCase()}.`);
+  if(a.hp===0){endBattle(b,1-side,'knockout',now);note(b,`${b.actors[1-side].name} wins.`);return false;}
+ }
+ const percent=cursePercent(a,'curseSkip');if(!percent)return false;
+ a.curseSkipProgress=(Number.isFinite(a.curseSkipProgress)?a.curseSkipProgress:0)+percent;
+ if(a.curseSkipProgress<100)return false;
+ a.curseSkipProgress-=100;recordAction(b,{kind:'curse',curse:'skip',side,target:side,percent,amount:0,hpAfter:a.hp});note(b,`${a.name}'s curse skips this turn.`);return true;
+}
 function advance(b,now=Date.now()){
- if(b.status!=='active')return;b.challenge=null;b.ply++;b.turn=1-b.turn;b.round=Math.floor(b.ply/2)+1;const a=b.actors[b.turn];a.turns++;a.defending=false;b.deadline=now+(b.kind==='pvp'?90000:1800000);
+ if(b.status!=='active')return;
+ let skipped;do{
+  b.challenge=null;b.ply++;b.turn=1-b.turn;b.round=Math.floor(b.ply/2)+1;const a=b.actors[b.turn];a.turns++;a.defending=false;b.deadline=now+(b.kind==='pvp'?90000:1800000);
+  skipped=beginTurn(b,now);
+ }while(b.status==='active'&&skipped);
 }
 function enemyTurn(b,now=Date.now()){
  if(b.status!=='active'||b.turn!==1||b.kind==='pvp')return;
+ while(b.status==='active'&&b.turn===1){
  const a=b.actors[1],target=b.actors[0],available=a.active.filter(id=>usable(b,1,id));
  const estimate=id=>damageFor(a,target,SKILLS[id]);
  const lethal=available.find(id=>estimate(id)>=target.hp);
@@ -904,6 +945,7 @@ function enemyTurn(b,now=Date.now()){
   else defend(b,1);
  }else{const choices=available.sort((x,y)=>estimate(y)-estimate(x)),id=choices[a.turns%Math.min(2,choices.length)];attack(b,1,id,now);}
  advance(b,now);
+ }
 }
 function finishTurn(b,now=Date.now()){advance(b,now);enemyTurn(b,now);}
 function recordAction(b,event){b.eventSeq=(b.eventSeq||0)+1;b.events=[...(b.events||[]),{id:b.eventSeq,...event}].slice(-12);}
@@ -917,4 +959,4 @@ function timeout(b,now=Date.now()){
 }
 function publicBattle(b,me){if(!b)return null;const c=b.challenge;return {...b,me,actors:b.actors.map(a=>{const {userId,...visible}=a;return visible;}),challenge:c?{kind:c.kind,side:c.side,clocks:c.clocks,clockAt:c.clockAt,...(c.side===me?{fen:c.fen,moves:c.moves||[],elo:c.elo,puzzleId:c.puzzleId,rating:c.rating,pool:c.pool}:{} )}:null};}
 
-globalThis.RPGBattleRules={damageFor,SKILLS,MONSTERS,profile,monster,createBattle,usable,attack,advance,enemyTurn,finishTurn,defend,timeout,note,endBattle,gainResource,harvestAmount,harvestResult,potion,potionFromItem,battleSummary,publicBattle};})();
+globalThis.RPGBattleRules={beginTurn,damageFor,SKILLS,MONSTERS,profile,monster,createBattle,usable,attack,advance,enemyTurn,finishTurn,defend,timeout,note,endBattle,gainResource,harvestAmount,harvestResult,potion,potionFromItem,battleSummary,publicBattle};})();

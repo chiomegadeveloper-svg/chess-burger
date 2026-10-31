@@ -16,7 +16,7 @@
  function enableOffline(data){
   if(window.RPGOfflineCombatEnabled===false||data.battle?.kind!=='monster')return false;
   try{const saved=window.RPGOfflineCombat.resume(hero.id);if(data.offline)offline=window.RPGOfflineCombat.open(data.offline,data.battle,hero.id);else if(saved?.battle.status==='finished'&&saved.battle.id===data.battle.id)offline=saved;else return false;
-   battle=offline.battle;state.items=state.items.filter(i=>!offline.usedPotions.includes(i.uid));syncLabel(battle.status==='active'?'Local battle · autosaved':'Saving result…');if(battle.status==='finished')void syncOffline();return true;
+   battle=offline.battle;for(const p of offline.potions||[]){const item=state.items.find(i=>i.uid===p.uid);if(!item)continue;const remaining=(p.quantity??1)-offline.usedPotions.filter(uid=>uid===p.uid).length;if(remaining>0)item.quantity=remaining;else state.items=state.items.filter(i=>i.uid!==p.uid);}syncLabel(battle.status==='active'?'Local battle · autosaved':'Saving result…');if(battle.status==='finished')void syncOffline();return true;
   }catch(error){offline=null;syncLabel('');console.warn('Local battle storage unavailable:',error.message);return false;}
  }
  async function syncOffline(){
@@ -114,7 +114,7 @@
  }
  function revealImpact(event,token){
   if(token!==presentationToken||event.id<=lastImpact||!battle)return;
-  lastImpact=event.id;if(event.skill&&event.effectiveness)notice(`${E.label(event.element)} · ${event.effectiveness} · ${event.damage} damage`,true);if(['defend','recover'].includes(event.kind)){const who=battle.actors[event.side].name;notice(event.kind==='defend'?`${who} defends · +${event.ap} AP · +${event.mp} MP`:`${who} recovers · +${event.amount} ${event.resource.toUpperCase()}`,true);draw();return;}if(event.kind!=='potion')window.RPGSound?.hit();const target=event.target??(1-event.side);
+  lastImpact=event.id;if(event.kind==='curse'){const who=battle.actors[event.side].name,detail=event.applied?'applied for this battle':event.curse==='skip'?'turn skipped':`−${event.amount} ${(event.resource||'hp').toUpperCase()}`;notice(`${who} · ${C.curseNames[event.curse]||'Curse'} · ${detail}`,true);if(event.applied||event.curse==='skip'||event.resource==='mp'){draw();return;}}if(event.skill&&event.effectiveness)notice(`${E.label(event.element)} · ${event.effectiveness} · ${event.damage} damage`,true);if(['defend','recover'].includes(event.kind)){const who=battle.actors[event.side].name;notice(event.kind==='defend'?`${who} defends · +${event.ap} AP · +${event.mp} MP`:`${who} recovers · +${event.amount} ${event.resource.toUpperCase()}`,true);draw();return;}if(event.kind!=='potion')window.RPGSound?.hit();const target=event.target??(1-event.side);
   shownHp[target]=Number.isFinite(event.hpAfter)?event.hpAfter:Math.max(0,shownHp[target]-event.damage);
   draw();
   const me=battle.me??0,node=el(target===me?'bt-fx-hero':'bt-fx-enemy').parentElement;
@@ -258,7 +258,7 @@
    const game=new Chess();input.moves.forEach(m=>game.move(uci(m)));if(!game.isGameOver())throw Error('Finish the chess game first.');if(game.isCheckmate()&&game.turn()==='b'){R.harvestResult(b,0,'ap',true,'Chess victory');R.note(b,'Chess victory · +20% maximum AP (up to cap).');}else{R.harvestResult(b,0,'ap',false,game.isCheckmate()?'Chess game lost':'Chess game drawn');R.note(b,'Chess lost or drawn. No AP gained.');}R.finishTurn(b);
   }else if(input.action==='abandon'){R.harvestResult(b,0,b.challenge.kind,false,'Harvest abandoned');R.note(b,'Challenge abandoned. No resource gained.');R.finishTurn(b);}
   else if(input.action==='attack'){R.attack(b,0,input.skill);R.finishTurn(b);}
-  else if(input.action==='usePotion'){const item=state.items.find(i=>i.uid===input.uid&&i.where==='bag'&&C.isConsumable(i));if(!item)throw Error('Choose a potion in your bag.');R.potionFromItem(b,0,item);state.items=state.items.filter(i=>i.uid!==item.uid);R.finishTurn(b);}
+  else if(input.action==='usePotion'){const item=state.items.find(i=>i.uid===input.uid&&i.where==='bag'&&C.isConsumable(i));if(!item)throw Error('Choose a potion in your bag.');R.potionFromItem(b,0,item);C.consume(state,item.uid);R.finishTurn(b);}
   else if(input.action==='defend'){R.defend(b,0);R.finishTurn(b);}else throw Error('Unknown action.');b.version++;
  }
  async function action(input){if(busy||presenting||pendingHarvest||!battle)return;
@@ -267,7 +267,7 @@
    root.classList.add('bt-hero-windup');
 
   }
-  const priorHarvest=battle.harvestResult?.id;busy=true;draw();try{if(offline){battle=offline.act(input);state.items=state.items.filter(i=>!offline.usedPotions.includes(i.uid));if(battle.status==='finished')Object.assign(state,{currentHp:battle.actors[0].hp,currentMp:battle.actors[0].mp,currentAp:battle.actors[0].ap});}else if(local)await localAction(input);else{const data=await api({...input,version:battle.version,...(input.action==='accept'?{profile:loadout()}:{} )});battle=input.action==='leave'?(data.report||data.battle):data.battle;}if(input.action==='leave'){const ended=battle;stopEngine();close();battle=null;dismissed=true;if(ended?.status==='finished')openReport(ended);}}catch(e){root.classList.remove('bt-hero-windup');notice(e.message,true);if(!local&&!offline){try{const d=await api();battle=d.battle;}catch{}}}finally{if(battle?.harvestResult&&battle.harvestResult.id!==priorHarvest)receiveHarvest(battle,true);busy=false;root.classList.remove('bt-hero-windup');draw();if(offline?.battle.status==='finished')void syncOffline();}}
+  const priorHarvest=battle.harvestResult?.id;busy=true;draw();try{if(offline){battle=offline.act(input);for(const p of offline.potions||[]){const item=state.items.find(i=>i.uid===p.uid);if(item){const remaining=(p.quantity??1)-offline.usedPotions.filter(uid=>uid===p.uid).length;if(remaining>0)item.quantity=remaining;else state.items=state.items.filter(i=>i.uid!==p.uid);}}if(battle.status==='finished')Object.assign(state,{currentHp:battle.actors[0].hp,currentMp:battle.actors[0].mp,currentAp:battle.actors[0].ap});}else if(local)await localAction(input);else{const data=await api({...input,version:battle.version,...(input.action==='accept'?{profile:loadout()}:{} )});battle=input.action==='leave'?(data.report||data.battle):data.battle;}if(input.action==='leave'){const ended=battle;stopEngine();close();battle=null;dismissed=true;if(ended?.status==='finished')openReport(ended);}}catch(e){root.classList.remove('bt-hero-windup');notice(e.message,true);if(!local&&!offline){try{const d=await api();battle=d.battle;}catch{}}}finally{if(battle?.harvestResult&&battle.harvestResult.id!==priorHarvest)receiveHarvest(battle,true);busy=false;root.classList.remove('bt-hero-windup');draw();if(offline?.battle.status==='finished')void syncOffline();}}
  const pieceNames={p:'pawn',n:'knight',b:'bishop',r:'rook',q:'queen',k:'king'};
  function board(){if(!chess)return;const color=battle.challenge.kind==='ap'?'w':chess.turn(),flip=color==='b',ranks=flip?[1,2,3,4,5,6,7,8]:[8,7,6,5,4,3,2,1],files=flip?'hgfedcba':'abcdefgh',legal=selected?chess.moves({square:selected,verbose:true}).map(m=>m.to):[];let html='';
   for(const rank of ranks)for(const file of files){

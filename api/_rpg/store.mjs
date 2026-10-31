@@ -26,13 +26,14 @@ export function makeHero(input){
 export function saveInventory(doc,input){
  const next=structuredClone(input),old=doc.state;
  if(doc.battle?.status==='active')fail('Equipment is locked during battle.');
- next.currentHp=old.currentHp;next.currentMp=old.currentMp;next.currentAp=old.currentAp;
+ next.potionCurses=old.potionCurses;next.currentHp=old.currentHp;next.currentMp=old.currentMp;next.currentAp=old.currentAp;
  if((next.inventoryRevision||0)!==(old.inventoryRevision||0))fail('Your inventory changed. Reopen Hero Room before saving.');
  if(!C.validState(next,doc.heroId)||next.heroId!==doc.heroId||next.name!==doc.name)fail('Your chosen hero and name are locked.',400);
  if(!same(next.items,old.items)||!same(next.grids,old.grids)){
   // Only rearrangement, rotation, storage transfers, and discards of owned gear are accepted.
   if(!same(next.grids,old.grids))fail('Inventory expansions are not available yet.');
-  for(const item of next.items){const original=old.items.find(i=>i.uid===item.uid);if(!original)fail('Unknown equipment.');for(const key of [...new Set([...Object.keys(original),...Object.keys(item)])].filter(k=>!['where','x','y','rotation','rotated'].includes(k)))if(!same(item[key],original[key]))fail('Equipment attributes cannot be changed.');}
+  for(const item of next.items.filter(C.isConsumable)){const key=C.stackKey(item),before=old.items.filter(i=>C.isConsumable(i)&&C.stackKey(i)===key).reduce((n,i)=>n+C.quantity(i),0),after=next.items.filter(i=>C.isConsumable(i)&&C.stackKey(i)===key).reduce((n,i)=>n+C.quantity(i),0);if(after>before)fail('Potion quantities cannot be increased.');}
+  for(const item of next.items){const original=old.items.find(i=>i.uid===item.uid);if(!original)fail('Unknown equipment.');for(const key of [...new Set([...Object.keys(original),...Object.keys(item)])].filter(k=>!['where','x','y','rotation','rotated',...(C.isConsumable(item)?['quantity']:[])].includes(k)))if(!same(item[key],original[key]))fail('Equipment attributes cannot be changed.');}
  }
  const missing=old.learned.some(id=>!next.learned.includes(id));
  if(missing||next.learned.length>Math.min(30,2+Math.floor(old.level/2)))fail('No skill choices are available.');

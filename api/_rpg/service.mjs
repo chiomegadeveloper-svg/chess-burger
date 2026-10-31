@@ -1,3 +1,4 @@
+import {forge} from './forge.mjs';
 import {publishRpgFeed} from './feed.mjs';
 import {chestRequest,resolveCity,recoverChests} from './chests.mjs';
 import {merchantRequest} from './merchant.mjs';
@@ -71,9 +72,9 @@ export async function gameRequest(client,user,method,input={},services={}){
   if(incoming.data){shared=incoming.data.metadata;if(!await validShared(shared.state))return null;doc.pvpId=shared.state.id;await persist();if(R.timeout(shared.state,now))await save(shared.state);return shared.state;}
   const b=doc.battle||null;if(b&&R.timeout(b,now))await save(b);return b;
  }
- const settlePotions=async b=>{if(b?.kind!=='pvp')return;const side=me(b),receipts=doc.battlePotionReceipts||[],debits=(b.potions||[]).filter(p=>p.side===side&&!receipts.includes(b.id+':'+p.uid));if(!debits.length)return;for(const debit of debits){doc.state.items=doc.state.items.filter(item=>item.uid!==debit.uid);receipts.push(b.id+':'+debit.uid);}doc.battlePotionReceipts=receipts.slice(-200);doc.state.inventoryRevision=(doc.state.inventoryRevision||0)+1;await persist();};
+ const settlePotions=async b=>{if(b?.kind!=='pvp')return;const side=me(b),receipts=doc.battlePotionReceipts||[],receipt=p=>b.id+':'+(p.id??p.uid),debits=(b.potions||[]).filter(p=>p.side===side&&!receipts.includes(receipt(p)));if(!debits.length)return;for(const debit of debits){if(!C.consume(doc.state,debit.uid))fail('A battle potion is no longer owned.');receipts.push(receipt(debit));}doc.battlePotionReceipts=[...receipts.filter(r=>!r.startsWith(b.id+':')).slice(-200),...receipts.filter(r=>r.startsWith(b.id+':'))];doc.state.inventoryRevision=(doc.state.inventoryRevision||0)+1;await persist();};
  const result=async b=>{await settlePotions(b);
-  if(b?.status==='finished'&&me(b)>=0&&doc.healthBattle!==b.id){doc.state.currentHp=b.actors[me(b)].hp;doc.state.currentMp=b.actors[me(b)].mp;doc.state.currentAp=b.actors[me(b)].ap;doc.healthBattle=b.id;await persist();}
+  if(b?.status==='finished'&&me(b)>=0&&doc.healthBattle!==b.id){doc.state.currentHp=b.actors[me(b)].hp;doc.state.currentMp=b.actors[me(b)].mp;doc.state.currentAp=b.actors[me(b)].ap;doc.healthBattle=b.id;delete doc.state.potionCurses;await persist();}
   if(b?.status==='finished'&&b.winner===me(b)&&b.kind==='monster'&&!b.training&&b.encounterId&&b.endReason==='knockout'&&!doc.awards.some(a=>a.id===b.id)){
    const xp=Math.min(P.threshold(88)-doc.state.totalXp,P.victoryXp(doc.state.level,b.actors[1].level));C.gainXp(doc.state,xp);const encounter=doc.encounters.find(e=>e.id===b.encounterId);if(encounter)encounter.consumed=true;const drops=loot(b.actors[1].level,services.rng);doc.pendingLoot=[...(doc.pendingLoot||[]),...drops];stash(doc);const cbg=cbgDrop(doc.state,services.rng||Math.random);doc.awards=[...doc.awards,{id:b.id,xp,drops,cbg}].slice(-100);await persist();
   }
@@ -81,13 +82,21 @@ export async function gameRequest(client,user,method,input={},services={}){
   return {cbgReward:reward?.cbg||0,cbgPending:!!reward?.cbg&&!doc.awards.find(a=>a.id===b?.id)?.cbgPaid,game:doc.state,pendingLoot:doc.pendingLoot||[],drops:doc.awards.find(a=>a.id===b?.id)?.drops||[],battle:b?visible(b):null,offline:b?.status==='active'&&doc.offline?.battleId===b.id?publicOffline(doc.offline,puzzles):null,progression:progression(doc,b),defeatedEncounterId:b?.kind==='monster'&&b.status==='finished'&&b.winner===me(b)&&b.endReason==='knockout'?b.encounterId:null};
  };
  if(['chests','openChest'].includes(input.action)){if(input.action==='openChest'){const active=await current();await result(active);if(['active','pending'].includes(active?.status))fail('Finish your battle before opening a chest.');}return chestRequest(client,user,doc,input,now,services);}
+ if(input.action==='forge'){
+  const receipt=(doc.forgeReceipts||[]).find(r=>r.id===input.requestId);if(receipt)return {game:doc.state,forge:receipt.result};
+  if(typeof input.requestId!=='string'||input.requestId.length<8||input.requestId.length>100)fail('A forge request ID is required.',400);
+  const active=await current();await result(active);if(['active','pending'].includes(active?.status))fail('Finish your battle before merging items.');
+  if((input.inventoryRevision||0)!==(doc.state.inventoryRevision||0))fail('Your inventory changed. Reopen the forge.');
+  const forged=forge(doc,input,{rng:services.rng||Math.random,now});doc.state.inventoryRevision=(doc.state.inventoryRevision||0)+1;
+  doc.forgeReceipts=[...(doc.forgeReceipts||[]),{id:input.requestId,result:forged}].slice(-100);await persist();return {game:doc.state,forge:forged};
+ }
  if(['merchant','merchantBuy','merchantSell'].includes(input.action)){const active=await current();await result(active);if(['active','pending'].includes(active?.status))fail('Finish your battle before trading.');return merchantRequest(client,user,doc,input,now,services);}
  if(['drinkPotion','usePotion'].includes(input.action)&&!input.battlePotion){await result(await current());
   const ongoing=await read(client,user,'rpg_profile','hero');let active=ongoing?.battle?.status==='active';if(ongoing?.pvpId){const rows=await client.from('cb_inventory_items').select('metadata').eq('item_kind','rpg_battle').eq('item_id',ongoing.pvpId).contains('metadata',{participants:[user]}).maybeSingle();if(rows.error)fail('Battle unavailable.',503);active=['pending','active'].includes(rows.data?.metadata?.status);}if(active)fail('Finish your battle before using a potion.');
   const index=doc.state.items.findIndex(i=>input.action==='usePotion'?i.uid===input.uid&&C.isConsumable(i):C.potions.get(i)?.restore.resource==='hp');if(index<0)fail('This potion is no longer available.');
   const item=doc.state.items[index],resource=C.potions.get(item).restore.resource,info=C.potions.resources[resource],cap=resource==='hp'?healthCap(doc.state):resource==='mp'?manaCap(doc.state):C.maxAp(doc.state),balance=Math.max(0,Math.min(cap,doc.state[info.state]??cap));
   if(balance>=cap)fail(`${info.name} is already full.`);
-  const amount=Math.min(Math.round(C.potions.amount(item,cap)*(1+(C.passives(doc.state).potionPower||0)/100)),cap-balance);doc.state.items.splice(index,1);doc.state.inventoryRevision=(doc.state.inventoryRevision||0)+1;doc.state[info.state]=balance+amount;stash(doc);await persist();return {game:doc.state,pendingLoot:doc.pendingLoot,restored:{resource,amount}};
+  const amount=Math.min(Math.round(C.potions.amount(item,cap)*(1+(C.passives(doc.state).potionPower||0)/100)),cap-balance);C.consume(doc.state,item.uid);doc.state.inventoryRevision=(doc.state.inventoryRevision||0)+1;doc.state[info.state]=balance+amount;for(const extra of item.forged?.restores||[]){const r=C.potions.resources[extra.resource],max=extra.resource==='hp'?healthCap(doc.state):extra.resource==='mp'?manaCap(doc.state):C.maxAp(doc.state);doc.state[r.state]=Math.min(max,(doc.state[r.state]??max)+Math.round(max*extra.percent/100));}for(const curse of item.forged?.curses||[]){doc.state.potionCurses=doc.state.potionCurses||{};const key=C.curseKeys[curse.id];doc.state.potionCurses[key]=Math.min(20,(doc.state.potionCurses[key]||0)+curse.value);}stash(doc);await persist();return {game:doc.state,pendingLoot:doc.pendingLoot,restored:{resource,amount}};
  }
  if(input.action==='upgrade'){const b=await current();if(['active','pending'].includes(b?.status))fail('Finish your battle before upgrading.');if(!C.upgrade(doc.state,input.stat))fail('No upgrade points are available.');await persist();return {game:doc.state};}
  if(input.action==='exploreRecover'){const b=await current();if(['active','pending'].includes(b?.status))return {game:doc.state};if(!validateFix(input.gps,now))fail('Wait for a fresh GPS fix.');const last=doc.explorerRecovery;const continuous=last&&now-last.pulse<=45000;if(continuous&&now-last.tick>=30000){doc.state.currentHp=Math.min(healthCap(doc.state),health(doc.state)+1);doc.state.currentMp=Math.min(manaCap(doc.state),mana(doc.state)+1);last.tick=now;}doc.explorerRecovery=continuous?{...last,pulse:now}:{pulse:now,tick:now};await persist();return {game:doc.state};}
@@ -133,8 +142,8 @@ export async function gameRequest(client,user,method,input={},services={}){
   if(doc.offlineReceipt?.id===input.sessionId&&doc.offlineReceipt.battleId===input.battleId)return {...await result(doc.battle?.id===input.battleId?doc.battle:null),offlineSynced:true};
   const session=doc.offline;if(!session||session.id!==input.sessionId||session.battleId!==input.battleId||doc.battle?.id!==session.battleId||doc.battle.version!==session.baseVersion)fail('This local battle is no longer available. Reopen RPG.',409);
   let replay;try{replay=replayOffline(session,input.commands,puzzles,now);}catch(error){fail(error.message,400);}
-  if(replay.usedPotions.some(uid=>!doc.state.items.some(i=>i.uid===uid&&i.where==='bag'&&session.potions.some(p=>p.uid===uid&&p.defId===i.defId))))fail('A battle potion is no longer owned.',409);
-  if(replay.usedPotions.length){doc.state.items=doc.state.items.filter(i=>!replay.usedPotions.includes(i.uid));doc.state.inventoryRevision=(doc.state.inventoryRevision||0)+replay.usedPotions.length;}
+  if(replay.usedPotions.some(uid=>!doc.state.items.some(i=>i.uid===uid&&i.where==='bag'&&C.quantity(i)>=replay.usedPotions.filter(x=>x===uid).length&&session.potions.some(p=>p.uid===uid&&p.defId===i.defId))))fail('A battle potion is no longer owned.',409);
+  if(replay.usedPotions.length){for(const uid of replay.usedPotions)C.consume(doc.state,uid);doc.state.inventoryRevision=(doc.state.inventoryRevision||0)+replay.usedPotions.length;}
   for(const id of replay.solved)doc.history=[id,...doc.history.filter(p=>p!==id)].slice(0,1000);
   doc.battle=replay.battle;doc.offline=null;doc.offlineReceipt={id:session.id,battleId:session.battleId};await persist();
   return {...await result(doc.battle),offlineSynced:true};
@@ -147,7 +156,7 @@ export async function gameRequest(client,user,method,input={},services={}){
  if(input.version!==b.version)fail('Battle changed. Refresh and try again.',409);
  if(b.status==='pending'){
   if(input.action==='decline'){b.status='cancelled';R.note(b,'Challenge declined.');}
-  else if(input.action==='accept'&&side===1){b.actors[1]=await player();if(b.actors[1].hp<=0)fail('Drink a health potion before accepting.');if(!b.actors[1].active.length)fail('Equip a skill first.');b.status='active';b.startedAt=now;b.battleEndsAt=now+300000;b.deadline=now+90000;R.note(b,'Challenge accepted. Challenger takes the first turn.');}
+  else if(input.action==='accept'&&side===1){b.actors[1]=await player();if(b.actors[1].hp<=0)fail('Drink a health potion before accepting.');if(!b.actors[1].active.length)fail('Equip a skill first.');b.status='active';b.startedAt=now;b.battleEndsAt=now+300000;b.deadline=now+90000;R.beginTurn(b,now);R.note(b,'Challenge accepted. Challenger takes the first turn.');}
   else fail('Waiting for the other player to accept.');await save(b);return await result(b);
  }
  if(b.status!=='active')fail('This battle has ended.',409);
@@ -189,8 +198,8 @@ export async function gameRequest(client,user,method,input={},services={}){
   if(b.challenge)fail('Finish or abandon your harvest first.');
   if(input.action==='usePotion'&&input.battlePotion){
    const index=doc.state.items.findIndex(item=>item.uid===input.uid&&item.where==='bag'&&C.isConsumable(item));if(index<0)fail('Choose an owned potion from your hero bag.');
-   if((b.potions||[]).some(p=>p.side===side&&p.uid===input.uid))fail('This potion was already used.');R.potionFromItem(b,side,doc.state.items[index]);
-   if(b.kind==='pvp')b.potions=[...(b.potions||[]),{side,uid:input.uid}];else{doc.state.items.splice(index,1);doc.state.inventoryRevision=(doc.state.inventoryRevision||0)+1;}
+   R.potionFromItem(b,side,doc.state.items[index]);
+   if(b.kind==='pvp')b.potions=[...(b.potions||[]),{side,uid:input.uid,id:crypto.randomUUID()}];else{C.consume(doc.state,input.uid);doc.state.inventoryRevision=(doc.state.inventoryRevision||0)+1;}
   }else if(input.action==='attack')R.attack(b,side,input.skill,now);
   else if(input.action==='defend')R.defend(b,side);
   else fail('Unknown battle action.');

@@ -26,6 +26,12 @@
     ['helm','Helm',2,2,'Armor',[0,0,0,2,0,2]]
   ];
   const items=types.flatMap(([id,name,w,h,category,bonus])=>tiers.map((tier,i)=>({id:`${id}_v${i+1}`,type:id,name:`${tier} ${name}`,w,h,category,tier:i+1,sprite:`${id}_v${i+1}`,bonus:bonus.map(v=>v*(i+1))})));
+  items.push(...[
+    ['royal_longsword','Royal Longsword',[0,7,0,1,0,0]],['emerald_longsword','Emerald Longsword',[0,5,3,0,0,0]],
+    ['ember_machete','Ember Machete',[0,6,2,0,0,0]],['toxic_machete','Toxic Machete',[0,6,0,0,0,2]],
+    ['titan_greatsword','Titan Greatsword',[2,6,0,2,0,0]],['frost_greatsword','Frost Greatsword',[0,5,3,0,1,0]],
+    ['bandit_cleaver','Bandit Cleaver',[1,7,0,0,0,0]],['thunder_bandit_sword','Thunder Bandit Sword',[0,6,2,0,0,1]]
+  ].map(([id,name,bonus])=>({id,type:id,name,w:1,h:4,category:'Weapons',tier:4,sprite:id,bonus,mergeOnly:true})));
   items.push(...Potions.items);
   const spells=root.RPG_ATTACK_SKILLS||(typeof require==='function'?require('./skill-catalog.js'):[]);
   const itemMap=Object.fromEntries(items.map(i=>[i.id,i]));
@@ -53,6 +59,15 @@
   const gearTier=required=>Math.floor(required/10)+1;
   function rollRarity(rng){let ticket=integer(1,1000,rng);for(const rarity of rarities){ticket-=rarity.weight;if(ticket<=0)return rarity.id;}return 'divine';}
   const isConsumable=item=>!!Potions.get(item);
+  const quantity=item=>item.quantity??1;
+  const stable=value=>Array.isArray(value)?value.map(stable):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(k=>[k,stable(value[k])])):value;
+  const stackKey=item=>JSON.stringify(stable({defId:item.defId,rarity:item.rarity,forged:item.forged||null}));
+  const sameStack=(a,b)=>isConsumable(a)&&isConsumable(b)&&stackKey(a)===stackKey(b);
+  function consume(state,uid,count=1){const index=state.items.findIndex(i=>i.uid===uid);if(index<0||!Number.isSafeInteger(count)||count<1||quantity(state.items[index])<count)return false;const item=state.items[index],left=quantity(item)-count;if(left)item.quantity=left;else state.items.splice(index,1);return true;}
+  const curseNames={lifeDrain:'Life drain per turn',poison:'Poison per turn',manaDrain:'Mana deduction per turn',skip:'Attack turn skip'};
+  const curseKeys={lifeDrain:'curseLifeDrain',poison:'cursePoison',manaDrain:'curseManaDrain',skip:'curseSkip'};
+  const forgeText=item=>{const f=item.forged;if(!f)return '';return [`Forged level ${f.level}`,...(f.attributes||[]).map(a=>`+${a.value} ${stats[a.stat]}`),...(f.restores||[]).map(a=>`+${a.percent}% ${Potions.resources[a.resource].name} restore`),...(f.curses||[]).map(c=>`Curse: ${curseNames[c.id]} ${c.value}%`)].join(' · ');};
+  function validForge(item){const f=item.forged;if(!f)return true;const attrs=f.attributes||[],restores=f.restores||[],curses=f.curses||[];return Number.isInteger(f.level)&&f.level>=1&&f.level<=88&&Array.isArray(attrs)&&attrs.length<=3&&attrs.every(a=>Number.isInteger(a.stat)&&a.stat>=0&&a.stat<6&&Number.isSafeInteger(a.value)&&a.value>0&&a.value<=1000)&&new Set(attrs.map(a=>a.stat)).size===attrs.length&&Array.isArray(restores)&&restores.length<=3&&restores.every(a=>Potions.resources[a.resource]&&Number.isInteger(a.percent)&&a.percent>=2&&a.percent<=8)&&new Set(restores.map(a=>a.resource)).size===restores.length&&Array.isArray(curses)&&curses.length<=4&&curses.every(c=>curseNames[c.id]&&Number.isInteger(c.value)&&c.value>=2&&c.value<=8)&&new Set(curses.map(c=>c.id)).size===curses.length&&(!isConsumable(item)||!attrs.length);}
   const potionRoll=(def,rarity='common')=>({rarity,consumable:true,restore:{...Potions.get(def).restore}});
   const potionRestoreMatches=(item,effect)=>Object.keys(effect).every(k=>item.restore?.[k]===effect[k])&&Object.keys(item.restore||{}).length===Object.keys(effect).length;
   const potionGearKeys=['enhancement','attributes','baseBonus','iLvl','requiredLevel','gearTier','elemental','affix'];
@@ -60,7 +75,7 @@
   const affixes=[['cbgChance','CBG luck',88,88],['cbgGain','CBG gain',28,68],['attack','Attack',8,48],['ap','Attack Points',2,10],['mana','Mana Points',8,28],['monsterDamage','Monster damage',2,8],['health','Health',2,8],['magic','Magic',2,8],['armor','Armor',2,8],['wisdom','Wisdom',2,8],['physicalDamage','Physical damage',2,8],['magicDamage','Magic damage',2,8],['damageReduction','Damage resistance',2,8],['potionPower','Potion effectiveness',2,8]].map(([id,name,min,max])=>({id,name,min,max}));
   const affixMap=Object.fromEntries(affixes.map(a=>[a.id,a]));
   const affixText=item=>item.affix?`${item.affix.id==='cbgChance'?'':'+'}${item.affix.value}% ${affixMap[item.affix.id]?.name||''}`:'';
-  const passives=state=>Object.assign(E.gearBonuses(state,{itemMap,canEquip,isConsumable}),state.items.filter(i=>i.where==='bag'&&!isConsumable(i)&&canEquip(state,i)&&i.affix).reduce((out,item)=>{const a=item.affix;out[a.id]=a.id==='cbgChance'?Math.max(out[a.id]||0,a.value):Math.min(a.id==='damageReduction'?60:200,(out[a.id]||0)+a.value);return out;},{}));
+  const passives=state=>{const out=Object.assign(E.gearBonuses(state,{itemMap,canEquip,isConsumable}),state.items.filter(i=>i.where==='bag'&&!isConsumable(i)&&canEquip(state,i)&&i.affix).reduce((out,item)=>{const a=item.affix;out[a.id]=a.id==='cbgChance'?Math.max(out[a.id]||0,a.value):Math.min(a.id==='damageReduction'?60:200,(out[a.id]||0)+a.value);return out;},{}));for(const item of state.items.filter(i=>i.where==='bag'&&!isConsumable(i)&&canEquip(state,i)))for(const c of item.forged?.curses||[])out[curseKeys[c.id]]=Math.min(20,(out[curseKeys[c.id]]||0)+c.value);for(const [key,value]of Object.entries(state.potionCurses||{}))if(Object.values(curseKeys).includes(key))out[key]=Math.min(20,(out[key]||0)+value);return out;};
   const maxAp=state=>Math.round(P.maxAp(state.level)*(1+(passives(state).ap||0)/100));
   function rollItem(def,level,rng=Math.random,options={}){
     if(isConsumable(def))return potionRoll(def,options.rarity??rollRarity(rng));
@@ -84,7 +99,7 @@
     if(isConsumable(item))return [0,0,0,0,0,0];
     const result=[...item.baseBonus];
     for(const attribute of item.attributes)result[attribute.stat]+=attribute.value;
-    result[item.enhancement.stat]+=item.enhancement.value;return result;
+    result[item.enhancement.stat]+=item.enhancement.value;for(const a of item.forged?.attributes||[])result[a.stat]+=a.value;return result;
   };
   const canEquip=(state,item)=>state.level>=(item.requiredLevel||1);
   function canPlace(state,item,where,x,y,rotation=rotationOf(item)){
@@ -99,6 +114,8 @@
     });
   }
   function place(state,item,where,x,y,rotation=rotationOf(item)){
+    const stack=state.items.find(other=>other.uid!==item.uid&&other.where===where&&other.x===x&&other.y===y&&sameStack(item,other)&&quantity(item)+quantity(other)<=999);
+    if(stack){stack.quantity=quantity(stack)+quantity(item);state.items=state.items.filter(i=>i.uid!==item.uid);return true;}
     if(!canPlace(state,item,where,x,y,rotation))return false;
     rotation=orientation(rotation);const rotated=Boolean(rotation%2);
     const old=state.items.find(i=>i.uid===item.uid);
@@ -108,6 +125,7 @@
   }
   function findSpace(state,item,where,allowRotate=true){
     const grid=gridFor(state,where);if(!grid)return null;
+    const stack=state.items.find(other=>other.uid!==item.uid&&other.where===where&&sameStack(item,other)&&quantity(item)+quantity(other)<=999);if(stack)return {x:stack.x,y:stack.y,rotation:rotationOf(stack),rotated:stack.rotated};
     const original=rotationOf(item);
     for(const rotation of allowRotate?[original,(original+1)%4]:[original]){
       for(let y=0;y<grid.rows;y++)for(let x=0;x<grid.cols;x++)if(canPlace(state,item,where,x,y,rotation))return {x,y,rotation,rotated:Boolean(rotation%2)};
@@ -213,6 +231,7 @@
     return true;
   }
   function validRoll(item){
+    if(!validForge(item)||!Number.isSafeInteger(quantity(item))||quantity(item)<1||quantity(item)>(isConsumable(item)?999:1))return false;
     if(isConsumable(item))return !!rarityMap[item.rarity]&&item.consumable===true&&potionRestoreMatches(item,Potions.get(item).restore)&&!potionGearKeys.some(k=>k in item)&&Number.isInteger(item.rotation)&&item.rotation>=0&&item.rotation<4&&item.rotated===Boolean(item.rotation%2);
     if(item.elemental&&(!E.property(item)||item.elemental.kind!==(itemMap[item.defId]?.category==='Armor'?'resistance':'damage')))return false;
     if(item.affix){const a=affixMap[item.affix.id];if(!a||!Number.isInteger(item.affix.value)||item.affix.value<a.min||item.affix.value>a.max)return false;}
@@ -241,6 +260,6 @@
     }
     return validState(state,heroId)?state:null;
   }
-  const api={potions:Potions,affixes,affixMap,affixText,passives,maxAp,isConsumable,normalizePotions,stats,tiers,types,items,itemMap,spells,spellMap,grids,rarities,rarityMap,enhancements,BAG_PRICE,STARTING_CBG,newState,size,rotationOf,gridFor,gearTier,rollItem,itemBonus,canEquip,canPlace,place,findSpace,collect,rotateItem,addTestGear,autoArrange,buyBag,addTestCBG,bagBonus,spellBonus,totals,applyProgress,gainXp,levelUp,upgrade,learn,moveSpell,validState,migrate};
+  const api={quantity,consume,stackKey,sameStack,curseNames,curseKeys,forgeText,validForge,potions:Potions,affixes,affixMap,affixText,passives,maxAp,isConsumable,normalizePotions,stats,tiers,types,items,itemMap,spells,spellMap,grids,rarities,rarityMap,enhancements,BAG_PRICE,STARTING_CBG,newState,size,rotationOf,gridFor,gearTier,rollItem,itemBonus,canEquip,canPlace,place,findSpace,collect,rotateItem,addTestGear,autoArrange,buyBag,addTestCBG,bagBonus,spellBonus,totals,applyProgress,gainXp,levelUp,upgrade,learn,moveSpell,validState,migrate};
   root.RPGInventory=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(globalThis);

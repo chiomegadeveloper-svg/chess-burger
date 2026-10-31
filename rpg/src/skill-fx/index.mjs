@@ -111,6 +111,7 @@ async function sequence(host,events,options={}){
  try{
   session=stage(host);let timer;await Promise.race([preload(events),new Promise(resolve=>{timer=setTimeout(resolve,150);})]);clearTimeout(timer);
   for(const event of events){if(session.cancelled)break;
+   if(event.kind==='curse'){options.onAction?.(event);continue;}
    if(['defend','recover'].includes(event.kind)){options.onPrepare?.(event);await waitForReply(event,session);if(session.cancelled)break;options.onAction?.(event);await waitForReply({delayMs:250},session);continue;}
    const s=skill(event.skill);if(!s)continue;options.onPrepare?.(event);await waitForReply(event,session);if(session.cancelled)break;options.onAttack?.(event);
    if(textures.has(s.id))await animate(host,s,{...event,onImpact:()=>options.onImpact?.(event)},session);else await fallback(host,event,session,options);

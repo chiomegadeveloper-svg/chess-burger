@@ -67,9 +67,9 @@ test('failed SQL commits roll back both inventories and reject stale profile/sta
  }finally{await f.close();}
 });
 
-test('Hero Stash returns to 6×6 while overflow remains recoverable with exact item identities',()=>{
+test('Hero Stash returns to 6×6 while distinct forged potion overflow retains exact item identities',()=>{
  const doc=makeHero({heroId:'rogue',name:'Hero',skill:'punch'});doc.state.grids.stash.rows=7;
- for(let i=0;i<40;i++)doc.state.items.push({uid:'potion-'+i,defId:'health_potion',where:'stash',x:i%6,y:Math.floor(i/6),rotation:0,rotated:false,...C.rollItem(C.itemMap.health_potion,1)});
+ for(let i=0;i<40;i++)doc.state.items.push({uid:'potion-'+i,forged:{level:i+1,attributes:[],restores:[],curses:[]},defId:'health_potion',where:'stash',x:i%6,y:Math.floor(i/6),rotation:0,rotated:false,...C.rollItem(C.itemMap.health_potion,1)});
  assert.equal(normalize(doc),true);assert.deepEqual(doc.state.grids.stash,{cols:6,rows:6});assert.equal(doc.state.items.length,36);assert.equal(doc.pendingLoot.length,4);assert.equal(new Set([...doc.state.items,...doc.pendingLoot].map(i=>i.uid)).size,40);assert.equal(normalize(doc),false);
 });
 

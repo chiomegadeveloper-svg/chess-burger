@@ -45,9 +45,9 @@ test('Hero Room healing uses the equipped maximum, rounds once and never consume
   const doc=[...db.rows.values()].find(r=>r.item_kind==='rpg_profile').metadata;C.gainXp(doc.state,P.threshold(10));doc.state.currentHp=1;
   const gear={uid:crypto.randomUUID(),defId:'armor_v1',rotation:0,rotated:false,...C.rollItem(C.itemMap.armor_v1,10,()=>0,{rarity:'common',requiredLevel:1})};assert.ok(C.place(doc.state,gear,'bag',0,0));
   const cap=C.totals(doc.state,P.baseStats(10))[0],potion=item(id),spot=C.findSpace(doc.state,potion,'stash');C.place(doc.state,potion,'stash',spot.x,spot.y,spot.rotation);
-  const used=await call({action:'usePotion',uid:potion.uid});assert.equal(used.restored.amount,Math.round(cap*percent/100));assert.equal(used.game.currentHp,1+used.restored.amount);assert.ok(!used.game.items.some(i=>i.uid===potion.uid));
+  const owned=doc.state.items.find(i=>C.sameStack(i,potion)),beforeQty=C.quantity(owned);potion.uid=owned.uid;const used=await call({action:'usePotion',uid:potion.uid});assert.equal(used.restored.amount,Math.round(cap*percent/100));assert.equal(used.game.currentHp,1+used.restored.amount);assert.equal(used.game.items.find(i=>i.uid===potion.uid)?.quantity||0,beforeQty-1);
   const saved=[...db.rows.values()].find(r=>r.item_kind==='rpg_profile').metadata,next=item(id);saved.state.currentHp=cap;const nextSpot=C.findSpace(saved.state,next,'stash');C.place(saved.state,next,'stash',nextSpot.x,nextSpot.y,nextSpot.rotation);
-  await assert.rejects(call({action:'usePotion',uid:next.uid}),/already full/);assert.ok((await read(db,'hero')).state.items.some(i=>i.uid===next.uid));
+  const nextOwned=saved.state.items.find(i=>C.sameStack(i,next));await assert.rejects(call({action:'usePotion',uid:nextOwned.uid}),/already full/);assert.ok((await read(db,'hero')).state.items.some(i=>i.uid===nextOwned.uid));
  }
 });
 
@@ -68,9 +68,9 @@ test('merchant charges current-level prices times quantity and rejects footprint
   const now=Date.now(),day=merchantDay(now),doc={revision:0,state:C.newState('rogue','Buyer')};C.gainXp(doc.state,P.threshold(6));doc.merchant={day,level:1,sold:[],offers:stock('hero',day,1)};
   let balance=5000,trades=0;const client={from:()=>({select(){return this},eq(){return this},maybeSingle:async()=>({data:{gold_points:balance}})}),rpc:async(name,args)=>{if(!args.p_document)return {data:doc};trades++;balance+=args.p_delta;return {data:{...args.p_document,revision:args.p_revision+1,state:{...args.p_document.state,cbg:balance}}};}};
   const services={merchantVisit:async()=>({id:'merchant',city:'Town'})},input={action:'merchantBuy',offerId:id,quantity:2,day,requestId:crypto.randomUUID(),price:0};
-  const result=await merchantRequest(client,'hero',doc,input,now,services);assert.equal(balance,5000-2*(base+6));assert.equal(result.game.items.filter(i=>i.defId===id).length,2);assert.equal(result.merchant.potions.find(p=>p.id===id).price,base+6);
+  const result=await merchantRequest(client,'hero',doc,input,now,services);assert.equal(balance,5000-2*(base+6));assert.equal(result.game.items.filter(i=>i.defId===id).reduce((n,i)=>n+C.quantity(i),0),2);assert.equal(result.merchant.potions.find(p=>p.id===id).price,base+6);
   await merchantRequest(client,'hero',doc,input,now,services);assert.equal(trades,1,'retry never charges twice');
-  const previous=balance;await assert.rejects(merchantRequest(client,'hero',doc,{...input,quantity:99,requestId:crypto.randomUUID()},now,services),/cannot fit/);assert.equal(balance,previous);assert.equal(trades,1);
+  for(const i of doc.state.items)i.quantity=999;for(let n=0;n<36;n++){const filler={uid:crypto.randomUUID(),defId:'health_potion',rotation:0,rotated:false,quantity:999,...C.rollItem(C.itemMap.health_potion,1,()=>0,{rarity:'common'})},spot=C.findSpace(doc.state,filler,'stash');if(!spot)break;C.place(doc.state,filler,'stash',spot.x,spot.y,spot.rotation);} const previous=balance;await assert.rejects(merchantRequest(client,'hero',doc,{...input,quantity:99,requestId:crypto.randomUUID()},now,services),/cannot fit/);assert.equal(balance,previous);assert.equal(trades,1);
  }
 });
 

@@ -30,7 +30,7 @@
     if(b.challenge)throw Error('Finish or abandon your harvest first.');
     if(input.action==='attack')R.attack(b,0,input.skill,now);
     else if(input.action==='defend')R.defend(b,0);
-    else if(input.action==='usePotion'){const p=ctx.potions.find(p=>p.uid===input.uid);if(!p||ctx.usedPotions.includes(p.uid))throw Error('This potion is not available.');R.potionFromItem(b,0,p);ctx.usedPotions.push(p.uid);}
+    else if(input.action==='usePotion'){const p=ctx.potions.find(p=>p.uid===input.uid);if(!p||ctx.usedPotions.filter(uid=>uid===p.uid).length>=(p.quantity??1))throw Error('This potion is not available.');R.potionFromItem(b,0,p);ctx.usedPotions.push(p.uid);}
     else throw Error('Unknown local battle action.');end();
    }
    b.version++;return b;

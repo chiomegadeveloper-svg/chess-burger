@@ -80,3 +80,7 @@ test('slower playback retains a bounded watchdog and cancellation suppresses fal
  const {win,host,sprites}=await renderer();let hits=0;const start=Date.now();await win.RPGSkillFX.sequence(host,[{skill:'basic'}],{onImpact:()=>hits++});assert.equal(hits,1);assert.ok(Date.now()-start>=1800&&Date.now()-start<2800);assert.ok(sprites.some(s=>s.spec?.animationFPS===9*.35));
  const slow=await renderer({loadImages:false});let cancelledHits=0;const pending=slow.win.RPGSkillFX.sequence(slow.host,[{skill:'basic'}],{onImpact:()=>cancelledHits++});slow.win.RPGSkillFX.stop(slow.host);await pending;assert.equal(cancelledHits,0);
 });
+
+test('curse actions resolve in sequence before a later skill contact without extra attack animation',async()=>{
+ const {win,host,sprites}=await renderer(),order=[];const curse={id:1,kind:'curse',curse:'poison',side:0,target:0,damage:2,hpAfter:18};const running=win.RPGSkillFX.sequence(host,[curse,{id:2,skill:'basic'}],{onAction:event=>order.push(event.kind),onImpact:()=>order.push('hit')});await settle();assert.deepEqual(order,['curse']);const effect=sprites.find(s=>s.playing);assert.ok(effect);effect.currentFrame=3;effect.onFrameChange();effect.onComplete();await running;assert.deepEqual(order,['curse','hit']);
+});

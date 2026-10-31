@@ -59,5 +59,12 @@ test('offline chess flag is an unsuccessful harvest and cannot grant a victory b
 
 test('settlement consumes an issued bag potion once while saving the final hero health',async()=>{
  const f=await fixture({potion:true}),b=structuredClone(f.data.battle),ctx={...f.data.offline,elapsed:0,usedPotions:[],solved:[]},uid=ctx.potions[0].uid,commands=[{action:'usePotion',uid,t:10},{action:'attack',skill:'basic',t:20}];
- for(const command of commands)engine.apply(b,command,ctx,command.t);assert.equal(b.status,'finished');const input={action:'offlineFinish',sessionId:f.data.offline.id,battleId:b.id,commands};const settled=await f.call(input);assert.equal(settled.game.items.some(i=>i.uid===uid),false);assert.equal(settled.game.currentHp,b.actors[0].hp);const count=settled.game.items.length;assert.equal((await f.call(input)).game.items.length,count);assert.equal((await read(f.db,'a')).awards.length,1);
+ for(const command of commands)engine.apply(b,command,ctx,command.t);assert.equal(b.status,'finished');const input={action:'offlineFinish',sessionId:f.data.offline.id,battleId:b.id,commands};const settled=await f.call(input);assert.equal(settled.game.items.find(i=>i.uid===uid)?C.quantity(settled.game.items.find(i=>i.uid===uid)):0,(ctx.potions[0].quantity??1)-1);assert.equal(settled.game.currentHp,b.actors[0].hp);const count=settled.game.items.length;assert.equal((await f.call(input)).game.items.length,count);assert.equal((await read(f.db,'a')).awards.length,1);
+});
+
+test('offline potion stacks allow repeated turns only up to issued quantity and settlement debits each unit once',async()=>{
+ const f=await fixture({potion:true}),b=structuredClone(f.data.battle),ctx={...f.data.offline,elapsed:0,usedPotions:[],solved:[]},uid=ctx.potions[0].uid;
+ assert.equal(ctx.potions[0].quantity,3);const commands=[{action:'usePotion',uid,t:10},{action:'usePotion',uid,t:20}];for(const command of commands)engine.apply(b,command,ctx,command.t);
+ const trial=structuredClone(b),trialCtx=structuredClone(ctx);engine.apply(trial,{action:'usePotion',uid,t:30},trialCtx,30);assert.throws(()=>engine.apply(trial,{action:'usePotion',uid,t:40},trialCtx,40),/not available/);
+ commands.push({action:'attack',skill:'basic',t:30});engine.apply(b,commands.at(-1),ctx,30);assert.equal(b.status,'finished');const input={action:'offlineFinish',sessionId:f.data.offline.id,battleId:b.id,commands};const result=await f.call(input);assert.equal(C.quantity(result.game.items.find(i=>i.uid===uid)),1);assert.equal(C.quantity((await f.call(input)).game.items.find(i=>i.uid===uid)),1);
 });

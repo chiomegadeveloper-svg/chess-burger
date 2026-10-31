@@ -10,7 +10,7 @@
   const store=next=>localStorage.setItem(storageKey,JSON.stringify(next));store(journal);
   const elapsed=()=>Math.min(300000,Math.max(journal.context.elapsed||0,Date.now()-journal.startedAt));
   function act(input){const next=clone(journal),command=['chessSave','chessFinish'].includes(input.action)?{action:input.action,move:input.moves.at(-1),t:elapsed()}:{...input,t:elapsed()};engine.apply(next.battle,command,next.context,command.t);next.commands.push(command);store(next);journal=next;return journal.battle;}
-  return {get battle(){return journal.battle;},get id(){return journal.id;},get usedPotions(){return journal.context.usedPotions;},act,tick(){if(journal.battle.status!=='active')return null;const copy=clone(journal.battle);if(root.RPGBattleRules.timeout(copy,journal.battle.startedAt+elapsed()))return act({action:'timeout'});return null;},payload:()=>({action:'offlineFinish',sessionId:journal.id,battleId:journal.battleId,commands:journal.commands}),clear(){localStorage.removeItem(storageKey);}};
+  return {get battle(){return journal.battle;},get id(){return journal.id;},get usedPotions(){return journal.context.usedPotions;},get potions(){return journal.context.potions;},act,tick(){if(journal.battle.status!=='active')return null;const copy=clone(journal.battle);if(root.RPGBattleRules.timeout(copy,journal.battle.startedAt+elapsed()))return act({action:'timeout'});return null;},payload:()=>({action:'offlineFinish',sessionId:journal.id,battleId:journal.battleId,commands:journal.commands}),clear(){localStorage.removeItem(storageKey);}};
  }
  function resume(heroId){const saved=load(heroId);return saved?open({id:saved.id},saved.battle,heroId):null;}
  root.RPGOfflineCombat={open,resume};

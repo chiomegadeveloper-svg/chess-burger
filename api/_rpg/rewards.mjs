@@ -19,7 +19,7 @@ export function loot(level,rng=Math.random){
  for(let i=0;i<count;i++){
   const roll=rng(),rarity=roll<.85?'common':roll<.95?'uncommon':'rare';
   // Item type is independent from rarity: 85% equipment, 15% consumables.
-  const category=rng()<.5?'Weapons':'Armor',pool=C.items.filter(d=>d.category===category);
+  const category=rng()<.5?'Weapons':'Armor',pool=C.items.filter(d=>d.category===category&&!d.mergeOnly);
   const def=rng()<.85?pool[Math.floor(rng()*pool.length)]:C.itemMap[rng()<.5?'health_potion':'mana_potion'];
   // Each percentage potion has its own independent roll below; avoid duplicate legacy potion slots.
   if(!C.isConsumable({defId:def.id}))drops.push({uid:crypto.randomUUID(),defId:def.id,rotation:0,rotated:false,...C.rollItem(def,level,rng,{rarity,iLvl:level})});

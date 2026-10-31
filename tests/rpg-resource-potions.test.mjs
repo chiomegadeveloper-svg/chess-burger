@@ -87,9 +87,9 @@ test('merchant sells all twelve potions and charges tier price times quantity at
   const now=Date.now(),day=merchantDay(now),doc={revision:0,state:C.newState('rogue','Buyer')};C.gainXp(doc.state,P.threshold(6));doc.merchant={day,level:1,sold:[],offers:stock('hero',day,1)};
   let balance=5000,trades=0;const client={from:()=>({select(){return this},eq(){return this},maybeSingle:async()=>({data:{gold_points:balance}})}),rpc:async(name,args)=>{if(!args.p_document)return {data:doc};trades++;balance+=args.p_delta;return {data:{...args.p_document,revision:args.p_revision+1,state:{...args.p_document.state,cbg:balance}}};}};
   const services={merchantVisit:async()=>({id:'merchant',city:'Town'})},input={action:'merchantBuy',offerId:def.id,quantity:2,day,requestId:crypto.randomUUID(),price:0};
-  const result=await merchantRequest(client,'hero',doc,input,now,services);assert.equal(result.merchant.potions.length,12);assert.equal(balance,5000-2*(def.basePrice+6));assert.equal(result.game.items.filter(i=>i.defId===def.id).length,2);
+  const result=await merchantRequest(client,'hero',doc,input,now,services);assert.equal(result.merchant.potions.length,12);assert.equal(balance,5000-2*(def.basePrice+6));assert.equal(result.game.items.filter(i=>i.defId===def.id).reduce((n,i)=>n+C.quantity(i),0),2);
   await merchantRequest(client,'hero',doc,input,now,services);assert.equal(trades,1);
-  const before=balance;await assert.rejects(merchantRequest(client,'hero',doc,{...input,quantity:99,requestId:crypto.randomUUID()},now,services),/cannot fit/);assert.equal(balance,before);
+  for(const i of doc.state.items)i.quantity=999;for(let n=0;n<36;n++){const filler={uid:crypto.randomUUID(),defId:'health_potion',rotation:0,rotated:false,quantity:999,...C.rollItem(C.itemMap.health_potion,1,()=>0,{rarity:'common'})},spot=C.findSpace(doc.state,filler,'stash');if(!spot)break;C.place(doc.state,filler,'stash',spot.x,spot.y,spot.rotation);} const before=balance;await assert.rejects(merchantRequest(client,'hero',doc,{...input,quantity:99,requestId:crypto.randomUUID()},now,services),/cannot fit/);assert.equal(balance,before);
  }
 });
 

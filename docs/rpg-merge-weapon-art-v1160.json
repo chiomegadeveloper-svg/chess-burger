@@ -1,0 +1,185 @@
+{
+  "mode": "built-in-imagegen",
+  "release": "v1160",
+  "assets": [
+    {
+      "id": "royal-longsword",
+      "prompt": "Use case: stylized-concept. Asset type: fantasy RPG inventory weapon sprite. One single complete weapon, upright vertical tip up, handle down, centered, front three-quarter view. Hand painted pixel art aesthetic, crisp dark outline, compact detailed shaded metal, matching classic dark fantasy inventory item icons. Transparent background. Generous clear padding all around; weapon contained inside central 76 percent of square canvas. No text, no border, no shadow outside object, no glow cloud, no other objects. Royal long sword: slender long straight double edged silver blade, restrained gold crossguard with ruby centerpiece, dark red grip, gold pommel.",
+      "source": "/workspace/scratch/11e1a4629bcf/generated_images/exec-7ec6d58c-d4ed-4779-8e08-6f7b98ea4778.png",
+      "output": "public/rpg/assets/merge-weapons/royal-longsword.webp",
+      "verification": {
+        "size": [
+          256,
+          1024
+        ],
+        "alpha_bbox": [
+          18,
+          162,
+          238,
+          861
+        ],
+        "sha256": "134dd5fdbb5a3910dad4193dfbd499ed8af1d5f6f6a7cba4745d53d7372c5f77",
+        "transparent_corners": true
+      },
+      "processing": "Remove near-transparent alpha noise <=10/255, crop transparent padding, resize artwork to fit 220x880, center on transparent 256x1024 portrait canvas, lossless WebP."
+    },
+    {
+      "id": "emerald-longsword",
+      "prompt": "Use case: stylized-concept. Asset type: fantasy RPG inventory weapon sprite. One single complete weapon, upright vertical tip up, handle down, centered, front three-quarter view. Hand painted pixel art aesthetic, crisp dark outline, compact detailed shaded metal, matching classic dark fantasy inventory item icons. Transparent background. Generous clear padding all around; weapon contained inside central 76 percent of square canvas. No text, no border, no shadow outside object, no glow cloud, no other objects. Emerald long sword: long straight green crystal blade with bright faceted edges, angular dark steel crossguard, deep green leather grip and emerald pommel.",
+      "source": "/workspace/scratch/11e1a4629bcf/generated_images/exec-411d0acf-30cf-4ab2-920f-7470b3d249b3.png",
+      "output": "public/rpg/assets/merge-weapons/emerald-longsword.webp",
+      "verification": {
+        "size": [
+          256,
+          1024
+        ],
+        "alpha_bbox": [
+          18,
+          202,
+          238,
+          821
+        ],
+        "sha256": "48519229b42f2d7e9b34ea5b15d6a441d6b03308ee4cbe7b603e71318010930d",
+        "transparent_corners": true
+      },
+      "processing": "Remove near-transparent alpha noise <=10/255, crop transparent padding, resize artwork to fit 220x880, center on transparent 256x1024 portrait canvas, lossless WebP."
+    },
+    {
+      "id": "ember-machete",
+      "prompt": "Use case: stylized-concept. Asset type: fantasy RPG inventory weapon sprite. One single complete weapon, upright vertical tip up, handle down, centered, front three-quarter view. Hand painted pixel art aesthetic, crisp dark outline, compact detailed shaded metal, matching classic dark fantasy inventory item icons. Transparent background. Generous clear padding all around; weapon contained inside central 76 percent of square canvas. No text, no border, no shadow outside object, no glow cloud, no other objects. Ember machete: broad single edged curved dark iron blade with glowing orange fissures and copper edge, short wrapped charcoal grip, simple brass guard.",
+      "source": "/workspace/scratch/11e1a4629bcf/generated_images/exec-e9590c1f-8c96-4d9b-a1eb-8a4d9b48a09b.png",
+      "output": "public/rpg/assets/merge-weapons/ember-machete.webp",
+      "verification": {
+        "size": [
+          256,
+          1024
+        ],
+        "alpha_bbox": [
+          18,
+          190,
+          238,
+          834
+        ],
+        "sha256": "f58649a17819097452996bdf10ad5b081b279defba53a9a6873b96b22cbd68e3",
+        "transparent_corners": true
+      },
+      "processing": "Remove near-transparent alpha noise <=10/255, crop transparent padding, resize artwork to fit 220x880, center on transparent 256x1024 portrait canvas, lossless WebP."
+    },
+    {
+      "id": "toxic-machete",
+      "prompt": "Use case: stylized-concept. Asset type: fantasy RPG inventory weapon sprite. One single complete weapon, upright vertical tip up, handle down, centered, front three-quarter view. Hand painted pixel art aesthetic, crisp dark outline, compact detailed shaded metal, matching classic dark fantasy inventory item icons. Transparent background. Generous clear padding all around; weapon contained inside central 76 percent of square canvas. No text, no border, no shadow outside object, no glow cloud, no other objects. Toxic machete: hooked broad single edged weathered steel blade with acid green inset channel, asymmetrical black guard, purple wrapped grip.",
+      "source": "/workspace/scratch/11e1a4629bcf/generated_images/exec-4d4a540b-1d75-4f5d-9fff-52a7f6d0393e.png",
+      "output": "public/rpg/assets/merge-weapons/toxic-machete.webp",
+      "verification": {
+        "size": [
+          256,
+          1024
+        ],
+        "alpha_bbox": [
+          18,
+          162,
+          238,
+          861
+        ],
+        "sha256": "35535264290341eae351ea613c8cd5bf51e5c5cfd5d80b20c8f74602d3f0e6e1",
+        "transparent_corners": true
+      },
+      "processing": "Remove near-transparent alpha noise <=10/255, crop transparent padding, resize artwork to fit 220x880, center on transparent 256x1024 portrait canvas, lossless WebP."
+    },
+    {
+      "id": "titan-greatsword",
+      "prompt": "Use case: stylized-concept. Asset type: fantasy RPG inventory weapon sprite. One single complete weapon, upright vertical tip up, handle down, centered, front three-quarter view. Hand painted pixel art aesthetic, crisp dark outline, compact detailed shaded metal, matching classic dark fantasy inventory item icons. Transparent background. Generous clear padding all around; weapon contained inside central 76 percent of square canvas. No text, no border, no shadow outside object, no glow cloud, no other objects. Titan greatsword: enormous wide straight silver slab blade with pronounced central ridge, heavy squared dark steel crossguard, long brown two hand grip, iron pommel.",
+      "source": "/workspace/scratch/11e1a4629bcf/generated_images/exec-01777173-ed6a-4c8f-b358-b6ecf667d5f1.png",
+      "output": "public/rpg/assets/merge-weapons/titan-greatsword.webp",
+      "verification": {
+        "size": [
+          256,
+          1024
+        ],
+        "alpha_bbox": [
+          18,
+          152,
+          238,
+          872
+        ],
+        "sha256": "431a4eb1c105f351a637851f43181ca5ebac5be1eec15ac4295ce96dd17b57df",
+        "transparent_corners": true
+      },
+      "processing": "Remove near-transparent alpha noise <=10/255, crop transparent padding, resize artwork to fit 220x880, center on transparent 256x1024 portrait canvas, lossless WebP."
+    },
+    {
+      "id": "frost-greatsword",
+      "prompt": "Use case: stylized-concept. Asset type: fantasy RPG inventory weapon sprite. One single complete weapon, upright vertical tip up, handle down, centered, front three-quarter view. Hand painted pixel art aesthetic, crisp dark outline, compact detailed shaded metal, matching classic dark fantasy inventory item icons. Transparent background. Generous clear padding all around; weapon contained inside central 76 percent of square canvas. No text, no border, no shadow outside object, no glow cloud, no other objects. Frost greatsword: huge broad ice blue blade with angular frosted crystal silhouette, silver wing shaped crossguard, long navy two hand grip, blue crystal pommel.",
+      "source": "/workspace/scratch/11e1a4629bcf/generated_images/exec-03d1f60a-c3cd-40a1-b49e-7f77aab5c104.png",
+      "output": "public/rpg/assets/merge-weapons/frost-greatsword.webp",
+      "verification": {
+        "size": [
+          256,
+          1024
+        ],
+        "alpha_bbox": [
+          18,
+          175,
+          238,
+          848
+        ],
+        "sha256": "84eed7fa12d1e457f1aaae7c8f2b2372fd92282182569ac3c582833f783d74a4",
+        "transparent_corners": true
+      },
+      "processing": "Remove near-transparent alpha noise <=10/255, crop transparent padding, resize artwork to fit 220x880, center on transparent 256x1024 portrait canvas, lossless WebP."
+    },
+    {
+      "id": "bandit-cleaver",
+      "prompt": "Use case: stylized-concept. Asset type: fantasy RPG inventory weapon sprite. One single complete weapon, upright vertical tip up, handle down, centered, front three-quarter view. Hand painted pixel art aesthetic, crisp dark outline, compact detailed shaded metal, matching classic dark fantasy inventory item icons. Transparent background. Generous clear padding all around; weapon contained inside central 76 percent of square canvas. No text, no border, no shadow outside object, no glow cloud, no other objects. Bandit cleaver: massive crude broad rectangular chopping sword, nicked dark iron edge, three round rivets near the spine, rugged long red leather grip, thick iron guard.",
+      "source": "/workspace/scratch/11e1a4629bcf/generated_images/exec-2401711d-33aa-47e7-a5f7-c229999c814e.png",
+      "output": "public/rpg/assets/merge-weapons/bandit-cleaver.webp",
+      "verification": {
+        "size": [
+          256,
+          1024
+        ],
+        "alpha_bbox": [
+          18,
+          101,
+          238,
+          922
+        ],
+        "sha256": "056bb325452861374fa3eb7385ddb5ef1187d1c94ec6906693b683763a01723d",
+        "transparent_corners": true
+      },
+      "processing": "Remove near-transparent alpha noise <=10/255, crop transparent padding, resize artwork to fit 220x880, center on transparent 256x1024 portrait canvas, lossless WebP."
+    },
+    {
+      "id": "thunder-bandit-sword",
+      "prompt": "Use case: stylized-concept. Asset type: fantasy RPG inventory weapon sprite. One single complete weapon, upright vertical tip up, handle down, centered, front three-quarter view. Hand painted pixel art aesthetic, crisp dark outline, compact detailed shaded metal, matching classic dark fantasy inventory item icons. Transparent background. Generous clear padding all around; weapon contained inside central 76 percent of square canvas. No text, no border, no shadow outside object, no glow cloud, no other objects. Thunder bandit sword: huge broad asymmetrical hooked bandit blade, dark gunmetal with golden lightning shaped inlay, rough brass guard, long black wrapped grip, heavy brass pommel.",
+      "source": "/workspace/scratch/11e1a4629bcf/generated_images/exec-d00a18fc-1a57-48d6-80c7-a84ec0905f27.png",
+      "output": "public/rpg/assets/merge-weapons/thunder-bandit-sword.webp",
+      "verification": {
+        "size": [
+          256,
+          1024
+        ],
+        "alpha_bbox": [
+          18,
+          163,
+          238,
+          860
+        ],
+        "sha256": "92c1b41b201720dd2e8cb605f4bfb82131cb395151426b4bb7a86d19106ca8d8",
+        "transparent_corners": true
+      },
+      "processing": "Remove near-transparent alpha noise <=10/255, crop transparent padding, resize artwork to fit 220x880, center on transparent 256x1024 portrait canvas, lossless WebP."
+    }
+  ],
+  "output_geometry": {
+    "canvas": [
+      256,
+      1024
+    ],
+    "art_bounds_max": [
+      220,
+      880
+    ],
+    "reason": "Portrait 1x4 inventory footprint; object-fit contain."
+  }
+}
