@@ -1,6 +1,8 @@
 import {read,insert,write,fail} from './store.mjs';
+import {consoleRequest} from './owner-console.mjs';
 export async function ownerRequest(client,actor,role,input){
  if(role!=='owner')fail('Owner access is required.',403);
+ if(['owner_console_access','owner_command'].includes(input.action))return consoleRequest(client,actor,role,input);
  if(input.action==='owner_search'){
   const query=String(input.query||'').trim().replace(/^@+/,'').toLowerCase();
   if(!/^[a-z0-9_]{2,40}$/.test(query))fail('Enter at least two username characters.',400);

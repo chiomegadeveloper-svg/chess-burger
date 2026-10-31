@@ -31,7 +31,9 @@ export default function RpgGame({onBack,onWalletChange}:{onBack:()=>void;onWalle
    frame.current?.contentWindow?.postMessage({type:'CB_RPG_REPLY',id:message.id,status,data},location.origin);
   };
   window.addEventListener('message',receive);
-  return ()=>{window.removeEventListener('message',receive);document.body.style.overflow=overflow;screen.orientation?.unlock?.();if(document.fullscreenElement)void document.exitFullscreen().catch(()=>{});previous?.focus();};
+  const terminal=(event:KeyboardEvent)=>{if(!event.repeat&&!event.isComposing&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&(event.code==='Backquote'||event.key==='~'||event.key==='`')){event.preventDefault();frame.current?.contentWindow?.postMessage({type:'CB_RPG_CONSOLE_TOGGLE'},location.origin);}};
+  window.addEventListener('keydown',terminal);
+  return ()=>{window.removeEventListener('message',receive);window.removeEventListener('keydown',terminal);document.body.style.overflow=overflow;screen.orientation?.unlock?.();if(document.fullscreenElement)void document.exitFullscreen().catch(()=>{});previous?.focus();};
  },[boot,onBack,onWalletChange]);
  const panel=<section className="rpg-live-shell" aria-label="Chess Burger RPG">
   {!ready&&!error&&<div className="rpg-live-loading" role="status"><p>Opening your adventure…</p><button type="button" onClick={onBack}><ArrowLeft size={17}/>Back to Chess Burger</button></div>}

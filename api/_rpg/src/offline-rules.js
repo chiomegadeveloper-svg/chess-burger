@@ -9,7 +9,13 @@
    if(R.timeout(b,now)){b.version++;return b;}
    const a=b.actors[0],end=()=>R.finishTurn(b,now);
    if(input.action==='timeout')throw Error('Battle clock has not expired.');
-   if(input.action==='leave'){R.endBattle(b,1,'forfeit',now);R.note(b,`${a.name} left the encounter.`);}
+   if(input.action==='ownerRecovery'){
+    const grant=ctx.ownerRecoveries?.find(g=>g.id===input.grantId);
+    if(!grant||!['heal','recover'].includes(grant.mode)||(ctx.usedOwnerRecoveries||[]).includes(grant.id))throw Error('Owner recovery is unavailable or already used.');
+    a.hp=a.maxHp;if(grant.mode==='recover'){a.ap=a.maxAp;a.mp=a.maxMp;}
+    ctx.usedOwnerRecoveries=[...(ctx.usedOwnerRecoveries||[]),grant.id];R.note(b,'Owner recovery applied.');
+   }
+   else if(input.action==='leave'){R.endBattle(b,1,'forfeit',now);R.note(b,`${a.name} left the encounter.`);}
    else if(input.action==='harvest'){
     if(b.challenge||!['ap','mp'].includes(input.resource))throw Error('Finish the current harvest first.');
     if(a[input.resource]>=a[input.resource==='ap'?'maxAp':'maxMp'])throw Error('That resource is already full.');

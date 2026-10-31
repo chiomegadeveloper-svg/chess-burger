@@ -318,5 +318,17 @@
  root.addEventListener('pointerup',event=>{if(!potionDrag||event.pointerId!==potionDrag.pointer)return;const {uid}=potionDrag,r=el('bt-fx-hero').parentElement.getBoundingClientRect(),inside=event.clientX>=r.left&&event.clientX<=r.right&&event.clientY>=r.top&&event.clientY<=r.bottom;clearPotionDrag();if(root.hasPointerCapture?.(event.pointerId))root.releasePointerCapture(event.pointerId);if(inside&&canDrink(uid))void action({action:'usePotion',battlePotion:true,uid});});
  root.addEventListener('pointercancel',clearPotionDrag);
  el('bt-bag').addEventListener('keydown',event=>{const node=event.target.closest('[data-item-uid]');if(node&&['Enter',' '].includes(event.key)){event.preventDefault();if(canDrink(node.dataset.itemUid))void action({action:'usePotion',battlePotion:true,uid:node.dataset.itemUid});}});
- window.RPGBattle={clearCity:closeEncounter,connect,openLab,encounter,spawn,offlinePending:()=>!!offline,stop(){connectionVersion++;pendingHarvest=null;harvestModal.hidden=true;root.inert=false;closeEncounter();clearInterval(pollTimer);pollTimer=null;stopEngine();close();battle=null;offline=null;clearTimeout(syncRetry);}};
+ async function applyOwnerRecovery(data){
+  if(busy||presenting||refreshing||syncPromise)return false;
+  if(offline){
+   if(offline.battle.status!=='active'){void syncOffline();return false;}
+   if(data.offline?.id!==offline.id)return false;
+   offline.recover(data.offline.grants||[]);battle=offline.battle;
+  }else if(battle&&['active','pending'].includes(battle.status)&&!local){
+   busy=true;try{const latest=await api();battle=latest.battle;}finally{busy=false;}
+  }
+  if(battle&&['active','pending'].includes(battle.status)&&!local){const a=battle.actors[battle.me??0];data.resources={hp:a.hp,mp:a.mp,ap:a.ap};shownHp=battle.actors.map(a=>a.hp);draw();}
+  return true;
+ }
+ window.RPGBattle={applyOwnerRecovery,clearCity:closeEncounter,connect,openLab,encounter,spawn,offlinePending:()=>!!offline,stop(){connectionVersion++;pendingHarvest=null;harvestModal.hidden=true;root.inert=false;closeEncounter();clearInterval(pollTimer);pollTimer=null;stopEngine();close();battle=null;offline=null;clearTimeout(syncRetry);}};
 })();

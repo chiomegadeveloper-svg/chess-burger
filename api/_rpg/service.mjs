@@ -21,6 +21,7 @@ const rand=n=>crypto.getRandomValues(new Uint32Array(1))[0]%n;
 export async function gameRequest(client,user,method,input={},services={}){
  if(input.action==='guildStash')return guildRequest(client,user,null,input);
  const now=services.now?.()??Date.now();let doc=await read(client,user),shared=null;
+ if(input.action==='recoveryStatus')return {recovery:doc?.ownerRecovery&&doc.ownerRecovery.id!==input.lastSeen?doc.ownerRecovery:null,...(doc?.ownerRecovery&&doc.ownerRecovery.id!==input.lastSeen&&doc.state?{resources:{hp:health(doc.state),mp:mana(doc.state),ap:Math.max(0,Math.min(C.maxAp(doc.state),doc.state.currentAp??C.maxAp(doc.state)))},offline:doc.offline?{id:doc.offline.id,grants:doc.offline.ownerRecoveries||[]}:null}:{})};
  if(doc?.state&&!doc.feedCursor)doc.feedCursor={registered:true,level:doc.state.level};
  const persist=async()=>{await write(client,user,'rpg_profile','hero',doc);await publishRpgFeed(client,user,doc);};
  const cachedSet=()=>doc?.monsterSet?.version===Layout.SPAWN_VERSION&&doc.monsterSet.radius===Layout.SPAWN_RADIUS&&doc.monsterSet.cityId===(doc.chestCity?.city?.id||null)&&doc.monsterSet.refreshAt>now?{encounters:(doc.encounters||[]).filter(e=>!e.consumed&&e.expires_at>now),refreshAt:doc.monsterSet.refreshAt}:null;
