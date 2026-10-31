@@ -494,7 +494,7 @@
   el('hr-back').addEventListener('click',()=>{save();hideTooltip();clearDrag();room.hidden=true;document.querySelector('.app').hidden=false;el('saveBtn').focus();});
   el('hr-save').addEventListener('click',()=>save(true));
   el('hr-collect').addEventListener('click',()=>{renderCatalog();showModal('hr-catalog-modal');});
-  el('hr-explore').addEventListener('click',async()=>{clearDrag();room.inert=true;try{if(!save())return;if(await window.RPGLive.flush?.()===false){feedback('Your inventory is still saving. Reconnect and try again.');return;}window.RPGWorld.open(hero,state);}finally{room.inert=false;}});
+  el('hr-explore').addEventListener('click',async()=>{if(room.classList.contains('hr-popup')){closePopup();return;}clearDrag();room.inert=true;try{if(!save())return;if(await window.RPGLive.flush?.()===false){feedback('Your inventory is still saving. Reconnect and try again.');return;}window.RPGWorld.open(hero,state);}finally{room.inert=false;}});
   el('hr-damage').addEventListener('click',()=>{clearDrag();lastTap=null;window.DamageSprites.open(hero.id);showModal('hr-damage-modal');});
   el('hr-book').addEventListener('click',()=>{clearDrag();lastTap=null;window.BabaylanBook.open();showModal('hr-book-modal');});
   el('hr-catalog-modal').addEventListener('click',event=>{
@@ -567,7 +567,11 @@
     if(window.RPGForge?.busy())return;
     if(room.hidden&&el('rpg-world').hidden)return;
     if(el('hr-skill-confirm').open)return;
-    if(event.key==='Escape'){if(!el('hr-skill-popover').hidden){event.preventDefault();hideSkillPreview();el('hr-skill-category').focus();return;}if(modal)closeModal();else{clearDrag();mergeSelection.clear();selectedItem=null;selectedSpell=null;render();}return;}
+    if(event.key==='Escape'){if(!el('hr-skill-popover').hidden){event.preventDefault();hideSkillPreview();el('hr-skill-category').focus();return;}if(modal)closeModal();else if(room.classList.contains('hr-popup')&&!selectedItem&&!selectedSpell&&!drag)closePopup();else{clearDrag();mergeSelection.clear();selectedItem=null;selectedSpell=null;render();}return;}
+    if(!modal&&room.classList.contains('hr-popup')&&event.key==='Tab'){
+      const nodes=[...room.querySelectorAll('button:not([disabled]),input,select,[tabindex="0"]')].filter(n=>n.offsetParent!==null),first=nodes[0],last=nodes.at(-1);
+      if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus();}else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus();}
+    }
     if(modal&&event.key==='Tab'){
       const nodes=[...modal.querySelectorAll('button:not([disabled]),input,select')].filter(n=>n.offsetParent!==null),first=nodes[0],last=nodes.at(-1);
       if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus();}
@@ -582,6 +586,12 @@
   el('hr-drink-potion').onclick=()=>{const item=state.items.find(i=>C.potions.get(i)?.restore.resource==='hp');if(item)void consumePotion(item.uid);};
   el('hr-claim-loot').onclick=async()=>{el('hr-claim-loot').disabled=true;try{const response=await fetch('/api/battle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'claimLoot'})}),data=await response.json();if(!response.ok)throw Error(data.error);Object.assign(state,data.game);localStorage.setItem(key(),JSON.stringify(state));feedback(data.pendingLoot?.length?'Stash full. Throw away unwanted items, then collect the remaining drops.':'Saved drops collected.');}catch(error){feedback(error.message);}finally{el('hr-claim-loot').disabled=false;render();}};
 
- window.RPGRoom={snapshot:()=>structuredClone(state),selected:()=>selectedItem,inventory:()=>showView('inventory'),heroRoom:()=>showView('hero'),view:()=>room.dataset.view,accept(game){mergeSelection.clear();if(!game.potionCurses)delete state.potionCurses;Object.assign(state,game);localStorage.setItem(key(),JSON.stringify(state));render();window.RPGWorld.refresh?.();},persist:save,open,refresh:render,utility(kind){if(kind==='book'){window.BabaylanBook.open();showModal('hr-book-modal');}if(kind==='shop'){window.RPGWorld.merchantArea?.();}}};
+ const popupBackdrop=document.createElement('div');popupBackdrop.className='hr-popup-backdrop';popupBackdrop.hidden=true;popupBackdrop.addEventListener('click',()=>closePopup());room.before(popupBackdrop);
+  const popupClose=document.createElement('button');popupClose.type='button';popupClose.className='hr-popup-close';popupClose.setAttribute('aria-label','Close and return to the map');popupClose.title='Close';popupClose.textContent='✕';popupClose.addEventListener('click',()=>closePopup());room.querySelector('.hr-topbar').append(popupClose);
+  let popupReturn=null,popupEpoch=0;
+  // Opens the Hero Room or Hero Inventory as a window centered over the GPS map.
+  function openPopup(view){if(el('rpg-world').hidden||!hero||!state)return;closeModal();hideTooltip();clearDrag();popupReturn=document.activeElement;popupEpoch++;el('rpg-world').inert=true;room.classList.add('hr-popup');room.setAttribute('role','dialog');room.setAttribute('aria-modal','true');room.setAttribute('aria-labelledby','hr-view-title');popupBackdrop.hidden=false;room.hidden=false;render();showView(view==='inventory'?'inventory':'hero');popupClose.focus({preventScroll:true});}
+  function closePopup(){if(!room.classList.contains('hr-popup'))return;if(modal)closeModal();hideTooltip();clearDrag();save();void window.RPGLive.flush?.();popupEpoch++;room.hidden=true;room.classList.remove('hr-popup');room.removeAttribute('role');room.removeAttribute('aria-modal');room.removeAttribute('aria-labelledby');popupBackdrop.hidden=true;el('rpg-world').inert=false;if(!el('rpg-world').hidden)window.RPGWorld.refresh(hero,state);const target=popupReturn?.closest?.('.world-sidebar')?el('world-panel-tab'):popupReturn;target?.focus?.({preventScroll:true});popupReturn=null;}
+  window.RPGRoom={popup:openPopup,closePopup,popupOpen:()=>room.classList.contains('hr-popup'),popupVersion:()=>popupEpoch,snapshot:()=>structuredClone(state),selected:()=>selectedItem,inventory:()=>showView('inventory'),heroRoom:()=>showView('hero'),view:()=>room.dataset.view,accept(game){mergeSelection.clear();if(!game.potionCurses)delete state.potionCurses;Object.assign(state,game);localStorage.setItem(key(),JSON.stringify(state));render();window.RPGWorld.refresh?.();},persist:save,open,refresh:render,utility(kind){if(kind==='book'){window.BabaylanBook.open();showModal('hr-book-modal');}if(kind==='shop'){window.RPGWorld.merchantArea?.();}}};
   el('saveBtn').addEventListener('click',()=>{const name=el('heroName').value.trim();if(name.length>=2)open(selected,name);});
 })();
