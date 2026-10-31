@@ -607,3 +607,62 @@ test('retrying an unconfirmed forge reuses its receipt and never consumes the re
  const C=(await import('../api/_rpg/src/inventory-core.js')).default,db=database();await gameRequest(db,'player-a','POST',{action:'register',heroId:'rogue',name:'Retry Smith',skill:'punch'});const doc=[...db.rows.values()].find(r=>r.item_kind==='rpg_profile').metadata;doc.state.items=[];C.place(doc.state,{uid:'retry-potions',defId:'health_potion',quantity:10,rotation:0,rotated:false,...C.rollItem(C.itemMap.health_potion,1,()=>0,{rarity:'common'})},'stash',0,0);
  let lost=true;const a=open(db,{rng:()=>.9},{beforeReply(data){if(data.body?.action==='forge'&&lost){lost=false;throw Error('Unconfirmed forge reply');}}});try{await pause();await pause();a.d.querySelector('#hr-inventory-open').click();a.d.querySelector('#hi-forge-open').click();a.d.querySelector('[data-forge]').click();await pause();await pause();assert.match(a.d.querySelector('.forge-result').textContent,/Unconfirmed/);a.d.querySelector('[data-forge]').click();await pause();await pause();const saved=await read(db,'player-a');assert.equal(saved.state.items.find(i=>i.defId==='health_potion').quantity,8);assert.equal(saved.state.items.filter(i=>i.defId==='cola_potion').length,1);const attempts=a.messages.filter(m=>m.body?.action==='forge');assert.equal(attempts.length,2);assert.equal(attempts[0].body.requestId,attempts[1].body.requestId);assert.deepEqual(a.errors,[]);}finally{a.close();}
 });
+
+async function directMergeFixture(defId,quantities){
+ const C=(await import('../api/_rpg/src/inventory-core.js')).default,db=database();
+ await gameRequest(db,'player-a','POST',{action:'register',heroId:'rogue',name:'Drag Smith',skill:'punch'});
+ const doc=[...db.rows.values()].find(r=>r.item_kind==='rpg_profile').metadata;doc.state.items=[];
+ for(let i=0;i<quantities.length;i++){const item={uid:'merge-'+i,defId,quantity:quantities[i],rotation:0,rotated:false,...C.rollItem(C.itemMap[defId],1,()=>.9,{rarity:'common',iLvl:1,requiredLevel:1})};assert.ok(C.place(doc.state,item,'stash',i*C.itemMap[defId].w,0));}
+ const a=open(db,{rng:()=>.9});await pause();await pause();a.d.querySelector('#hr-inventory-open').click();await pause();await pause();
+ const room=a.d.querySelector('#hr-room');room.setPointerCapture=()=>{};room.hasPointerCapture=()=>false;
+ const rect=(left,top,width,height)=>({left,top,width,height,right:left+width,bottom:top+height});
+ for(const [zone,left]of[['bag',0],['stash',300],['guild',600]]){const grid=a.d.querySelector('#hr-'+zone);grid.getBoundingClientRect=()=>rect(left,0,240,240);grid.parentElement.getBoundingClientRect=()=>rect(left,0,240,240);}
+ for(const node of a.d.querySelectorAll('#hr-stash .hr-item')){const i=Number(node.dataset.uid.split('-')[1]),def=C.itemMap[defId];node.getBoundingClientRect=()=>rect(300+i*def.w*40,0,def.w*40,def.h*40);}
+ const pointer=(node,type,x,pointerType)=>{const e=new a.w.MouseEvent(type,{bubbles:true,button:0,clientX:x,clientY:20});Object.defineProperties(e,{pointerId:{value:7},pointerType:{value:pointerType}});node.dispatchEvent(e);};
+ return {...a,db,room,pointer};
+}
+
+test('mouse and touch item drops automatically merge without opening the retained forge tools',async()=>{
+ for(const type of ['mouse','touch']){
+  const a=await directMergeFixture('health_potion',[1,1]);try{
+   const source=a.d.querySelector('[data-uid="merge-0"]');a.pointer(source,'pointerdown',320,type);a.pointer(a.room,'pointermove',360,type);
+   assert.ok(a.d.querySelector('[data-uid="merge-1"].hr-merge-target'));
+   a.pointer(a.room,'pointerup',360,type);for(let n=0;n<8;n++)await pause();
+   const state=(await read(a.db,'player-a')).state;assert.equal(state.items.length,1);assert.equal(state.items[0].defId,'cola_potion');
+   assert.equal(a.d.querySelector('#rpg-forge').open,false);assert.ok(a.d.querySelector('#hi-forge-open'));assert.equal(a.d.querySelector('#hr-feedback').textContent,'');
+   a.d.querySelector('#hi-forge-open').click();assert.equal(a.d.querySelector('#rpg-forge').open,true);assert.ok(a.d.querySelector('#rpg-forge [data-recipe]'));assert.deepEqual(a.errors,[]);
+  }finally{a.close();}
+ }
+});
+
+test('tapping several potion stacks then dragging one combines the complete group on mouse and touch',async()=>{
+ for(const type of ['mouse','touch']){
+  const a=await directMergeFixture('coconut_potion',[2,3,4]);try{
+   for(const [id,x]of[['merge-0',320],['merge-1',400]]){const node=a.d.querySelector(`[data-uid="${id}"]`);a.pointer(node,'pointerdown',x,type);a.pointer(a.room,'pointerup',x,type);}
+   const source=a.d.querySelector('[data-uid="merge-1"]');a.pointer(source,'pointerdown',400,type);a.pointer(a.room,'pointermove',480,type);a.pointer(a.room,'pointerup',480,type);
+   for(let n=0;n<8;n++)await pause();const state=(await read(a.db,'player-a')).state;
+   assert.equal(state.items.length,1);assert.equal(state.items[0].uid,'merge-2');assert.equal(state.items[0].quantity,9);
+   const request=a.messages.find(m=>m.type==='CB_RPG_API'&&m.body?.action==='forge');assert.equal(request.body.uids.length,3);assert.equal(request.body.recipe,'auto');assert.equal(a.d.querySelector('#rpg-forge').open,false);assert.deepEqual(a.errors,[]);
+  }finally{a.close();}
+ }
+});
+
+test('retained forge tools allow more than two equipment ingredients and failed group drops keep every item',async()=>{
+ for(const tools of [true,false]){
+  const a=await directMergeFixture('iron_sword_v1',[1,1,1]);try{
+   if(tools){a.d.querySelector('#hi-forge-open').click();a.d.querySelector('#rpg-forge [data-mode="gear"]').click();for(const node of [...a.d.querySelectorAll('#rpg-forge [data-ingredient]')])a.d.querySelector(`[data-ingredient="${node.dataset.ingredient}"]`).click();assert.equal(a.d.querySelectorAll('#rpg-forge [data-ingredient][aria-pressed="true"]').length,3);assert.equal(a.d.querySelector('#rpg-forge [data-forge]').disabled,false);a.d.querySelector('#rpg-forge [data-forge]').click();}
+   else{for(const [id,x]of[['merge-0',320],['merge-1',360]]){const node=a.d.querySelector(`[data-uid="${id}"]`);a.pointer(node,'pointerdown',x,'touch');a.pointer(a.room,'pointerup',x,'touch');}const source=a.d.querySelector('[data-uid="merge-1"]');a.pointer(source,'pointerdown',360,'touch');a.pointer(a.room,'pointermove',400,'touch');a.pointer(a.room,'pointerup',400,'touch');}
+   for(let n=0;n<8;n++)await pause();const state=(await read(a.db,'player-a')).state;assert.equal(state.items.length,3);assert.ok(state.items.every(i=>i.defId==='iron_sword_v1'));
+   const request=a.messages.find(m=>m.type==='CB_RPG_API'&&m.body?.action==='forge');assert.equal(request.body.uids.length,3);assert.equal(a.d.querySelector('#rpg-forge').open,tools);assert.deepEqual(a.errors,[]);
+  }finally{a.close();}
+ }
+});
+
+test('direct drops flush pending layout changes before using the confirmed inventory revision',async()=>{
+ const a=await directMergeFixture('health_potion',[1,1]);try{
+  const game=a.w.RPGRoom.snapshot();game.items.find(i=>i.uid==='merge-0').y=1;a.w.RPGRoom.accept(game);a.w.RPGRoom.persist();assert.equal(await a.w.RPGLive.flush(),true);
+  assert.equal((await read(a.db,'player-a')).state.items.find(i=>i.uid==='merge-0').y,1);
+  await a.w.RPGForge.drop('merge-0','merge-1');for(let n=0;n<4;n++)await pause();
+  const saved=(await read(a.db,'player-a')).state;assert.equal(saved.items.length,1);assert.equal(saved.items[0].defId,'cola_potion');assert.deepEqual(a.errors,[]);
+ }finally{a.close();}
+});

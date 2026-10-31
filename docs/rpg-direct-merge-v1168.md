@@ -1,0 +1,9 @@
+# Direct inventory combining — v0.1168
+
+Hero Inventory supports tapping several owned items to select them, then dragging any selected item onto another compatible item. Selected items stay outlined; a compatible drop target glows. Direct drops submit one server-owned, idempotent transaction and display a short icon/glow effect without opening a dialog or adding visible recipe labels. Escape clears the selection. Switching Hero Room/Inventory clears it as well. The existing Merge & Forge button, item action, recipe choices and equipment tools remain available.
+
+Matching potion stacks combine their quantities at the target position, up to 999 units, while retaining matching rarity and forged effects. Normal potion drops automatically select the highest eligible existing recipe: ten Normal for Tuba, four for Coconut, or two for Cola. A group containing two Normal and one Cola can produce Coconut. Recipes consume only their required units and preserve all leftovers. Each drop produces one recipe output. Recipes remain within one resource family; incompatible groups are not partially combined.
+
+Equipment groups can contain two or more weapons/armor in direct drops or the retained tools. The existing 38% success chance and output rules apply once to the group. Success consumes the selected equipment; failure retains every ingredient. Output placement first tries the drop target, then available owned inventory space. Inventory changes remain atomic if the result cannot fit. Group stacking and merging never operate on guild storage. Guild drag/drop continues through its existing ownership-transfer flow.
+
+Verification: the full inventory UI and forge rules/API suite passed 84 checks. Six focused checks passed after final selection/sync adjustments, covering mouse and touch drops, selected groups, retained multi-equipment tools, failed attempts preserving all ingredients, pending layout saves and uncertain-response retries. Production build passed.

@@ -5,6 +5,7 @@
   const abbreviations=['HP','ATK','MAG','ARM','MP','WIS'];
   const bonusColors={common:'#c1cbd1',uncommon:'#7ee49a',rare:'#8cbdff',epic:'#ffbd82',mythic:'#d4a5ff',divine:'#f8d879'};
   let hero,state,selectedItem=null,selectedSpell=null,drag=null,ghost=null,preview=null;
+  const mergeSelection=new Set();
   let suppressClickUntil=0,suppressedSource=null,modal=null,returnFocus=null;
   let lastTap=null,tooltipAnchor=null,consumeBusy=false;
   const transferId=()=>{if(crypto.randomUUID)return crypto.randomUUID();const bytes=crypto.getRandomValues(new Uint8Array(16));bytes[6]=bytes[6]&15|64;bytes[8]=bytes[8]&63|128;const h=[...bytes].map(n=>n.toString(16).padStart(2,'0')).join('');return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`;};
@@ -17,7 +18,7 @@
   const guildLayout=()=>({...state,grids:{...state.grids,stash:{cols:12,rows:12}},items:guildData.items.map(item=>({...item,where:'stash'}))});
   const canPlace=(item,where,x,y,rotation)=>where==='guild'?!!guildData.guild&&!guildBusy&&C.canPlace(guildLayout(),item,'stash',x,y,rotation):(C.canPlace(state,item,where,x,y,rotation)||state.items.some(i=>i.uid!==item.uid&&i.where===where&&i.x===x&&i.y===y&&C.sameStack(i,item)&&C.quantity(i)+C.quantity(item)<=999));
   function fitGrids(){if(!state)return;for(const where of ['bag','stash','guild']){const node=el('hr-'+where),wrap=node.parentElement,grid=roomGrid(where),w=wrap.clientWidth-14,h=wrap.clientHeight-14;if(w<=0||h<=0)continue;const cell=Math.min((w-2)/grid.cols,(h-2)/grid.rows),width=Math.floor(cell*grid.cols)+2;node.style.width=width+'px';node.style.height=((width-2)*grid.rows/grid.cols+2)+'px';}}
-  function showView(view){hideTooltip();clearDrag();selectedItem=null;selectedSpell=null;room.dataset.view=view;feedback('');el('hr-character-page').hidden=view!=='hero';el('hr-inventory-page').hidden=view!=='inventory';el('hr-view-title').textContent=view==='hero'?'Hero Room':'Hero Inventory';room.setAttribute('aria-label',el('hr-view-title').textContent);renderInspector();fitGrids();requestAnimationFrame(fitGrids);if(view==='inventory')void loadGuild();}
+  function showView(view){hideTooltip();clearDrag();mergeSelection.clear();for(const node of room.querySelectorAll('.hr-item.selected')){node.classList.remove('selected');node.setAttribute('aria-pressed','false');}selectedItem=null;selectedSpell=null;room.dataset.view=view;feedback('');el('hr-character-page').hidden=view!=='hero';el('hr-inventory-page').hidden=view!=='inventory';el('hr-view-title').textContent=view==='hero'?'Hero Room':'Hero Inventory';room.setAttribute('aria-label',el('hr-view-title').textContent);renderInspector();fitGrids();requestAnimationFrame(fitGrids);if(view==='inventory')void loadGuild();}
   async function guildApi(body){const response=await fetch('/api/battle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}),data=await response.json();if(!response.ok)throw Object.assign(Error(data.error||'Guild stash is unavailable.'),{status:response.status,code:data.code});if(data.guildStash)C.normalizePotions(data.guildStash);return data;}
   function guildStatus(text,retry=false){el('hi-guild-state').hidden=!text;el('hi-guild-message').textContent=text;el('hi-guild-retry').hidden=!retry;el('hr-guild').setAttribute('aria-disabled',String(!!text));}
   async function loadGuild(){
@@ -123,7 +124,7 @@
       if(raw&&old?.version!==2&&!localStorage.getItem(`${key()}:previous`))localStorage.setItem(`${key()}:previous`,raw);
     }
     catch(error){state=C.newState(hero.id,name);}
-    state.name=name;selectedItem=null;selectedSpell=null;lastTap=null;
+    state.name=name;selectedItem=null;selectedSpell=null;lastTap=null;mergeSelection.clear();
     document.querySelector('.app').hidden=true;room.hidden=false;
     el('toast').classList.remove('show');
     el('hr-portrait').src=`assets/heroes/${hero.id}-right.webp`;el('hr-portrait').alt=`${hero.name}, ${hero.heroClass}, full-body hero facing right`;
@@ -165,7 +166,7 @@
     let occupied=0;
     for(const item of (where==='guild'?(guildPreview?.items||guildData.items):(guildPreview?.state||state).items.filter(i=>i.where===where))){
       const def=C.itemMap[item.defId],size=C.size(def,item.rotation),rarity=C.rarityMap[item.rarity],locked=!C.canEquip(state,item);occupied+=size.w*size.h;
-      html+=`<button type="button" class="hr-item rarity-${item.rarity}${item.rotated?' rotated':''}${locked?' level-locked':''}${selectedItem===item.uid?' selected':''}" data-uid="${item.uid}" aria-pressed="${selectedItem===item.uid}" aria-label="${escape(itemName(item))}, ${C.quantity(item)>1?C.quantity(item)+' potions in stack, ':''}${rarity.name}, ${C.isConsumable(item)?'consumable, '+C.potions.describe(item):'item level '+item.iLvl+', requires level '+item.requiredLevel}, ${size.w} by ${size.h} cells, in ${where}" style="--rarity:${rarity.color};--angle:${item.rotation*90}deg;--cols:${size.w};--rows:${size.h};left:${item.x/grid.cols*100}%;top:${item.y/grid.rows*100}%;width:${size.w/grid.cols*100}%;height:${size.h/grid.rows*100}%"><img class="hr-item-img" src="${images[def.sprite]}" alt="" draggable="false">${C.quantity(item)>1?`<span class="hr-stack-count">${C.quantity(item)}</span>`:''}${C.isConsumable(item)?'':'<span class="hr-tier">'+item.iLvl+'</span>'}${locked?`<span class="hr-item-lock">L${item.requiredLevel}</span>`:''}</button>`;
+      html+=`<button type="button" class="hr-item rarity-${item.rarity}${item.rotated?' rotated':''}${locked?' level-locked':''}${(selectedItem===item.uid||mergeSelection.has(item.uid))?' selected':''}" data-uid="${item.uid}" aria-pressed="${(selectedItem===item.uid||mergeSelection.has(item.uid))}" aria-label="${escape(itemName(item))}, ${C.quantity(item)>1?C.quantity(item)+' potions in stack, ':''}${rarity.name}, ${C.isConsumable(item)?'consumable, '+C.potions.describe(item):'item level '+item.iLvl+', requires level '+item.requiredLevel}, ${size.w} by ${size.h} cells, in ${where}" style="--rarity:${rarity.color};--angle:${item.rotation*90}deg;--cols:${size.w};--rows:${size.h};left:${item.x/grid.cols*100}%;top:${item.y/grid.rows*100}%;width:${size.w/grid.cols*100}%;height:${size.h/grid.rows*100}%"><img class="hr-item-img" src="${images[def.sprite]}" alt="" draggable="false">${C.quantity(item)>1?`<span class="hr-stack-count">${C.quantity(item)}</span>`:''}${C.isConsumable(item)?'':'<span class="hr-tier">'+item.iLvl+'</span>'}${locked?`<span class="hr-item-lock">L${item.requiredLevel}</span>`:''}</button>`;
     }
     node.innerHTML=html;node.querySelector(`[data-uid="${guildPreview?.uid||''}"]`)?.classList.add('hr-transfer-pending');node.parentElement.scrollTop=scroll;el(`hr-${where}-count`).textContent=`${occupied}/${grid.cols*grid.rows}`;
   }
@@ -198,9 +199,10 @@
   function renderVitals(){const totals=C.totals(state,hero.stats),ap=C.maxAp(state);el('hr-current-hp').innerHTML=[['Health','currentHp',totals[0],'#20f697'],['Mana','currentMp',totals[4],'#39dbff'],['Attack Points','currentAp',ap,'#ff9a42']].map(([name,key,max,color])=>{const value=Math.max(0,Math.min(max,state[key]??max)),fill=value/max*100,percent=Math.round(fill);return `<div class="hr-resource" style="--meter-color:${color}"><span>${name}<b>${value} / ${max}</b></span><div class="hr-neon-meter" style="--fill:${fill}%" role="meter" aria-label="${name}" aria-valuemin="0" aria-valuemax="${max}" aria-valuenow="${value}" aria-valuetext="${value} of ${max}, ${percent}%"><i style="width:${fill}%"></i><span class="hr-meter-percent" aria-hidden="true">${percent}%</span></div></div>`;}).join('');}
   function selectItem(uid){
     hideTooltip();selectedItem=uid;selectedSpell=null;
+    if(itemById(uid)?.where==='guild')mergeSelection.clear();else mergeSelection.add(uid);
     // Keep the touched element connected throughout the pointer gesture.
     for(const node of room.querySelectorAll('.hr-item')){
-      const active=node.dataset.uid===uid;node.classList.toggle('selected',active);node.setAttribute('aria-pressed',String(active));
+      const active=mergeSelection.has(node.dataset.uid)||node.dataset.uid===uid;node.classList.toggle('selected',active);node.setAttribute('aria-pressed',String(active));
     }
     renderSpells();renderInspector();
   }
@@ -328,7 +330,9 @@
     el('hr-buy-bag').textContent=balance<C.BAG_PRICE?`Need ${C.BAG_PRICE-balance} more CBG`:`Buy +6 ${where} tiles · ${C.BAG_PRICE} CBG`;
     el('hr-buy-bag').disabled=balance<C.BAG_PRICE;
   }
-  function clearDrag(){el('hr-portrait').closest('.hr-hero-scene').classList.remove('hr-potion-ready');ghost?.remove();preview?.remove();ghost=null;preview=null;drag=null;}
+  function clearDrag(){el('hr-portrait').closest('.hr-hero-scene').classList.remove('hr-potion-ready');for(const node of room.querySelectorAll('.hr-merge-target'))node.classList.remove('hr-merge-target');ghost?.remove();preview?.remove();ghost=null;preview=null;drag=null;}
+  function mergeUids(target){return [...new Set([...(drag?.uids||[]).filter(id=>id!==target),target])];}
+  function mergePlan(target){return target?C.mergePlan(...mergeUids(target).map(itemById)):null;}
   function candidate(x,y){
     if(room.dataset.view==='hero'&&drag?.kind==='item'&&C.isConsumable(itemById(drag.uid)||{})){const rect=el('hr-portrait').closest('.hr-hero-scene').getBoundingClientRect();if(x>=rect.left&&x<=rect.right&&y>=rect.top&&y<=rect.bottom)return {hero:true};}
     for(const where of ['bag','stash','guild']){
@@ -337,7 +341,9 @@
         const size=C.size(C.itemMap[itemById(drag.uid).defId],drag.rotation);
         // Keep the full footprint in the target grid even when the item was
         // grabbed by a lower corner or moves between differently sized cells.
-        return {where,x:Math.max(0,Math.min(grid.cols-size.w,Math.floor((x-r.left)/r.width*grid.cols)-drag.anchorX)),y:Math.max(0,Math.min(grid.rows-size.h,Math.floor((y-r.top)/r.height*grid.rows)-drag.anchorY))};
+        const cellX=Math.floor((x-r.left)/r.width*grid.cols),cellY=Math.floor((y-r.top)/r.height*grid.rows);
+        const over=state.items.find(i=>{if(i.uid===drag.uid||i.where!==where)return false;const s=C.size(C.itemMap[i.defId],i.rotation);return cellX>=i.x&&cellX<i.x+s.w&&cellY>=i.y&&cellY<i.y+s.h;});
+        return {where,over:over?.uid,x:Math.max(0,Math.min(grid.cols-size.w,cellX-drag.anchorX)),y:Math.max(0,Math.min(grid.rows-size.h,cellY-drag.anchorY))};
       }
     }
     return null;
@@ -355,26 +361,30 @@
       image.style.width=drag.rotation%2?`${90*size.h/size.w}%`:'90%';image.style.height=drag.rotation%2?`${90*size.w/size.h}%`:'90%';
       image.style.transform=`rotate(${drag.rotation*90}deg)`;
       drag.target=candidate(x,y);preview?.remove();preview=null;
+      for(const node of room.querySelectorAll('.hr-merge-target'))node.classList.remove('hr-merge-target');
       el('hr-portrait').closest('.hr-hero-scene').classList.toggle('hr-potion-ready',!!drag.target?.hero);
       if(drag.target&&!drag.target.hero){
+        if(mergePlan(drag.target.over)){for(const node of room.querySelectorAll('.hr-item'))if(node.dataset.uid===drag.target.over)node.classList.add('hr-merge-target');}
+        else{
         const target=drag.target,grid=roomGrid(target.where),valid=canPlace(item,target.where,target.x,target.y,drag.rotation);
         preview=document.createElement('div');preview.className=`hr-placement${valid?'':' invalid'}`;
         Object.assign(preview.style,{left:`${target.x/grid.cols*100}%`,top:`${target.y/grid.rows*100}%`,width:`${size.w/grid.cols*100}%`,height:`${size.h/grid.rows*100}%`});
         el(`hr-${target.where}`).appendChild(preview);
+        }
       }
     }else{ghost.style.width='54px';ghost.style.height='54px';}
     ghost.style.left=`${x+10}px`;ghost.style.top=`${y+10}px`;
   }
   room.addEventListener('pointerdown',event=>{
-    if(event.button!==0||consumeBusy||guildBusy)return;
+    if(event.button!==0||consumeBusy||guildBusy||window.RPGForge?.busy())return;
     hideTooltip();
     const itemNode=event.target.closest('.hr-item'),spellNode=event.target.closest('.hr-spell-slot.filled');
     if(!itemNode&&!spellNode)return;
     const r=(itemNode||spellNode).getBoundingClientRect();
     if(itemNode){
       const item=itemById(itemNode.dataset.uid),def=C.itemMap[item.defId],size=C.size(def,item.rotation);
-      selectItem(item.uid);
-      drag={kind:'item',uid:item.uid,rotation:item.rotation,image:images[def.sprite],anchorX:Math.min(size.w-1,Math.floor((event.clientX-r.left)/r.width*size.w)),anchorY:Math.min(size.h-1,Math.floor((event.clientY-r.top)/r.height*size.h))};
+      const wasSelected=mergeSelection.has(item.uid);selectItem(item.uid);
+      drag={kind:'item',uid:item.uid,uids:[...mergeSelection].filter(id=>['bag','stash'].includes(itemById(id)?.where)),wasSelected,rotation:item.rotation,image:images[def.sprite],anchorX:Math.min(size.w-1,Math.floor((event.clientX-r.left)/r.width*size.w)),anchorY:Math.min(size.h-1,Math.floor((event.clientY-r.top)/r.height*size.h))};
     }else{
       const zone=spellNode.dataset.slotZone,index=Number(spellNode.dataset.slotIndex),id=(zone==='active'?state.active:state.spellStorage)[index];
       drag={kind:'spell',zone,index,image:skillImage(C.spellMap[id])};
@@ -397,6 +407,8 @@
         const target=current.target,item=itemById(current.uid);
         if(target?.hero){clearDrag();void consumePotion(item.uid);}else{
         if(target&&(item.where==='guild'||target.where==='guild')){clearDrag();void guildTransfer(item,target.where,target.x,target.y,current.rotation);return;}
+        if(mergePlan(target?.over)){const uids=mergeUids(target.over),over=target.over;clearDrag();mergeSelection.clear();feedback('');void window.RPGForge.drop(uids,over);return;}
+        if(target?.over&&current.uids.length>1){clearDrag();feedback('');return;}
         const success=target&&C.place(state,item,target.where,target.x,target.y,current.rotation);
         clearDrag();if(success)finish(()=>changed(`Item moved to ${target.where}.`));else feedback(target?.where==='bag'&&!C.canEquip(state,item)?`Reach level ${item.requiredLevel} to equip this item.`:'That space is blocked or outside the grid. Your item stays in its original position.');}
       }else{
@@ -410,7 +422,7 @@
       else finish(()=>{
         const now=Date.now();
         if(lastTap?.uid===current.uid&&now-lastTap.time<=340){lastTap=null;selectedItem=current.uid;rotate();}
-        else lastTap={uid:current.uid,time:now};
+        else{if(current.wasSelected){mergeSelection.delete(current.uid);selectedItem=[...mergeSelection].at(-1)||null;renderInspector();for(const node of room.querySelectorAll('.hr-item')){const active=mergeSelection.has(node.dataset.uid);node.classList.toggle('selected',active);node.setAttribute('aria-pressed',String(active));}}lastTap={uid:current.uid,time:now};}
       });
     }
     if(room.hasPointerCapture(event.pointerId))room.releasePointerCapture(event.pointerId);
@@ -418,7 +430,7 @@
   room.addEventListener('pointercancel',clearDrag);
   room.addEventListener('dragstart',event=>event.preventDefault());
   room.addEventListener('click',event=>{
-    if(guildBusy)return;
+    if(guildBusy||window.RPGForge?.busy())return;
     const arrange=event.target.closest('[data-arrange]');
     if(arrange){
       const where=arrange.dataset.arrange;clearDrag();lastTap=null;
@@ -532,9 +544,10 @@
     if(event.isTrusted&&blockedTouchClick&&Date.now()<blockedTouchClick.until&&event.target.closest('button')===blockedTouchClick.button){event.preventDefault();event.stopImmediatePropagation();}
   },true);
   document.addEventListener('keydown',event=>{
+    if(window.RPGForge?.busy())return;
     if(room.hidden&&el('rpg-world').hidden)return;
     if(el('hr-skill-confirm').open)return;
-    if(event.key==='Escape'){if(!el('hr-skill-popover').hidden){event.preventDefault();hideSkillPreview();el('hr-skill-category').focus();return;}if(modal)closeModal();else{clearDrag();selectedItem=null;selectedSpell=null;render();}return;}
+    if(event.key==='Escape'){if(!el('hr-skill-popover').hidden){event.preventDefault();hideSkillPreview();el('hr-skill-category').focus();return;}if(modal)closeModal();else{clearDrag();mergeSelection.clear();selectedItem=null;selectedSpell=null;render();}return;}
     if(modal&&event.key==='Tab'){
       const nodes=[...modal.querySelectorAll('button:not([disabled]),input,select')].filter(n=>n.offsetParent!==null),first=nodes[0],last=nodes.at(-1);
       if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus();}
@@ -549,6 +562,6 @@
   el('hr-drink-potion').onclick=()=>{const item=state.items.find(i=>C.potions.get(i)?.restore.resource==='hp');if(item)void consumePotion(item.uid);};
   el('hr-claim-loot').onclick=async()=>{el('hr-claim-loot').disabled=true;try{const response=await fetch('/api/battle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'claimLoot'})}),data=await response.json();if(!response.ok)throw Error(data.error);Object.assign(state,data.game);localStorage.setItem(key(),JSON.stringify(state));feedback(data.pendingLoot?.length?'Stash full. Throw away unwanted items, then collect the remaining drops.':'Saved drops collected.');}catch(error){feedback(error.message);}finally{el('hr-claim-loot').disabled=false;render();}};
 
- window.RPGRoom={snapshot:()=>structuredClone(state),selected:()=>selectedItem,inventory:()=>showView('inventory'),heroRoom:()=>showView('hero'),view:()=>room.dataset.view,accept(game){if(!game.potionCurses)delete state.potionCurses;Object.assign(state,game);localStorage.setItem(key(),JSON.stringify(state));render();window.RPGWorld.refresh?.();},persist:save,open,refresh:render,utility(kind){if(kind==='book'){window.BabaylanBook.open();showModal('hr-book-modal');}if(kind==='shop'){window.RPGWorld.merchantArea?.();}}};
+ window.RPGRoom={snapshot:()=>structuredClone(state),selected:()=>selectedItem,inventory:()=>showView('inventory'),heroRoom:()=>showView('hero'),view:()=>room.dataset.view,accept(game){mergeSelection.clear();if(!game.potionCurses)delete state.potionCurses;Object.assign(state,game);localStorage.setItem(key(),JSON.stringify(state));render();window.RPGWorld.refresh?.();},persist:save,open,refresh:render,utility(kind){if(kind==='book'){window.BabaylanBook.open();showModal('hr-book-modal');}if(kind==='shop'){window.RPGWorld.merchantArea?.();}}};
   el('saveBtn').addEventListener('click',()=>{const name=el('heroName').value.trim();if(name.length>=2)open(selected,name);});
 })();
