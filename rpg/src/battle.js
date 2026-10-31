@@ -95,8 +95,17 @@
   if(e.key==='Tab'){const nodes=[...reportModal.querySelectorAll('button,summary')].filter(n=>!n.hidden&&n.getClientRects().length),first=nodes[0],last=nodes.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}
  });
  // The server owns combat; this queue only controls when damage becomes visible.
+ const reactionTimers=new Map();
+ function clearReaction(node){clearTimeout(reactionTimers.get(node));reactionTimers.delete(node);node.classList.remove('bt-impact-reaction');}
+ function reactToImpact(node){
+  clearReaction(node);void node.offsetWidth;node.classList.add('bt-impact-reaction');
+  // Animation events can be missed when rendering is interrupted or throttled.
+  reactionTimers.set(node,setTimeout(()=>clearReaction(node),300));
+ }
  function cancelPresentation(){
   root.classList.remove('bt-hero-windup');
+  for(const node of reactionTimers.keys())clearReaction(node);
+  root.querySelectorAll('.bt-impact-reaction').forEach(clearReaction);
   presentationToken++;attackQueue=[];presenting=false;enemyThinking=false;enemyCasting=null;
   window.RPGSkillFX?.stop(el('bt-fx-bar'));
   shownHp=battle?.actors.map(a=>a.hp)||[];seenBattle=battle?.id||'';seenEvent=battle?.eventSeq||0;lastImpact=seenEvent;
@@ -118,8 +127,11 @@
   shownHp[target]=Number.isFinite(event.hpAfter)?event.hpAfter:Math.max(0,shownHp[target]-event.damage);
   draw();
   const me=battle.me??0,node=el(target===me?'bt-fx-hero':'bt-fx-enemy').parentElement;
-  node.classList.remove('bt-impact-reaction');void node.offsetWidth;node.classList.add('bt-impact-reaction');
+  reactToImpact(node);
  }
+ root.addEventListener('animationend',event=>{
+  if(event.animationName==='bt-fighter-hit'&&event.target.matches('.bt-idle-actor'))clearReaction(event.target);
+ });
  async function playHits(){
   const token=++presentationToken;
   try{

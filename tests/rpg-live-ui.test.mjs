@@ -175,6 +175,39 @@ test('confirmed attacks change damage sprites at the hit frame and show the sele
  }finally{a.close();}
 });
 
+test('both fighters keep breathing through repeated hits, release reactions on completion, and stop breathing only at death',async()=>{
+ const db=database(),saved=await gameRequest(db,'player-a','POST',{action:'register',heroId:'crusader',name:'Idle Warrior',skill:'punch'});
+ const gps={lat:11.26,lng:125,accuracy:5,time:Date.now()},batch=await gameRequest(db,'player-a','POST',{action:'spawn',gps},{roadPoints:async()=>[{lat:11.2602,lng:125}]});
+ await gameRequest(db,'player-a','POST',{action:'encounter',target:batch.encounters[0].id,gps});
+ const doc=[...db.rows.values()].find(r=>r.item_kind==='rpg_profile').metadata;
+ for(const actor of doc.battle.actors){actor.hp=actor.maxHp=5000;actor.stats[0]=5000;actor.ap=actor.maxAp=1000;actor.mp=actor.maxMp=1000;actor.active=['basic'];}
+ const a=open(db);let hits=0;
+ const animationEnd=(node,name)=>{const event=new a.w.Event('animationend',{bubbles:true});Object.defineProperty(event,'animationName',{value:name});node.dispatchEvent(event);};
+ try{
+  await pause();await pause();a.d.getElementById('rpg-world').hidden=false;a.w.RPGBattle.connect(a.w.eval('HEROES.find(h=>h.id==="crusader")'),saved.game);await pause();await pause();a.w.RPGBattle.openLab();
+  a.w.RPGSkillFX={stop(){},sequence:async(host,events,options)=>{for(const event of events){options.onPrepare?.(event);options.onAttack?.(event);options.onImpact?.(event);
+   const node=a.d.querySelector(event.target===0?'#bt-fx-hero':'#bt-fx-enemy').parentElement;
+   assert.ok(node.classList.contains('bt-impact-reaction'));
+   const animation=a.w.getComputedStyle(node).animation;
+   if(node.dataset.health!=='0'){assert.match(animation,/bt-health-breathe.*infinite/);assert.match(animation,/bt-fighter-hit/);}
+   else assert.doesNotMatch(animation,/infinite/);
+   animationEnd(node,'unrelated-animation');assert.ok(node.classList.contains('bt-impact-reaction'));
+   if(hits%3===0)await new Promise(resolve=>setTimeout(resolve,350));else animationEnd(node,'bt-fighter-hit');
+   assert.equal(node.classList.contains('bt-impact-reaction'),false);hits++;
+  }}};
+  for(let round=1;round<=8;round++){
+   const button=a.d.querySelector('[data-bt-skill="basic"]');assert.equal(button.disabled,false);button.click();
+   for(let i=0;i<40&&hits<round*2;i++)await pause();await pause();
+   assert.equal(hits,round*2);
+   for(const id of ['bt-fx-hero','bt-fx-enemy'])assert.match(a.w.getComputedStyle(a.d.getElementById(id).parentElement).animation,/bt-health-breathe.*infinite/);
+  }
+  const live=[...db.rows.values()].find(r=>r.item_kind==='rpg_profile').metadata;live.battle.actors[1].hp=1;
+  a.d.querySelector('[data-bt-skill="basic"]').click();for(let i=0;i<40&&hits<17;i++)await pause();await pause();
+  const dead=a.d.querySelector('#bt-fx-enemy').parentElement;assert.equal(hits,17);assert.equal(dead.dataset.health,'0');assert.doesNotMatch(a.w.getComputedStyle(dead).animation,/infinite/);
+  const hero=a.d.querySelector('#bt-fx-hero').parentElement;hero.classList.add('bt-impact-reaction');a.w.RPGBattle.stop();assert.equal(hero.classList.contains('bt-impact-reaction'),false);assert.deepEqual(a.errors,[]);
+ }finally{a.close();}
+});
+
 test('a slow map presence response cannot hold a combat request in the account queue',async()=>{
  const a=open(database());try{await pause();await pause();const post=a.w.postMessage;let held;
  a.w.postMessage=data=>{if(data.type==='CB_RPG_API'&&data.body.channel==='presence')held=data;else post(data);};
