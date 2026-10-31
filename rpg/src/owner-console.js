@@ -35,7 +35,7 @@
   }}catch{}finally{applying=false;}
  }
  async function poll(){
-  if(polling||document.hidden)return;polling=true;
+  if(polling||applying||document.hidden)return;polling=true;
   try{const data=await window.RPGLive?.recoveryStatus?.(lastSeen);if(data?.recovery)pending=data;await apply();}catch{}finally{polling=false;}
  }
  document.addEventListener('keydown',event=>{

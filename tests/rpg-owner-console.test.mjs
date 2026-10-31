@@ -117,3 +117,19 @@ test('console hotkey is owner-gated, top-mounted, supports command history and c
   let escapes=0;d.addEventListener('keydown',event=>{if(event.key==='Escape')escapes++;});key('Escape');assert.equal(panel.open,false);assert.equal(escapes,0);assert.equal(d.activeElement,d.querySelector('#before'));
  }finally{w.close();}
 });
+
+test('a later notification cannot replace a recovery while the first correction is applying',async()=>{
+ const dom=new JSDOM('<div></div>',{url:'https://chessburger.site/rpg/',pretendToBeVisual:true}),w=dom.window,timers=[];let calls=0,ready=false,release,snapshot={heroId:'rogue'};
+ const seen=[],a={recovery:{id:'a'},resources:{hp:10,mp:2,ap:1}},b={recovery:{id:'b'},resources:{hp:20,mp:20,ap:20}};
+ w.RPGLive={async recoveryStatus(lastSeen){seen.push(lastSeen);return ++calls===1?a:b;}};
+ w.RPGRoom={snapshot:()=>structuredClone(snapshot),accept:value=>{snapshot=value;}};
+ w.RPGBattle={applyOwnerRecovery(){if(!ready)return false;if(!release)return new Promise(resolve=>{release=resolve;});return true;}};
+ try{
+  vm.runInNewContext(fs.readFileSync('rpg/src/owner-console.js','utf8'),{window:w,document:w.document,parent:w,location:w.location,crypto:globalThis.crypto,setInterval:fn=>{timers.push(fn);return timers.length;}});
+  const tick=()=>new Promise(resolve=>setTimeout(resolve,0));
+  timers[0]();await tick();assert.equal(calls,1);ready=true;timers[1]();await tick();
+  timers[0]();await tick();assert.equal(calls,1,'no status read may replace the pending notification during application');
+  release(true);await tick();assert.equal(snapshot.currentHp,10);
+  timers[0]();await tick();assert.equal(calls,2);assert.equal(seen[1],'a');assert.equal(snapshot.currentHp,20);assert.equal(snapshot.currentAp,20);
+ }finally{w.close();}
+});

@@ -11,3 +11,5 @@ Active server battles update only the selected combatant and do not consume a tu
 Verification: 19 owner/recovery/offline/reset checks and two focused UI checks passed. The browser fixture exercised all four commands through a real local HTTP service using the production request/store logic. `healme` changed HP from 0/20 to 20/20 while MP stayed 2/20 and AP stayed 1/20; `recoverme` then set all three to 20/20. Both named-hero commands succeeded. The dialog was full width at y=0 with an rgba black background. This used test heroes rather than production player accounts. The production build passed.
 
 ![Owner console preview using test heroes](images/rpg-owner-console-v1200.jpg)
+
+The v0.1208 follow-up serializes recovery status reads while a correction is being applied, so a later notification cannot replace and accidentally acknowledge an earlier in-flight correction. The expanded suite has 20 owner/recovery/offline/reset checks; both focused UI checks also passed.
