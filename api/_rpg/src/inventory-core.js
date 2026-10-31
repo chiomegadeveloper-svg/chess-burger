@@ -63,17 +63,19 @@
   const stable=value=>Array.isArray(value)?value.map(stable):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(k=>[k,stable(value[k])])):value;
   const stackKey=item=>JSON.stringify(stable({defId:item.defId,rarity:item.rarity,forged:item.forged||null}));
   const sameStack=(a,b)=>isConsumable(a)&&isConsumable(b)&&stackKey(a)===stackKey(b);
+  const forgeCost=units=>18+8*Math.max(0,Math.floor(Number(units)||0)-2);
   function mergePlan(...items){
     if(items.length<2||items.some(i=>!i||!['bag','stash'].includes(i.where))||new Set(items.map(i=>i.uid)).size!==items.length)return null;
-    if(items.every(i=>['Weapons','Armor'].includes(itemMap[i.defId]?.category)))return {kind:'forge',recipe:'gear'};
+    const quote=(recipe,units)=>({kind:'forge',recipe,units,fee:forgeCost(units)});
+    if(items.every(i=>['Weapons','Armor'].includes(itemMap[i.defId]?.category)))return quote('gear',items.length);
     if(!items.every(isConsumable))return null;
     const family=[Potions.health,Potions.mana,Potions.attack].find(rows=>rows.some(row=>row.id===items[0].defId));
     if(!family||!items.every(i=>family.some(row=>row.id===i.defId)))return null;
     const normal=family[0].id,cola=family[1].id;
     const count=id=>items.filter(i=>i.defId===id).reduce((n,i)=>n+quantity(i),0);
-    if(items.every(i=>i.defId===normal)){const total=count(normal);return {kind:'forge',recipe:total>=10?'tuba':total>=4?'coconut':'cola'};}
-    if(items.every(i=>[normal,cola].includes(i.defId))&&count(normal)>=2&&count(cola)>=1)return {kind:'forge',recipe:'mixed-coconut'};
-    return items.every(i=>sameStack(items[0],i))&&items.reduce((n,i)=>n+quantity(i),0)<=999?{kind:'stack'}:null;
+    if(items.every(i=>i.defId===normal)){const total=count(normal);return total>=10?quote('tuba',10):total>=4?quote('coconut',4):quote('cola',2);}
+    if(items.every(i=>[normal,cola].includes(i.defId))&&count(normal)>=2&&count(cola)>=1)return quote('mixed-coconut',3);
+    return items.every(i=>sameStack(items[0],i))&&items.reduce((n,i)=>n+quantity(i),0)<=999?{kind:'stack',fee:0,units:0}:null;
   }
   function consume(state,uid,count=1){const index=state.items.findIndex(i=>i.uid===uid);if(index<0||!Number.isSafeInteger(count)||count<1||quantity(state.items[index])<count)return false;const item=state.items[index],left=quantity(item)-count;if(left)item.quantity=left;else state.items.splice(index,1);return true;}
   const curseNames={lifeDrain:'Life drain per turn',poison:'Poison per turn',manaDrain:'Mana deduction per turn',skip:'Attack turn skip'};
@@ -272,6 +274,6 @@
     }
     return validState(state,heroId)?state:null;
   }
-  const api={mergePlan,quantity,consume,stackKey,sameStack,curseNames,curseKeys,forgeText,validForge,potions:Potions,affixes,affixMap,affixText,passives,maxAp,isConsumable,normalizePotions,stats,tiers,types,items,itemMap,spells,spellMap,grids,rarities,rarityMap,enhancements,BAG_PRICE,STARTING_CBG,newState,size,rotationOf,gridFor,gearTier,rollItem,itemBonus,canEquip,canPlace,place,findSpace,collect,rotateItem,addTestGear,autoArrange,buyBag,addTestCBG,bagBonus,spellBonus,totals,applyProgress,gainXp,levelUp,upgrade,learn,moveSpell,validState,migrate};
+  const api={forgeCost,mergePlan,quantity,consume,stackKey,sameStack,curseNames,curseKeys,forgeText,validForge,potions:Potions,affixes,affixMap,affixText,passives,maxAp,isConsumable,normalizePotions,stats,tiers,types,items,itemMap,spells,spellMap,grids,rarities,rarityMap,enhancements,BAG_PRICE,STARTING_CBG,newState,size,rotationOf,gridFor,gearTier,rollItem,itemBonus,canEquip,canPlace,place,findSpace,collect,rotateItem,addTestGear,autoArrange,buyBag,addTestCBG,bagBonus,spellBonus,totals,applyProgress,gainXp,levelUp,upgrade,learn,moveSpell,validState,migrate};
   root.RPGInventory=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(globalThis);

@@ -666,3 +666,17 @@ test('direct drops flush pending layout changes before using the confirmed inven
   const saved=(await read(a.db,'player-a')).state;assert.equal(saved.items.length,1);assert.equal(saved.items[0].defId,'cola_potion');assert.deepEqual(a.errors,[]);
  }finally{a.close();}
 });
+
+test('forge tools display per-unit CBG fees, disable unaffordable recipes, and charge the confirmed wallet',async()=>{
+ const a=await directMergeFixture('health_potion',[4]);try{
+  a.db.wallets.set('player-a',35);a.d.querySelector('#hi-forge-open').click();await pause();await pause();
+  const recipe=a.d.querySelector('#rpg-forge [data-recipe]');recipe.value='coconut';recipe.dispatchEvent(new a.w.Event('change',{bubbles:true}));
+  assert.match(a.d.querySelector('#rpg-forge [data-forge]').textContent,/34 CBG/);assert.match(a.d.querySelector('#rpg-forge [data-note]').textContent,/Balance: 35 CBG/);assert.equal(a.d.querySelector('#rpg-forge [data-forge]').disabled,false);
+  a.d.querySelector('#rpg-forge [data-forge]').click();for(let n=0;n<8;n++)await pause();
+  assert.equal(a.db.wallets.get('player-a'),1);assert.equal(a.w.RPGRoom.snapshot().cbg,1);assert.equal((await read(a.db,'player-a')).state.items[0].defId,'coconut_potion');assert.equal(a.db.forgeLedger.size,1);assert.ok(a.messages.some(m=>m.type==='CB_RPG_WALLET_CHANGED'));assert.deepEqual(a.errors,[]);
+ }finally{a.close();}
+ const b=await directMergeFixture('health_potion',[1,1]);try{
+  b.db.wallets.set('player-a',17);b.d.querySelector('#hi-forge-open').click();await pause();await pause();assert.match(b.d.querySelector('#rpg-forge [data-forge]').textContent,/18 CBG/);assert.equal(b.d.querySelector('#rpg-forge [data-forge]').disabled,true);b.d.querySelector('#rpg-forge [data-close]').click();
+  await b.w.RPGForge.drop('merge-0','merge-1');assert.equal((await read(b.db,'player-a')).state.items.length,2);assert.equal(b.db.wallets.get('player-a'),17);assert.equal(b.db.forgeLedger.size,0);assert.deepEqual(b.errors,[]);
+ }finally{b.close();}
+});

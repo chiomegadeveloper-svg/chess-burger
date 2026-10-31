@@ -11,6 +11,14 @@ function effects(rng,level,potion){
  return forged;
 }
 const recipes={cola:{normal:2,cola:0,out:1},coconut:{normal:4,cola:0,out:2},'mixed-coconut':{normal:2,cola:1,out:2},tuba:{normal:10,cola:0,out:3}};
+export function forgeQuote(doc,input){
+ const uids=input?.uids;if(!Array.isArray(uids)||!uids.length||uids.length>128||new Set(uids).size!==uids.length||uids.some(id=>typeof id!=='string'))fail('Choose distinct owned ingredients.');
+ const selected=uids.map(id=>doc.state.items.find(i=>i.uid===id));if(selected.some(i=>!i||!['bag','stash'].includes(i.where)))fail('An ingredient is no longer in your inventory.');
+ if(input.recipe==='auto'){const plan=C.mergePlan(...selected);if(!plan)fail('These items cannot combine.');return {fee:plan.fee,units:plan.units};}
+ if(Object.hasOwn(recipes,input.recipe)){const r=recipes[input.recipe];return {fee:C.forgeCost(r.normal+r.cola),units:r.normal+r.cola};}
+ if((!input.recipe||input.recipe==='gear')&&selected.length>=2&&selected.every(i=>['Weapons','Armor'].includes(C.itemMap[i.defId]?.category)))return {fee:C.forgeCost(selected.length),units:selected.length};
+ fail('Choose compatible ingredients.');
+}
 /** Mutates the document only after a complete, valid inventory transaction. */
 export function forge(doc,input,{rng=Math.random,now=Date.now()}={}){
  const state=doc?.state,uids=input?.uids;

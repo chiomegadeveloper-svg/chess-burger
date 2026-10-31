@@ -1,4 +1,5 @@
-import {forge} from './forge.mjs';
+import {createHash} from 'node:crypto';
+import {forge,forgeQuote} from './forge.mjs';
 import {publishRpgFeed} from './feed.mjs';
 import {chestRequest,resolveCity,recoverChests} from './chests.mjs';
 import {merchantRequest} from './merchant.mjs';
@@ -87,9 +88,21 @@ export async function gameRequest(client,user,method,input={},services={}){
   if(typeof input.requestId!=='string'||input.requestId.length<8||input.requestId.length>100)fail('A forge request ID is required.',400);
   const active=await current();await result(active);if(['active','pending'].includes(active?.status))fail('Finish your battle before merging items.');
   if((input.inventoryRevision||0)!==(doc.state.inventoryRevision||0))fail('Your inventory changed. Reopen the forge.');
-  const forged=forge(doc,input,{rng:services.rng||Math.random,now});doc.state.inventoryRevision=(doc.state.inventoryRevision||0)+1;
-  doc.forgeReceipts=[...(doc.forgeReceipts||[]),{id:input.requestId,result:forged}].slice(-100);await persist();return {game:doc.state,forge:forged};
+  const quote=forgeQuote(doc,input),next=structuredClone(doc);
+  if(quote.fee){const wallet=await client.from('cb_profiles').select('gold_points').eq('user_id',user).maybeSingle();if(wallet.error||!wallet.data||!Number.isSafeInteger(wallet.data.gold_points))fail('Your CBG balance is unavailable.',503);if(wallet.data.gold_points<quote.fee)fail(`Not enough CBG. This merge costs ${quote.fee} CBG.`);}
+  const forged={...forge(next,input,{rng:services.rng||Math.random,now}),...quote};next.state.inventoryRevision=(next.state.inventoryRevision||0)+1;
+  next.forgeReceipts=[...(next.forgeReceipts||[]),{id:input.requestId,result:forged}].slice(-100);
+  if(quote.fee){
+   const reference=createHash('sha256').update(JSON.stringify(['rpg-forge',user,input.requestId])).digest('hex').slice(0,32).replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/,'$1-$2-$3-$4-$5');
+   const paid=await client.rpc('cb_rpg_merchant_trade',{p_user_id:user,p_request_id:reference,p_revision:doc.revision,p_delta:-quote.fee,p_document:next});
+   if(paid.error){if(/PGRST202|42883/.test(paid.error.code||''))fail('CBG transactions are temporarily unavailable. Your items were kept.',503);fail(paid.error.message||'Merge failed. Your items and CBG were not changed.');}
+   if(!paid.data?.state)fail('Merge confirmation is unavailable. Retry the same attempt.',503);Object.assign(doc,paid.data);
+   const confirmed=(doc.forgeReceipts||[]).find(r=>r.id===input.requestId);if(!confirmed)fail('Merge confirmation is unavailable. Retry the same attempt.',503);
+   return {game:doc.state,forge:confirmed.result};
+  }
+  Object.assign(doc,next);await persist();return {game:doc.state,forge:forged};
  }
+ if(input.action==='forgeWallet'){const wallet=await client.from('cb_profiles').select('gold_points').eq('user_id',user).maybeSingle();if(wallet.error||!wallet.data||!Number.isSafeInteger(wallet.data.gold_points))fail('Your CBG balance is unavailable.',503);return {cbg:wallet.data.gold_points};}
  if(['merchant','merchantBuy','merchantSell'].includes(input.action)){const active=await current();await result(active);if(['active','pending'].includes(active?.status))fail('Finish your battle before trading.');return merchantRequest(client,user,doc,input,now,services);}
  if(['drinkPotion','usePotion'].includes(input.action)&&!input.battlePotion){await result(await current());
   const ongoing=await read(client,user,'rpg_profile','hero');let active=ongoing?.battle?.status==='active';if(ongoing?.pvpId){const rows=await client.from('cb_inventory_items').select('metadata').eq('item_kind','rpg_battle').eq('item_id',ongoing.pvpId).contains('metadata',{participants:[user]}).maybeSingle();if(rows.error)fail('Battle unavailable.',503);active=['pending','active'].includes(rows.data?.metadata?.status);}if(active)fail('Finish your battle before using a potion.');

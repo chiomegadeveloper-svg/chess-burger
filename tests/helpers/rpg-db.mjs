@@ -16,5 +16,16 @@ export function database({jsonb=false}={}){
   }
   maybeSingle(){return this.run(true);}then(resolve,reject){return this.run().then(resolve,reject);}
  }
- const feed=new Map();const db={rows,feed,feedError:false,from(table){if(table==='cb_feed')return {async upsert(events){if(db.feedError)return {error:{message:'Unavailable'}};for(const event of events)if(!feed.has(event.id))feed.set(event.id,stored(event));return {error:null};}};if(table==='cb_profiles')return {select(){return this;},eq(){return this;},async maybeSingle(){return {data:{display_name:'Test Player'},error:null};}};return new Query();},async rpc(){return {data:null,error:{code:'PGRST202',message:'Function is not installed in this fixture'}};}};return db;
+ const feed=new Map(),wallets=new Map(),forgeLedger=new Map();
+ const db={rows,feed,wallets,forgeLedger,feedError:false,from(table){if(table==='cb_feed')return {async upsert(events){if(db.feedError)return {error:{message:'Unavailable'}};for(const event of events)if(!feed.has(event.id))feed.set(event.id,stored(event));return {error:null};}};if(table==='cb_profiles'){let user;return {select(){return this;},eq(k,v){if(k==='user_id')user=v;return this;},async maybeSingle(){return {data:{display_name:'Test Player',gold_points:wallets.get(user)??10000},error:null};}};}return new Query();},async rpc(name,args){
+  if(name==='cb_rpg_merchant_trade'&&args.p_document?.forgeReceipts){
+   const row=rows.get([args.p_user_id,'rpg_profile','hero'].join(':')),balance=wallets.get(args.p_user_id)??10000;
+   if(forgeLedger.has(args.p_request_id))return {data:{...structuredClone(row.metadata),state:{...structuredClone(row.metadata.state),cbg:balance}},error:null};
+   if((row.metadata.revision||0)!==args.p_revision)return {error:{message:'Your inventory changed'}};
+   if(balance+args.p_delta<0)return {error:{message:'Not enough CBG'}};
+   wallets.set(args.p_user_id,balance+args.p_delta);forgeLedger.set(args.p_request_id,args.p_delta);
+   row.metadata=stored({...args.p_document,revision:args.p_revision+1,state:{...args.p_document.state,cbg:balance+args.p_delta}});return {data:structuredClone(row.metadata),error:null};
+  }
+  return {data:null,error:{code:'PGRST202',message:'Function is not installed in this fixture'}};
+ }};return db;
 }
