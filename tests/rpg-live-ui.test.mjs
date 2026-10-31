@@ -680,3 +680,26 @@ test('forge tools display per-unit CBG fees, disable unaffordable recipes, and c
   await b.w.RPGForge.drop('merge-0','merge-1');assert.equal((await read(b.db,'player-a')).state.items.length,2);assert.equal(b.db.wallets.get('player-a'),17);assert.equal(b.db.forgeLedger.size,0);assert.deepEqual(b.errors,[]);
  }finally{b.close();}
 });
+
+test('visible icon-only arrangers save bag and stash and retry a changed guild layout without losing items',async()=>{
+ const C=(await import('../api/_rpg/src/inventory-core.js')).default,db=guildDatabase();
+ await gameRequest(db,'player-a','POST',{action:'register',heroId:'assassin',name:'Arranger',skill:'punch'});
+ const doc=[...db.rows.values()].find(r=>r.item_kind==='rpg_profile').metadata;
+ const make=(uid,where,x,y)=>({uid,defId:'health_potion',where,x,y,rotation:0,rotated:false,...C.rollItem(C.itemMap.health_potion,1,()=>0,{rarity:'common',requiredLevel:1})});
+ doc.state.items=[make('bag-one','bag',4,5),make('bag-two','bag',2,4),make('stash-one','stash',4,5)];
+ db.guildMembers.set('player-a','guild-a');db.guildStashes.set('guild-a',{revision:1,items:Array.from({length:30},(_,i)=>make('shared-'+i,'guild',i%12,7+Math.floor(i/12)))});
+ const a=open(db);try{
+  await pause();await pause();a.d.querySelector('#hr-inventory-open').click();await pause();await pause();
+  for(const where of ['bag','stash','guild']){const button=a.d.querySelector('#hr-arrange-'+where);assert.equal(button.hidden,false);assert.notEqual(a.w.getComputedStyle(button).display,'none');assert.ok(button.querySelector('svg'));assert.equal(button.textContent.trim(),'');assert.match(button.getAttribute('aria-label'),/Auto-arrange/);assert.ok(button.title);}
+  a.d.querySelector('#hr-arrange-bag').click();await a.w.RPGLive.flush();
+  a.d.querySelector('#hr-arrange-stash').click();await a.w.RPGLive.flush();
+  let saved=await read(db,'player-a');assert.equal(saved.state.items.length,3);assert.ok(saved.state.items.every(i=>i.y===0));
+  db.guildStashes.get('guild-a').items.push(make('new-member-item','guild',11,11));db.guildStashes.get('guild-a').revision++;
+  assert.equal(a.d.querySelector('#hr-arrange-guild').disabled,false);a.d.querySelector('#hr-arrange-guild').click();
+  for(let i=0;i<8;i++)await pause();
+  const shared=db.guildStashes.get('guild-a');assert.equal(shared.items.length,31);assert.ok(shared.items.some(i=>i.uid==='new-member-item'));assert.ok(Math.max(...shared.items.map(i=>i.y))<7);
+  assert.equal(new Set(shared.items.map(i=>i.x+','+i.y)).size,31);assert.equal(shared.revision,3);assert.equal(db.guildReceipts.size,1);
+  assert.equal(a.messages.filter(m=>m.body?.action==='guildArrange').length,2);assert.match(a.d.querySelector('#hr-feedback').textContent,/Guild stash arranged/);
+  saved=await read(db,'player-a');assert.equal(saved.state.items.length,3);assert.equal(a.d.querySelector('#hr-inventory-page').getAttribute('aria-busy'),'false');assert.deepEqual(a.errors,[]);
+ }finally{a.close();}
+});

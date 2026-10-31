@@ -93,6 +93,25 @@
       }catch{}
     }finally{guildPreview=null;setGuildMoving(false);}
   }
+  async function arrangeGuild(){
+    if(guildBusy||consumeBusy||!guildConnected||!guildData.guild||!guildData.items.length)return;
+    const guildId=guildData.guild.id,requestId=transferId();guildEpoch++;hideTooltip();setGuildMoving(true);feedback('Arranging guild stash…');
+    try{
+      if(await window.RPGLive.flush?.()===false)throw Error('Your inventory is still saving. Reconnect and retry.');
+      let data;
+      for(let attempt=0;attempt<2;attempt++){
+        try{data=await guildApi({action:'guildArrange',guildId,requestId,stashRevision:guildData.revision,inventoryRevision:state.inventoryRevision||0});break;}
+        catch(error){
+          if(attempt||error.status!==409||!/(?:This inventory changed|Your inventory changed|Your game changed in another window)/i.test(error.message))throw error;
+          await refreshTransferState();if(guildData.guild?.id!==guildId)throw Error('Your guild changed. Reopen Inventory before arranging.');
+        }
+      }
+      guildData=data.guildStash;Object.assign(state,data.game);localStorage.setItem(key(),JSON.stringify(state));render();feedback('Guild stash arranged.');
+    }catch(error){
+      try{await refreshTransferState();render();}catch{}
+      feedback(error.message);
+    }finally{setGuildMoving(false);}
+  }
   function guildDestination(to){const item=itemById(selectedItem);if(!item)return;if(to==='bag'&&!C.canEquip(state,item)){feedback(`Reach level ${item.requiredLevel} to equip this item. You can withdraw it to Hero Stash instead.`);return;}const layout=to==='guild'?guildLayout():state,spot=C.findSpace(layout,item,to==='guild'?'stash':to);if(!spot){feedback('There is no room for this item in '+(to==='guild'?'the Guild Stash.':to==='bag'?'your Hero Bag.':'your Hero Stash.'));return;}void guildTransfer(item,to,spot.x,spot.y,spot.rotation);}
   setInterval(()=>{if(!room.hidden&&room.dataset.view==='inventory'&&!document.hidden&&!drag)void loadGuild();},8000);
   el('hr-inventory-open').onclick=()=>showView('inventory');el('hi-hero-room').onclick=()=>showView('hero');el('hi-explore').onclick=()=>el('hr-explore').click();el('hi-guild-retry').onclick=()=>void loadGuild();
@@ -101,7 +120,7 @@
   let walletCbg=0,cbgDirection='deposit',cbgSending=false,cbgPending=null;
   const cbgKey=()=>key()+':guild-cbg-pending';
   function readPendingCbg(){try{const value=JSON.parse(localStorage.getItem(cbgKey())||'null');if(value?.guildId===guildData.guild?.id&&['deposit','withdraw'].includes(value.direction)&&Number.isSafeInteger(value.amount)&&value.amount>0&&value.amount<=1000000&&typeof value.requestId==='string')return value;localStorage.removeItem(cbgKey());}catch{}return null;}
-  function renderGuildCbg(){const enabled=!!guildData.guild&&guildData.cbgReady!==false&&guildConnected;const balance=Number(guildData.cbg||0),pending=hero?readPendingCbg():null;el('hi-cbg-balance').textContent=enabled?(balance>=1000000?new Intl.NumberFormat('en',{notation:'compact',maximumFractionDigits:2}).format(balance):balance.toLocaleString()):'—';el('hi-cbg-balance').title=enabled?balance.toLocaleString()+' CBG':'Shared CBG is not enabled yet';el('hi-cbg-balance').setAttribute('aria-label',enabled?'Shared CBG: '+balance:'Shared CBG unavailable');el('hi-cbg-deposit').disabled=!enabled||guildBusy||walletCbg<1&&pending?.direction!=='deposit';el('hi-cbg-withdraw').disabled=!enabled||guildBusy||balance<1&&pending?.direction!=='withdraw';if(el('hi-cbg-modal').open)updateCbgForm();}
+  function renderGuildCbg(){el('hr-arrange-guild').disabled=!guildLoaded||!guildConnected||!guildData.guild||guildBusy||!guildData.items.length;const enabled=!!guildData.guild&&guildData.cbgReady!==false&&guildConnected;const balance=Number(guildData.cbg||0),pending=hero?readPendingCbg():null;el('hi-cbg-balance').textContent=enabled?(balance>=1000000?new Intl.NumberFormat('en',{notation:'compact',maximumFractionDigits:2}).format(balance):balance.toLocaleString()):'—';el('hi-cbg-balance').title=enabled?balance.toLocaleString()+' CBG':'Shared CBG is not enabled yet';el('hi-cbg-balance').setAttribute('aria-label',enabled?'Shared CBG: '+balance:'Shared CBG unavailable');el('hi-cbg-deposit').disabled=!enabled||guildBusy||walletCbg<1&&pending?.direction!=='deposit';el('hi-cbg-withdraw').disabled=!enabled||guildBusy||balance<1&&pending?.direction!=='withdraw';if(el('hi-cbg-modal').open)updateCbgForm();}
   function updateCbgForm(){const input=el('hi-cbg-amount'),amount=Number(input.value),available=cbgDirection==='deposit'?walletCbg:Number(guildData.cbg||0),retry=!!cbgPending;el('hi-cbg-wallet').textContent=walletCbg.toLocaleString()+' CBG';el('hi-cbg-shared').textContent=Number(guildData.cbg||0).toLocaleString()+' CBG';input.max=String(retry?1000000:Math.min(1000000,available));input.readOnly=retry;input.disabled=cbgSending;const valid=Number.isSafeInteger(amount)&&amount>=1&&amount<=1000000&&(retry||amount<=available);el('hi-cbg-confirm').disabled=cbgSending||!valid||!guildData.guild||guildData.cbgReady===false||!guildConnected&&!retry;el('hi-cbg-confirm').textContent=cbgSending?'Transferring…':retry?'Retry transfer':(cbgDirection==='deposit'?'Deposit ':'Withdraw ')+(valid?amount.toLocaleString()+' CBG':'CBG');el('hi-cbg-cancel').disabled=cbgSending;el('hi-cbg-close').disabled=cbgSending;}
   async function openCbg(direction){if(guildBusy||!guildData.guild)return;await loadGuild();if(!guildData.guild||guildData.cbgReady===false||!guildConnected)return;cbgPending=readPendingCbg();cbgDirection=cbgPending?.direction||direction;el('hi-cbg-title').textContent=(cbgDirection==='deposit'?'Deposit':'Withdraw')+' CBG';el('hi-cbg-amount').value=String(cbgPending?.amount||1);el('hi-cbg-status').textContent=cbgPending?'The previous transfer was not confirmed. Retry it to check the result.':'';updateCbgForm();el('hi-cbg-modal').showModal();el('hi-cbg-amount').focus();}
   function closeCbg(){if(!cbgSending)el('hi-cbg-modal').close();}
@@ -434,6 +453,7 @@
     const arrange=event.target.closest('[data-arrange]');
     if(arrange){
       const where=arrange.dataset.arrange;clearDrag();lastTap=null;
+      if(where==='guild'){void arrangeGuild();return;}
       if(C.autoArrange(state,where))changed(`${where==='bag'?'Hero bag':'Item stash'} ${state.items.some(item=>item.where===where)?'arranged':'is empty'}.`);
       else feedback('Unable to arrange these items. Your layout is unchanged.');
       return;

@@ -186,7 +186,7 @@
       (a,b)=>footprint(b).w-footprint(a).w||area(b)-area(a)
     ];
     for(const compare of modes)for(const horizontalFirst of [false,true]){
-      const rows=new Uint8Array(rowCount),layout=[];
+      const rows=new Uint16Array(rowCount),layout=[];
       const ordered=[...inventory].sort((a,b)=>compare(a,b)||a.defId.localeCompare(b.defId)||a.uid.localeCompare(b.uid));
       for(const item of ordered){
         const original=rotationOf(item),def=itemMap[item.defId];

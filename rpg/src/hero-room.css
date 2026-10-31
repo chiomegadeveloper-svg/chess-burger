@@ -12,6 +12,7 @@
 .hr-arrange-button:hover{background:#30505b;border-color:#9ff3ed;color:#efffff}.hr-arrange-button:focus-visible{outline:2px solid #a4f0ed;outline-offset:2px}
 .hr-arrange-button:after{content:attr(data-tooltip);position:absolute;top:calc(100% + 6px);right:0;width:max-content;max-width:150px;padding:7px 9px;border:1px solid #718d96;border-radius:6px;background:#0b1b25;color:#edffff;box-shadow:0 5px 16px #0008;font-size:11px;font-weight:600;line-height:1.2;white-space:nowrap;pointer-events:none;visibility:hidden;opacity:0;transition:opacity .12s}
 .hr-arrange-button:focus-visible:after{visibility:visible;opacity:1}
+.hr-arrange-button:disabled{opacity:.4;cursor:default}
 @media(hover:hover){.hr-arrange-button:hover:after{visibility:visible;opacity:1}}
 .hero-room{--room-line:#415261;--room-gold:#e8bf70;--room-cyan:#65e3eb;position:fixed;inset:0;z-index:10;color:#eee9dc;background:radial-gradient(ellipse at 60% 0,#263a46,#0b111a 78%);padding:clamp(5px,1vw,14px);display:flex;flex-direction:column;gap:8px;font-size:12px}
 .hr-topbar{display:flex;align-items:center;gap:10px;min-height:44px;padding:0 4px;flex-shrink:0}

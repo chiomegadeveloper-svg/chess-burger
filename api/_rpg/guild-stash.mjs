@@ -30,7 +30,7 @@ export async function guildRequest(client,user,doc,input){
  if(input.action!=='guildStash'&&!/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(input.requestId||''))fail('Please retry this transfer.',400);
  const [stash,receipt]=await Promise.all([
   guildSnapshot(client,user),
-  input.action==='guildTransfer'?client.from('cb_rpg_guild_transfers').select('user_id,guild_id').eq('request_id',input.requestId).maybeSingle():null,
+  ['guildTransfer','guildArrange'].includes(input.action)?client.from('cb_rpg_guild_transfers').select('user_id,guild_id').eq('request_id',input.requestId).maybeSingle():null,
  ]);
  if(input.action==='guildStash')return {guildStash:stash,walletCbg:stash.guild?await wallet(client,user):0};
  if(!stash.guild)fail('Join a Chess Burger guild to use its stash.',403);
@@ -47,6 +47,22 @@ export async function guildRequest(client,user,doc,input){
  if(receipt.data){if(receipt.data.user_id!==user||receipt.data.guild_id!==stash.guild.id)fail('Transfer reference is unavailable.');return {game:doc.state,guildStash:stash,transferred:true};}
  if(input.stashRevision!==stash.revision||(input.inventoryRevision||0)!==(doc.state.inventoryRevision||0))fail('This inventory changed. Refresh and retry.');
  if(doc.battle?.status==='active')fail('Finish your battle before using the guild stash.');
+ if(input.action==='guildArrange'){
+  if(!stash.items.length)return {game:doc.state,guildStash:stash};
+  const layout=guildLayout(doc.state,stash.items);
+  if(!C.autoArrange(layout,'stash'))fail('Unable to arrange the guild stash. Your layout is unchanged.');
+  const items=layout.items.map(item=>({...item,where:'guild'})),next=structuredClone(doc);
+  next.state.inventoryRevision=(doc.state.inventoryRevision||0)+1;
+  // Reuse the atomic, membership-locked guild-to-guild layout commit. The server
+  // computes positions; the caller cannot supply items, rolls or ownership.
+  const result=await client.rpc('cb_rpg_guild_transfer',{
+   p_user_id:user,p_guild_id:stash.guild.id,p_request_id:input.requestId,p_revision:doc.revision||0,
+   p_stash_revision:stash.revision,p_document:next,p_items:items,p_item_uid:'auto-arrange',p_from:'guild',p_to:'guild',
+  });
+  if(result.error){if(setupError(result.error))unavailable(true);fail(result.error.message||'Unable to arrange the guild stash.');}
+  Object.assign(doc,result.data.document);
+  return {game:doc.state,guildStash:{cbg:stash.cbg,cbgReady:stash.cbgReady,...result.data.guildStash,guild:stash.guild,...GUILD_GRID}};
+ }
  const from=input.from,to=input.to;
  if(!['bag','stash','guild'].includes(from)||!['bag','stash','guild'].includes(to)||from!=='guild'&&to!=='guild')fail('Choose a guild stash transfer.',400);
  if(!Number.isInteger(input.rotation)||input.rotation<0||input.rotation>3)fail('Invalid item rotation.',400);
